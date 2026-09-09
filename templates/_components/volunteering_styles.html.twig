@@ -961,11 +961,22 @@
        destacaba. Lo que se quitó de color vuelve por tipografía, orden y
        blanco. */
     .vol-task {
+        display: flex; flex-direction: column;
         background: var(--csa-surface);
         border: 1px solid var(--csa-rule);
         border-radius: var(--csa-radius-lg);
         padding: var(--csa-sp-4);
     }
+    /* EL BOTÓN, SIEMPRE ABAJO DEL TODO. Sin esto la altura de cada tarjeta la
+       marcaba su texto, y dos tarjetas de al lado —una con «Faltan 2 personas» y
+       la otra sin— dejaban los botones a alturas distintas: la fila entera
+       parecía descuadrada. `margin-top: auto` empuja el formulario al fondo, y
+       como la rejilla estira las tarjetas a la misma altura, los botones quedan
+       a la misma línea. */
+    .vol-task > form { margin-top: auto; }
+    /* El bloque de datos deja de empujar: el hueco sobrante va antes del botón,
+       no repartido. */
+    .vol-task__meta { margin-bottom: var(--csa-sp-2); }
 
     /* Ya vas: el verde pasa al borde y al fondo, y el botón desaparece — no hay
        nada que pulsar salvo deshacer. Es el único estado que tiñe la tarjeta,
@@ -975,22 +986,34 @@
        había que leer las cuatro fechas para saber cuál es el de esta semana. Un
        borde de 2px y un halo suave — no otro color, que el verde ya es el suyo:
        más peso del mismo. */
-    .vol-task--next {
-        border-width: 2px;
-        box-shadow: 0 0 0 4px var(--csa-green-soft);
-    }
+    .vol-task--next { border-width: 2px; }
     .csa-app .vol-task--next .vol-task__title { font-size: var(--csa-fs-xl); }
+    /* A LO ANCHO DE LA REJILLA, que es lo que de verdad destaca. Con un borde
+       algo más grueso y media columna, como las demás, había que fijarse para
+       encontrarlo; ocupando la fila entera se ve antes de leer nada. */
+    @media (min-width: 640px) {
+        .vol-tasks > .vol-task--next { grid-column: 1 / -1; }
+    }
     /* LAS DEL MONTÓN URGENTE, con borde ámbar. No es un color nuevo: es el mismo
        que ya llevan dentro «Faltan 2 personas» y el «Mañana» de la fecha, o sea
        la misma idea en otro soporte. Y borde y no relleno: un fondo de color en
        cuatro tarjetas seguidas convierte la pantalla en una alarma y deja de
        avisar de nada. */
-    .vol-group--urgent .vol-task { border-color: var(--csa-ochre-soft); }
-    /* La que PREGUNTA no es ni una cosa ni la otra: no es tuya —ya pasó— ni
-       pide gente. Con el mismo blanco que las de «hace falta» costaba ver a
-       simple vista qué tipo de tarjeta era cada una en una pantalla que tiene
-       los dos. Fondo neutro y en su sitio, sin gastar un acento. */
-    .vol-task--ask { background: var(--csa-surface-alt); border-color: #d9d4c4; }
+    /* LAS DEL MONTÓN URGENTE. El borde en ocre claro no se veía a un metro de la
+       pantalla; una franja ámbar arriba, sí. Sigue sin ser un color nuevo: es el
+       que ya llevan dentro «Faltan 2 personas» y el «Mañana» de la fecha. Y
+       arriba y no alrededor: el borde de la tarjeta ya significa otra cosa —el
+       verde de «ya vas»— y dos bordes que dicen cosas distintas se confunden. */
+    .vol-group--urgent .vol-task {
+        border-top: 3px solid var(--csa-amber);
+        border-radius: var(--csa-radius-lg);
+        padding-top: calc(var(--csa-sp-4) - 2px);
+    }
+    /* La que PREGUNTA se distingue por sus DOS BOTONES, que no los tiene ninguna
+       otra, no por un fondo gris. El gris la hacía parecer desactivada —lo
+       contrario de lo que quiere, que es que la contesten— y ensuciaba una
+       pantalla que por lo demás es blanca sobre crema. */
+    .vol-task--ask { border-color: #d9d4c4; }
 
     /* El área, en versalitas y en gris: no se pulsa, no avisa de nada y se
        repite en cada tarjeta. Como cápsula pesaba lo mismo que el título. */
@@ -1067,14 +1090,20 @@
     }
     .vol-task__cta:hover { opacity: 0.92; }
 
-    /* Deshacer SÍ es destructivo: libera la plaza. Enlace y no botón, para que
-       no compita con nada — es lo único terracota del módulo. */
+    /* Deshacer: MISMO SITIO Y MISMA FORMA que «Me apunto», para que las dos
+       pantallas se lean como la misma cosa. Lo que cambia es el color, que es
+       justamente lo que distingue una tarjeta a la que vas de una que pide
+       gente.
+
+       De contorno y no relleno: es destructivo —libera la plaza— y un botón rojo
+       a lo ancho en cuatro tarjetas seguidas pesa más que el trabajo. */
     .vol-task__undo {
-        margin-top: var(--csa-sp-3); padding: 0;
-        background: none; border: 0; cursor: pointer;
-        font-family: var(--csa-sans); font-size: var(--csa-fs-sm); font-weight: 500;
-        color: var(--csa-terracotta); text-decoration: underline;
+        width: 100%; height: 44px; margin-top: var(--csa-sp-3);
+        border: 1.5px solid var(--csa-terracotta); border-radius: var(--csa-radius-md);
+        background: transparent; color: var(--csa-terracotta); cursor: pointer;
+        font-family: var(--csa-sans); font-size: var(--csa-fs-base); font-weight: 600;
     }
+    .vol-task__undo:hover { background: var(--csa-terracotta-soft); }
 
 
     /* ---- Las cuatro pestañas del voluntariado del socix ----
@@ -1088,17 +1117,17 @@
     .vol-tabs {
         width: 100%; margin: 0 0 var(--csa-sp-5); justify-content: flex-start;
     }
-    /* Lo que hay por confirmar SÍ tiene que verse: es una pregunta con respuesta
-       de un clic, y hasta que no se conteste esas horas no las tiene nadie. El
-       gris del contador canónico —pensado para "Quién viene · 3"— aquí se pierde. */
+    /* Lo que hay por confirmar tiene que verse, pero EN ÁMBAR Y SIN PASTILLA. La
+       pastilla terracota rellena era la mancha de color más fuerte de la
+       pantalla, puesta en la navegación y con el color destructivo del sistema
+       para decir «tienes dos cosas que contestar». El ámbar ya significa «esto
+       corre prisa» en el resto del módulo. */
     .vol-tabs .csa-tabs__count {
-        display: inline-flex; align-items: center; justify-content: center;
-        min-width: 18px; height: 18px; padding: 0 5px;
-        border-radius: var(--csa-radius-pill);
-        background: var(--csa-terracotta); color: #fff;
-        font-size: 10.5px; font-weight: 700; opacity: 1;
+        margin-left: 5px;
+        background: none; color: var(--csa-amber);
+        font-weight: 600; opacity: 1;
     }
-    .vol-tabs .csa-tabs__item.active .csa-tabs__count { color: #fff; opacity: 1; }
+    .vol-tabs .csa-tabs__item.active .csa-tabs__count { color: var(--csa-amber); opacity: 1; }
 
     /* Móvil: cuatro rótulos en dos filas. El componente ya las deja envolver;
        lo que falta es que no queden pegadas al borde ni desalineadas. */
@@ -1134,8 +1163,13 @@
         flex-basis: 100%; margin-top: -7px;
         font-size: var(--csa-fs-sm); color: var(--csa-ink-soft);
     }
-    /* Con aire: pegado al último botón se leía como el pie de esa tarjeta y no
-       como la salida del montón entero. */
+    /* La salida de la lista: UNA sola, al pie de todos los montones y con aire.
+       Dentro de cada montón y pegada al último botón se leía como el pie de esa
+       tarjeta, y con dos montones salía dos veces seguidas diciendo lo mismo. */
+    .vol-more { margin: var(--csa-sp-6) 0 0; font-size: var(--csa-fs-base); }
+    .vol-more a { color: var(--csa-green); font-weight: 600; text-decoration: none; }
+    .vol-more a:hover { text-decoration: underline; }
+    /* El que queda dentro de un montón (el día a día, «mis turnos»). */
     .vol-group__more {
         margin: var(--csa-sp-5) 0 0;
         font-size: var(--csa-fs-sm); font-weight: 500; color: var(--csa-ink-soft);
@@ -1194,16 +1228,11 @@
        hubiera quedado suelta al final.
 
        Fondo crema y sin regla superior: un panel, no otra fila de la pila. */
-    .vol-balance {
-        border-top: 0;
-        margin-top: var(--csa-sp-8);
-        padding: var(--csa-sp-5) var(--csa-sp-5) var(--csa-sp-4);
-        background: var(--csa-rule-soft);
-        border-radius: var(--csa-radius-lg);
-    }
-    /* Dentro del panel las filas se separan con una línea algo más marcada: el
-       crema del fondo se come el divisor suave. */
-    .vol-balance .vol-done__row { border-top-color: #e0d9c4; }
+    /* SIN FONDO. Con el panel crema era un ladrillo gris de media pantalla al
+       final de todo: pesaba más que los turnos, que es lo que se viene a hacer,
+       y en una pantalla que es blanco sobre crema el bloque relleno cantaba.
+       Lo que lo separa es el aire de más y su regla, como los demás bloques. */
+    .vol-balance { margin-top: var(--csa-sp-10); }
 
     /* ---- Tu aportación: la cifra y lo que hay detrás ----
        La cifra en serif y grande, como el resto de números con peso del panel.
@@ -1288,7 +1317,17 @@
         margin-top: 28px; padding: 18px 0; min-height: 44px;
         text-decoration: none; color: inherit;
     }
-    .vol-fold:hover { color: inherit; }
+    /* Hover con FONDO y no con subrayado: la fila entera es el objetivo —44px de
+       alto— y subrayar sólo el texto sugiere que lo pulsable es el texto. Con el
+       fondo se ve que se pulsa toda la banda. */
+    .vol-fold { border-radius: var(--csa-radius-md); transition: background .12s ease; }
+    .vol-fold:hover {
+        color: inherit; text-decoration: none;
+        background: var(--csa-surface-alt);
+        box-shadow: 0 0 0 var(--csa-sp-3) var(--csa-surface-alt);
+    }
+    .vol-fold:hover .vol-fold__title,
+    .vol-fold:hover .vol-fold__go { text-decoration: none; }
     .vol-fold__title {
         display: block;
         font-size: var(--csa-fs-xs); font-weight: 600;

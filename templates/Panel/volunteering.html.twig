@@ -80,25 +80,57 @@
                  # un control que no hace nada. #}
                 {% if todos is not empty %}
                 {# ---- FILTROS ----
-                 # Sólo los tres que tienen dato de verdad. «Sin experiencia»
-                 # está en el diseño y no se pone: no hay campo que lo diga
-                 # (open_to_anyone es otra cosa — a quién se le amplía el
-                 # aviso), y un filtro que no filtra por lo que promete es
-                 # peor que no tenerlo.
+                 # POR ÁREA, que es como la gente piensa en esto: «yo hago
+                 # huerta». Es además un dato de primera —lo elige quien crea la
+                 # tarea— y ya es el filtro del cuadrante, así que las dos
+                 # pantallas se filtran igual.
                  #
-                 # Filtran en el navegador y sobre lo ya pintado: son unas
-                 # decenas de tarjetas, no hay recarga, y quien no tenga JS
-                 # las sigue viendo todas —que es el estado útil—. Por eso los
-                 # contadores se calculan aquí sobre lo que se pinta y no
-                 # sobre el total: un filtro no puede sacar lo que no está. #}
+                 # FUERA «FIN DE SEMANA». No salía de ningún campo: lo calculaba
+                 # la plantilla de la fecha del turno. Con cinco tarjetas en
+                 # pantalla, filtrar por sábado no le ahorra el trabajo a nadie, y
+                 # para mirar por días está el cuadrante, que es una vista de
+                 # calendario entera.
+                 #
+                 # «Desde casa» y «en mi punto» se quedan: son los dos que dicen
+                 # si PUEDES ir, que es la pregunta anterior a si te apetece. El
+                 # primero sale de `remote` y el segundo de que la tarea tenga
+                 # nodo y sea el tuyo.
+                 #
+                 # «Sin experiencia» está en el diseño y no se pone: no hay campo
+                 # que lo diga —`open_to_anyone` es otra cosa, a quién se le
+                 # amplía el aviso— y un filtro que no filtra por lo que promete
+                 # es peor que no tenerlo.
+                 #
+                 # Filtran en el navegador y sobre lo ya pintado: son unas pocas
+                 # tarjetas, no hay recarga, y quien no tenga JS las sigue viendo
+                 # todas, que es el estado útil. Por eso los contadores se
+                 # calculan sobre lo que se pinta y no sobre el total: un filtro
+                 # no puede sacar lo que no está. #}
                 {% set n_casa = todos|filter(s => s.offer.remote)|length %}
                 {% set n_mio = my_node_id ? todos|filter(s => s.offer.node and s.offer.node.id == my_node_id)|length : 0 %}
-                {% set n_finde = todos|filter(s => s.startsAt|date('N') >= 6)|length %}
 
                 <div class="vol-filters" data-vol-filters>
                     <button type="button" class="vol-filter vol-filter--on" data-vol-filter="todas" aria-pressed="true">
                         Todas <span class="vol-filter__n">{{ todos|length }}</span>
                     </button>
+
+                    {# Las áreas que hay EN PANTALLA, no el catálogo entero: un
+                     # filtro que deja la lista vacía es un botón que no sirve. #}
+                    {% set areas_vistas = [] %}
+                    {% for shift in todos %}
+                        {% for category in shift.offer.categories %}
+                            {% if category.id not in areas_vistas|map(a => a.id) %}
+                                {% set areas_vistas = areas_vistas|merge([{ id: category.id, name: category.name }]) %}
+                            {% endif %}
+                        {% endfor %}
+                    {% endfor %}
+                    {% for area in areas_vistas %}
+                        {% set n_area = todos|filter(s => area.id in s.offer.categories|map(c => c.id))|length %}
+                        <button type="button" class="vol-filter" data-vol-filter="area-{{ area.id }}" aria-pressed="false">
+                            {{ area.name }} <span class="vol-filter__n">{{ n_area }}</span>
+                        </button>
+                    {% endfor %}
+
                     {% if n_casa %}
                         <button type="button" class="vol-filter" data-vol-filter="remote" aria-pressed="false">
                             Desde casa <span class="vol-filter__n">{{ n_casa }}</span>
@@ -107,11 +139,6 @@
                     {% if n_mio %}
                         <button type="button" class="vol-filter" data-vol-filter="mine" aria-pressed="false">
                             En mi punto <span class="vol-filter__n">{{ n_mio }}</span>
-                        </button>
-                    {% endif %}
-                    {% if n_finde %}
-                        <button type="button" class="vol-filter" data-vol-filter="weekend" aria-pressed="false">
-                            Fin de semana <span class="vol-filter__n">{{ n_finde }}</span>
                         </button>
                     {% endif %}
                 </div>
@@ -132,6 +159,20 @@
                     title: 'Próximas semanas', hint: 'Hay hueco, pero conviene cerrarlo', tone: 'later',
                     shifts: later_shifts, total: later_total, my_node_id: my_node_id, my_category_ids: my_category_ids
                 } only %}
+                {# ---- LO QUE QUEDA FUERA, UNA SOLA VEZ ----
+                 # La suma de los dos montones, con su enlace y su aire. Antes
+                 # iba dentro de cada montón, pegada al último botón: se leía
+                 # como el pie de esa tarjeta, no como la salida de la lista, y
+                 # con dos montones salía dos veces seguidas. #}
+                {% set fuera = (urgent_total - urgent_shifts|length) + (later_total - later_shifts|length) %}
+                {% if fuera > 0 %}
+                    <p class="vol-more">
+                        <a href="{{ path('panel_volunteering_calendar') }}">
+                            Ver los otros {{ fuera }} turno{{ fuera == 1 ? '' : 's' }} en el cuadrante →
+                        </a>
+                    </p>
+                {% endif %}
+
                 {# ---- EL DÍA A DÍA, EN UNA LÍNEA ----
                  # Y no como un tercer montón de tarjetas, que en móvil dejaba
                  # el trabajo de verdad a cuatro scrolls de distancia. Son
@@ -187,9 +228,22 @@
             var groups = Array.prototype.slice.call(document.querySelectorAll('[data-vol-group]'));
             var none = document.querySelector('[data-vol-none]');
 
+            function matches(task, filter) {
+                if (filter === 'todas') { return true; }
+
+                // Por área: el filtro viaja como «area-3» y la tarjeta lleva la
+                // lista de las suyas, que pueden ser varias.
+                if (filter.indexOf('area-') === 0) {
+                    var id = filter.slice(5);
+                    return (task.getAttribute('data-vol-areas') || '').split(',').indexOf(id) !== -1;
+                }
+
+                return task.getAttribute('data-vol-' + filter) === '1';
+            }
+
             function apply(filter) {
                 tasks.forEach(function (task) {
-                    task.hidden = filter !== 'todas' && task.getAttribute('data-vol-' + filter) !== '1';
+                    task.hidden = !matches(task, filter);
                 });
 
                 var visibles = 0;

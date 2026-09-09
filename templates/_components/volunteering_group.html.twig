@@ -36,20 +36,9 @@
             {% endfor %}
         </div>
 
-        {# Cuántos quedan fuera, Y CÓMO LLEGAR A ELLOS. Como frase suelta era un
-         # dato muerto pegado al último botón: decía que hay doce más y no daba
-         # forma de verlos. Ahora es el enlace, con su aire.
-         #
-         # Dice TURNOS porque eso es lo que cuenta `total`: aquí se enseña un
-         # turno por tarea, así que los que faltan son casi siempre otros días de
-         # las mismas —los sábados que vienen—, no doce trabajos distintos. #}
-        {% set fuera = total - shifts|length %}
-        {% if fuera > 0 %}
-            <p class="vol-group__more">
-                <a href="{{ path('panel_volunteering_calendar') }}">
-                    Ver los otros {{ fuera }} turno{{ fuera == 1 ? '' : 's' }} en el cuadrante →
-                </a>
-            </p>
-        {% endif %}
+        {# SIN «y N más» aquí. Con un enlace al cuadrante por montón salían dos
+         # o tres en el mismo palmo de pantalla, todos al mismo sitio y diciendo
+         # casi lo mismo. La cuenta de lo que queda fuera se hace UNA vez, al pie
+         # de la pantalla, sumando los montones. #}
     </section>
 {% endif %}

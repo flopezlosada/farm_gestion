@@ -60,7 +60,7 @@
          data-vol-task
          data-vol-remote="{{ offer.remote ? '1' : '0' }}"
          data-vol-mine="{{ en_mi_punto ? '1' : '0' }}"
-         data-vol-weekend="{{ shift.startsAt|date('N') >= 6 ? '1' : '0' }}">
+         data-vol-areas="{{ areas|map(a => a.id)|join(',') }}">
 
     {# ── ANTETÍTULO ── el área, en versalitas y en gris. Era una cápsula y no
      # necesita serlo: no se pulsa, no avisa de nada y se repite en cada
