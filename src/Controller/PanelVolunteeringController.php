@@ -192,7 +192,11 @@ class PanelVolunteeringController extends AbstractController
             'pending_confirmation' => $signups->findPendingConfirmationFor($partner, $now),
             // Qué hizo, no sólo cuánto: "6 h" no dice nada, "6 h: dos repartos y
             // una mañana de plantación" sí.
-            'my_done' => $signups->findDoneFor($partner, $from, $to),
+            // Lo contestado, no sólo lo hecho: un «no pude» salía de los
+            // pendientes y no entraba en ninguna otra lista, así que la tarjeta
+            // desaparecía sin dejar rastro. Quien pulsaba no sabía si se había
+            // guardado y quien erraba de botón no tenía qué corregir.
+            'my_done' => $signups->findAnsweredFor($partner, $from, $to),
             'my_minutes' => $mine->minutes,
             // La mediana de quienes participan (no la media) y a quién se le
             // enseña. Las dos reglas viven en VolunteerContribution, que es

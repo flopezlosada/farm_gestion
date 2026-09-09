@@ -109,6 +109,56 @@ class PanelVolunteeringTabsTest extends AbstractPartnerAuthenticatedTest
         );
     }
 
+    /**
+     * Decir «no pude» no hace desaparecer el turno.
+     *
+     * Es el fallo que se vio en pantalla: al contestar que no, la inscripción
+     * salía de los pendientes —correcto— y no entraba en ninguna otra lista, así
+     * que la tarjeta se esfumaba sin dejar rastro. Quien pulsaba no podía saber
+     * si su respuesta se había guardado, y quien se equivocaba de botón no tenía
+     * nada que corregir.
+     *
+     * Sigue sin sumar horas, que es lo que no se puede romper al arreglarlo.
+     */
+    public function testDecirQueNoPudisteNoBorraElTurnoDeLaPantalla(): void
+    {
+        $client = $this->socixWithModuleOn();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+
+        $partner = $em->getRepository(User::class)
+            ->loadUserByIdentifier(PartnerUserFixtures::USER_SOCIX_USERNAME)
+            ->getPartner();
+
+        $titulo = 'Tabs no pude '.uniqid();
+        $offer = (new VolunteerOffer())
+            ->setTitle($titulo)
+            ->setSlots(3)
+            ->setCreditedMinutes(120)
+            ->setStatus(VolunteerOffer::STATUS_PUBLISHED);
+        $shift = (new VolunteerShift())->setStartsAt(new \DateTime('-2 days'));
+        $offer->addShift($shift);
+        $signup = (new VolunteerSignup())->setShift($shift)->setPartner($partner);
+
+        $em->persist($offer);
+        $em->persist($shift);
+        $em->persist($signup);
+        $em->flush();
+
+        // Contesta que no pudo ir, por el mismo camino que la pantalla.
+        $client->request('POST', sprintf('/panel/voluntariado/%d/confirmar', $shift->getId()), [
+            'attended' => '0',
+            '_csrf_token' => static::getContainer()->get('security.csrf.token_manager')
+                ->getToken('panel_volunteering')->getValue(),
+        ]);
+        $client->followRedirect();
+
+        $this->assertSelectorTextContains('.vol-done', $titulo, 'Lo contestado tiene que seguir viéndose.');
+
+        $em->refresh($signup);
+        $this->assertFalse($signup->getAttended());
+        $this->assertNull($signup->getCreditedMinutes(), 'Un «no pude» no computa horas.');
+    }
+
     private function socixWithModuleOn(): KernelBrowser
     {
         $client = $this->createPartnerAuthenticatedClient();

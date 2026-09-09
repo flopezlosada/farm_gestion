@@ -1135,6 +1135,46 @@
     }
     .vol-task__answer:hover { background: var(--csa-surface-alt); }
 
+    /* ---- Tu aportación: la cifra y lo que hay detrás ----
+       La cifra en serif y grande, como el resto de números con peso del panel.
+       Sin barra de progreso: una barra hacia la mediana la convierte en una
+       meta, y esto no es una cuota. */
+    .csa-app .vol-sum {
+        margin: 0;
+        font-family: var(--csa-serif); font-weight: 400; font-size: var(--csa-fs-2xl);
+        line-height: 1.1; letter-spacing: -0.02em; color: var(--csa-ink);
+    }
+    .csa-app .vol-sum--zero {
+        font-size: var(--csa-fs-md); line-height: var(--csa-lh-snug); color: var(--csa-ink-soft);
+    }
+
+    /* Dos columnas: qué y cuánto. Un número suelto no significa nada; la lista
+       de lo que hay detrás sí. */
+    .vol-done { list-style: none; margin: var(--csa-sp-4) 0 0; padding: 0; }
+    .vol-done__row {
+        display: flex; align-items: baseline; justify-content: space-between;
+        gap: var(--csa-sp-4);
+        padding: var(--csa-sp-3) 0;
+        border-top: 1px solid var(--csa-rule-soft);
+    }
+    .vol-done__title { font-size: var(--csa-fs-base); font-weight: 600; color: var(--csa-ink); }
+    .vol-done__role {
+        margin-left: 6px;
+        font-size: var(--csa-fs-xs); color: var(--csa-ink-muted);
+    }
+    .vol-done__when {
+        display: block; margin-top: 2px;
+        font-size: var(--csa-fs-sm); color: var(--csa-ink-muted);
+    }
+    .vol-done__time {
+        flex-shrink: 0;
+        font-size: var(--csa-fs-sm); color: var(--csa-ink-soft); white-space: nowrap;
+    }
+    /* Lo que no se pudo hacer: en gris y sin horas, pero PRESENTE. Ni tachado ni
+       en rojo — es una respuesta suya, no un incumplimiento. */
+    .vol-done__row--absent .vol-done__title { font-weight: 500; color: var(--csa-ink-soft); }
+    .vol-done__time--absent { color: var(--csa-ink-muted); font-style: italic; }
+
     /* ---- Mis áreas ----
        Sin tarjeta: la pantalla ES el bloque. Con una csa-card alrededor había
        dos títulos para lo mismo —«Mis áreas» en la pestaña y «Qué tareas te
