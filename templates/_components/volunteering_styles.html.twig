@@ -1135,6 +1135,36 @@
     }
     .vol-task__answer:hover { background: var(--csa-surface-alt); }
 
+    /* El primer bloque de una pantalla no lleva la regla de arriba: no separa de
+       nada, y deja un filo suelto justo debajo de las pestañas. */
+    .vol-group--first { border-top: 0; margin-top: 0; padding-top: 0; }
+
+    /* ---- Los turnos que vienen después del próximo ----
+       En una línea cada uno y no como tarjetas: para decidir si vas al del
+       sábado que viene no hace falta releer la ficha entera, y tres tarjetas
+       verdes seguidas dejaban la pantalla sin un solo foco. */
+    .vol-next { list-style: none; margin: 0; padding: 0; }
+    .vol-next__row {
+        display: flex; align-items: baseline; justify-content: space-between;
+        gap: var(--csa-sp-4);
+        padding: var(--csa-sp-3) 0;
+        border-top: 1px solid var(--csa-rule-soft);
+    }
+    .vol-next__row:first-child { border-top: 0; padding-top: 0; }
+    .vol-next__title { font-size: var(--csa-fs-base); font-weight: 600; color: var(--csa-ink); }
+    .vol-next__when {
+        display: block; margin-top: 2px;
+        font-size: var(--csa-fs-sm); color: var(--csa-ink-soft);
+    }
+    /* Deshacer es lo único destructivo, y aquí va como enlace para no llenar la
+       lista de botones. */
+    .vol-next__undo {
+        flex-shrink: 0; padding: 0;
+        background: none; border: 0; cursor: pointer;
+        font-family: var(--csa-sans); font-size: var(--csa-fs-sm); font-weight: 500;
+        color: var(--csa-terracotta); text-decoration: underline; white-space: nowrap;
+    }
+
     /* ---- Tu aportación: la cifra y lo que hay detrás ----
        La cifra en serif y grande, como el resto de números con peso del panel.
        Sin barra de progreso: una barra hacia la mediana la convierte en una

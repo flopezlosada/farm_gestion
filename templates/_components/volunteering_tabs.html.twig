@@ -40,7 +40,8 @@
     { short: 'Cuadrante', label: 'El cuadrante del mes', url: path('panel_volunteering_calendar'),
       active: route == 'panel_volunteering_calendar' },
     { short: 'Mis turnos', label: 'A lo que me he apuntado', url: path('panel_volunteering_mine'),
-      active: route == 'panel_volunteering_mine', count: pending|default(0) }
+      active: route starts with 'panel_volunteering_mine' or route == 'panel_volunteering_history',
+      count: pending|default(0) }
 ] %}
 
 <ul class="csa-tabs csa-tabs--folder vol-tabs" role="tablist">

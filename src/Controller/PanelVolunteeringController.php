@@ -86,6 +86,15 @@ class PanelVolunteeringController extends AbstractController
     private const MAX_ROUTINE = 4;
 
     /**
+     * Cuántos turnos por confirmar se enseñan con sus botones en «Mis turnos».
+     *
+     * A la vista y no detrás de un resumen, porque es la acción que más cuesta
+     * conseguir. Pero con tope: quien lleva medio año sin contestar tendría ahí
+     * una pared de tarjetas, y una pared no se contesta, se cierra.
+     */
+    private const MAX_PENDING = 3;
+
+    /**
      * La portada: lo que hace falta, y nada más.
      *
      * Contesta UNA pregunta —¿dónde hago falta?— desde que lo demás tiene su
@@ -161,12 +170,21 @@ class PanelVolunteeringController extends AbstractController
     }
 
     /**
-     * Lo mío: a lo que me he apuntado, lo que llevo hecho y lo que me falta por
-     * confirmar.
+     * Mis turnos: el próximo, lo que falta por contestar, lo que viene después y
+     * cuánto llevo puesto este año.
      *
-     * PANTALLA PROPIA desde que el voluntariado tiene pestañas. Vivía al final
-     * de una pantalla que hacía cinco cosas, o sea a cuatro pantallazos de
-     * scroll en un móvil, que en la práctica es no estar.
+     * ES UN RESUMEN, NO UN ARCHIVO. La versión anterior desplegaba entera la
+     * lista de todo lo hecho en el año, y ésa es la única parte de la pantalla
+     * que crece sin techo: en septiembre eran siete líneas y en junio serían
+     * treinta. Los pendientes y los turnos futuros son pocos por naturaleza; el
+     * histórico no. Así que el histórico se resume aquí —la cifra y cuántas
+     * tareas— y se despliega en {@see self::history()}.
+     *
+     * LO QUE FALTA POR CONTESTAR SE QUEDA A LA VISTA, con sus botones, y no
+     * detrás de un «tienes 5 sin confirmar». Es la acción que más cuesta
+     * conseguir —hasta que no responden, esas horas no las tiene nadie— y
+     * ponerle un clic de más va justo en contra. Se limita, eso sí: con seis
+     * pendientes la pantalla volvía a ser un muro.
      */
     #[Route('/mis-turnos', name: 'panel_volunteering_mine', methods: ['GET'])]
     public function mine(
@@ -183,20 +201,28 @@ class PanelVolunteeringController extends AbstractController
         [$from, $to] = $contributions->period();
         $mine = $contributions->forPartner($partner);
 
+        // El próximo va aparte del resto: es lo que se viene a mirar, y como
+        // tarjeta entera. Los demás bajan a una línea cada uno — para decidir si
+        // vas al del sábado no hace falta releer la ficha completa.
+        $upcoming = $signups->findUpcomingFor($partner, $now);
+        $pending = $signups->findPendingConfirmationFor($partner, $now);
+        $answered = $signups->findAnsweredFor($partner, $from, $to);
+
         return $this->render('Panel/volunteering_mine.html.twig', [
             'partner' => $partner,
-            'my_signups' => $signups->findUpcomingFor($partner, $now),
-            // Lo que ya pasó y aún no ha dicho si hizo. Va arriba del todo: es
-            // una pregunta concreta, con respuesta de un clic, y hasta que no la
-            // conteste esas horas no las tiene nadie.
-            'pending_confirmation' => $signups->findPendingConfirmationFor($partner, $now),
-            // Qué hizo, no sólo cuánto: "6 h" no dice nada, "6 h: dos repartos y
-            // una mañana de plantación" sí.
-            // Lo contestado, no sólo lo hecho: un «no pude» salía de los
-            // pendientes y no entraba en ninguna otra lista, así que la tarjeta
-            // desaparecía sin dejar rastro. Quien pulsaba no sabía si se había
-            // guardado y quien erraba de botón no tenía qué corregir.
-            'my_done' => $signups->findAnsweredFor($partner, $from, $to),
+            'next_signup' => $upcoming[0] ?? null,
+            'later_signups' => \array_slice($upcoming, 1),
+            // Lo que ya pasó y aún no ha dicho si hizo. Es una pregunta concreta
+            // con respuesta de un clic, y hasta que no la conteste esas horas no
+            // las tiene nadie.
+            'pending_confirmation' => \array_slice($pending, 0, self::MAX_PENDING),
+            'pending_total' => \count($pending),
+            // Del histórico, aquí sólo el recuento: el detalle vive en su propia
+            // pantalla porque es lo único que crece todo el año.
+            'done_count' => \count(array_filter(
+                $answered,
+                static fn (VolunteerSignup $signup): bool => true === $signup->getAttended()
+            )),
             'my_minutes' => $mine->minutes,
             // La mediana de quienes participan (no la media) y a quién se le
             // enseña. Las dos reglas viven en VolunteerContribution, que es
@@ -211,6 +237,44 @@ class PanelVolunteeringController extends AbstractController
             // Lo que lleva apuntado este año, para que no lo apunte dos veces.
             'coordination_log' => $coordinationLog->findFor($partner, $from, $to),
         ] + $this->tabsContext($signups, $partner, $now));
+    }
+
+    /**
+     * El detalle de lo que llevo hecho este año.
+     *
+     * PANTALLA PROPIA porque es lo único de «Mis turnos» que crece sin techo: en
+     * septiembre son siete líneas y en junio serán treinta, y desplegado entero
+     * enterraba lo que sí se viene a mirar —el próximo turno y lo que falta por
+     * contestar—. Aquí se entra a propósito, y entonces la lista larga no
+     * estorba: es justo lo que se venía a ver.
+     *
+     * Trae también los «no pude», que no computan pero son respuestas suyas: sin
+     * ellos, contestar que no hacía desaparecer el turno sin dejar rastro.
+     */
+    #[Route('/mis-turnos/historial', name: 'panel_volunteering_history', methods: ['GET'])]
+    public function history(
+        VolunteerSignupRepository $signups,
+        VolunteerCoordinationLogRepository $coordinationLog,
+        VolunteerContributions $contributions,
+    ): Response {
+        if (($redirect = $this->ensureReady()) !== null) {
+            return $redirect;
+        }
+
+        $partner = $this->getUser()->getPartner();
+        [$from, $to] = $contributions->period();
+        $mine = $contributions->forPartner($partner);
+
+        return $this->render('Panel/volunteering_history.html.twig', [
+            'partner' => $partner,
+            'my_done' => $signups->findAnsweredFor($partner, $from, $to),
+            'my_minutes' => $mine->minutes,
+            'median_minutes' => $mine->medianMinutes,
+            'show_median' => $mine->showMedian(),
+            // Coordinar no genera inscripciones, así que sus horas sólo se ven
+            // aquí: en la lista de turnos no aparecerían nunca.
+            'coordination_log' => $coordinationLog->findFor($partner, $from, $to),
+        ] + $this->tabsContext($signups, $partner, new \DateTime()));
     }
 
     /**
