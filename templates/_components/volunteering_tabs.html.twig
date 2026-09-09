@@ -26,15 +26,21 @@
 
 {# El rótulo corto es el que se ve: a 390px caben cuatro en dos filas si ninguno
  # se pasa de dos palabras. El largo va en el title, para quien pare encima. #}
+{# TRES Y NO CUATRO. «Mis áreas» se fue al menú de la cuenta, donde ya vive
+ # «Cómo te avisamos», que es literalmente lo mismo: se contesta una vez al año y
+ # no merece el mismo rango que lo que se usa cada semana. A 390px, además, el
+ # cuarto rótulo más el contador no cabían con holgura.
+ #
+ # «MIS TURNOS» Y NO «LO MÍO»: dice qué hay dentro. «Lo mío» podría ser
+ # cualquier cosa —mis datos, mis áreas, mis horas— y obliga a entrar para
+ # averiguarlo. #}
 {% set tabs = [
     { short: 'Hace falta', label: 'Lo que hace falta', url: path('panel_volunteering'),
       active: route == 'panel_volunteering' },
     { short: 'Cuadrante', label: 'El cuadrante del mes', url: path('panel_volunteering_calendar'),
       active: route == 'panel_volunteering_calendar' },
-    { short: 'Lo mío', label: 'A lo que me he apuntado', url: path('panel_volunteering_mine'),
-      active: route == 'panel_volunteering_mine', count: pending|default(0) },
-    { short: 'Mis áreas', label: 'De qué quiero que me avisen', url: path('panel_volunteering_areas'),
-      active: route == 'panel_volunteering_areas' }
+    { short: 'Mis turnos', label: 'A lo que me he apuntado', url: path('panel_volunteering_mine'),
+      active: route == 'panel_volunteering_mine', count: pending|default(0) }
 ] %}
 
 <ul class="csa-tabs csa-tabs--folder vol-tabs" role="tablist">
