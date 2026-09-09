@@ -75,10 +75,19 @@
     .scal-legend__sw { width: 22px; height: 13px; border-radius: 3px; background: var(--bg); border-left: 3px solid var(--line); }
     .scal-legend__sw--apagado { background: transparent; border: 1px dashed var(--line); border-left: 3px solid var(--line); }
     .scal-legend__sw--alarm { border: 1px solid var(--cal-ocre-line); border-left-width: 3px; }
-    /* Las dos muestras del relleno: mismo borde, sólo cambia el fondo. Es la
-       diferencia que hay que aprender de un vistazo. */
-    .scal-legend__sw--mine { background: var(--cal-crema, #efeadb); border: 1px solid #d9d4c4; border-left-width: 1px; }
-    .scal-legend__sw--other { background: #fff; border: 1px solid #d9d4c4; border-left-width: 1px; }
+    /* ---- leyenda del modo socix: los dos ejes ----
+       Las muestras de la BARRA llevan sólo barra (el fondo blanco), y las del
+       FONDO llevan sólo fondo (sin barra): si todas tuvieran las dos cosas, la
+       leyenda no explicaría nada, sería cuatro rectángulos parecidos. */
+    .scal-legend--socix { gap: 13px; }
+    .scal-legend__sep { width: 1px; height: 14px; background: var(--cal-rule); }
+    .scal-legend__sw--need { background: #fff; border: 1px solid var(--cal-rule); border-left: 3px solid var(--csa-terracotta); }
+    .scal-legend__sw--ok   { background: #fff; border: 1px solid var(--cal-rule); border-left: 3px solid var(--cal-salvia-line); }
+    /* El verde de Huerta como ejemplo: la leyenda enseña el CONTRASTE entre
+       vivo y lavado, que es la regla; el color concreto lo da cada área. */
+    .scal-legend__sw--own   { background: color-mix(in srgb, #4a7c3a 20%, #fff); border: 1px solid color-mix(in srgb, #4a7c3a 38%, #fff); }
+    .scal-legend__sw--other { background: color-mix(in srgb, #4a7c3a 7%, #fff); border: 1px solid color-mix(in srgb, #4a7c3a 22%, #fff); }
+    .scal-legend__sw--past  { background: var(--cal-neutro); border: 1px solid transparent; opacity: .62; }
 
     /* ---------- estados: variables por ficha, grupo y muestra ---------- */
     .scal-chip--porvenir, .scal-group--porvenir, .scal-legend__sw--porvenir { --bg: var(--cal-azul-soft); --fg: var(--cal-azul-ink); --line: var(--cal-azul-line); }
@@ -171,6 +180,68 @@
     .scal-chip__place { font-size: 11.5px; color: var(--cal-ink-muted); }
     .scal-chip__extra { display: none; font-size: 11.5px; color: var(--cal-ink-muted); }
 
+
+    /* ============================================================
+     * LOS CUATRO NIVELES DE UNA FICHA (modo socix)
+     * ============================================================
+     * Una ficha del cuadrante dice CUATRO cosas a la vez, y cada una necesita su
+     * propio canal o se pisan. El reparto:
+     *
+     *   1. DE QUÉ ÁREA ES  → el color del fondo
+     *   2. SI ES DE LAS MÍAS → cuánto se ve ese color (saturado / lavado)
+     *   3. SI FALTA GENTE   → la barra de la izquierda (terracota / salvia)
+     *   4. SI YA PASÓ       → gris, tachado y opaco: manda sobre todo lo demás
+     *
+     * Antes 1 y 2 no existían y 3 y 4 compartían el mismo canal: lo que no era
+     * de tus áreas salía con `opacity: .34`, o sea con la misma señal que lo
+     * vencido, y no había forma de distinguir «esto no es lo tuyo, pero puedes
+     * venir» de «esto ya no se puede tocar».
+     *
+     * El color del área sale del id (`% 5`), no de una columna: es el mismo
+     * truco que el avatar del socix (`partner.id % 4`), estable mientras el área
+     * exista y sin un campo que alguien tendría que rellenar a mano. Si algún día
+     * quien coordina quiere elegirlo, entonces sí toca columna. */
+    .scal--socix .scal-chip--area0 { --area: #9c4a6e; }   /* ciruela */
+    .scal--socix .scal-chip--area1 { --area: #4a7c3a; }   /* verde   · Huerta */
+    .scal--socix .scal-chip--area2 { --area: #a3702a; }   /* ámbar   · Reparto */
+    .scal--socix .scal-chip--area3 { --area: #3a7ca5; }   /* azul    */
+    .scal--socix .scal-chip--area4 { --area: #5f6b3a; }   /* oliva   · Comunicación */
+
+    /* 1+2. El fondo lleva el color del área; cuánto se ve dice si es tuya.
+       Las dos se leen igual de bien —las dos se pueden pulsar— pero de un
+       vistazo se ve cuáles son de lo que marcaste. */
+    .scal--socix .scal-chip[class*="scal-chip--area"] {
+        background: color-mix(in srgb, var(--area) 7%, #fff);
+        border-color: color-mix(in srgb, var(--area) 22%, #fff);
+    }
+    .scal--socix .scal-chip--mine[class*="scal-chip--area"] {
+        background: color-mix(in srgb, var(--area) 20%, #fff);
+        border-color: color-mix(in srgb, var(--area) 38%, #fff);
+    }
+
+    /* 3. La barra de la izquierda es el ESTADO DE LA GENTE, y sólo eso:
+       terracota si falta alguien, salvia si está cubierto o si ya vas. Es la
+       única pregunta que se contesta de un vistazo desde el otro lado de la
+       habitación. */
+    .scal--socix .scal-chip { border-left: 3px solid var(--cal-salvia-line); }
+    .scal--socix .scal-chip:has(.scal-chip__state--need) { border-left-color: var(--csa-terracotta); }
+
+    /* 4. YA PASÓ: manda sobre todo. Sin color de área —de una ficha vencida no
+       se decide nada—, en gris, con el título tachado y algo transparente. Es la
+       diferencia con «no es de tus áreas», que se ve perfectamente y se puede
+       pulsar. */
+    .scal--socix .scal-chip--past {
+        background: var(--cal-neutro);
+        border-color: transparent; border-left-color: rgba(28, 29, 26, 0.18);
+        opacity: 0.62;
+    }
+    .scal--socix .scal-chip--past .scal-chip__title,
+    .scal--socix .scal-chip--past .scal-chip__time { text-decoration: line-through; }
+    .scal--socix .scal-chip--past .scal-chip__title,
+    .scal--socix .scal-chip--past .scal-chip__time,
+    .scal--socix .scal-chip--past .scal-chip__place,
+    .scal--socix .scal-chip--past .scal-chip__state { color: var(--cal-ink-muted); }
+
     /* ---------- de mis áreas vs. de otra área ----------
        RELLENO SÍ / RELLENO NO, y no opacidad. La opacidad baja es el lenguaje
        universal de «deshabilitado», y aquí decía justo lo contrario: un turno de
@@ -184,8 +255,9 @@
        relevante».
 
        Sólo en modo socix: en gestión el atenuado sí significa «no es tuyo». */
-    .scal--socix .scal-chip--mine { background: var(--cal-crema, #efeadb); }
-    .scal--socix .scal-chip--dim { opacity: 1; background: #fff; }
+    /* El atenuado, retirado del todo en modo socix: lo que no es de tus áreas se
+       distingue por llevar su color lavado, no por verse peor. */
+    .scal--socix .scal-chip--dim { opacity: 1; }
     .scal--socix .scal-chip--dim:hover { opacity: 1; }
 
     /* El atenuado se queda donde de verdad quiere decir «esto ya no se toca». */
