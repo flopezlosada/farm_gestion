@@ -47,121 +47,124 @@
          # dejaría el «Todas 7» prometiendo tarjetas que no están. #}
         {% set todos = urgent_shifts|merge(later_shifts) %}
 
-        {% embed '_components/csa_card.html.twig' with {
-            title: 'Lo que hace falta',
-            subtitle: 'Turnos de las próximas semanas que siguen sin cubrir',
-            icon: 'fa-hand-paper-o',
-            accent: 'green',
-            variant: 'hero'
-        } %}
-            {% block body %}
-                {% if todos is empty and routine_shifts is empty %}
-                    <p class="vol-empty">
-                        Ahora mismo no hay ningún turno pendiente. Cuando haya algo que
-                        necesite manos, aparecerá aquí.
-                    </p>
-                {% else %}
-                    {# Los filtros sólo tienen sentido con tarjetas que filtrar:
-                     # con el día a día por toda compañía, una barra de filtros es
-                     # un control que no hace nada. #}
-                    {% if todos is not empty %}
-                    {# ---- FILTROS ----
-                     # Sólo los tres que tienen dato de verdad. «Sin experiencia»
-                     # está en el diseño y no se pone: no hay campo que lo diga
-                     # (open_to_anyone es otra cosa — a quién se le amplía el
-                     # aviso), y un filtro que no filtra por lo que promete es
-                     # peor que no tenerlo.
-                     #
-                     # Filtran en el navegador y sobre lo ya pintado: son unas
-                     # decenas de tarjetas, no hay recarga, y quien no tenga JS
-                     # las sigue viendo todas —que es el estado útil—. Por eso los
-                     # contadores se calculan aquí sobre lo que se pinta y no
-                     # sobre el total: un filtro no puede sacar lo que no está. #}
-                    {% set n_casa = todos|filter(s => s.offer.remote)|length %}
-                    {% set n_mio = my_node_id ? todos|filter(s => s.offer.node and s.offer.node.id == my_node_id)|length : 0 %}
-                    {% set n_finde = todos|filter(s => s.startsAt|date('N') >= 6)|length %}
+        {# ---- CABECERA ----
+         # Sin la csa-card «hero» que la envolvía: una banda verde con un icono
+         # en un círculo blanco y el título dentro pesaba más que las tarjetas y
+         # ponía un cuarto verde en una pantalla que ya tiene el de los botones.
+         # Aquí el título hace de título, en serif y grande, y la pantalla empieza
+         # donde empieza el contenido.
+         #
+         # «¿DÓNDE HAGO FALTA?» y no «Lo que hace falta»: es la pregunta que trae
+         # a alguien a esta pantalla, dicha con sus palabras. Y la entradilla dice
+         # de qué se le avisa —que es lo que explica por qué ve lo que ve— y que
+         # puede venir a cualquier cosa, que si no marcar un área se lee como
+         # cerrarse las demás. #}
+        <header class="vol-head">
+            <h1 class="vol-head__title">¿Dónde hago falta?</h1>
+            <p class="vol-head__sub">
+                Turnos de las próximas semanas que siguen sin cubrir.
+                {%- if my_area_names is not empty %}
+                    Te avisamos de {{ my_area_names|join(' y ') }}, pero puedes venir a cualquiera.
+                {%- endif %}
+            </p>
+        </header>
 
-                    <div class="vol-filters" data-vol-filters>
-                        <button type="button" class="vol-filter vol-filter--on" data-vol-filter="todas" aria-pressed="true">
-                            Todas <span class="vol-filter__n">{{ todos|length }}</span>
+        {% if todos is empty and routine_shifts is empty %}
+                <p class="vol-empty">
+                    Ahora mismo no hay ningún turno pendiente. Cuando haya algo que
+                    necesite manos, aparecerá aquí.
+                </p>
+            {% else %}
+                {# Los filtros sólo tienen sentido con tarjetas que filtrar:
+                 # con el día a día por toda compañía, una barra de filtros es
+                 # un control que no hace nada. #}
+                {% if todos is not empty %}
+                {# ---- FILTROS ----
+                 # Sólo los tres que tienen dato de verdad. «Sin experiencia»
+                 # está en el diseño y no se pone: no hay campo que lo diga
+                 # (open_to_anyone es otra cosa — a quién se le amplía el
+                 # aviso), y un filtro que no filtra por lo que promete es
+                 # peor que no tenerlo.
+                 #
+                 # Filtran en el navegador y sobre lo ya pintado: son unas
+                 # decenas de tarjetas, no hay recarga, y quien no tenga JS
+                 # las sigue viendo todas —que es el estado útil—. Por eso los
+                 # contadores se calculan aquí sobre lo que se pinta y no
+                 # sobre el total: un filtro no puede sacar lo que no está. #}
+                {% set n_casa = todos|filter(s => s.offer.remote)|length %}
+                {% set n_mio = my_node_id ? todos|filter(s => s.offer.node and s.offer.node.id == my_node_id)|length : 0 %}
+                {% set n_finde = todos|filter(s => s.startsAt|date('N') >= 6)|length %}
+
+                <div class="vol-filters" data-vol-filters>
+                    <button type="button" class="vol-filter vol-filter--on" data-vol-filter="todas" aria-pressed="true">
+                        Todas <span class="vol-filter__n">{{ todos|length }}</span>
+                    </button>
+                    {% if n_casa %}
+                        <button type="button" class="vol-filter" data-vol-filter="remote" aria-pressed="false">
+                            Desde casa <span class="vol-filter__n">{{ n_casa }}</span>
                         </button>
-                        {% if n_casa %}
-                            <button type="button" class="vol-filter" data-vol-filter="remote" aria-pressed="false">
-                                Desde casa <span class="vol-filter__n">{{ n_casa }}</span>
-                            </button>
-                        {% endif %}
-                        {% if n_mio %}
-                            <button type="button" class="vol-filter" data-vol-filter="mine" aria-pressed="false">
-                                En mi punto <span class="vol-filter__n">{{ n_mio }}</span>
-                            </button>
-                        {% endif %}
-                        {% if n_finde %}
-                            <button type="button" class="vol-filter" data-vol-filter="weekend" aria-pressed="false">
-                                Fin de semana <span class="vol-filter__n">{{ n_finde }}</span>
-                            </button>
-                        {% endif %}
-                    </div>
-
-                    {# Cuando un filtro deja la pantalla vacía hay que decirlo: si
-                     # no, parece que se ha roto. #}
-                    <p class="vol-empty" data-vol-none hidden>
-                        Nada de eso ahora mismo. Prueba con «Todas» o mira el calendario.
-                    </p>
-
                     {% endif %}
-
-                    {% include '_components/volunteering_group.html.twig' with {
-                        title: 'Falta gente ya', hint: 'Sin cubrir y con la fecha encima', tone: 'urgent',
-                        shifts: urgent_shifts, total: urgent_total, my_node_id: my_node_id, my_category_ids: my_category_ids
-                    } only %}
-                    {% include '_components/volunteering_group.html.twig' with {
-                        title: 'Próximas semanas', hint: 'Hay hueco, pero conviene cerrarlo', tone: 'later',
-                        shifts: later_shifts, total: later_total, my_node_id: my_node_id, my_category_ids: my_category_ids
-                    } only %}
-                    {# ---- EL DÍA A DÍA, EN UNA LÍNEA ----
-                     # Y no como un tercer montón de tarjetas, que en móvil dejaba
-                     # el trabajo de verdad a cuatro scrolls de distancia. Son
-                     # turnos de una plaza y un rato corto —sacar al perro—: se
-                     # cubren solos casi siempre y quien los hace ya sabe que
-                     # existen. Enseñarlos con el mismo peso que una faena de
-                     # cuatro plazas era darles una importancia que no tienen.
-                     #
-                     # La fila entera es el enlace y mide 44px: se toca con el
-                     # pulgar sin apuntar. #}
-                    {% if routine_shifts is not empty %}
-                        <a class="vol-fold" href="{{ path('panel_volunteering_calendar') }}">
-                            <span class="vol-fold__body">
-                                <span class="vol-fold__title">Del día a día</span>
-                                <span class="vol-fold__hint">
-                                    Un rato corto, todos los días.
-                                    {% for shift in routine_shifts|slice(0, 2) %}
-                                        {{- ' ' }}{{ shift.offer.title }}{{ loop.last ? '.' : ',' }}
-                                    {%- endfor %}
-                                </span>
-                            </span>
-                            <span class="vol-fold__go">
-                                {{ routine_total }} turno{{ routine_total == 1 ? '' : 's' }} →
-                            </span>
-                        </a>
+                    {% if n_mio %}
+                        <button type="button" class="vol-filter" data-vol-filter="mine" aria-pressed="false">
+                            En mi punto <span class="vol-filter__n">{{ n_mio }}</span>
+                        </button>
                     {% endif %}
+                    {% if n_finde %}
+                        <button type="button" class="vol-filter" data-vol-filter="weekend" aria-pressed="false">
+                            Fin de semana <span class="vol-filter__n">{{ n_finde }}</span>
+                        </button>
+                    {% endif %}
+                </div>
 
-                    {# El calendario, al pie: aquí se asoman unos pocos turnos, y
-                     # para comprometerse con "los viernes de agosto" hace falta
-                     # verlos todos y poder marcar varios. #}
-                    {# Sigue al pie aunque el cuadrante tenga ya su pestaña
-                     # arriba: quien acaba de recorrer la lista y no ha
-                     # encontrado su día está justo aquí, y volver a subir a la
-                     # pestaña es una acción más. Dice «el cuadrante» y no «el
-                     # calendario», como la pestaña. #}
-                    <p class="vol-help">
-                        <a href="{{ path('panel_volunteering_calendar') }}">
-                            <i class="fa fa-calendar-o" aria-hidden="true"></i>
-                            Ver el cuadrante del mes y apuntarme a varios días
-                        </a>
-                    </p>
+                {# Cuando un filtro deja la pantalla vacía hay que decirlo: si
+                 # no, parece que se ha roto. #}
+                <p class="vol-empty" data-vol-none hidden>
+                    Nada de eso ahora mismo. Prueba con «Todas» o mira el calendario.
+                </p>
+
                 {% endif %}
-            {% endblock %}
-        {% endembed %}
+
+                {% include '_components/volunteering_group.html.twig' with {
+                    title: 'Falta gente ya', hint: 'Sin cubrir y con la fecha encima', tone: 'urgent',
+                    shifts: urgent_shifts, total: urgent_total, my_node_id: my_node_id, my_category_ids: my_category_ids
+                } only %}
+                {% include '_components/volunteering_group.html.twig' with {
+                    title: 'Próximas semanas', hint: 'Hay hueco, pero conviene cerrarlo', tone: 'later',
+                    shifts: later_shifts, total: later_total, my_node_id: my_node_id, my_category_ids: my_category_ids
+                } only %}
+                {# ---- EL DÍA A DÍA, EN UNA LÍNEA ----
+                 # Y no como un tercer montón de tarjetas, que en móvil dejaba
+                 # el trabajo de verdad a cuatro scrolls de distancia. Son
+                 # turnos de una plaza y un rato corto —sacar al perro—: se
+                 # cubren solos casi siempre y quien los hace ya sabe que
+                 # existen. Enseñarlos con el mismo peso que una faena de
+                 # cuatro plazas era darles una importancia que no tienen.
+                 #
+                 # La fila entera es el enlace y mide 44px: se toca con el
+                 # pulgar sin apuntar. #}
+                {% if routine_shifts is not empty %}
+                    <a class="vol-fold" href="{{ path('panel_volunteering_calendar') }}">
+                        <span class="vol-fold__body">
+                            <span class="vol-fold__title">Del día a día</span>
+                            <span class="vol-fold__hint">
+                                Un rato corto, todos los días.
+                                {% for shift in routine_shifts|slice(0, 2) %}
+                                    {{- ' ' }}{{ shift.offer.title }}{{ loop.last ? '.' : ',' }}
+                                {%- endfor %}
+                            </span>
+                        </span>
+                        <span class="vol-fold__go">
+                            {{ routine_total }} turno{{ routine_total == 1 ? '' : 's' }} →
+                        </span>
+                    </a>
+                {% endif %}
+
+                {# SIN un tercer enlace al cuadrante al pie. Llegó a haber tres
+                 # seguidos en el mismo palmo de pantalla —«y 12 turnos más», la
+                 # fila del día a día y éste—, los tres al mismo sitio y diciendo
+                 # casi lo mismo. Cada montón lleva ya el suyo, con su número y su
+                 # contexto, y el cuadrante tiene además su pestaña arriba. #}
+            {% endif %}
 
     </div>
 

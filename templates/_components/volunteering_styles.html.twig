@@ -971,6 +971,21 @@
        nada que pulsar salvo deshacer. Es el único estado que tiñe la tarjeta,
        y puede porque es el que uno tiene de uno en uno, no de nueve en nueve. */
     .vol-task--mine { border-color: var(--csa-green); background: #f6faf1; }
+    /* EL PRÓXIMO, destacado sobre los otros a los que va: con todas iguales
+       había que leer las cuatro fechas para saber cuál es el de esta semana. Un
+       borde de 2px y un halo suave — no otro color, que el verde ya es el suyo:
+       más peso del mismo. */
+    .vol-task--next {
+        border-width: 2px;
+        box-shadow: 0 0 0 4px var(--csa-green-soft);
+    }
+    .csa-app .vol-task--next .vol-task__title { font-size: var(--csa-fs-xl); }
+    /* LAS DEL MONTÓN URGENTE, con borde ámbar. No es un color nuevo: es el mismo
+       que ya llevan dentro «Faltan 2 personas» y el «Mañana» de la fecha, o sea
+       la misma idea en otro soporte. Y borde y no relleno: un fondo de color en
+       cuatro tarjetas seguidas convierte la pantalla en una alarma y deja de
+       avisar de nada. */
+    .vol-group--urgent .vol-task { border-color: var(--csa-ochre-soft); }
     /* La que PREGUNTA no es ni una cosa ni la otra: no es tuya —ya pasó— ni
        pide gente. Con el mismo blanco que las de «hace falta» costaba ver a
        simple vista qué tipo de tarjeta era cada una en una pantalla que tiene
@@ -1119,10 +1134,14 @@
         flex-basis: 100%; margin-top: -7px;
         font-size: var(--csa-fs-sm); color: var(--csa-ink-soft);
     }
+    /* Con aire: pegado al último botón se leía como el pie de esa tarjeta y no
+       como la salida del montón entero. */
     .vol-group__more {
-        margin: 14px 0 0;
+        margin: var(--csa-sp-5) 0 0;
         font-size: var(--csa-fs-sm); font-weight: 500; color: var(--csa-ink-soft);
     }
+    .vol-group__more a { color: var(--csa-green); text-decoration: none; }
+    .vol-group__more a:hover { text-decoration: underline; }
 
     /* Las dos respuestas de «¿pudiste ir?»: MISMO PESO Y NINGUNA VERDE. Es una
        pregunta de hecho, no una recomendación; pintar «sí, la hice» en primario
@@ -1132,17 +1151,59 @@
         display: grid; grid-template-columns: 1fr 1fr; gap: var(--csa-sp-2);
         margin-top: 14px;
     }
+    /* CON COLOR, PERO NINGUNO RELLENO. Dos botones blancos iguales no se leían
+       como una pregunta con dos respuestas, se leían como nada. Y rellenar el
+       «sí» de verde recomienda una de las dos respuestas a una pregunta de
+       hecho, lo que empuja a decir que sí a quien no fue — y de ahí salen las
+       horas del año de esa persona. Contorno y texto de color: se distinguen,
+       pesan lo mismo. */
     .vol-task__answer {
         height: 44px; border-radius: var(--csa-radius-md); cursor: pointer;
-        background: var(--csa-surface); color: var(--csa-ink);
-        border: 1px solid #d9d4c4;
+        background: var(--csa-surface);
         font-family: var(--csa-sans); font-size: var(--csa-fs-base); font-weight: 600;
     }
-    .vol-task__answer:hover { background: var(--csa-surface-alt); }
+    .vol-task__answer--yes { border: 1.5px solid var(--csa-green); color: var(--csa-green); }
+    .vol-task__answer--yes:hover { background: var(--csa-green-soft); }
+    .vol-task__answer--no { border: 1.5px solid var(--csa-ink-muted); color: var(--csa-ink-soft); }
+    .vol-task__answer--no:hover { background: var(--csa-surface-alt); }
 
     /* El primer bloque de una pantalla no lleva la regla de arriba: no separa de
        nada, y deja un filo suelto justo debajo de las pestañas. */
     .vol-group--first { border-top: 0; margin-top: 0; padding-top: 0; }
+
+    /* ---- Cabecera de pantalla ----
+       Un título y una entradilla, sin banda de color ni icono en un círculo. La
+       csa-card «hero» que llevaba antes pesaba más que las tarjetas y metía un
+       cuarto verde en una pantalla que ya tiene el de los botones. */
+    .vol-head { margin-bottom: var(--csa-sp-5); }
+    .csa-app .vol-head__title {
+        margin: 0;
+        font-family: var(--csa-serif); font-weight: 400; font-size: var(--csa-fs-2xl);
+        line-height: 1.15; letter-spacing: -0.02em; color: var(--csa-ink);
+    }
+    .vol-head__sub {
+        max-width: 52ch; margin: var(--csa-sp-2) 0 0;
+        font-size: var(--csa-fs-base); line-height: var(--csa-lh-normal);
+        color: var(--csa-ink-soft);
+    }
+
+    /* ---- El balance del año, en su propio panel ----
+       Habla de OTRA cosa que todo lo de arriba: arriba están los turnos —lo que
+       viene, lo que hay que contestar—, y esto es el saldo. Con el mismo
+       tratamiento que las secciones de turnos se leía como una lista más que se
+       hubiera quedado suelta al final.
+
+       Fondo crema y sin regla superior: un panel, no otra fila de la pila. */
+    .vol-balance {
+        border-top: 0;
+        margin-top: var(--csa-sp-8);
+        padding: var(--csa-sp-5) var(--csa-sp-5) var(--csa-sp-4);
+        background: var(--csa-rule-soft);
+        border-radius: var(--csa-radius-lg);
+    }
+    /* Dentro del panel las filas se separan con una línea algo más marcada: el
+       crema del fondo se come el divisor suave. */
+    .vol-balance .vol-done__row { border-top-color: #e0d9c4; }
 
     /* ---- Tu aportación: la cifra y lo que hay detrás ----
        La cifra en serif y grande, como el resto de números con peso del panel.

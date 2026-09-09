@@ -129,8 +129,8 @@
                             <form method="post" action="{{ path('panel_volunteering_confirm', {id: shift.id}) }}"
                                   class="vol-task__answers">
                                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
-                                <button type="submit" name="attended" value="1" class="vol-task__answer">Sí, la hice</button>
-                                <button type="submit" name="attended" value="0" class="vol-task__answer">No pude</button>
+                                <button type="submit" name="attended" value="1" class="vol-task__answer vol-task__answer--yes">Sí, la hice</button>
+                                <button type="submit" name="attended" value="0" class="vol-task__answer vol-task__answer--no">No pude</button>
                             </form>
                         </article>
                     {% endfor %}
@@ -159,7 +159,12 @@
          # La cifra, las últimas y el enlace al detalle. El listado entero vive en
          # su pantalla: es lo único de aquí que crece todo el año, y desplegado
          # enterraba lo de arriba, que es lo que se viene a hacer. #}
-        <section class="vol-group">
+        {# En su propio panel, no como un bloque más de la pila. Habla de OTRA
+         # cosa que todo lo de arriba: arriba están los turnos —lo que viene y lo
+         # que hay que contestar—, y esto es el balance del año. Con el mismo
+         # tratamiento que las secciones de turnos, se leía como una lista más
+         # que se hubiera quedado suelta al final. #}
+        <section class="vol-group vol-balance">
             <div class="vol-group__head">
                 <h4 class="vol-group__title">Tu aportación este año</h4>
             </div>

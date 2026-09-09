@@ -176,6 +176,13 @@ class PanelVolunteeringController extends AbstractController
                 static fn (VolunteerCategory $category): int => $category->getId(),
                 $partner->getVolunteerCategories()->toArray()
             ),
+            // Los nombres, para la entradilla: decir de qué se le avisa explica
+            // por qué ve lo que ve, y decir que puede venir a cualquier cosa
+            // evita que marcar un área se lea como cerrarse las demás.
+            'my_area_names' => array_map(
+                static fn (VolunteerCategory $category): string => $category->getName(),
+                $partner->getVolunteerCategories()->toArray()
+            ),
         ] + $this->tabsContext($signups, $partner, $now));
     }
 

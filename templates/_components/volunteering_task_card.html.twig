@@ -56,7 +56,7 @@
 {% set de_otra_area = my_category_ids|default([]) is not empty and areas|length > 0
     and areas|filter(c => c.id in my_category_ids)|length == 0 %}
 
-<article class="vol-task{% if apuntado %} vol-task--mine{% endif %}"
+<article class="vol-task{% if apuntado %} vol-task--mine{% endif %}{% if next|default(false) %} vol-task--next{% endif %}"
          data-vol-task
          data-vol-remote="{{ offer.remote ? '1' : '0' }}"
          data-vol-mine="{{ en_mi_punto ? '1' : '0' }}"
@@ -80,23 +80,27 @@
 
     <h3 class="vol-task__title">{{ offer.title }}</h3>
 
-    {# A quien ya va no se le dice cuánta gente falta ni por qué hace falta: ya
-     # dijo que sí. Eso es de la tarjeta que pide, no de la que confirma. #}
-    {% if not apuntado %}
-        {% if faltan %}
-            <p class="vol-task__need{% if urgente %} vol-task__need--now{% endif %}">
-                {% if faltan == 1 %}Falta 1 persona{% else %}Faltan {{ faltan }} personas{% endif %}
-            </p>
-        {% endif %}
+    {# Cuánta gente falta: sólo en la tarjeta que PIDE. A quien ya va no le toca
+     # resolverlo, y ahí el hueco lo ocupa con quién viene. #}
+    {% if not apuntado and faltan %}
+        <p class="vol-task__need{% if urgente %} vol-task__need--now{% endif %}">
+            {% if faltan == 1 %}Falta 1 persona{% else %}Faltan {{ faltan }} personas{% endif %}
+        </p>
+    {% endif %}
 
-        {# El porqué: si quien organiza ha dicho qué pasa si no lo hace nadie, eso
-         # es lo que va aquí. Sin consecuencia se cae a la descripción, recortada.
-         # En gris y no en rojo: es el motivo para ir, no un error del sistema. #}
-        {% if offer.consequence %}
-            <p class="vol-task__why">{{ offer.consequence }}</p>
-        {% elseif offer.description %}
-            <p class="vol-task__why">{{ offer.description|striptags|u.truncate(150, '…', false) }}</p>
-        {% endif %}
+    {# EL PORQUÉ VA TAMBIÉN EN LA TARJETA DE QUIEN YA VA. Sin él quedaba un
+     # antetítulo, un título y tres líneas de datos —la mitad de cuerpo que la
+     # tarjeta de al lado— y la pantalla de «mis turnos» se veía descolorida al
+     # lado de «hace falta» sin que se supiera por qué. Además, a tres semanas
+     # vista uno ya no se acuerda de a qué dijo que sí.
+     #
+     # Si quien organiza ha dicho qué pasa si no lo hace nadie, eso es lo que va
+     # aquí; si no, la descripción recortada. En gris: es el motivo para ir, no
+     # un error del sistema. #}
+    {% if offer.consequence %}
+        <p class="vol-task__why">{{ offer.consequence }}</p>
+    {% elseif offer.description %}
+        <p class="vol-task__why">{{ offer.description|striptags|u.truncate(150, '…', false) }}</p>
     {% endif %}
 
     {# ── LOS TRES DATOS QUE DECIDEN ── cuándo, dónde y cuánto cuesta. En tres
