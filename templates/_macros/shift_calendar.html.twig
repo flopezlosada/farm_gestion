@@ -68,8 +68,8 @@
      #- exista, y sin una columna nueva que alguien tendría que rellenar. -#}
     {%- set area = o.categories|first|default(null) -%}
     {%- set area_tone = area ? (area.id % 5) : null -%}
-    {#- YA PASÓ es lo que manda sobre todo lo demás: de una ficha vencida no se
-     #- decide nada, así que ni su área ni sus plazas importan ya. -#}
+    {#- YA PASÓ: se marca aparte porque lo que la distingue es el TACHADO, no el
+     #- color — su área se sigue viendo. -#}
     {%- set pasado = item.state not in ['porvenir', 'cubierto'] -%}
     {%- set can_join = item.state == 'porvenir' and not i_go and s.isOpen() -%}
     {%- set time = s.startsAt|date('H:i') -%}
@@ -87,7 +87,7 @@
         {%- set words = 'Ya pasó' -%}{%- set tone = 'past' -%}
     {%- endif -%}
     {%- set people = s.filledSlots == 0 ? 'Todavía no va nadie' : (s.filledSlots == 1 ? 'Ya va 1 persona' : 'Ya van ' ~ s.filledSlots ~ ' personas') -%}
-    <div class="scal-chip scal-chip--{{ item.state }}{{ dim ? ' scal-chip--dim' }}{{ in_my_area ? ' scal-chip--mine' }}{{ i_go ? ' scal-chip--going' }}{{ compact ? ' scal-chip--compact' }}{% if area_tone is not null and not pasado %} scal-chip--area{{ area_tone }}{% endif %}{{ pasado ? ' scal-chip--past' }}"
+    <div class="scal-chip scal-chip--{{ item.state }}{{ dim ? ' scal-chip--dim' }}{{ in_my_area ? ' scal-chip--mine' }}{{ i_go ? ' scal-chip--going' }}{{ compact ? ' scal-chip--compact' }}{% if area_tone is not null %} scal-chip--area{{ area_tone }}{% endif %}{{ pasado ? ' scal-chip--past' }}"
          data-scal-turno data-scal-id="{{ s.id }}" data-scal-day="{{ s.startsAt|date('j') }}"
          data-scal-title="{{ o.title }}" data-scal-area="{{ o.categories|map(c => c.name)|join(' · ') }}"
          data-scal-date="{{ s.startsAt|format_date(pattern="EEEE d 'de' MMMM", locale='es')|capitalize }}"

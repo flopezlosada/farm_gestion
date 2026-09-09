@@ -37,6 +37,9 @@
          # Para añadir un área —Grupo de consumo, Actividades…— se añade aquí una
          # entrada y aparece en los dos sitios. Con `soon: true` se enseña atenuada
          # y sin enlace, para anunciar lo que viene sin prometer una fecha. #}
+        {# El rótulo corto de voluntariado es el MISMO que el largo: «Echar mano»
+         # obligaba a traducir entre el nombre del módulo y el de la pestaña, y
+         # en la barra de abajo cabe «Voluntariado» de sobra. #}
         {% set panel_areas = [
             { label: 'Inicio', short: 'Inicio', icon: 'fa-home',
               url: path('panel'), active: route == 'panel', tab: true },
@@ -45,7 +48,7 @@
               hint: 'Cuándo y dónde recoges' },
         ]
         |merge(is_granted('FEATURE_VOLUNTEERING') ? [
-            { label: 'Voluntariado', short: 'Echar mano', icon: 'fa-hand-paper-o',
+            { label: 'Voluntariado', short: 'Voluntariado', icon: 'fa-hand-paper-o',
               url: path('panel_volunteering'), active: route starts with 'panel_volunteering', tab: true,
               hint: 'Lo que hace falta y lo que llevas hecho' },
         ] : [])

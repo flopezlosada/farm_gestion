@@ -24,23 +24,24 @@
             <span class="scal-legend__sw scal-legend__sw--ok"></span>Ya está cubierto
         </span>
 
-        {# 2. El fondo: de qué área es, y más vivo si es de las tuyas. #}
+        {# 2. Cada área tiene su color, siempre el mismo; lo que cambia es que
+         # las que no son tuyas van apagadas. #}
         {% if has_areas|default(false) %}
             <span class="scal-legend__sep" aria-hidden="true"></span>
             <span class="scal-legend__item">
-                <span class="scal-legend__sw scal-legend__sw--own"></span>De tus áreas
+                <span class="scal-legend__sw scal-legend__sw--own"></span>Cada área, con su color
             </span>
             <span class="scal-legend__item">
-                <span class="scal-legend__sw scal-legend__sw--other"></span>De otra área. También puedes venir
+                <span class="scal-legend__sw scal-legend__sw--other"></span>Apagada, de otra área. Puedes venir igual
             </span>
         {% endif %}
 
-        {# 3. Lo vencido: gris y tachado. Es lo único que NO se puede tocar, y por
-         # eso es lo único apagado. #}
+        {# 3. Lo vencido: TACHADO. También va apagado, así que la raya es lo que
+         # lo separa de «no es de tus áreas». #}
         {% if 'hecho' in states or 'sincerrar' in states %}
             <span class="scal-legend__sep" aria-hidden="true"></span>
             <span class="scal-legend__item">
-                <span class="scal-legend__sw scal-legend__sw--past"></span>Ya pasó
+                <span class="scal-legend__sw scal-legend__sw--past"></span>Tachada, ya pasó
             </span>
         {% endif %}
     </div>

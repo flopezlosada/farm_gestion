@@ -15,17 +15,23 @@
 {% endblock %}
 
 {#
- # De qué quiero que me avisen.
+ # En qué quiere echar una mano cada cual.
  #
- # PESTAÑA PROPIA porque se contesta UNA vez y luego se mira cero veces, pero
- # ocupaba media pantalla en cada visita por delante de lo único que cambia cada
- # semana.
+ # NO ES UNA PANTALLA DE AVISOS, aunque de aquí salga a quién se avisa. Marcar un
+ # área tiene DOS consecuencias, y las dos importan: que te avisen de lo suyo
+ # (`PartnerRepository::findActiveMatchingVolunteerCategories`, que es de donde
+ # sale la audiencia del escalado) y que en el cuadrante lo tuyo se vea destacado
+ # y lo demás apagado. Contarlo sólo como «de qué te avisamos» dejaba fuera la
+ # mitad, y explicaba mal por qué el cuadrante se ve como se ve.
  #
- # AQUÍ Y NO EN «AVISOS», aunque de esto salga a quién se avisa. Lo que se elige
- # es en qué quiere participar cada cual —su voluntariado—, no por qué canal
- # quiere enterarse; eso último es lo que vive en Avisos. Puestas juntas, las dos
- # se leían como la misma y ninguna se entendía: una habla de huerta y reparto,
- # la otra de correo y móvil.
+ # PERO TAMPOCO ES APUNTARSE. Marcar «Huerta» no te inscribe en ningún turno, y
+ # el copy no puede sugerirlo: alguien se quedaría esperando a que le dijeran
+ # cuándo ir. Es una declaración de interés, y por eso se dice «en qué quieres
+ # echar una mano» y no «apúntate a».
+ #
+ # AQUÍ Y NO EN «CÓMO TE AVISAMOS», que es la otra pantalla: aquélla elige el
+ # CANAL —correo, móvil— y ésta el TEMA. Juntas se leían como la misma y ninguna
+ # se entendía.
  #
  # SIN TARJETA ALREDEDOR. La pantalla se llama «Mis áreas» en la pestaña y traía
  # dentro una tarjeta titulada «Qué tareas te interesan»: dos títulos para lo
@@ -38,7 +44,7 @@
 
     {% set my_categories = categories|filter(c => c.id in my_category_ids) %}
 
-    {{ csa.page_header('Mi cuenta', 'Mis áreas de voluntariado', 'De qué quieres que te avisemos.') }}
+    {{ csa.page_header('Mi cuenta', 'Mis áreas de voluntariado', 'En qué quieres echar una mano.') }}
 
     <div class="vol-areas">
 
@@ -49,13 +55,13 @@
             {% if partner.volunteeringOptOut %}
                 No quieres que te avisemos de voluntariado.
             {% elseif my_categories is not empty %}
-                Te avisamos de
+                Echas una mano en
                 {% for category in my_categories %}
                     <strong>{{ category.name }}</strong>
                     {%- if not loop.last %}{{ loop.revindex == 2 ? ' y ' : ', ' }}{% endif -%}
                 {% endfor %}.
             {% else %}
-                Te avisamos sólo de las tareas sencillas que puede hacer cualquiera.
+                No has dicho todavía en qué te gustaría echar una mano.
             {% endif %}
         </p>
 
@@ -63,14 +69,20 @@
          # qué puede apuntarse: en el cuadrante se ven y se cogen los turnos de
          # cualquier área. Sin decirlo, marcar un área se lee como cerrarse las
          # otras, que es lo contrario de lo que hace. #}
+        {# LAS DOS CONSECUENCIAS, dichas. Y la tercera frase, la que evita el
+         # malentendido de fondo: marcar un área no te cierra las otras ni te
+         # inscribe en nada. #}
         <p class="vol-areas__note">
-            Sólo cambia lo que te llega. Puedes apuntarte a cualquier turno, sea de tu área o no.
+            Lo que marques aquí es de lo que te avisaremos, y lo que verás destacado en el cuadrante.
+            No te apunta a ningún turno, y puedes venir a cualquier otro aunque no sea de tu área.
         </p>
 
-        {# Tras un <details>: se contesta una vez y luego se mira cero veces. #}
-        <details class="vol-details">
-            <summary>Cambiar de qué me avisáis</summary>
-
+        {# A LA VISTA Y SIN PLEGAR. Estaba tras un <details> por la misma razón
+         # que cuando vivía dentro de otra pantalla —no comerse media página en
+         # cada visita—, pero eso dejó de aplicar en cuanto pasó a ser una
+         # pantalla propia: quien entra aquí viene justamente a cambiar esto, y
+         # encontrarse un enlace en vez del formulario es un clic de peaje para
+         # llegar a lo único que hay. #}
             <form method="post" action="{{ path('panel_volunteering_preferences') }}">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
 
@@ -81,10 +93,17 @@
                  # cosa, quien marca dos categorías recibiría avisos de todo
                  # y dejaría de fiarse de esta pantalla.
                  #}
+                {#
+                 # Este texto NO es relleno: de él depende que el escalado de
+                 # avisos sea honesto. Marcar = «esto me interesa». No marcar
+                 # nada = «avísame sólo de lo sencillo». Si dijera otra cosa,
+                 # quien marca dos áreas recibiría avisos de todo y dejaría de
+                 # fiarse de esta pantalla.
+                 #}
                 <p class="vol-help">
-                    Marca lo que te apetezca hacer y te avisaremos sólo de eso.
-                    Si no marcas nada, te avisaremos únicamente de las tareas
-                    sencillas que puede hacer cualquiera.
+                    Marca en qué te gustaría echar una mano. Si no marcas nada, te
+                    avisaremos únicamente de las tareas sencillas que puede hacer
+                    cualquiera.
                 </p>
 
                 <div class="vol-prefs">
@@ -112,14 +131,13 @@
                     <label class="vol-optout">
                         <input type="checkbox" name="opt_out" value="1"
                                {% if partner.volunteeringOptOut %}checked{% endif %}>
-                        <span>No quiero que me avisen de voluntariado</span>
+                        <span>Por ahora no quiero echar una mano</span>
                     </label>
-                    <p class="vol-areas__out-hint">Sigues viendo el cuadrante cuando entres.</p>
+                    <p class="vol-areas__out-hint">No te avisaremos de nada de voluntariado. Sigues viendo el cuadrante cuando entres.</p>
                 </div>
 
                 <button type="submit" class="vol-areas__save">Guardar</button>
             </form>
-        </details>
 
     </div>
 {% endblock %}

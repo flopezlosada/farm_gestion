@@ -85,9 +85,18 @@
     .scal-legend__sw--ok   { background: #fff; border: 1px solid var(--cal-rule); border-left: 3px solid var(--cal-salvia-line); }
     /* El verde de Huerta como ejemplo: la leyenda enseña el CONTRASTE entre
        vivo y lavado, que es la regla; el color concreto lo da cada área. */
-    .scal-legend__sw--own   { background: color-mix(in srgb, #4a7c3a 20%, #fff); border: 1px solid color-mix(in srgb, #4a7c3a 38%, #fff); }
-    .scal-legend__sw--other { background: color-mix(in srgb, #4a7c3a 7%, #fff); border: 1px solid color-mix(in srgb, #4a7c3a 22%, #fff); }
-    .scal-legend__sw--past  { background: var(--cal-neutro); border: 1px solid transparent; opacity: .62; }
+    .scal-legend__sw--own   { background: color-mix(in srgb, #4a7c3a 18%, #fff); border: 1px solid color-mix(in srgb, #4a7c3a 34%, #fff); }
+    .scal-legend__sw--other { background: color-mix(in srgb, #4a7c3a 18%, #fff); border: 1px solid color-mix(in srgb, #4a7c3a 34%, #fff); opacity: .45; }
+    /* La muestra de «ya pasó» lleva la raya, que es lo que la distingue de la
+       de «no es tuya»: las dos están apagadas. */
+    .scal-legend__sw--past  {
+        background: color-mix(in srgb, #4a7c3a 18%, #fff); border: 1px solid color-mix(in srgb, #4a7c3a 34%, #fff);
+        opacity: .45; position: relative; overflow: hidden;
+    }
+    .scal-legend__sw--past::after {
+        content: ''; position: absolute; left: 2px; right: 2px; top: 50%;
+        border-top: 1px solid var(--cal-ink);
+    }
 
     /* ---------- estados: variables por ficha, grupo y muestra ---------- */
     .scal-chip--porvenir, .scal-group--porvenir, .scal-legend__sw--porvenir { --bg: var(--cal-azul-soft); --fg: var(--cal-azul-ink); --line: var(--cal-azul-line); }
@@ -182,86 +191,57 @@
 
 
     /* ============================================================
-     * LOS CUATRO NIVELES DE UNA FICHA (modo socix)
+     * CÓMO SE LEE UNA FICHA (modo socix)
      * ============================================================
-     * Una ficha del cuadrante dice CUATRO cosas a la vez, y cada una necesita su
-     * propio canal o se pisan. El reparto:
+     * Tres preguntas, tres señales que no se pisan:
      *
-     *   1. DE QUÉ ÁREA ES  → el color del fondo
-     *   2. SI ES DE LAS MÍAS → cuánto se ve ese color (saturado / lavado)
-     *   3. SI FALTA GENTE   → la barra de la izquierda (terracota / salvia)
-     *   4. SI YA PASÓ       → gris, tachado y opaco: manda sobre todo lo demás
+     *   1. DE QUÉ ÁREA ES → su color, SIEMPRE el mismo y siempre presente.
+     *      Huerta es verde en enero y en agosto, esté cubierta o no, sea tuya o
+     *      no. Es la identidad de la ficha, no un estado.
      *
-     * Antes 1 y 2 no existían y 3 y 4 compartían el mismo canal: lo que no era
-     * de tus áreas salía con `opacity: .34`, o sea con la misma señal que lo
-     * vencido, y no había forma de distinguir «esto no es lo tuyo, pero puedes
-     * venir» de «esto ya no se puede tocar».
+     *   2. SI ES DE LAS TUYAS → apagada si no lo es. Se puede pulsar igual y se
+     *      lee igual de bien; sólo pasa a segundo plano.
      *
-     * El color del área sale del id (`% 5`), no de una columna: es el mismo
-     * truco que el avatar del socix (`partner.id % 4`), estable mientras el área
-     * exista y sin un campo que alguien tendría que rellenar a mano. Si algún día
-     * quien coordina quiere elegirlo, entonces sí toca columna. */
+     *   3. SI YA PASÓ → TACHADA. Es lo que la distingue de una apagada por no
+     *      ser tuya, que era el problema: las dos se atenúan, pero sólo la
+     *      vencida lleva la raya encima.
+     *
+     * Y la barra de la izquierda, aparte de todo esto, dice si falta gente.
+     *
+     * El color del área sale del id (`% 5`), no de una columna: el mismo truco
+     * que el avatar del socix (`partner.id % 4`), estable mientras el área
+     * exista y sin un campo que alguien tenga que rellenar. Si algún día quien
+     * coordina quiere elegirlo, entonces toca columna. */
     .scal--socix .scal-chip--area0 { --area: #9c4a6e; }   /* ciruela */
     .scal--socix .scal-chip--area1 { --area: #4a7c3a; }   /* verde   · Huerta */
     .scal--socix .scal-chip--area2 { --area: #a3702a; }   /* ámbar   · Reparto */
     .scal--socix .scal-chip--area3 { --area: #3a7ca5; }   /* azul    */
     .scal--socix .scal-chip--area4 { --area: #5f6b3a; }   /* oliva   · Comunicación */
 
-    /* 1+2. El fondo lleva el color del área; cuánto se ve dice si es tuya.
-       Las dos se leen igual de bien —las dos se pueden pulsar— pero de un
-       vistazo se ve cuáles son de lo que marcaste. */
+    /* 1. El color del área, sin matices: el mismo para todas las de esa área. */
     .scal--socix .scal-chip[class*="scal-chip--area"] {
-        background: color-mix(in srgb, var(--area) 7%, #fff);
-        border-color: color-mix(in srgb, var(--area) 22%, #fff);
-    }
-    .scal--socix .scal-chip--mine[class*="scal-chip--area"] {
-        background: color-mix(in srgb, var(--area) 20%, #fff);
-        border-color: color-mix(in srgb, var(--area) 38%, #fff);
+        background: color-mix(in srgb, var(--area) 18%, #fff);
+        border-color: color-mix(in srgb, var(--area) 34%, #fff);
     }
 
-    /* 3. La barra de la izquierda es el ESTADO DE LA GENTE, y sólo eso:
-       terracota si falta alguien, salvia si está cubierto o si ya vas. Es la
-       única pregunta que se contesta de un vistazo desde el otro lado de la
-       habitación. */
-    .scal--socix .scal-chip { border-left: 3px solid var(--cal-salvia-line); }
-    .scal--socix .scal-chip:has(.scal-chip__state--need) { border-left-color: var(--csa-terracotta); }
+    /* 2. No es de las tuyas: apagada. Sigue siendo pulsable y sigue teniendo su
+       color; sólo baja de plano. */
+    .scal--socix .scal-chip--dim { opacity: .45; }
+    .scal--socix .scal-chip--dim:hover { opacity: .8; }
 
-    /* 4. YA PASÓ: manda sobre todo. Sin color de área —de una ficha vencida no
-       se decide nada—, en gris, con el título tachado y algo transparente. Es la
-       diferencia con «no es de tus áreas», que se ve perfectamente y se puede
-       pulsar. */
-    .scal--socix .scal-chip--past {
-        background: var(--cal-neutro);
-        border-color: transparent; border-left-color: rgba(28, 29, 26, 0.18);
-        opacity: 0.62;
-    }
+    /* 3. Ya pasó: TACHADA, que es lo que la separa de la anterior. Y también
+       apagada, porque tampoco se puede hacer nada con ella. */
+    .scal--socix .scal-chip--past { opacity: .45; }
+    .scal--socix .scal-chip--past:hover { opacity: .45; }
     .scal--socix .scal-chip--past .scal-chip__title,
     .scal--socix .scal-chip--past .scal-chip__time { text-decoration: line-through; }
-    .scal--socix .scal-chip--past .scal-chip__title,
-    .scal--socix .scal-chip--past .scal-chip__time,
-    .scal--socix .scal-chip--past .scal-chip__place,
-    .scal--socix .scal-chip--past .scal-chip__state { color: var(--cal-ink-muted); }
 
-    /* ---------- de mis áreas vs. de otra área ----------
-       RELLENO SÍ / RELLENO NO, y no opacidad. La opacidad baja es el lenguaje
-       universal de «deshabilitado», y aquí decía justo lo contrario: un turno de
-       otra área se puede pulsar y uno se puede apuntar igual, sólo que no es de
-       lo que marcó. Con `opacity: .34` la señal contradecía a la acción.
-
-       Se separan las dos cosas que se estaban diciendo con la misma herramienta:
-       el RELLENO dice de qué área es —los dos igual de nítidos y legibles—, y la
-       opacidad queda reservada para «no se puede», que es lo pasado y lo
-       completo. Nunca bajar el contraste del texto para decir «menos
-       relevante».
-
-       Sólo en modo socix: en gestión el atenuado sí significa «no es tuyo». */
-    /* El atenuado, retirado del todo en modo socix: lo que no es de tus áreas se
-       distingue por llevar su color lavado, no por verse peor. */
-    .scal--socix .scal-chip--dim { opacity: 1; }
-    .scal--socix .scal-chip--dim:hover { opacity: 1; }
-
-    /* El atenuado se queda donde de verdad quiere decir «esto ya no se toca». */
-    .scal--socix .scal-chip--hecho { opacity: .55; }
+    /* La barra de la izquierda es el ESTADO DE LA GENTE, y sólo eso: terracota
+       si falta alguien, salvia si está cubierto o si ya vas. Es la única
+       pregunta que se contesta desde el otro lado de la habitación. */
+    .scal--socix .scal-chip { border-left: 3px solid var(--cal-salvia-line); }
+    .scal--socix .scal-chip:has(.scal-chip__state--need) { border-left-color: var(--csa-terracotta); }
+    .scal--socix .scal-chip--past { border-left-color: rgba(28, 29, 26, 0.25); }
 
     .scal-chip--dim { opacity: .34; }
     .scal-chip--dim:hover { opacity: .85; }
@@ -273,6 +253,20 @@
     .scal-foot--socix { text-align: center; line-height: 1.6; }
 
     /* ---------- barra de selección (socix) ---------- */
+    /* SÓLO CUANDO HAY ALGO MARCADO. Salía siempre, ocupando una franja negra al
+       pie con un botón desactivado que decía «marca al menos un turno»: un
+       control que no hace nada, en el sitio de más peso de la pantalla, y encima
+       tapando la última fila del mes. Aparece cuando sirve para algo.
+
+       Sin JS no se pierde nada: el script le quita el `hidden` en cuanto marcas
+       la primera casilla, y si no llega a arrancar, el botón de apuntarse vive
+       igualmente dentro de la ficha. */
+    .scal-bar[hidden] { display: none; }
+    /* En móvil, POR ENCIMA de la barra de pestañas: pegada a `bottom: 12px` se
+       metía justo debajo de ella y no se veía. */
+    @media (max-width: 900px) {
+        .scal-bar { bottom: calc(64px + env(safe-area-inset-bottom, 0px) + 8px); }
+    }
     .scal-bar {
         position: sticky; bottom: 12px; z-index: 20;
         display: flex; align-items: center; gap: 16px; margin-top: 14px; padding: 13px 18px; border-radius: 7px;
