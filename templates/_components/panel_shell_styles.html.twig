@@ -10,6 +10,19 @@
  # barra todavía sin salir: sin ninguna navegación.
  #}
 <style>
+    /* ---- ANCHO DE LECTURA ----
+       El panel heredaba `--csa-content-max: 1600px`, que es el ancho pensado
+       para las TABLAS de gestión —un listado de socixs con ocho columnas lo
+       agradece—. Aquí no hay tablas: hay texto y tarjetas, y a 1600px una
+       tarjeta de cuatro líneas se estira de lado a lado con la acción a
+       novecientos píxeles del título. El ojo tiene que cruzar la pantalla entera
+       para relacionar dos cosas que van juntas.
+
+       1040px: caben dos tarjetas por fila, la rejilla de siete columnas del
+       cuadrante sigue holgada, y ninguna línea de texto pasa de lo que se lee de
+       una pasada. */
+    .csa-shell--tabbed .csa-content { max-width: 1040px; }
+
     .csa-tabbar { display: none; }
 
     @media (max-width: 900px) {
