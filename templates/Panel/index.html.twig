@@ -232,7 +232,8 @@
                 {% include '_components/volunteering_teaser.html.twig' with {
                     shifts: volunteering_shifts|default([]),
                     total: volunteering_total|default(0),
-                    my_node_id: group and group.node ? group.node.id : null
+                    my_node_id: group and group.node ? group.node.id : null,
+                    my_category_ids: my_category_ids|default([])
                 } only %}
             </section>
         {% endif %}

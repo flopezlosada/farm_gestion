@@ -12,6 +12,19 @@
 {% set shown = [] %}
 <div class="scal-legend" aria-label="Qué significa cada color">
     <span class="scal-legend__k">Colores</span>
+    {# De qué área es un turno lo dice el RELLENO, no la opacidad: los dos se ven
+     # igual de nítidos y de los dos se puede uno apuntar. Hay que explicarlo,
+     # porque un relleno sin leyenda es sólo decoración. Sólo cuando hay áreas
+     # propias y se está viendo todo: con «sólo mis áreas» no hay contraste que
+     # explicar. #}
+    {% if has_areas|default(false) %}
+        <span class="scal-legend__item">
+            <span class="scal-legend__sw scal-legend__sw--mine"></span>De tus áreas
+        </span>
+        <span class="scal-legend__item">
+            <span class="scal-legend__sw scal-legend__sw--other"></span>De otra área. También puedes venir
+        </span>
+    {% endif %}
     {% for state, label in labels %}
         {% if state in states and label not in shown %}
             {% set shown = shown|merge([label]) %}
