@@ -1,0 +1,65 @@
+{# ============================================================
+ # Base del registro de avisos: cabecera, pestañas y filtro de periodo.
+ #
+ # Las dos sub-pantallas (envíos y ejecuciones) extienden esta y rellenan
+ # `log_filters` (sus filtros propios) y `log_body` (la tabla).
+ #
+ # El PERIODO es lo único que viaja de una pestaña a otra, y a propósito: el
+ # canal o el tipo de aviso no significan nada en el listado de ejecuciones,
+ # pero el rango de fechas que estás mirando sí, y perderlo al cambiar de
+ # pestaña obliga a volver a escribirlo justo cuando estás siguiendo un rastro.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set current = app.request.attributes.get('_route') %}
+{% set range = { from: filters.from|date('Y-m-d'), to: filters.to|date('Y-m-d') } %}
+
+{% block title %}Registro de avisos{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Registro de avisos</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Administración',
+        'Registro de avisos',
+        'Qué ha enviado el sistema, a quién y con qué resultado, y qué tareas lo han enviado. Se guarda todo, salga bien o mal.'
+    ) }}
+
+    {% set tabs = {
+        'notification_log_index': 'Envíos',
+        'notification_log_runs':  'Ejecuciones'
+    } %}
+    <ul class="csa-tabs">
+        {% for route, label in tabs %}
+            <li class="csa-tabs__item {{ current == route ? 'active' : '' }}">
+                <a class="csa-tabs__link" href="{{ path(route, range) }}">{{ label }}</a>
+            </li>
+        {% endfor %}
+    </ul>
+
+    {% set filter_label = 'font-size: 0.7em; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--csa-ink-soft); margin-bottom: var(--csa-sp-1);' %}
+
+    <div style="display: flex; flex-wrap: wrap; gap: var(--csa-sp-6) var(--csa-sp-8); align-items: flex-start; margin-bottom: var(--csa-sp-4);">
+        <div style="display: flex; flex-direction: column;">
+            <span style="{{ filter_label }}">Periodo</span>
+            <div style="display: flex; gap: var(--csa-sp-1); flex-wrap: wrap; align-items: center;">
+                {% for p in presets %}
+                    <a href="{{ path(current, { from: p.from, to: p.to }) }}"
+                       class="csa-btn csa-btn--sm {{ (range.from == p.from and range.to == p.to) ? 'csa-btn--primary' : 'csa-btn--ghost' }}">{{ p.label }}</a>
+                {% endfor %}
+            </div>
+        </div>
+
+        {% block log_filters %}{% endblock %}
+    </div>
+
+    {% block log_body %}{% endblock %}
+
+{% endblock %}
