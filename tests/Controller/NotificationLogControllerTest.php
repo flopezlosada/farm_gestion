@@ -47,6 +47,7 @@ class NotificationLogControllerTest extends AbstractAuthenticatedTest
             $em->persist($log);
         }
         $em->flush();
+        $ids = array_map(static fn (NotificationLog $l): ?int => $l->getId(), $logs);
 
         try {
             $crawler = $client->request('GET', '/gestion/avisos?q=' . urlencode($buscada));
@@ -56,10 +57,9 @@ class NotificationLogControllerTest extends AbstractAuthenticatedTest
             $this->assertStringContainsString($buscada, $html);
             $this->assertStringNotContainsString($otra, $html, 'La búsqueda no debe traer avisos de otra persona.');
         } finally {
-            foreach ($logs as $log) {
-                $em->remove($log);
+            foreach ($ids as $id) {
+                $this->borrar($id);
             }
-            $em->flush();
         }
     }
 
@@ -80,6 +80,7 @@ class NotificationLogControllerTest extends AbstractAuthenticatedTest
             ->setSentAt(new \DateTimeImmutable('-200 days'));
         $em->persist($log);
         $em->flush();
+        $id = $log->getId();
 
         try {
             // Rango por defecto: los últimos 30 días, así que no debe salir.
@@ -94,8 +95,11 @@ class NotificationLogControllerTest extends AbstractAuthenticatedTest
             ]))->html();
             $this->assertStringContainsString($antiguo, $amplio);
         } finally {
-            $em->remove($log);
-            $em->flush();
+            // Se RELEE por id en vez de reutilizar el objeto: cada petición del
+            // cliente reinicia el kernel, así que la entidad que se persistió
+            // arriba pertenece a un EntityManager que ya no existe y borrarla
+            // directamente lanza "Detached entity cannot be removed".
+            $this->borrar($id);
         }
     }
 
@@ -111,6 +115,26 @@ class NotificationLogControllerTest extends AbstractAuthenticatedTest
         $client->request('GET', '/gestion/avisos');
 
         $this->assertResponseStatusCodeSame(403);
+    }
+
+    /**
+     * Borra una fila sembrada por su id, releyéndola con el EntityManager que
+     * esté vivo AHORA. Cada `request()` del cliente reinicia el kernel, así que
+     * el objeto que se persistió antes de la primera petición pertenece a un
+     * gestor que ya se cerró y `remove()` lo rechaza por desligado.
+     */
+    private function borrar(?int $id): void
+    {
+        if ($id === null) {
+            return;
+        }
+
+        $fresco = static::getContainer()->get('doctrine')->getManager();
+        $log = $fresco->getRepository(NotificationLog::class)->find($id);
+        if ($log !== null) {
+            $fresco->remove($log);
+            $fresco->flush();
+        }
     }
 
     private function log(string $target, string $kind, string $subject): NotificationLog

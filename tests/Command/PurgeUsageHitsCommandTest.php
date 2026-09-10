@@ -76,8 +76,8 @@ class PurgeUsageHitsCommandTest extends KernelTestCase
 
         $viejo = $this->log(new \DateTimeImmutable('-400 days'));
         $reciente = $this->log(new \DateTimeImmutable('-10 days'));
-        $runViejo = $this->run(new \DateTimeImmutable('-400 days'));
-        $runReciente = $this->run(new \DateTimeImmutable('-10 days'));
+        $runViejo = $this->cronRunRow(new \DateTimeImmutable('-400 days'));
+        $runReciente = $this->cronRunRow(new \DateTimeImmutable('-10 days'));
         foreach ([$viejo, $reciente, $runViejo, $runReciente] as $fila) {
             $em->persist($fila);
         }
@@ -134,7 +134,13 @@ class PurgeUsageHitsCommandTest extends KernelTestCase
             ->setStatus(NotificationLog::STATUS_SENT);
     }
 
-    private function run(\DateTimeImmutable $startedAt): CronRun
+    /**
+     * OJO CON EL NOMBRE: un helper llamado `run()` en una clase que hereda de
+     * TestCase choca con `PHPUnit\Framework\TestCase::run()` y revienta la
+     * suite ENTERA con un error fatal de nivel de acceso, no con un test en
+     * rojo. Ya había pasado antes en este proyecto.
+     */
+    private function cronRunRow(\DateTimeImmutable $startedAt): CronRun
     {
         return (new CronRun())
             ->setTaskKey('cron.test_purga')

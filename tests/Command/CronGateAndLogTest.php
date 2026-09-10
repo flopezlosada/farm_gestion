@@ -184,7 +184,10 @@ class CronGateAndLogTest extends KernelTestCase
         $run = $this->lastRun(AppSettings::CRON_PURGE_USAGE_HITS);
         $this->assertNotNull($run);
         $this->assertSame(CronRun::STATUS_DONE, $run->getStatus());
-        $this->assertStringContainsString('usage_hit', (string) $run->getOutput(), 'La salida del comando debe quedar registrada.');
+        // Se busca el texto que de verdad se lee en pantalla, no el nombre de la
+        // tabla: la salida de esta tarea la muestra /gestion/settings, así que
+        // dejó de hablar de "usage_hit" para hablar de "rastro de uso".
+        $this->assertStringContainsString('rastro de uso', (string) $run->getOutput(), 'La salida del comando debe quedar registrada.');
     }
 
     /**
