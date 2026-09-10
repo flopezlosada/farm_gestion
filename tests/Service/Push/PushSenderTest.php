@@ -2,9 +2,11 @@
 
 namespace App\Tests\Service\Push;
 
+use App\Entity\NotificationLog;
 use App\Entity\PushSubscription;
 use App\Entity\User;
 use App\Repository\PushSubscriptionRepository;
+use App\Service\Notification\NotificationRecorder;
 use App\Service\Push\PushDeliveryReport;
 use App\Service\Push\PushSender;
 use App\Service\Push\PushTransport;
@@ -45,7 +47,7 @@ class PushSenderTest extends TestCase
             $entityManager
         );
 
-        $this->assertSame(1, $sender->sendToMany([new User()], 'Falta gente', 'El jueves', '/panel'));
+        $this->assertSame(1, $sender->sendToMany([new User()], 'Falta gente', 'El jueves', '/panel', 'volunteer_call'));
     }
 
     /**
@@ -65,7 +67,7 @@ class PushSenderTest extends TestCase
             $entityManager
         );
 
-        $this->assertSame(0, $sender->sendToMany([new User()], 'Falta gente', null, '/panel'));
+        $this->assertSame(0, $sender->sendToMany([new User()], 'Falta gente', null, '/panel', 'volunteer_call'));
     }
 
     /**
@@ -85,10 +87,11 @@ class PushSenderTest extends TestCase
             $subscriptions,
             $this->createMock(EntityManagerInterface::class),
             $transport,
-            new NullLogger()
+            new NullLogger(),
+            $this->recorder()
         );
 
-        $this->assertSame(0, $sender->sendToUser(new User(), 'Da igual', null, '/panel'));
+        $this->assertSame(0, $sender->sendToUser(new User(), 'Da igual', null, '/panel', 'volunteer_call'));
     }
 
     /**
@@ -109,10 +112,11 @@ class PushSenderTest extends TestCase
             $subscriptions,
             $this->createMock(EntityManagerInterface::class),
             $transport,
-            new NullLogger()
+            new NullLogger(),
+            $this->recorder()
         );
 
-        $this->assertSame(0, $sender->sendToMany([new User()], 'Falta gente', null, '/panel'));
+        $this->assertSame(0, $sender->sendToMany([new User()], 'Falta gente', null, '/panel', 'volunteer_call'));
     }
 
     /**
@@ -132,19 +136,98 @@ class PushSenderTest extends TestCase
             $subscriptions,
             $this->createMock(EntityManagerInterface::class),
             $transport,
-            new NullLogger()
+            new NullLogger(),
+            $this->recorder()
         );
 
-        $this->assertSame(0, $sender->sendToMany([], 'Falta gente', null, '/panel'));
+        $this->assertSame(0, $sender->sendToMany([], 'Falta gente', null, '/panel', 'volunteer_call'));
     }
 
     /**
-     * @param string $endpoint la URL del servicio de push
+     * Cada persona alcanzada deja su línea en la bitácora, y quien no recibió
+     * nada la deja también como fallo: es la diferencia entre "no le llegó" y
+     * "no se intentó", que es justo lo que hay que poder distinguir cuando
+     * alguien dice que no recibe avisos.
      */
-    private function subscription(string $endpoint): PushSubscription
+    public function testApuntaEnLaBitacoraQuienRecibioYQuienNo(): void
+    {
+        $conSuerte = new User();
+        $sinSuerte = new User();
+
+        $recorder = $this->createMock(NotificationRecorder::class);
+        $recorder->expects($this->once())
+            ->method('sent')
+            ->with(NotificationLog::CHANNEL_PUSH, 'volunteer_call', '1 navegador(es)', 'Falta gente');
+        $recorder->expects($this->once())
+            ->method('failed')
+            ->with(NotificationLog::CHANNEL_PUSH, 'volunteer_call', '1 navegador(es)', $this->anything(), 'Falta gente');
+
+        $transport = $this->createMock(PushTransport::class);
+        $transport->method('isConfigured')->willReturn(true);
+        $transport->method('send')->willReturn([
+            PushDeliveryReport::delivered('https://fcm.googleapis.com/ok'),
+            PushDeliveryReport::failed('https://fcm.googleapis.com/ko', 'timeout'),
+        ]);
+
+        $repository = $this->createMock(PushSubscriptionRepository::class);
+        $repository->method('findByUsers')->willReturn([
+            $this->subscription('https://fcm.googleapis.com/ok', $conSuerte),
+            $this->subscription('https://fcm.googleapis.com/ko', $sinSuerte),
+        ]);
+
+        $sender = new PushSender(
+            $repository,
+            $this->createMock(EntityManagerInterface::class),
+            $transport,
+            new NullLogger(),
+            $recorder,
+        );
+
+        $this->assertSame(1, $sender->sendToMany([$conSuerte, $sinSuerte], 'Falta gente', null, '/panel', 'volunteer_call'));
+    }
+
+    /**
+     * Si revienta el lote entero, todos los que tenían dónde recibirlo quedan
+     * apuntados como fallo. Sin esto, una caída del transporte se leería en el
+     * registro igual que "no había nadie suscrito".
+     */
+    public function testUnFalloDelTransporteQuedaApuntado(): void
+    {
+        $recorder = $this->createMock(NotificationRecorder::class);
+        $recorder->expects($this->once())->method('failed');
+
+        $transport = $this->createMock(PushTransport::class);
+        $transport->method('isConfigured')->willReturn(true);
+        $transport->method('send')->willThrowException(new \RuntimeException('la red no va'));
+
+        $repository = $this->createMock(PushSubscriptionRepository::class);
+        $repository->method('findByUsers')->willReturn([$this->subscription('https://fcm.googleapis.com/a')]);
+
+        $sender = new PushSender(
+            $repository,
+            $this->createMock(EntityManagerInterface::class),
+            $transport,
+            new NullLogger(),
+            $recorder,
+        );
+
+        $this->assertSame(0, $sender->sendToMany([new User()], 'Falta gente', null, '/panel', 'volunteer_call'));
+    }
+
+    /** Un registrador que no comprueba nada, para los tests que miran otra cosa. */
+    private function recorder(): NotificationRecorder
+    {
+        return $this->createMock(NotificationRecorder::class);
+    }
+
+    /**
+     * @param string    $endpoint la URL del servicio de push
+     * @param User|null $user     de quién es ese navegador
+     */
+    private function subscription(string $endpoint, ?User $user = null): PushSubscription
     {
         return (new PushSubscription())
-            ->setUser(new User())
+            ->setUser($user ?? new User())
             ->setEndpoint($endpoint)
             ->setP256dh('clave-publica')
             ->setAuth('secreto');
@@ -166,6 +249,6 @@ class PushSenderTest extends TestCase
         $repository = $this->createMock(PushSubscriptionRepository::class);
         $repository->method('findByUsers')->willReturn($subscriptions);
 
-        return new PushSender($repository, $entityManager, $transport, new NullLogger());
+        return new PushSender($repository, $entityManager, $transport, new NullLogger(), $this->recorder());
     }
 }

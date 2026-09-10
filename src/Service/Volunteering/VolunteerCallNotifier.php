@@ -212,6 +212,7 @@ class VolunteerCallNotifier
             // '/panel/voluntariado' estaba copiada en dos ficheros, y era
             // exactamente la forma de que un día llevaran a sitios distintos.
             $this->link->pathForKind(Notification::KIND_VOLUNTEERING_CALL),
+            'volunteer_call',
         );
 
         $this->email($shift, $byEmail);
@@ -306,6 +307,7 @@ class VolunteerCallNotifier
                 $this->askTitle($shift),
                 $this->askBody($shift),
                 $this->link->pathForKind(Notification::KIND_VOLUNTEERING_CALL),
+                'volunteer_call',
             );
 
             if ($reached > 0) {

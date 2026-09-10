@@ -388,7 +388,7 @@ class VolunteerOfferChangeNotifierTest extends TestCase
         $push = $this->createMock(PushSender::class);
         $push->expects($this->once())
             ->method('sendToMany')
-            ->with($this->anything(), $title, $this->anything(), '/panel/voluntariado');
+            ->with($this->anything(), $title, $this->anything(), '/panel/voluntariado', 'volunteer_change');
 
         return $push;
     }

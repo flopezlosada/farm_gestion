@@ -1,0 +1,171 @@
+{# ============================================================
+ # Registro de avisos · Envíos: una fila por aviso intentado.
+ #
+ # La tabla NO usa `data-paginate` (la paginación del navegador sobre la tabla
+ # ya pintada): aquí pagina el servidor, porque el registro crece sin techo y
+ # traerse un año entero para enseñar cincuenta filas se cae solo.
+ # ============================================================ #}
+
+{% extends 'notification_log/_layout.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set tone_by_status = {
+    'sent': 'green',
+    'failed': 'terracotta',
+    'discarded': 'ochre'
+} %}
+
+{% block log_filters %}
+    {# Un solo formulario con todo lo demás: son filtros que se combinan (el
+       canal Y el tipo Y el estado), no atajos excluyentes como el periodo. #}
+    <form method="get" action="{{ path('notification_log_index') }}"
+          style="display: flex; flex-wrap: wrap; gap: var(--csa-sp-4); align-items: flex-end;">
+        {# Si estás mirando los avisos de UNA ejecución, tocar otro filtro no
+           debe sacarte de ella sin avisar: el aviso de arriba desaparecería y
+           pasarías a ver el histórico entero creyendo que sigues dentro. #}
+        {% if filters.run %}
+            <input type="hidden" name="run" value="{{ filters.run }}">
+        {% endif %}
+        <div style="display: flex; flex-direction: column;">
+            <span style="{{ filter_label }}">Fechas a medida</span>
+            <div style="display: flex; align-items: center; gap: var(--csa-sp-2);">
+                <input type="date" name="from" value="{{ range.from }}" class="csa-input csa-input--compact" aria-label="Desde">
+                <span class="csa-muted">–</span>
+                <input type="date" name="to" value="{{ range.to }}" class="csa-input csa-input--compact" aria-label="Hasta">
+            </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column;">
+            <span style="{{ filter_label }}">Canal</span>
+            <select name="channel" class="csa-input csa-input--compact">
+                <option value="">Todos</option>
+                {% for value, label in channels %}
+                    <option value="{{ value }}" {{ filters.channel == value ? 'selected' : '' }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="display: flex; flex-direction: column;">
+            <span style="{{ filter_label }}">Tipo de aviso</span>
+            <select name="kind" class="csa-input csa-input--compact">
+                <option value="">Todos</option>
+                {% for k in kinds %}
+                    <option value="{{ k }}" {{ filters.kind == k ? 'selected' : '' }}>{{ k }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="display: flex; flex-direction: column;">
+            <span style="{{ filter_label }}">Resultado</span>
+            <select name="status" class="csa-input csa-input--compact">
+                <option value="">Todos</option>
+                {% for value, label in statuses %}
+                    <option value="{{ value }}" {{ filters.status == value ? 'selected' : '' }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="display: flex; flex-direction: column;">
+            <span style="{{ filter_label }}">Buscar</span>
+            <input type="search" name="q" value="{{ filters.q }}" placeholder="Correo, nombre o asunto"
+                   class="csa-input csa-input--compact" style="min-width: 210px;" aria-label="Buscar">
+        </div>
+
+        <button type="submit" class="csa-btn csa-btn--sm csa-btn--secondary">Aplicar</button>
+    </form>
+{% endblock %}
+
+{% block log_body %}
+
+    {% if filters.run %}
+        <p class="csa-muted" style="margin: 0 0 var(--csa-sp-4);">
+            Mostrando sólo los avisos de la ejecución #{{ filters.run }}.
+            <a href="{{ path('notification_log_index', range) }}">Ver todos</a>
+        </p>
+    {% endif %}
+
+    <div class="csa-kpi-row" style="margin-bottom: var(--csa-sp-6);">
+        {{ csa.kpi('Avisos', summary.total, null, null, null, 'sky') }}
+        {{ csa.kpi('Entregados', summary.sent, null, null, null, 'green') }}
+        {{ csa.kpi('Fallidos', summary.failed, null, null, null, summary.failed > 0 ? 'terracotta' : null) }}
+        {{ csa.kpi('Descartados', summary.discarded, null, null, null, summary.discarded > 0 ? 'ochre' : null) }}
+    </div>
+
+    {% if summary.discarded > 0 %}
+        {{ csa.callout(
+            'Hay avisos descartados en este periodo: se prepararon pero no salieron porque el interruptor general de envíos estaba apagado.',
+            'warning'
+        ) }}
+    {% endif %}
+
+    <div class="csa-table-wrap">
+        <table class="csa-table">
+            <thead>
+                <tr>
+                    <th class="csa-table__col-tight">Cuándo</th>
+                    <th class="csa-table__col-tight">Canal</th>
+                    <th>Tipo</th>
+                    <th>Destinatarix</th>
+                    <th>Asunto</th>
+                    <th class="csa-table__col-tight">Resultado</th>
+                    <th class="csa-table__col-tight">Tarea</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in pagination %}
+                    <tr>
+                        <td class="csa-table__col-tight">{{ log.sentAt|format_datetime('short', 'short', locale='es') }}</td>
+                        <td class="csa-table__col-tight">
+                            {% if log.channel == 'push' %}
+                                <i class="fa fa-mobile" aria-hidden="true"></i> Móvil
+                            {% else %}
+                                <i class="fa fa-envelope-o" aria-hidden="true"></i> Correo
+                            {% endif %}
+                        </td>
+                        <td>{{ log.kind }}</td>
+                        <td>
+                            {# El push conoce a la persona; el correo sólo la dirección, y la
+                               ficha se cruza al leer (partners_by_email). Sin ese cruce la
+                               tabla sería una lista de correos sueltos, que no se lee. #}
+                            {% set quien = log.partner ?? partners_by_email[log.target]|default(null) %}
+                            {% if quien %}
+                                <a class="csa-table__primary" href="{{ path('partner_show', { id: quien.id }) }}">{{ quien.name }} {{ quien.surname }}</a>
+                                <div class="csa-muted" style="font-size: 0.85em;">{{ log.target }}</div>
+                            {% else %}
+                                {{ log.target }}
+                            {% endif %}
+                        </td>
+                        <td>{{ log.subject ?: '—' }}</td>
+                        <td class="csa-table__col-tight">
+                            {{ csa.badge(statuses[log.status]|default(log.status), tone_by_status[log.status]|default('neutral'), { sm: true }) }}
+                            {% if log.error %}
+                                <div class="csa-muted" style="font-size: 0.85em;" title="{{ log.error }}">{{ log.error|u.truncate(60, '…') }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="csa-table__col-tight">
+                            {% if log.cronRun %}
+                                <a href="{{ path('notification_log_index', range|merge({ run: log.cronRun.id })) }}"
+                                   title="Ver todos los avisos de esta ejecución">#{{ log.cronRun.id }}</a>
+                            {% else %}
+                                <span class="csa-muted">a mano</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="7" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                            No hay avisos registrados con estos filtros.
+                            {# El registro empezó a escribirse con esta pantalla: antes de
+                               eso no hay nada que enseñar, y conviene decirlo para que un
+                               listado vacío no se lea como "no se envió nada". #}
+                            Si el periodo es anterior a que existiera este registro, no habrá nada aunque sí se enviaran avisos.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="grl-pagination">{{ knp_pagination_render(pagination) }}</div>
+
+{% endblock %}
