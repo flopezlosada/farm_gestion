@@ -3,6 +3,7 @@
 namespace App\Command;
 
 use App\Entity\CronRun;
+use App\Service\Cron\CronRunContext;
 use App\Service\Cron\CronRunLogger;
 use App\Service\Cron\CronTaskRegistry;
 use App\Service\Cron\EffectLedger;
@@ -64,6 +65,8 @@ abstract class AbstractCronCommand extends Command
 
     protected EffectLedger $effectLedger;
 
+    protected CronRunContext $cronRunContext;
+
     /** Estado reportado por la hija ({@see self::nothingToDo()} / {@see self::didWork()}). */
     private ?string $reportedStatus = null;
 
@@ -103,6 +106,7 @@ abstract class AbstractCronCommand extends Command
      * @param CronRunLogger    $cronRunLogger Escritura del registro de ejecuciones.
      * @param TaskLock         $taskLock      Cerrojo de no solapamiento por tarea.
      * @param EffectLedger     $effectLedger  Guardián de idempotencia de efectos.
+     * @param CronRunContext   $cronRunContext Qué tarea corre, para la bitácora de avisos.
      */
     #[Required]
     public function setCronScaffolding(
@@ -110,11 +114,13 @@ abstract class AbstractCronCommand extends Command
         CronRunLogger $cronRunLogger,
         TaskLock $taskLock,
         EffectLedger $effectLedger,
+        CronRunContext $cronRunContext,
     ): void {
         $this->cronTasks = $cronTasks;
         $this->cronRunLogger = $cronRunLogger;
         $this->taskLock = $taskLock;
         $this->effectLedger = $effectLedger;
+        $this->cronRunContext = $cronRunContext;
     }
 
     /**
@@ -328,6 +334,12 @@ abstract class AbstractCronCommand extends Command
         $runId = $this->cronRunLogger->start($task['key'], $task['command'], $trigger);
         $captor = new TeeOutput($output);
 
+        // Desde aquí, cada aviso que se mande queda apuntado como salido de
+        // ESTA ejecución. Se abre después de tener el id y se cierra pase lo
+        // que pase: si no se cerrara, los avisos que mandara luego el mismo
+        // proceso —el tick encadena varias tareas— se atribuirían a la anterior.
+        $this->cronRunContext->enter($task['key'], $runId);
+
         try {
             $exitCode = $this->doExecute($input, $captor);
         } catch (\Throwable $e) {
@@ -341,6 +353,8 @@ abstract class AbstractCronCommand extends Command
 
             // La excepción sigue su curso: registrar no es tragarse el error.
             throw $e;
+        } finally {
+            $this->cronRunContext->leave();
         }
 
         $status = $exitCode === Command::SUCCESS
