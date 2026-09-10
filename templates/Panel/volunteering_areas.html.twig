@@ -106,7 +106,12 @@
                     cualquiera.
                 </p>
 
-                <div class="vol-prefs">
+                {# Las áreas se apagan al marcar la salida: decir «por ahora no
+                 # quiero echar una mano» con tres áreas marcadas es una
+                 # contradicción a la vista, y además no se sabe cuál gana. Gana
+                 # la salida —así lo hace ya el guardado—, y la pantalla lo
+                 # enseña en vez de dejarlo para la sorpresa. #}
+                <div class="vol-prefs" data-vol-areas>
                     {% for category in categories %}
                         <label class="vol-pref">
                             <input type="checkbox" name="categories[]" value="{{ category.id }}"
@@ -138,6 +143,25 @@
 
                 <button type="submit" class="vol-areas__save">Guardar</button>
             </form>
+
+            <script>
+                (function () {
+                    var out = document.querySelector('.vol-optout input');
+                    var box = document.querySelector('[data-vol-areas]');
+                    if (!out || !box) { return; }
+
+                    function sync() {
+                        box.classList.toggle('vol-prefs--off', out.checked);
+                        box.querySelectorAll('input[type="checkbox"]').forEach(function (c) {
+                            c.disabled = out.checked;
+                            if (out.checked) { c.checked = false; }
+                        });
+                    }
+
+                    out.addEventListener('change', sync);
+                    sync();
+                }());
+            </script>
 
     </div>
 {% endblock %}

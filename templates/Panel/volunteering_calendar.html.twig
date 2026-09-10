@@ -42,6 +42,11 @@
 
 {% block csa_main %}
 
+    {# Rejilla + panel lateral: esta pantalla SÍ aprovecha el ancho de más, así
+     # que se sale del ancho de lectura del panel. Ver panel_shell_styles. #}
+    <span class="csa-wide" hidden aria-hidden="true"></span>
+
+
     {% include '_components/volunteering_tabs.html.twig' %}
 
     {% set keep = { tipo: current ? current.id : null, solo: only_mine ? 'mias' : null }|filter(v => v is not null) %}
