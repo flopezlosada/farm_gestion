@@ -5,9 +5,12 @@ namespace App\Controller;
 use App\Entity\CronRun;
 use App\Entity\NotificationLog;
 use App\Repository\CronRunRepository;
+use App\Repository\EmittedEffectRepository;
 use App\Repository\NotificationLogRepository;
 use App\Repository\PartnerRepository;
+use App\Repository\WeeklyBasketRepository;
 use App\Service\Cron\CronTaskRegistry;
+use App\Service\Delivery\PickupNoticeCoverage;
 use Knp\Component\Pager\PaginatorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -24,10 +27,14 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * enseñaba la ÚLTIMA ejecución de cada tarea —nada de hace un mes— y los envíos
  * no se veían en ninguna parte.
  *
- * Dos pestañas porque son dos preguntas distintas, y en un diagnóstico se pasa
- * de una a la otra: "¿corrió la tarea?" (Ejecuciones) y "¿le llegó a esta
- * persona?" (Envíos). Se navega entre ellas: desde una ejecución se ven los
- * avisos que salieron de ella.
+ * Tres pestañas porque son tres preguntas distintas, y en un diagnóstico se
+ * pasa de una a otra: "¿le llegó a esta persona?" (Envíos), "¿corrió la tarea?"
+ * (Ejecuciones) y "¿se quedó alguien sin aviso?" (Cobertura). Se navega entre
+ * ellas: desde una ejecución se ven los avisos que salieron de ella.
+ *
+ * Las dos primeras cuentan lo que el sistema hizo. La tercera compara lo hecho
+ * con lo que había que hacer, y es la única capaz de descubrir a quién NO se
+ * está avisando: eso, desde dentro, se ve como una tarea en verde.
  */
 #[Route('/gestion/avisos')]
 #[IsGranted('ROLE_ADMIN')]
@@ -38,6 +45,14 @@ class NotificationLogController extends AbstractController
 
     /** Tope del rango consultable, en días, para que nadie pida cinco años por error. */
     private const MAX_DAYS = 400;
+
+    /**
+     * Cuántos repartos seguidos se miran en la pestaña de cobertura. Cada uno
+     * cuesta sus consultas, así que no es una lista larga: con ocho ya se ve si
+     * un hueco es de un día o se repite cada dos semanas, que es lo que hay que
+     * distinguir.
+     */
+    private const COVERAGE_DATES = 8;
 
     public function __construct(
         private readonly NotificationLogRepository $logs,
@@ -123,6 +138,57 @@ class NotificationLogController extends AbstractController
                 CronRun::STATUS_DISABLED => 'Apagada',
                 CronRun::STATUS_FAILED => 'Falló',
             ],
+        ]);
+    }
+
+    /**
+     * Cobertura: de quienes recogían cada día, a cuántxs se avisó.
+     *
+     * Es la pestaña que contesta la pregunta que nadie estaba haciendo. Las
+     * otras dos cuentan lo que el sistema hizo; ésta compara lo que hizo con lo
+     * que había que hacer, y es la única que puede descubrir a quién NO se
+     * avisa — un fallo que desde dentro se ve como una tarea en verde.
+     *
+     * Se calculan varias fechas seguidas a propósito, aunque cada una cueste
+     * sus consultas: un hueco suelto no dice nada, y el mismo hueco cada dos
+     * semanas es un fallo del sistema. El patrón sólo se ve en la serie.
+     */
+    #[Route('/cobertura', name: 'notification_log_coverage', methods: ['GET'])]
+    public function coverage(
+        Request $request,
+        PickupNoticeCoverage $coverage,
+        WeeklyBasketRepository $baskets,
+        EmittedEffectRepository $effects,
+    ): Response {
+        $dates = $baskets->recentDeliveryDates(self::COVERAGE_DATES);
+
+        $series = [];
+        foreach ($dates as $row) {
+            $resultado = $coverage->forDate(new \DateTimeImmutable($row['date']));
+            $series[$row['date']] = $resultado['totals'] + ['unrecorded' => $resultado['unrecorded']];
+        }
+
+        // Por defecto se abre el reparto más reciente, que es el que se acaba
+        // de hacer y por el que preguntará la gente. Pero se admite CUALQUIER
+        // fecha, no sólo las de la serie: el fallo de las compartidas se
+        // descubrió en septiembre y venía de julio, así que poder retroceder a
+        // un reparto viejo es justo lo que hace falta para acotar desde cuándo.
+        $selected = $request->query->getString('date') ?: (string) (array_key_first($series) ?? '');
+        $day = $selected !== '' ? \DateTimeImmutable::createFromFormat('!Y-m-d', $selected) : false;
+        $detail = $day instanceof \DateTimeImmutable ? $coverage->forDate($day) : null;
+
+        return $this->render('notification_log/coverage.html.twig', [
+            'series' => $series,
+            'selected' => $selected,
+            'detail' => $detail,
+            // Desde cuándo hay constancia. Se enseña para que un reparto viejo
+            // sin datos no se lea como un reparto sin avisar.
+            'first_record' => $effects->earliestOccurredOn(PickupNoticeCoverage::noticeKinds()),
+            // El rango no pinta nada aquí (la serie va por repartos, no por
+            // días), pero el layout lo necesita para las pestañas y para que
+            // volver a Envíos conserve el periodo que traías.
+            'filters' => $this->resolveFilters($request, []),
+            'presets' => $this->presets(),
         ]);
     }
 
