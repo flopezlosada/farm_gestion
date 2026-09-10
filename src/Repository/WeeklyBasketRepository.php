@@ -262,6 +262,73 @@ class WeeklyBasketRepository extends ServiceEntityRepository
     }
 
     /**
+     * TODAS las cestas que se recogen en una fecha física, sin filtrar por
+     * modalidad.
+     *
+     * Es la hermana deliberadamente ingenua de
+     * {@see self::findPickedByDeliveryDateAndShares()}, y existe para
+     * comprobarla. Quien vigila si el recordatorio alcanzó a todo el mundo no
+     * puede preguntar con el mismo criterio que usa el recordatorio para
+     * elegir: si la lista de modalidades se queda corta —que es justo el fallo
+     * que dejó dos meses sin aviso a las cestas compartidas—, las dos
+     * consultas se equivocarían igual y la comprobación diría que todo está
+     * bien. Aquí se traen todas y quien compara decide cuáles esperaba.
+     *
+     * @param \DateTimeInterface $deliveryDate Día físico de reparto.
+     * @return WeeklyBasket[] Ordenadas por nodo y nombre.
+     */
+    public function findPickedByDeliveryDate(\DateTimeInterface $deliveryDate): array
+    {
+        return $this->createQueryBuilder('wb')
+            ->innerJoin('wb.partner', 'p')->addSelect('p')
+            ->innerJoin('wb.basket_share', 'bs')->addSelect('bs')
+            ->leftJoin('wb.weekly_basket_group', 'wbg')->addSelect('wbg')
+            ->leftJoin('wbg.node', 'n')->addSelect('n')
+            ->where('wb.delivery_date = :date')
+            ->andWhere('wb.weekly_basket_status = :status')
+            ->setParameter('date', $deliveryDate->format('Y-m-d'))
+            ->setParameter('status', 1)
+            ->orderBy('n.name', 'ASC')
+            ->addOrderBy('p.name', 'ASC')
+            ->addOrderBy('p.surname', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Las últimas fechas físicas con reparto, de más nueva a más vieja.
+     *
+     * Alimenta la pantalla de cobertura: enseñar los últimos repartos seguidos
+     * es lo que hace visible un patrón. Un hueco suelto puede ser cualquier
+     * cosa; el mismo hueco cada dos semanas desde julio es un fallo del
+     * sistema, y así se ve sin buscarlo.
+     *
+     * @param int $limit Cuántas fechas.
+     * @return list<array{date: string, picking: int}>
+     */
+    public function recentDeliveryDates(int $limit = 10): array
+    {
+        $rows = $this->createQueryBuilder('wb')
+            ->select('wb.delivery_date AS date, COUNT(wb.id) AS picking')
+            ->where('wb.delivery_date IS NOT NULL')
+            ->andWhere('wb.weekly_basket_status = :status')
+            ->setParameter('status', 1)
+            ->groupBy('wb.delivery_date')
+            ->orderBy('wb.delivery_date', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getScalarResult();
+
+        return array_map(
+            static fn (array $row): array => [
+                'date' => substr((string) $row['date'], 0, 10),
+                'picking' => (int) $row['picking'],
+            ],
+            $rows,
+        );
+    }
+
+    /**
      * Número de cestas a repartir en un Basket: cuenta las WeeklyBasket
      * cuyo status indica que se recogen (status_id = 1). Las marcadas como
      * "no recoge" (status 2) no se cuentan porque no llegan a salir.

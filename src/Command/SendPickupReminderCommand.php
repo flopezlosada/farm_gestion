@@ -3,10 +3,9 @@
 namespace App\Command;
 
 use App\Entity\BasketShare;
-use App\Entity\WeeklyBasket;
-use App\Repository\DeliveryExceptionRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Service\AppSettings;
+use App\Service\Delivery\CancelledDeliveryFilter;
 use App\Service\Delivery\PickupReminderMailer;
 use App\Service\Delivery\PickupReminderPusher;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -42,7 +41,7 @@ class SendPickupReminderCommand extends AbstractCronCommand
 {
     public function __construct(
         private readonly WeeklyBasketRepository $weeklyBasketRepository,
-        private readonly DeliveryExceptionRepository $exceptionRepository,
+        private readonly CancelledDeliveryFilter $cancelledFilter,
         private readonly AppSettings $settings,
         private readonly PickupReminderMailer $reminderMailer,
         private readonly PickupReminderPusher $reminderPusher,
@@ -94,7 +93,7 @@ class SendPickupReminderCommand extends AbstractCronCommand
         // administrativo, no otra forma de repartir. Pidiendo sólo
         // ID_BIWEEKLY/ID_MONTHLY esas familias quedaban fuera de la consulta y
         // nunca recibían el recordatorio.
-        $recipients = $this->withoutCancelled(
+        $recipients = $this->cancelledFilter->withoutCancelled(
             $this->weeklyBasketRepository->findPickedByDeliveryDateAndShares(
                 $target,
                 [...BasketShare::IDS_BIWEEKLY, ...BasketShare::IDS_MONTHLY],
@@ -199,46 +198,6 @@ class SendPickupReminderCommand extends AbstractCronCommand
         return $this->nothingToDo($result['already'] > 0
             ? sprintf('%d destinatarios el %s, todos avisados ya', $result['already'], $target->format('Y-m-d'))
             : sprintf('%d destinatarios el %s, ninguno con email', $result['skipped'], $target->format('Y-m-d')));
-    }
-
-    /**
-     * Descarta las WeeklyBasket cuyo reparto está CANCELADO por una excepción de
-     * calendario. Al materializar de cero, un ciclo cancelado no genera WB (el
-     * generador hace `continue` cuando la fecha física es null). Pero una
-     * cancelación registrada DESPUÉS de materializar la semana no limpia
-     * retroactivamente el WB ya creado salvo que se reconcilie: queda vivo (status
-     * "recoge") con delivery_date en el día cancelado. El finder ancla en
-     * delivery_date, así que sin este filtro el recordatorio avisaría de un
-     * reparto que no existe. Es la misma protección que aplica en la vista el
-     * {@see \App\Service\Delivery\DeliveryCalendarProjector}. La precedencia
-     * (cancelación global absoluta, si no la del nodo) la resuelve
-     * {@see DeliveryExceptionRepository::findForBasketAndNode()}. Se cachea por
-     * (basket, nodo): los destinatarios de un mismo día comparten ciclo y pocos nodos.
-     *
-     * @param WeeklyBasket[] $recipients
-     * @return WeeklyBasket[]
-     */
-    private function withoutCancelled(array $recipients): array
-    {
-        $cancelledByKey = [];
-
-        return array_values(array_filter($recipients, function (WeeklyBasket $wb) use (&$cancelledByKey): bool {
-            $basket = $wb->getBasket();
-            if ($basket === null) {
-                return true;
-            }
-
-            $node = $wb->getWeeklyBasketGroup()?->getNode();
-            $key = $basket->getId() . ':' . ($node?->getId() ?? 'global');
-            if (!array_key_exists($key, $cancelledByKey)) {
-                $exception = $node !== null
-                    ? $this->exceptionRepository->findForBasketAndNode($basket, $node)
-                    : $this->exceptionRepository->findGlobalForBasket($basket);
-                $cancelledByKey[$key] = $exception !== null && $exception->isCancelled();
-            }
-
-            return !$cancelledByKey[$key];
-        }));
     }
 
     /**
