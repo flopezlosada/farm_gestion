@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\CronRun;
 use App\Entity\NotificationLog;
 use App\Repository\CronRunRepository;
+use App\Repository\EmittedEffectRepository;
 use App\Repository\NotificationLogRepository;
 use App\Repository\PartnerRepository;
 use App\Repository\WeeklyBasketRepository;
@@ -153,13 +154,18 @@ class NotificationLogController extends AbstractController
      * semanas es un fallo del sistema. El patrón sólo se ve en la serie.
      */
     #[Route('/cobertura', name: 'notification_log_coverage', methods: ['GET'])]
-    public function coverage(Request $request, PickupNoticeCoverage $coverage, WeeklyBasketRepository $baskets): Response
-    {
+    public function coverage(
+        Request $request,
+        PickupNoticeCoverage $coverage,
+        WeeklyBasketRepository $baskets,
+        EmittedEffectRepository $effects,
+    ): Response {
         $dates = $baskets->recentDeliveryDates(self::COVERAGE_DATES);
 
         $series = [];
         foreach ($dates as $row) {
-            $series[$row['date']] = $coverage->forDate(new \DateTimeImmutable($row['date']))['totals'];
+            $resultado = $coverage->forDate(new \DateTimeImmutable($row['date']));
+            $series[$row['date']] = $resultado['totals'] + ['unrecorded' => $resultado['unrecorded']];
         }
 
         // Por defecto se abre el reparto más reciente, que es el que se acaba
@@ -175,6 +181,9 @@ class NotificationLogController extends AbstractController
             'series' => $series,
             'selected' => $selected,
             'detail' => $detail,
+            // Desde cuándo hay constancia. Se enseña para que un reparto viejo
+            // sin datos no se lea como un reparto sin avisar.
+            'first_record' => $effects->earliestOccurredOn(PickupNoticeCoverage::noticeKinds()),
             // El rango no pinta nada aquí (la serie va por repartos, no por
             // días), pero el layout lo necesita para las pestañas y para que
             // volver a Envíos conserve el periodo que traías.

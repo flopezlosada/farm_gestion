@@ -45,6 +45,18 @@ class PickupNoticeCoverage
         'pickup_reminder_inbox',
     ];
 
+    /**
+     * Las clases de efecto que cuentan como aviso, para quien necesite
+     * preguntar por ellas fuera de aquí (la pantalla, al datar desde cuándo hay
+     * constancia).
+     *
+     * @return string[]
+     */
+    public static function noticeKinds(): array
+    {
+        return self::NOTICE_KINDS;
+    }
+
     public function __construct(
         private readonly WeeklyBasketRepository $weeklyBaskets,
         private readonly CancelledDeliveryFilter $cancelledFilter,
@@ -73,7 +85,8 @@ class PickupNoticeCoverage
      * @return array{
      *     rows: list<array{share: string, in_scope: bool, picking: int, notified: int, unreachable: int, gap: int}>,
      *     totals: array{picking: int, notified: int, unreachable: int, gap: int},
-     *     missing: list<Partner>
+     *     missing: list<Partner>,
+     *     unrecorded: bool
      * }
      */
     public function forDate(\DateTimeInterface $date): array
@@ -87,8 +100,15 @@ class PickupNoticeCoverage
                 'rows' => [],
                 'totals' => ['picking' => 0, 'notified' => 0, 'unreachable' => 0, 'gap' => 0],
                 'missing' => [],
+                'unrecorded' => false,
             ];
         }
+
+        // Un reparto anterior al primer apunte que existe no se puede juzgar:
+        // entonces se avisaba igual, pero no se guardaba constancia. Contarlo
+        // como hueco pintaría en rojo media asociación por un dato que falta, y
+        // un indicador que grita cuando no pasa nada deja de mirarse.
+        $unrecorded = $this->isBeforeAnyRecord($date);
 
         $notifiedIds = array_flip($this->effects->partnerIdsByKindsAndDate(self::NOTICE_KINDS, $date));
         $reachable = $this->reachablePartnerIds($baskets);
@@ -143,6 +163,11 @@ class PickupNoticeCoverage
                 continue;
             }
 
+            // De un reparto anterior al registro no se afirma nada.
+            if ($unrecorded) {
+                continue;
+            }
+
             ++$rows[$shareId]['gap'];
             ++$totals['gap'];
             $missing[] = $partner;
@@ -152,7 +177,26 @@ class PickupNoticeCoverage
         // cuando lo hay.
         uasort($rows, static fn (array $a, array $b): int => [$b['in_scope'], $b['gap']] <=> [$a['in_scope'], $a['gap']]);
 
-        return ['rows' => array_values($rows), 'totals' => $totals, 'missing' => $missing];
+        return [
+            'rows' => array_values($rows),
+            'totals' => $totals,
+            'missing' => $missing,
+            'unrecorded' => $unrecorded,
+        ];
+    }
+
+    /**
+     * ¿Este reparto es anterior a que empezara a haber registro de avisos?
+     *
+     * Con la tabla vacía del todo la respuesta es sí para cualquier fecha: aún
+     * no se ha apuntado nada, así que no hay nada que comprobar y lo honesto es
+     * decirlo en vez de acusar al sistema de no avisar a nadie.
+     */
+    private function isBeforeAnyRecord(\DateTimeInterface $date): bool
+    {
+        $earliest = $this->effects->earliestOccurredOn(self::NOTICE_KINDS);
+
+        return $earliest === null || $date < $earliest;
     }
 
     /**

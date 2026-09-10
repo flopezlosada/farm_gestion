@@ -147,6 +147,57 @@ class PickupNoticeCoverageTest extends KernelTestCase
     }
 
     /**
+     * De un reparto anterior al primer apunte no se afirma nada: entonces se
+     * avisaba igual y no quedaba constancia.
+     *
+     * Sin esta guarda, la pantalla acusaría al sistema de haber dejado sin
+     * avisar a media asociación cada vez que alguien mira un reparto viejo, y
+     * un indicador que grita cuando no pasa nada deja de mirarse.
+     */
+    public function testUnRepartoAnteriorAlRegistroNoCuentaHuecos(): void
+    {
+        self::bootKernel();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        $coverage = self::getContainer()->get(PickupNoticeCoverage::class);
+
+        // Una persona que recoge un día MUY anterior a cualquier apunte, y un
+        // apunte cualquiera en una fecha posterior que fija la frontera.
+        $viejo = '2099-10-02';
+        $basket = (new Basket())->setDate(new \DateTime($viejo))->setWeek(40)->setAmount(1);
+        $em->persist($basket);
+        $partner = (new Partner())->setName('AntiguaSocix')->setSurname('Prueba ' . uniqid());
+        $partner->setEmail(uniqid() . '-antigua@test.org');
+        $em->persist($partner);
+        $wb = (new WeeklyBasket())
+            ->setPartner($partner)
+            ->setBasket($basket)
+            ->setBasketShare($em->getRepository(BasketShare::class)->find(BasketShare::ID_BIWEEKLY))
+            ->setWeeklyBasketStatus($em->getRepository(WeeklyBasketStatus::class)->find(1))
+            ->setDeliveryDate(new \DateTime($viejo))
+            ->setAmount(1);
+        $em->persist($wb);
+        $em->flush();
+        $this->sembrado[] = [Basket::class, $basket->getId()];
+        $this->sembrado[] = [Partner::class, $partner->getId()];
+        $this->sembrado[] = [WeeklyBasket::class, $wb->getId()];
+
+        $frontera = (new EmittedEffect())
+            ->setKind('pickup_reminder')
+            ->setReference('partner-0')
+            ->setOccurredOn(new \DateTimeImmutable(self::DATE))
+            ->setTarget('frontera@test.org');
+        $em->persist($frontera);
+        $em->flush();
+        $this->sembrado[] = [EmittedEffect::class, $frontera->getId()];
+
+        $cobertura = $coverage->forDate(new \DateTimeImmutable($viejo));
+
+        $this->assertTrue($cobertura['unrecorded'], 'Antes del primer apunte no hay nada que comprobar.');
+        $this->assertSame(0, $cobertura['totals']['gap'], 'No se acusa de huecos donde no hay registro.');
+        $this->assertSame(1, $cobertura['totals']['picking'], 'Pero sí se sabe quién recogía.');
+    }
+
+    /**
      * Siembra una cesta que se recoge ese día.
      *
      * @param string|null $email null = ficha sin correo
