@@ -48,6 +48,37 @@ class PickupReminderMailerTest extends TestCase
         $this->assertFalse($ctx['was_shifted'], 'Recogida en el día habitual del nodo: no está desplazada.');
     }
 
+    /**
+     * Las cuatro modalidades que reciben aviso se nombran por su CADENCIA, y las
+     * compartidas igual que sus hermanas: a quien lee el correo le importa cada
+     * cuánto va a por su cesta, no el acuerdo por el que la parte con otra
+     * familia. El mapa que había antes nombraba sólo las no compartidas, así que
+     * a una cesta compartida el correo le habría dicho "tu cesta de la CSA".
+     *
+     * @dataProvider modalidadesQueRecibenAviso
+     */
+    public function testCadaModalidadSeNombraPorSuCadencia(int $shareId, string $esperada): void
+    {
+        $pickup = new \DateTimeImmutable('2099-07-01');
+        $wb = $this->weeklyBasket(
+            node: $this->node('Torremocha', (int) $pickup->format('N')),
+            deliveryDate: $pickup,
+            shareId: $shareId,
+            email: 'socix@test.org',
+        );
+
+        $this->assertSame($esperada, $this->mailer()->contextFor($wb)['modality']);
+    }
+
+    /** @return iterable<string, array{int, string}> */
+    public static function modalidadesQueRecibenAviso(): iterable
+    {
+        yield 'quincenal' => [BasketShare::ID_BIWEEKLY, 'quincenal'];
+        yield 'quincenal compartida' => [BasketShare::ID_BIWEEKLY_SHARED, 'quincenal'];
+        yield 'mensual' => [BasketShare::ID_MONTHLY, 'mensual'];
+        yield 'mensual compartida' => [BasketShare::ID_MONTHLY_SHARED, 'mensual'];
+    }
+
     public function testContextoMarcaDesplazadoCuandoElDiaNoEsElHabitual(): void
     {
         // El nodo reparte habitualmente el viernes; esta cesta cae en jueves (festivo).
