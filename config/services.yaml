@@ -80,3 +80,18 @@ services:
         arguments:
             $inner: '@.inner'
             $logger: '@monolog.logger.access'
+
+    # Bitácora del correo saliente: apunta cada envío en notification_log.
+    #
+    # decoration_priority MÁS ALTA que la del interruptor general (que va a 0,
+    # el valor por defecto), así que la cadena queda
+    # RecordingMailer → KillSwitchMailer → mailer real. El orden es lo que
+    # permite registrar TAMBIÉN los correos que el interruptor descarta: por
+    # dentro, un envío descartado vuelve sin error y sería indistinguible de uno
+    # entregado. Invertirlos dejaría el registro mudo justo cuando más
+    # desconcierta que no llegue nada.
+    App\Mailer\RecordingMailer:
+        decorates: mailer.mailer
+        decoration_priority: 10
+        arguments:
+            $inner: '@.inner'
