@@ -160,25 +160,28 @@
                     shifts: later_shifts, total: later_total, my_node_id: my_node_id, my_category_ids: my_category_ids
                 } only %}
                 {# ---- LA SALIDA, UNA SOLA ----
-                 # Había DOS enlaces al cuadrante uno debajo del otro: «y 12
-                 # turnos más» y la fila del día a día. Los dos al mismo sitio.
-                 # Ahora es una sola frase que cuenta las dos cosas —lo que queda
-                 # de las tareas con fecha y las rutinas— y un solo enlace. #}
+                 # SIN LA CUENTA DE TURNOS, que era cierta y no informaba de
+                 # nada: los «66 del día a día» son sesenta y seis veces la misma
+                 # tarea —sacar al perro, dos veces al día durante un mes— y los
+                 # «11 turnos más» son otros días de las mismas cinco tareas que
+                 # ya están arriba. Un número que sólo se entiende sabiendo cómo
+                 # se generan los turnos no es información, es ruido.
+                 #
+                 # Lo que sí dice algo: que hay MÁS DÍAS de lo mismo. #}
                 {% set fuera = (urgent_total - urgent_shifts|length) + (later_total - later_shifts|length) %}
                 {% if fuera > 0 or routine_total > 0 %}
                     <p class="vol-more">
                         <span class="vol-more__what">
                             {%- if fuera > 0 -%}
-                                Quedan {{ fuera }} turno{{ fuera == 1 ? '' : 's' }} más
+                                Hay más días de estas mismas tareas
                             {%- endif -%}
-                            {%- if fuera > 0 and routine_total > 0 %}, y {% endif -%}
-                            {%- if routine_total > 0 -%}
+                            {%- if fuera > 0 and routine_shifts is not empty %}, y {% endif -%}
+                            {%- if routine_shifts is not empty -%}
                                 {%- if fuera == 0 %}Hay {% endif -%}
-                                {{ routine_total }} del día a día
-                                {%- if routine_shifts is not empty %} ({{ routine_shifts|first.offer.title|lower }}){% endif -%}
+                                {{ routine_shifts|first.offer.title|lower }} todos los días
                             {%- endif -%}.
                         </span>
-                        <a href="{{ path('panel_volunteering_calendar') }}">Verlo todo en el cuadrante →</a>
+                        <a href="{{ path('panel_volunteering_calendar') }}">Verlo en el cuadrante →</a>
                     </p>
                 {% endif %}
 

@@ -23,6 +23,13 @@
        una pasada. */
     .csa-shell--tabbed .csa-content { max-width: 1040px; }
 
+    /* SALVO LAS PANTALLAS QUE SON UNA REJILLA. 1040px es un ancho de LECTURA:
+       va bien para texto y tarjetas, que es casi todo el panel, y ahoga a las dos
+       pantallas que tienen calendario y panel lateral a la vez —el de recogida y
+       el cuadrante—, donde el espacio de más sí se aprovecha. Se marcan con
+       `csa-content--wide` desde la propia pantalla. */
+    .csa-shell--tabbed .csa-content:has(.csa-wide) { max-width: 1400px; }
+
     .csa-tabbar { display: none; }
 
     @media (max-width: 900px) {
