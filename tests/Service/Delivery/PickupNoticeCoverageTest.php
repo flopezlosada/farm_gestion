@@ -8,6 +8,7 @@ use App\Entity\EmittedEffect;
 use App\Entity\Partner;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketStatus;
+use App\Repository\EmittedEffectRepository;
 use App\Service\Delivery\PickupNoticeCoverage;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -30,7 +31,13 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  */
 class PickupNoticeCoverageTest extends KernelTestCase
 {
-    private const DATE = '2099-11-06';
+    /**
+     * Fechas EXCLUSIVAS de este test. No es capricho: la cobertura cuenta todo
+     * lo que se recoge ese día, así que una cesta sembrada por otro test en la
+     * misma fecha entra en el recuento y rompe la comprobación. Antes de tocar
+     * estas constantes, comprobar que nadie más las usa.
+     */
+    private const DATE = '2099-05-08';
 
     /** @var list<array{class-string, int|null}> lo sembrado, para deshacerlo al terminar */
     private array $sembrado = [];
@@ -158,12 +165,17 @@ class PickupNoticeCoverageTest extends KernelTestCase
     {
         self::bootKernel();
         $em = self::getContainer()->get(EntityManagerInterface::class);
+        $effects = self::getContainer()->get(EmittedEffectRepository::class);
         $coverage = self::getContainer()->get(PickupNoticeCoverage::class);
 
-        // Una persona que recoge un día MUY anterior a cualquier apunte, y un
-        // apunte cualquiera en una fecha posterior que fija la frontera.
-        $viejo = '2099-10-02';
-        $basket = (new Basket())->setDate(new \DateTime($viejo))->setWeek(40)->setAmount(1);
+        // La frontera se DERIVA del apunte más antiguo que haya en la base, en
+        // vez de fijar una fecha a mano: otros tests dejan apuntes suyos, y con
+        // una constante bastaría uno anterior para que este caso dejara de ser
+        // "antes del registro" y la comprobación midiera otra cosa.
+        $frontera = $effects->earliestOccurredOn(PickupNoticeCoverage::noticeKinds());
+        $viejo = ($frontera ?? new \DateTimeImmutable(self::DATE))->modify('-1 day');
+
+        $basket = (new Basket())->setDate(\DateTime::createFromInterface($viejo))->setWeek(1)->setAmount(1);
         $em->persist($basket);
         $partner = (new Partner())->setName('AntiguaSocix')->setSurname('Prueba ' . uniqid());
         $partner->setEmail(uniqid() . '-antigua@test.org');
@@ -173,7 +185,7 @@ class PickupNoticeCoverageTest extends KernelTestCase
             ->setBasket($basket)
             ->setBasketShare($em->getRepository(BasketShare::class)->find(BasketShare::ID_BIWEEKLY))
             ->setWeeklyBasketStatus($em->getRepository(WeeklyBasketStatus::class)->find(1))
-            ->setDeliveryDate(new \DateTime($viejo))
+            ->setDeliveryDate(\DateTime::createFromInterface($viejo))
             ->setAmount(1);
         $em->persist($wb);
         $em->flush();
@@ -181,20 +193,14 @@ class PickupNoticeCoverageTest extends KernelTestCase
         $this->sembrado[] = [Partner::class, $partner->getId()];
         $this->sembrado[] = [WeeklyBasket::class, $wb->getId()];
 
-        $frontera = (new EmittedEffect())
-            ->setKind('pickup_reminder')
-            ->setReference('partner-0')
-            ->setOccurredOn(new \DateTimeImmutable(self::DATE))
-            ->setTarget('frontera@test.org');
-        $em->persist($frontera);
-        $em->flush();
-        $this->sembrado[] = [EmittedEffect::class, $frontera->getId()];
-
-        $cobertura = $coverage->forDate(new \DateTimeImmutable($viejo));
+        $cobertura = $coverage->forDate($viejo);
 
         $this->assertTrue($cobertura['unrecorded'], 'Antes del primer apunte no hay nada que comprobar.');
         $this->assertSame(0, $cobertura['totals']['gap'], 'No se acusa de huecos donde no hay registro.');
-        $this->assertSame(1, $cobertura['totals']['picking'], 'Pero sí se sabe quién recogía.');
+        $this->assertSame([], $cobertura['missing']);
+        // El recuento de quién recogía sí se sabe. No se compara con un número
+        // exacto: ese día puede haber cestas de las fixtures.
+        $this->assertGreaterThanOrEqual(1, $cobertura['totals']['picking'], 'Sí se sabe quién recogía.');
     }
 
     /**
