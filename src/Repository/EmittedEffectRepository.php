@@ -25,6 +25,33 @@ class EmittedEffectRepository extends ServiceEntityRepository
     }
 
     /**
+     * El apunte más antiguo que existe de esas clases de efecto.
+     *
+     * Sirve para no mentir hacia atrás. Antes de que este registro existiera se
+     * mandaron avisos igualmente, pero no quedó constancia; sin esta frontera,
+     * cualquier comprobación sobre un reparto viejo diría que se quedó sin
+     * avisar media asociación. Un dato que falta no es un fallo, y confundirlos
+     * es la forma más rápida de que nadie vuelva a mirar la pantalla.
+     *
+     * @param string[] $kinds Clases de efecto.
+     */
+    public function earliestOccurredOn(array $kinds): ?\DateTimeImmutable
+    {
+        if ($kinds === []) {
+            return null;
+        }
+
+        $value = $this->createQueryBuilder('e')
+            ->select('MIN(e.occurredOn)')
+            ->where('e.kind IN (:kinds)')
+            ->setParameter('kinds', $kinds)
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return $value === null ? null : new \DateTimeImmutable((string) $value);
+    }
+
+    /**
      * Ids de lxs socixs que ya tienen apuntado alguno de esos avisos para una
      * fecha de negocio.
      *
