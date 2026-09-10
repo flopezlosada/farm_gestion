@@ -29,12 +29,17 @@
         <p class="vol-need__lead">
             <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
             <span>
+                {# TURNOS y no «días»: el número que llega es la cuenta de turnos,
+                 # y en un mismo sábado puede haber cuatro. Decir «85 días» con 85
+                 # turnos repartidos en tres semanas es un número que no cuadra con
+                 # el calendario que se abre justo debajo. Es además la palabra que
+                 # usa el resto del módulo. #}
                 {% if total|default(0) > shifts|length %}
-                    <strong>Hay {{ total }} días esperando gente.</strong> Éstos son los más cercanos:
+                    <strong>Hay {{ total }} turnos esperando gente.</strong> Éstos son los más cercanos:
                 {% elseif shifts|length == 1 %}
-                    <strong>Hay un día esperando gente.</strong>
+                    <strong>Hay un turno esperando gente.</strong>
                 {% else %}
-                    <strong>Hay {{ shifts|length }} días esperando gente.</strong>
+                    <strong>Hay {{ shifts|length }} turnos esperando gente.</strong>
                 {% endif %}
                 {% if desde_casa %}
                     <span class="vol-need__sub">{% if desde_casa == 1 %}Uno de ellos se hace{% else %}{{ desde_casa }} de ellos se hacen{% endif %} desde casa.</span>
@@ -48,6 +53,7 @@
             {% include '_components/volunteering_task_card.html.twig' with {
                 shift: shift,
                 my_node_id: my_node_id|default(null),
+                my_category_ids: my_category_ids|default([]),
                 csrf: csrf_token('panel_volunteering')
             } only %}
         {% endfor %}

@@ -105,6 +105,17 @@ class VolunteerOfferType extends AbstractType
                 'help' => 'Con detalle suficiente para que alguien que no ha estado nunca sepa si puede con ello y qué tiene que llevar.',
                 'attr' => ['rows' => 4],
             ])
+            // La pregunta escrita es media invención: un campo llamado
+            // "consecuencia" no lo rellena nadie, y "¿qué pasa si no lo hace
+            // nadie?" se contesta sin pensarlo. Es lo que convierte una tarea
+            // apuntada en algo que hace falta, y sale en la tarjeta del socix
+            // justo debajo del título.
+            ->add('consequence', TextType::class, [
+                'label' => '¿Qué pasa si no lo hace nadie?',
+                'required' => false,
+                'help' => 'Una frase, la que hace que se entienda por qué importa. P. ej.: «sin desbrozar, el tractor no puede entrar a preparar la siembra de otoño».',
+                'attr' => ['maxlength' => 200],
+            ])
             ->add('categories', EntityType::class, [
                 'label' => 'Área',
                 'class' => VolunteerCategory::class,

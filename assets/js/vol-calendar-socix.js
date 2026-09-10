@@ -53,6 +53,11 @@
         go.textContent = n === 0 ? 'Marca al menos un turno' : n === 1 ? 'Apuntarme al turno marcado' : 'Apuntarme a los ' + n + ' turnos marcados';
         const clear = bar.querySelector('[data-scal-clear]');
         if (clear) clear.hidden = n === 0;
+        // La barra entera sólo cuando hay algo marcado: vacía era una franja
+        // negra al pie con un botón desactivado que decía «marca al menos un
+        // turno», o sea un control que no hace nada ocupando el sitio de más
+        // peso de la pantalla y tapando la última fila del mes.
+        bar.hidden = n === 0;
     }
 
     root.addEventListener('change', function (e) {

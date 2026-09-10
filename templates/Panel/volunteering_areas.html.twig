@@ -1,0 +1,167 @@
+{% extends '_layouts/csa_panel.html.twig' %}
+
+{% block title %}Voluntariado · Mis áreas{% endblock %}
+
+{# Cuelga de la CUENTA y no del voluntariado: se llega desde el menú del avatar,
+ # así que la miga y el título son los de un ajuste, sin la barra de pestañas del
+ # módulo. #}
+{% block csa_crumbs %}
+    <span class="csa-topbar__crumb-active">Mis áreas de voluntariado</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/volunteering_styles.html.twig' %}
+{% endblock %}
+
+{#
+ # En qué quiere echar una mano cada cual.
+ #
+ # NO ES UNA PANTALLA DE AVISOS, aunque de aquí salga a quién se avisa. Marcar un
+ # área tiene DOS consecuencias, y las dos importan: que te avisen de lo suyo
+ # (`PartnerRepository::findActiveMatchingVolunteerCategories`, que es de donde
+ # sale la audiencia del escalado) y que en el cuadrante lo tuyo se vea destacado
+ # y lo demás apagado. Contarlo sólo como «de qué te avisamos» dejaba fuera la
+ # mitad, y explicaba mal por qué el cuadrante se ve como se ve.
+ #
+ # PERO TAMPOCO ES APUNTARSE. Marcar «Huerta» no te inscribe en ningún turno, y
+ # el copy no puede sugerirlo: alguien se quedaría esperando a que le dijeran
+ # cuándo ir. Es una declaración de interés, y por eso se dice «en qué quieres
+ # echar una mano» y no «apúntate a».
+ #
+ # AQUÍ Y NO EN «CÓMO TE AVISAMOS», que es la otra pantalla: aquélla elige el
+ # CANAL —correo, móvil— y ésta el TEMA. Juntas se leían como la misma y ninguna
+ # se entendía.
+ #
+ # SIN TARJETA ALREDEDOR. La pantalla se llama «Mis áreas» en la pestaña y traía
+ # dentro una tarjeta titulada «Qué tareas te interesan»: dos títulos para lo
+ # mismo, con un icono y una cabecera gris de por medio para envolver dos
+ # párrafos. La pantalla ES el bloque.
+ #}
+{% block csa_main %}
+
+    {% import '_macros/csa.html.twig' as csa %}
+
+    {% set my_categories = categories|filter(c => c.id in my_category_ids) %}
+
+    {{ csa.page_header('Mi cuenta', 'Mis áreas de voluntariado', 'En qué quieres echar una mano.') }}
+
+    <div class="vol-areas">
+
+        {# El estado, en una frase y en grande: es lo que se viene a comprobar.
+         # Todo lo demás de esta pantalla es para cambiarlo, y eso se hace una
+         # vez al año. #}
+        <p class="vol-areas__state">
+            {% if partner.volunteeringOptOut %}
+                No quieres que te avisemos de voluntariado.
+            {% elseif my_categories is not empty %}
+                Echas una mano en
+                {% for category in my_categories %}
+                    <strong>{{ category.name }}</strong>
+                    {%- if not loop.last %}{{ loop.revindex == 2 ? ' y ' : ', ' }}{% endif -%}
+                {% endfor %}.
+            {% else %}
+                No has dicho todavía en qué te gustaría echar una mano.
+            {% endif %}
+        </p>
+
+        {# LA ACLARACIÓN QUE FALTABA. Esta pantalla decide a quién se AVISA, no a
+         # qué puede apuntarse: en el cuadrante se ven y se cogen los turnos de
+         # cualquier área. Sin decirlo, marcar un área se lee como cerrarse las
+         # otras, que es lo contrario de lo que hace. #}
+        {# LAS DOS CONSECUENCIAS, dichas. Y la tercera frase, la que evita el
+         # malentendido de fondo: marcar un área no te cierra las otras ni te
+         # inscribe en nada. #}
+        <p class="vol-areas__note">
+            Lo que marques aquí es de lo que te avisaremos, y lo que verás destacado en el cuadrante.
+            No te apunta a ningún turno, y puedes venir a cualquier otro aunque no sea de tu área.
+        </p>
+
+        {# A LA VISTA Y SIN PLEGAR. Estaba tras un <details> por la misma razón
+         # que cuando vivía dentro de otra pantalla —no comerse media página en
+         # cada visita—, pero eso dejó de aplicar en cuanto pasó a ser una
+         # pantalla propia: quien entra aquí viene justamente a cambiar esto, y
+         # encontrarse un enlace en vez del formulario es un clic de peaje para
+         # llegar a lo único que hay. #}
+            <form method="post" action="{{ path('panel_volunteering_preferences') }}">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
+
+                {#
+                 # Este texto NO es relleno: de él depende que el escalado de
+                 # avisos sea honesto. Marcar = "avísame de esto". No marcar
+                 # nada = "avísame de lo que sea sencillo". Si dijera otra
+                 # cosa, quien marca dos categorías recibiría avisos de todo
+                 # y dejaría de fiarse de esta pantalla.
+                 #}
+                {#
+                 # Este texto NO es relleno: de él depende que el escalado de
+                 # avisos sea honesto. Marcar = «esto me interesa». No marcar
+                 # nada = «avísame sólo de lo sencillo». Si dijera otra cosa,
+                 # quien marca dos áreas recibiría avisos de todo y dejaría de
+                 # fiarse de esta pantalla.
+                 #}
+                <p class="vol-help">
+                    Marca en qué te gustaría echar una mano. Si no marcas nada, te
+                    avisaremos únicamente de las tareas sencillas que puede hacer
+                    cualquiera.
+                </p>
+
+                {# Las áreas se apagan al marcar la salida: decir «por ahora no
+                 # quiero echar una mano» con tres áreas marcadas es una
+                 # contradicción a la vista, y además no se sabe cuál gana. Gana
+                 # la salida —así lo hace ya el guardado—, y la pantalla lo
+                 # enseña en vez de dejarlo para la sorpresa. #}
+                <div class="vol-prefs" data-vol-areas>
+                    {% for category in categories %}
+                        <label class="vol-pref">
+                            <input type="checkbox" name="categories[]" value="{{ category.id }}"
+                                   {% if category.id in my_category_ids %}checked{% endif %}>
+                            <span class="vol-pref__name">{{ category.name }}</span>
+                            {% if category.description %}
+                                <span class="vol-pref__desc">{{ category.description }}</span>
+                            {% endif %}
+                        </label>
+                    {% endfor %}
+                </div>
+
+                {#
+                 # La salida explícita, SEPARADA por una regla del resto: no es
+                 # una casilla más de la lista. NO es lo mismo que no marcar
+                 # nada —eso significa "avísame de lo sencillo"— ni que apagar
+                 # el voluntariado en «Avisos», que calla los canales; esto saca
+                 # a la persona de las audiencias y no se la cuenta ni para el
+                 # aviso general.
+                 #}
+                <div class="vol-areas__out">
+                    <label class="vol-optout">
+                        <input type="checkbox" name="opt_out" value="1"
+                               {% if partner.volunteeringOptOut %}checked{% endif %}>
+                        <span>Por ahora no quiero echar una mano</span>
+                    </label>
+                    <p class="vol-areas__out-hint">No te avisaremos de nada de voluntariado. Sigues viendo el cuadrante cuando entres.</p>
+                </div>
+
+                <button type="submit" class="vol-areas__save">Guardar</button>
+            </form>
+
+            <script>
+                (function () {
+                    var out = document.querySelector('.vol-optout input');
+                    var box = document.querySelector('[data-vol-areas]');
+                    if (!out || !box) { return; }
+
+                    function sync() {
+                        box.classList.toggle('vol-prefs--off', out.checked);
+                        box.querySelectorAll('input[type="checkbox"]').forEach(function (c) {
+                            c.disabled = out.checked;
+                            if (out.checked) { c.checked = false; }
+                        });
+                    }
+
+                    out.addEventListener('change', sync);
+                    sync();
+                }());
+            </script>
+
+    </div>
+{% endblock %}

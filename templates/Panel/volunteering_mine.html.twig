@@ -1,0 +1,296 @@
+{% extends '_layouts/csa_panel.html.twig' %}
+
+{% block title %}Voluntariado · Mis turnos{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('panel_volunteering') }}">Voluntariado</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Mis turnos</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/volunteering_styles.html.twig' %}
+{% endblock %}
+
+{#
+ # ES UN RESUMEN, NO UN ARCHIVO.
+ #
+ # La versión anterior desplegaba entera la lista de todo lo hecho en el año, y
+ # ésa es la única parte de esta pantalla que crece sin techo: en septiembre eran
+ # siete líneas y en junio serían treinta, enterrando lo que sí se viene a hacer.
+ # Los pendientes y los turnos futuros son pocos por naturaleza; el histórico no.
+ # Por eso el histórico se resume aquí y se despliega en su propia pantalla.
+ #
+ # CON LAS MISMAS TARJETAS QUE «HACE FALTA». Un intento anterior bajó los turnos
+ # propios a filas de texto con un enlace a la derecha, para resumir. Resumía, y
+ # de paso dejaba la pantalla sin nada que mirar: lo que hace legible un turno es
+ # el bloque de siempre —área, título, cuándo, dónde, cuánto—, no una fila de
+ # tabla. Resumir es enseñar POCAS tarjetas, no cambiarlas por líneas.
+ #
+ # LA APORTACIÓN VA LA ÚLTIMA, siempre. Arriba, «llevas 0 horas» convierte la
+ # pantalla en un reproche sin salida, y un reproche que no se resuelve de un
+ # clic sólo consigue que la gente deje de entrar en la web — y con ella se
+ # pierde el canal por el que gestionan su cesta.
+ #}
+{% block csa_main %}
+
+    {% import '_macros/volunteering.html.twig' as vol %}
+
+    {% include '_components/volunteering_tabs.html.twig' %}
+
+    <div class="csa-stack">
+
+        {# ============ 1. A LO QUE TE HAS APUNTADO ============
+         # EL PRÓXIMO VA PRIMERO Y LO DICE ÉL MISMO en su antetítulo, en vez de
+         # partir esto en dos secciones: «tu próximo turno» arriba y «después de
+         # ése» debajo eran dos encabezados para una sola lista ordenada por
+         # fecha, y el primero tenía siempre exactamente un elemento. #}
+        {% if my_signups is not empty %}
+            <section class="vol-group vol-group--first">
+                <div class="vol-group__head">
+                    <h4 class="vol-group__title">A lo que te has apuntado</h4>
+                    <span class="vol-group__n">{{ signups_total }}</span>
+                    <span class="vol-group__hint">
+                        {%- set cuando = my_signups|first.startsAt -%}
+                        {%- if cuando|date('Y-m-d') == 'now'|date('Y-m-d') -%}
+                            El próximo es hoy.
+                        {%- elseif cuando|date('Y-m-d') == 'tomorrow'|date('Y-m-d') -%}
+                            El próximo es mañana.
+                        {%- else -%}
+                            Faltan {{ (cuando|date('U') - 'now'|date('U')) // 86400 + 1 }} días para el próximo.
+                        {%- endif -%}
+                    </span>
+                </div>
+
+                <div class="vol-tasks">
+                    {% for signup in my_signups %}
+                        {% include '_components/volunteering_task_card.html.twig' with {
+                            shift: signup.shift,
+                            mine: true,
+                            next: loop.first,
+                            companions: signup.companions,
+                            my_node_id: null,
+                            my_category_ids: [],
+                            csrf: csrf_token('panel_volunteering')
+                        } only %}
+                    {% endfor %}
+                </div>
+
+                {% if signups_total > my_signups|length %}
+                    <p class="vol-group__more">
+                        Y {{ signups_total - my_signups|length }} más.
+                        <a href="{{ path('panel_volunteering_calendar') }}">Verlos en el cuadrante →</a>
+                    </p>
+                {% endif %}
+            </section>
+        {% endif %}
+
+        {# ============ 2. LO QUE FALTA POR CONTESTAR ============
+         # A LA VISTA, con sus botones, y no detrás de un «tienes 5 sin
+         # confirmar». Es la acción que más cuesta conseguir —hasta que no
+         # responden, esas horas no las tiene nadie— y ponerle un clic de más va
+         # justo en contra. Con tope: quien lleva medio año sin contestar tendría
+         # aquí una pared, y una pared no se contesta, se cierra.
+         #
+         # LOS DOS BOTONES PESAN LO MISMO y ninguno es verde. Recomendar una de
+         # las dos respuestas a una pregunta de hecho empuja a decir que sí a
+         # quien no fue, y de ahí salen las horas del año de esa persona. #}
+        {% if pending_confirmation is not empty %}
+            <section class="vol-group{% if my_signups is empty %} vol-group--first{% endif %}">
+                <div class="vol-group__head">
+                    <h4 class="vol-group__title">{{ pending_total == 1 ? '¿Pudiste ir?' : '¿Pudiste ir a estas?' }}</h4>
+                    <span class="vol-group__n">{{ pending_total }}</span>
+                    <span class="vol-group__hint">Hasta que no contestes, esas horas no las tiene nadie.</span>
+                </div>
+
+                <div class="vol-tasks">
+                    {% for signup in pending_confirmation %}
+                        {% set shift = signup.shift %}
+                        <article class="vol-task vol-task--ask">
+                            <p class="vol-task__kicker">
+                                {%- for category in signup.offer.categories|slice(0, 1) %}{{ category.name }}{% endfor -%}
+                            </p>
+                            <h3 class="vol-task__title">{{ signup.offer.title }}</h3>
+                            <div class="vol-task__meta">
+                                {# Con el mes, a diferencia de las tarjetas que
+                                 # miran hacia delante: aquí se recuerda algo que
+                                 # ya pasó, y «lunes 31» a 9 de septiembre no dice
+                                 # de qué mes se habla. #}
+                                <p class="vol-task__when">
+                                    {{- signup.startsAt|format_date(pattern="EEEE d 'de' MMMM", locale='es') -}}
+                                    {%- if signup.startsAt|date('H:i') != '00:00' %}{{ ' · ' }}{{ signup.startsAt|date('H:i') }}{% endif -%}
+                                </p>
+                                {% if shift.creditedMinutes %}
+                                    {# «Contarían» y no «cuenta»: todavía no son suyas. #}
+                                    <p>Contarían {{ vol.duration(shift.creditedMinutes) }}</p>
+                                {% endif %}
+                            </div>
+                            <form method="post" action="{{ path('panel_volunteering_confirm', {id: shift.id}) }}"
+                                  class="vol-task__answers">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
+                                <button type="submit" name="attended" value="1" class="vol-task__answer vol-task__answer--yes">Sí, la hice</button>
+                                <button type="submit" name="attended" value="0" class="vol-task__answer vol-task__answer--no">No pude</button>
+                            </form>
+                        </article>
+                    {% endfor %}
+                </div>
+
+                {% if pending_total > pending_confirmation|length %}
+                    <p class="vol-group__more">
+                        Y {{ pending_total - pending_confirmation|length }} más esperando respuesta. Contesta éstas y aparecerán.
+                    </p>
+                {% endif %}
+            </section>
+        {% endif %}
+
+        {# Sin nada apuntado no hay pantalla vacía a secas: se dice dónde está lo
+         # que hace falta, que es la única salida útil. #}
+        {% if my_signups is empty and pending_confirmation is empty %}
+            <section class="vol-group vol-group--first">
+                <p class="vol-empty">
+                    No estás apuntadx a ningún turno todavía.
+                    <a href="{{ path('panel_volunteering') }}">Mira lo que hace falta</a>.
+                </p>
+            </section>
+        {% endif %}
+
+        {# ============ 3. TU APORTACIÓN — resumida y la última ============
+         # La cifra, las últimas y el enlace al detalle. El listado entero vive en
+         # su pantalla: es lo único de aquí que crece todo el año, y desplegado
+         # enterraba lo de arriba, que es lo que se viene a hacer. #}
+        {# En su propio panel, no como un bloque más de la pila. Habla de OTRA
+         # cosa que todo lo de arriba: arriba están los turnos —lo que viene y lo
+         # que hay que contestar—, y esto es el balance del año. Con el mismo
+         # tratamiento que las secciones de turnos, se leía como una lista más
+         # que se hubiera quedado suelta al final. #}
+        <section class="vol-group vol-balance">
+            <div class="vol-group__head">
+                <h4 class="vol-group__title">Tu aportación este año</h4>
+            </div>
+
+            {% if my_minutes > 0 %}
+                <p class="vol-sum">{{ vol.duration(my_minutes) }}</p>
+                <p class="vol-note">
+                    {{ done_count == 1 ? 'En una tarea.' : 'En ' ~ done_count ~ ' tareas.' }}
+                    {% if show_median %}
+                        Quien echa una mano suele dedicar unas <strong>{{ vol.duration(median_minutes) }}</strong> al año.
+                        No es una cuota: es lo que sale de sumar lo que hace la gente.
+                    {% else %}
+                        Gracias — la asociación se sostiene con esto.
+                    {% endif %}
+                </p>
+            {% else %}
+                <p class="vol-sum vol-sum--zero">Este año todavía no has echado una mano.</p>
+                {% if show_median %}
+                    <p class="vol-note">
+                        Quien echa una mano suele dedicar unas <strong>{{ vol.duration(median_minutes) }}</strong> al año.
+                        No es una cuota: es lo que sale de sumar lo que hace la gente.
+                    </p>
+                {% endif %}
+            {% endif %}
+
+            {# Las últimas, no sólo la cifra: un número solo es un dato sin carne,
+             # y con dos o tres líneas debajo se ve de qué está hecho. #}
+            {% if my_last is not empty %}
+                <ul class="vol-done">
+                    {% for signup in my_last %}
+                        {# Lo que dijo que no pudo hacer va en esta misma lista y
+                         # no en una sección propia: «turnos a los que no fuiste»
+                         # con encabezado es un muro de la vergüenza, y esto es
+                         # voluntariado, no un control de fichaje. #}
+                        {% set no_fue = signup.attended is same as(false) %}
+                        <li class="vol-done__row{% if no_fue %} vol-done__row--absent{% endif %}">
+                            <span class="vol-done__what">
+                                <span class="vol-done__title">{{ signup.offer.title }}</span>
+                                {% if signup.coordination %}
+                                    {# Organizar también es trabajo, y quien lo hace
+                                     # merece verlo nombrado. #}
+                                    <span class="vol-done__role">lo organizaste</span>
+                                {% endif %}
+                                <span class="vol-done__when">{{ signup.startsAt|format_date('long', locale='es') }}</span>
+                            </span>
+                            {% if no_fue %}
+                                {# En palabras y no en blanco: un hueco donde los
+                                 # demás llevan la duración se lee como un fallo de
+                                 # la pantalla, no como una respuesta suya. #}
+                                <span class="vol-done__time vol-done__time--absent">dijiste que no podías</span>
+                            {% elseif signup.creditedMinutes %}
+                                <span class="vol-done__time">{{ vol.duration(signup.creditedMinutes) }}</span>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            {% if done_count > 0 or coordination_log is not empty %}
+                <p class="vol-group__more">
+                    <a href="{{ path('panel_volunteering_history') }}">Ver el detalle →</a>
+                </p>
+            {% endif %}
+
+            <p class="vol-note vol-note--faint">Sólo lo ves tú.</p>
+        </section>
+
+        {# ---- Horas de coordinar un área ----
+         # Sólo para quien coordina alguna. Coordinar no es una tarea que cerrar:
+         # no ocurre un día concreto, no tiene plazas y nadie se apunta. Es buscar
+         # gente, cuadrarla, avisar y estar pendiente, repartido por la semana.
+         #
+         # Las apunta quien las hace, como quien va a una tarea dice si fue: nadie
+         # más sabe ese número. Plegado, porque aun a quien coordina le toca una
+         # vez al mes. #}
+        {% if coordinated is not empty %}
+            <section class="vol-group">
+                <div class="vol-group__head">
+                    <h4 class="vol-group__title">Horas de coordinación</h4>
+                    <span class="vol-group__hint">Sólo para quien lleva un área: el tiempo de cuadrar turnos y avisar a gente.</span>
+                </div>
+
+                <details class="vol-details">
+                    <summary>Apuntar tiempo de coordinación</summary>
+
+                    <form method="post" action="{{ path('panel_volunteering_log_coordination') }}"
+                          class="vol-repeat" data-csa-validate>
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_volunteering') }}">
+
+                        {# Con una sola área no hay nada que elegir: se manda oculta. #}
+                        {% if coordinated|length == 1 %}
+                            <input type="hidden" name="category" value="{{ coordinated|first.id }}">
+                        {% else %}
+                            <label>
+                                Área
+                                <select name="category" class="csa-select" required>
+                                    {% for category in coordinated %}
+                                        <option value="{{ category.id }}">{{ category.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                        {% endif %}
+
+                        <label>
+                            Horas
+                            <input type="number" name="hours" min="0.25" max="24" step="any" required
+                                   class="csa-input csa-input--compact">
+                        </label>
+
+                        <label>
+                            Cuándo
+                            <input type="date" name="happened_on" class="csa-input"
+                                   value="{{ 'now'|date('Y-m-d') }}" max="{{ 'now'|date('Y-m-d') }}">
+                        </label>
+
+                        <label>
+                            En qué
+                            <input type="text" name="notes" class="csa-input" maxlength="255"
+                                   placeholder="opcional: «cuadrar los turnos de septiembre»">
+                        </label>
+
+                        <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Apuntar</button>
+                    </form>
+                </details>
+            </section>
+        {% endif %}
+
+    </div>
+{% endblock %}

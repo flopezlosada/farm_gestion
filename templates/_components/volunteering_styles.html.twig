@@ -435,6 +435,20 @@
     }
     .vol-help--muted { font-size: var(--csa-fs-xs); color: var(--csa-ink-soft); }
 
+    /* El porqué en la ficha de gestión: destacado sobre la descripción, porque
+       es la frase que va a leer un socix en su tarjeta. */
+    .vol-why {
+        display: flex; gap: var(--csa-sp-2); align-items: baseline;
+        margin: 0 0 var(--csa-sp-3);
+        padding: var(--csa-sp-3) var(--csa-sp-4);
+        border-left: 3px solid var(--csa-terracotta);
+        background: var(--csa-surface-alt);
+        border-radius: 0 var(--csa-radius-md) var(--csa-radius-md) 0;
+        font-size: var(--csa-fs-sm); line-height: var(--csa-lh-normal);
+        color: var(--csa-ink);
+    }
+    .vol-why > i { color: var(--csa-terracotta); flex-shrink: 0; }
+
     .vol-empty {
         margin: 0;
         font-size: var(--csa-fs-sm);
@@ -924,7 +938,11 @@
         font-size: var(--csa-fs-sm); line-height: var(--csa-lh-snug);
         color: var(--csa-ink);
     }
-    .vol-need__lead > i { color: var(--csa-terracotta); margin-top: 2px; flex-shrink: 0; }
+    /* El triángulo, en gris. Encabeza tarjetas que ya no llevan alarma ninguna:
+       un aviso rojo sobre una lista tranquila es el único grito de la pantalla y
+       lo daba un icono decorativo, no un dato. La misma regla que las tarjetas
+       —terracota sólo para lo destructivo— vale también aquí. */
+    .vol-need__lead > i { color: var(--csa-ink-muted); margin-top: 2px; flex-shrink: 0; }
     .vol-need__sub {
         display: block; margin-top: 2px;
         font-size: var(--csa-fs-xs); color: var(--csa-ink-muted);
@@ -932,108 +950,444 @@
 
     .vol-tasks { display: flex; flex-direction: column; gap: var(--csa-sp-3); }
 
+    /* ---- LA TARJETA DE TURNO ----
+       UN SOLO ACENTO: el botón verde. Y en un turno inminente, dos trozos de
+       TEXTO en ámbar. Nada más.
+
+       Antes tenía borde y franja lateral de color, cápsula gris del área,
+       etiquetas azul y verde, pastilla terracota de "faltan N" y un corro de
+       círculos con iniciales. En nueve tarjetas eso eran unos sesenta elementos
+       con acento: la pantalla era un mosaico donde nada destacaba porque todo
+       destacaba. Lo que se quitó de color vuelve por tipografía, orden y
+       blanco. */
     .vol-task {
-        position: relative; overflow: hidden;
+        display: flex; flex-direction: column;
         background: var(--csa-surface);
         border: 1px solid var(--csa-rule);
         border-radius: var(--csa-radius-lg);
-        padding: var(--csa-sp-4) var(--csa-sp-4) var(--csa-sp-4) var(--csa-sp-5);
+        padding: var(--csa-sp-4);
     }
-    /* La franja lateral marca la tarea sin teñir la tarjeta entera: un fondo de
-       color en tres tarjetas seguidas convierte la pantalla en una alarma. */
-    .vol-task::before {
-        content: ''; position: absolute; left: 0; top: 0; bottom: 0;
-        width: 3px; background: var(--csa-rule);
-    }
-    .vol-task--urgent { border-color: var(--csa-terracotta-soft); }
-    .vol-task--urgent::before { background: var(--csa-terracotta); }
+    /* EL BOTÓN, SIEMPRE ABAJO DEL TODO. Sin esto la altura de cada tarjeta la
+       marcaba su texto, y dos tarjetas de al lado —una con «Faltan 2 personas» y
+       la otra sin— dejaban los botones a alturas distintas: la fila entera
+       parecía descuadrada. `margin-top: auto` empuja el formulario al fondo, y
+       como la rejilla estira las tarjetas a la misma altura, los botones quedan
+       a la misma línea. */
+    .vol-task > form { margin-top: auto; }
+    /* El bloque de datos deja de empujar: el hueco sobrante va antes del botón,
+       no repartido. */
+    .vol-task__meta { margin-bottom: var(--csa-sp-2); }
 
-    .vol-task__tags {
-        display: flex; flex-wrap: wrap; align-items: center; gap: var(--csa-sp-2);
-        margin-bottom: var(--csa-sp-2);
+    /* Ya vas: el verde pasa al borde y al fondo, y el botón desaparece — no hay
+       nada que pulsar salvo deshacer. Es el único estado que tiñe la tarjeta,
+       y puede porque es el que uno tiene de uno en uno, no de nueve en nueve. */
+    /* SIN FONDO. El verde lavado en cuatro tarjetas seguidas teñía media
+       pantalla de un color que no aporta nada: que un turno sea tuyo ya lo dicen
+       el borde verde, el antetítulo «ya vas» y el botón de deshacer. Y con el
+       fondo puesto, la pantalla entera se veía de un solo color. */
+    .vol-task--mine { border-color: var(--csa-green); }
+    /* EL PRÓXIMO, destacado sobre los otros a los que va: con todas iguales
+       había que leer las cuatro fechas para saber cuál es el de esta semana. Un
+       borde de 2px y un halo suave — no otro color, que el verde ya es el suyo:
+       más peso del mismo. */
+    .vol-task--next {
+        border-width: 2px;
+        background: color-mix(in srgb, var(--csa-green) 7%, #fff);
     }
-    .vol-task__gap {
-        display: inline-flex; align-items: center; gap: 4px;
-        padding: 3px 8px; border-radius: var(--csa-radius-pill);
-        background: var(--csa-terracotta-soft); color: #b04e22;
-        font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em;
+    .csa-app .vol-task--next .vol-task__title { font-size: var(--csa-fs-xl); }
+    /* A LO ANCHO DE LA REJILLA, que es lo que de verdad destaca. Con un borde
+       algo más grueso y media columna, como las demás, había que fijarse para
+       encontrarlo; ocupando la fila entera se ve antes de leer nada. */
+    @media (min-width: 640px) {
+        .vol-tasks > .vol-task--next { grid-column: 1 / -1; }
+    }
+    /* LAS DEL MONTÓN URGENTE, con borde ámbar. No es un color nuevo: es el mismo
+       que ya llevan dentro «Faltan 2 personas» y el «Mañana» de la fecha, o sea
+       la misma idea en otro soporte. Y borde y no relleno: un fondo de color en
+       cuatro tarjetas seguidas convierte la pantalla en una alarma y deja de
+       avisar de nada. */
+    /* LAS DEL MONTÓN URGENTE. El borde en ocre claro no se veía a un metro de la
+       pantalla; una franja ámbar arriba, sí. Sigue sin ser un color nuevo: es el
+       que ya llevan dentro «Faltan 2 personas» y el «Mañana» de la fecha. Y
+       arriba y no alrededor: el borde de la tarjeta ya significa otra cosa —el
+       verde de «ya vas»— y dos bordes que dicen cosas distintas se confunden. */
+    .vol-group--urgent .vol-task {
+        border-top: 3px solid var(--csa-amber);
+        border-radius: var(--csa-radius-lg);
+        padding-top: calc(var(--csa-sp-4) - 2px);
+    }
+    /* La que PREGUNTA se distingue por sus DOS BOTONES, que no los tiene ninguna
+       otra, no por un fondo gris. El gris la hacía parecer desactivada —lo
+       contrario de lo que quiere, que es que la contesten— y ensuciaba una
+       pantalla que por lo demás es blanca sobre crema. */
+    .vol-task--ask { border-color: #d9d4c4; }
+
+    /* El área, en versalitas y en gris: no se pulsa, no avisa de nada y se
+       repite en cada tarjeta. Como cápsula pesaba lo mismo que el título. */
+    .vol-task__kicker {
+        margin: 0;
+        font-size: 11px; font-weight: 600; letter-spacing: 0.09em;
+        text-transform: uppercase; color: var(--csa-ink-muted);
+    }
+    .vol-task__kicker--mine { color: var(--csa-green); }
+    /* «no es de tus áreas, pero puedes venir»: la diferencia se dice con
+       palabras. Bajarle el contraste a la tarjeta sería usar el lenguaje
+       universal de «deshabilitado» para decir justo lo contrario. */
+    .vol-task__aside {
+        text-transform: none; letter-spacing: 0; font-weight: 500;
+        color: var(--csa-ink-soft);
     }
 
     .csa-app .vol-task__title {
-        margin: 0;
-        font-family: var(--csa-serif); font-weight: 500; font-size: var(--csa-fs-md);
+        margin: 7px 0 0;
+        font-family: var(--csa-serif); font-weight: 400; font-size: var(--csa-fs-lg);
         line-height: var(--csa-lh-snug); letter-spacing: -0.012em;
         color: var(--csa-ink);
     }
-    /* El para-qué, no el detalle: es lo que convierte una tarea apuntada por
-       alguien en algo que hace falta. */
+
+    /* Cuánta gente falta: línea propia y en negro. En ÁMBAR y no en terracota
+       cuando corre prisa — terracota es el color destructivo del sistema, y
+       usarlo aquí enseñaba que el rojizo es donde uno se apunta. Y es texto,
+       nunca relleno: una pastilla rellena en seis tarjetas seguidas deja de
+       avisar. */
+    .vol-task__need {
+        margin: 9px 0 0;
+        font-size: var(--csa-fs-base); font-weight: 600; color: var(--csa-ink);
+    }
+    .vol-task__need--now { color: var(--csa-amber); }
+
+    /* El para-qué. En gris: es el motivo para ir, no un error del sistema. */
     .vol-task__why {
-        margin: var(--csa-sp-2) 0 0;
+        margin: 5px 0 0;
         font-size: var(--csa-fs-sm); line-height: var(--csa-lh-normal);
         color: var(--csa-ink-soft);
     }
 
-    .vol-task__facts {
-        list-style: none; margin: var(--csa-sp-3) 0 0; padding: 0;
-        display: flex; flex-direction: column; gap: var(--csa-sp-1);
+    /* Los tres datos que deciden —cuándo, dónde, cuánto cuesta— en tres líneas
+       y no en chips sueltos: se leen de corrido y en voz alta. */
+    .vol-task__meta {
+        display: grid; gap: 4px;
+        margin-top: 14px; padding-top: var(--csa-sp-3);
+        border-top: 1px solid var(--csa-rule-soft);
+        font-size: var(--csa-fs-sm); line-height: 1.35; color: var(--csa-ink-soft);
+    }
+    .vol-task__meta p { margin: 0; }
+    .vol-task__when { color: var(--csa-ink); font-weight: 600; text-transform: capitalize; }
+    /* «Hoy» y «Mañana» son el otro trozo en ámbar de un turno inminente. */
+    .vol-task__when em { font-style: normal; color: var(--csa-amber); }
+
+    /* Acompañantes: encima del botón y en una línea, para que no se lea como un
+       segundo campo obligatorio. */
+    .vol-task__companions {
+        display: flex; align-items: center; gap: var(--csa-sp-2);
+        margin-top: var(--csa-sp-3);
         font-size: var(--csa-fs-sm); color: var(--csa-ink-soft);
     }
-    .vol-task__facts li { display: flex; align-items: baseline; gap: var(--csa-sp-2); }
-    .vol-task__facts i { width: 13px; text-align: center; color: var(--csa-ink-muted); flex-shrink: 0; }
-    .vol-task__facts strong { color: var(--csa-ink); font-weight: 600; text-transform: capitalize; }
+    .vol-task__companions .csa-input { width: 68px; height: 44px; text-align: center; }
 
-    /* Quién va ya: huecos vacíos incluidos, para que se vea el sitio libre y no
-       sólo un número. */
-    .vol-task__cover {
-        display: flex; align-items: center; justify-content: space-between;
-        gap: var(--csa-sp-3);
-        margin-top: var(--csa-sp-3); padding-top: var(--csa-sp-3);
-        border-top: 1px solid var(--csa-rule-soft);
-    }
-    .vol-task__faces { display: flex; }
-    .vol-task__face {
-        width: 26px; height: 26px; border-radius: 50%;
-        background: var(--csa-green-soft); color: var(--csa-green);
-        border: 2px solid var(--csa-surface);
-        display: inline-flex; align-items: center; justify-content: center;
-        font-size: 10px; font-weight: 700;
-    }
-    .vol-task__face + .vol-task__face { margin-left: -8px; }
-    .vol-task__face--empty {
-        background: transparent; border: 2px dashed var(--csa-rule);
-    }
-    .vol-task__count { font-size: var(--csa-fs-sm); color: var(--csa-ink-muted); flex-shrink: 0; }
-
-    /* 46px: el botón es el objetivo de toda la tarjeta y tiene que acertarse sin
-       apuntar. A lo ancho porque no compite con nada. */
+    /* 44px: el botón es el objetivo de toda la tarjeta y tiene que acertarse sin
+       apuntar. A lo ancho porque no compite con nada. SIEMPRE verde, también en
+       los urgentes: que el sitio donde uno dice que sí sea siempre igual vale
+       más que subrayar la prisa una vez más. */
     .vol-task__cta {
-        width: 100%; min-height: 46px; margin-top: var(--csa-sp-3);
+        width: 100%; height: 44px; margin-top: 14px;
         border: 0; border-radius: var(--csa-radius-md); cursor: pointer;
         background: var(--csa-green); color: #fff;
         font-family: var(--csa-sans); font-size: var(--csa-fs-base); font-weight: 600;
     }
-    .vol-task__cta:hover { background: var(--csa-green); opacity: 0.92; }
-    .vol-task--urgent .vol-task__cta { background: var(--csa-terracotta); }
+    .vol-task__cta:hover { opacity: 0.92; }
 
-    /* Ver todo: oscuro y no verde, para que no compita con "me apunto". Apuntarse
-       es la acción; ver la lista es la salida. */
-    .vol-all {
-        display: flex; align-items: center; justify-content: center; gap: var(--csa-sp-2);
-        width: 100%; min-height: 48px; margin-top: var(--csa-sp-3);
-        border-radius: var(--csa-radius-md);
-        background: var(--csa-ink); color: var(--csa-bg);
-        font-size: var(--csa-fs-base); font-weight: 600; text-decoration: none;
+    /* Deshacer: MISMO SITIO Y MISMA FORMA que «Me apunto», para que las dos
+       pantallas se lean como la misma cosa. Lo que cambia es el color, que es
+       justamente lo que distingue una tarjeta a la que vas de una que pide
+       gente.
+
+       De contorno y no relleno: es destructivo —libera la plaza— y un botón rojo
+       a lo ancho en cuatro tarjetas seguidas pesa más que el trabajo. */
+    /* CON FONDO, como «Me apunto»: mismo sitio, misma forma, mismo tamaño. Lo
+       único que cambia es el color, que es lo que distingue una tarjeta a la que
+       ya vas de una que pide gente.
+
+       EL DEL PRÓXIMO va con el color entero; los de los demás turnos, el MISMO
+       color pero atenuado. Cuatro botones terracota a plena intensidad, uno
+       debajo de otro, convertían la pantalla en una fila de alarmas para lo que
+       es la acción menos frecuente de todas: darse de baja. */
+    .vol-task__undo {
+        width: 100%; height: 44px; margin-top: var(--csa-sp-3);
+        border: 0; border-radius: var(--csa-radius-md); cursor: pointer;
+        background: var(--csa-terracotta-soft);
+        color: #8a3a1c;
+        font-family: var(--csa-sans); font-size: var(--csa-fs-base); font-weight: 600;
     }
-    .vol-all:hover { color: var(--csa-bg); opacity: 0.92; }
-    .vol-all__count {
-        padding: 1px 7px; border-radius: var(--csa-radius-pill);
-        background: rgba(255, 255, 255, 0.18); font-size: var(--csa-fs-xs); font-weight: 700;
+    .vol-task--next .vol-task__undo { background: var(--csa-terracotta); color: #fff; }
+    .vol-task__undo:hover { opacity: 0.9; }
+
+
+    /* ---- Las cuatro pestañas del voluntariado del socix ----
+       Sobre el componente canónico (.csa-tabs--folder), que ya envuelve solo por
+       debajo de 768px. Aquí sólo lo que es propio de esta pantalla. */
+    /* A LA IZQUIERDA, no centradas. El componente canónico centra con
+       `width: fit-content; margin: 0 auto`, que va bien en Ajustes —una rejilla
+       simétrica— pero aquí deja los rótulos flotando en mitad de la pantalla,
+       lejos del contenido que encabezan y con el ojo saltando de un lado a otro
+       al bajar. La navegación de una sección se lee donde empieza el texto. */
+    .vol-tabs {
+        width: 100%; margin: 0 0 var(--csa-sp-5); justify-content: flex-start;
     }
-    /* Dicho en voz alta porque, si no se dice, se supone lo contrario. */
-    .vol-note {
+    /* Lo que hay por confirmar tiene que verse, pero EN ÁMBAR Y SIN PASTILLA. La
+       pastilla terracota rellena era la mancha de color más fuerte de la
+       pantalla, puesta en la navegación y con el color destructivo del sistema
+       para decir «tienes dos cosas que contestar». El ámbar ya significa «esto
+       corre prisa» en el resto del módulo. */
+    .vol-tabs .csa-tabs__count {
+        margin-left: 5px;
+        background: none; color: var(--csa-amber);
+        font-weight: 600; opacity: 1;
+    }
+    .vol-tabs .csa-tabs__item.active .csa-tabs__count { color: var(--csa-amber); opacity: 1; }
+
+    /* Móvil: cuatro rótulos en dos filas. El componente ya las deja envolver;
+       lo que falta es que no queden pegadas al borde ni desalineadas. */
+    @media (max-width: 640px) {
+        .vol-tabs { justify-content: center; }
+    }
+
+    /* ---- Montones de la pantalla de voluntariado ----
+       Una regla arriba y el título en versalitas: separa sin añadir un marco más
+       a una pantalla que ya vive dentro de una csa-card.
+
+       SIN PUNTO DE COLOR. Eran tres puntos de tres colores distintos para decir
+       algo que ya dicen el título y el orden: el primer montón es el urgente
+       porque está primero y porque se llama «Falta gente ya». */
+    .vol-group {
+        border-top: 1px solid var(--csa-rule);
+        margin-top: 28px; padding-top: var(--csa-sp-4);
+    }
+    .vol-group__head {
+        display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--csa-sp-2);
+        margin-bottom: var(--csa-sp-3);
+    }
+    .csa-app .vol-group__title {
+        margin: 0;
+        font-family: var(--csa-sans); font-weight: 600; font-size: var(--csa-fs-xs);
+        letter-spacing: 0.1em; text-transform: uppercase; color: var(--csa-ink);
+    }
+    /* El contador, a la derecha y en gris: acompaña, no encabeza. */
+    .vol-group__n { margin-left: auto; font-size: var(--csa-fs-sm); color: var(--csa-ink-muted); }
+    /* El subtítulo baja a su propia línea: es lo que distingue un montón del de
+       al lado, y en la misma fila que el título se perdía. */
+    .vol-group__hint {
+        flex-basis: 100%; margin-top: -7px;
+        font-size: var(--csa-fs-sm); color: var(--csa-ink-soft);
+    }
+    /* La salida de la lista: UNA sola, al pie de todos los montones y con aire.
+       Dentro de cada montón y pegada al último botón se leía como el pie de esa
+       tarjeta, y con dos montones salía dos veces seguidas diciendo lo mismo. */
+    .vol-more { margin: var(--csa-sp-6) 0 0; font-size: var(--csa-fs-base); }
+    .vol-more a { color: var(--csa-green); font-weight: 600; text-decoration: none; }
+    .vol-more a:hover { text-decoration: underline; }
+    /* El que queda dentro de un montón (el día a día, «mis turnos»). */
+    .vol-group__more {
+        margin: var(--csa-sp-5) 0 0;
+        font-size: var(--csa-fs-sm); font-weight: 500; color: var(--csa-ink-soft);
+    }
+    .vol-group__more a { color: var(--csa-green); text-decoration: none; }
+    .vol-group__more a:hover { text-decoration: underline; }
+
+    /* Las dos respuestas de «¿pudiste ir?»: MISMO PESO Y NINGUNA VERDE. Es una
+       pregunta de hecho, no una recomendación; pintar «sí, la hice» en primario
+       empuja a decir que sí a quien no fue, y de ahí salen las horas del año de
+       esa persona. */
+    .vol-task__answers {
+        display: grid; grid-template-columns: 1fr 1fr; gap: var(--csa-sp-2);
+        margin-top: 14px;
+    }
+    /* CON COLOR, PERO NINGUNO RELLENO. Dos botones blancos iguales no se leían
+       como una pregunta con dos respuestas, se leían como nada. Y rellenar el
+       «sí» de verde recomienda una de las dos respuestas a una pregunta de
+       hecho, lo que empuja a decir que sí a quien no fue — y de ahí salen las
+       horas del año de esa persona. Contorno y texto de color: se distinguen,
+       pesan lo mismo. */
+    .vol-task__answer {
+        height: 44px; border-radius: var(--csa-radius-md); cursor: pointer;
+        background: var(--csa-surface);
+        font-family: var(--csa-sans); font-size: var(--csa-fs-base); font-weight: 600;
+    }
+    .vol-task__answer--yes { border: 1.5px solid var(--csa-green); color: var(--csa-green); }
+    .vol-task__answer--yes:hover { background: var(--csa-green-soft); }
+    .vol-task__answer--no { border: 1.5px solid var(--csa-ink-muted); color: var(--csa-ink-soft); }
+    .vol-task__answer--no:hover { background: var(--csa-surface-alt); }
+
+    /* El primer bloque de una pantalla no lleva la regla de arriba: no separa de
+       nada, y deja un filo suelto justo debajo de las pestañas. */
+    .vol-group--first { border-top: 0; margin-top: 0; padding-top: 0; }
+
+    /* ---- Cabecera de pantalla ----
+       Un título y una entradilla, sin banda de color ni icono en un círculo. La
+       csa-card «hero» que llevaba antes pesaba más que las tarjetas y metía un
+       cuarto verde en una pantalla que ya tiene el de los botones. */
+    .vol-head { margin-bottom: var(--csa-sp-5); }
+    .csa-app .vol-head__title {
+        margin: 0;
+        font-family: var(--csa-serif); font-weight: 400; font-size: var(--csa-fs-2xl);
+        line-height: 1.15; letter-spacing: -0.02em; color: var(--csa-ink);
+    }
+    .vol-head__sub {
+        max-width: 52ch; margin: var(--csa-sp-2) 0 0;
+        font-size: var(--csa-fs-base); line-height: var(--csa-lh-normal);
+        color: var(--csa-ink-soft);
+    }
+
+    /* ---- El balance del año, en su propio panel ----
+       Habla de OTRA cosa que todo lo de arriba: arriba están los turnos —lo que
+       viene, lo que hay que contestar—, y esto es el saldo. Con el mismo
+       tratamiento que las secciones de turnos se leía como una lista más que se
+       hubiera quedado suelta al final.
+
+       Fondo crema y sin regla superior: un panel, no otra fila de la pila. */
+    /* SIN FONDO. Con el panel crema era un ladrillo gris de media pantalla al
+       final de todo: pesaba más que los turnos, que es lo que se viene a hacer,
+       y en una pantalla que es blanco sobre crema el bloque relleno cantaba.
+       Lo que lo separa es el aire de más y su regla, como los demás bloques. */
+    .vol-balance { margin-top: var(--csa-sp-10); }
+
+    /* ---- Tu aportación: la cifra y lo que hay detrás ----
+       La cifra en serif y grande, como el resto de números con peso del panel.
+       Sin barra de progreso: una barra hacia la mediana la convierte en una
+       meta, y esto no es una cuota. */
+    .csa-app .vol-sum {
+        margin: 0;
+        font-family: var(--csa-serif); font-weight: 400; font-size: var(--csa-fs-2xl);
+        line-height: 1.1; letter-spacing: -0.02em; color: var(--csa-ink);
+    }
+    .csa-app .vol-sum--zero {
+        font-size: var(--csa-fs-md); line-height: var(--csa-lh-snug); color: var(--csa-ink-soft);
+    }
+
+    /* Dos columnas: qué y cuánto. Un número suelto no significa nada; la lista
+       de lo que hay detrás sí. */
+    .vol-done { list-style: none; margin: var(--csa-sp-4) 0 0; padding: 0; }
+    .vol-done__row {
+        display: flex; align-items: baseline; justify-content: space-between;
+        gap: var(--csa-sp-4);
+        padding: var(--csa-sp-3) 0;
+        border-top: 1px solid var(--csa-rule-soft);
+    }
+    .vol-done__title { font-size: var(--csa-fs-base); font-weight: 600; color: var(--csa-ink); }
+    .vol-done__role {
+        margin-left: 6px;
+        font-size: var(--csa-fs-xs); color: var(--csa-ink-muted);
+    }
+    .vol-done__when {
+        display: block; margin-top: 2px;
+        font-size: var(--csa-fs-sm); color: var(--csa-ink-muted);
+    }
+    .vol-done__time {
+        flex-shrink: 0;
+        font-size: var(--csa-fs-sm); color: var(--csa-ink-soft); white-space: nowrap;
+    }
+    /* Lo que no se pudo hacer: en gris y sin horas, pero PRESENTE. Ni tachado ni
+       en rojo — es una respuesta suya, no un incumplimiento. */
+    .vol-done__row--absent .vol-done__title { font-weight: 500; color: var(--csa-ink-soft); }
+    .vol-done__time--absent { color: var(--csa-ink-muted); font-style: italic; }
+
+    /* Áreas apagadas mientras esté marcada la salida: se ven, para saber qué
+       había, pero no se pueden tocar. */
+    .vol-prefs--off { opacity: .45; }
+
+    /* ---- Mis áreas ----
+       Sin tarjeta: la pantalla ES el bloque. Con una csa-card alrededor había
+       dos títulos para lo mismo —«Mis áreas» en la pestaña y «Qué tareas te
+       interesan» en la cabecera de la tarjeta— y un icono y una banda gris para
+       envolver dos párrafos. */
+    .vol-areas { max-width: 54ch; }
+    .csa-app .vol-areas__state {
+        margin: 0;
+        font-size: var(--csa-fs-md); line-height: var(--csa-lh-snug); color: var(--csa-ink);
+    }
+    .vol-areas__note {
         margin: var(--csa-sp-2) 0 0;
-        font-size: var(--csa-fs-xs); color: var(--csa-ink-muted); text-align: center;
+        font-size: var(--csa-fs-sm); line-height: var(--csa-lh-normal); color: var(--csa-ink-soft);
     }
+    /* La salida, separada del resto por una regla: no es una casilla más de la
+       lista de áreas, es lo contrario de todas ellas. */
+    .vol-areas__out {
+        margin-top: var(--csa-sp-4); padding-top: var(--csa-sp-4);
+        border-top: 1px solid var(--csa-rule);
+    }
+    .vol-areas__out-hint {
+        margin: 6px 0 0 30px;
+        font-size: var(--csa-fs-sm); color: var(--csa-ink-muted);
+    }
+    .vol-areas__save {
+        height: 44px; margin-top: var(--csa-sp-4); padding: 0 var(--csa-sp-6);
+        border: 0; border-radius: var(--csa-radius-md); cursor: pointer;
+        background: var(--csa-green); color: #fff;
+        font-family: var(--csa-sans); font-size: var(--csa-fs-base); font-weight: 600;
+    }
+    .vol-areas__save:hover { opacity: 0.92; }
+
+    /* ---- El día a día, plegado en una fila ----
+       Misma regla que un montón (línea arriba, título en versalitas) pero sin
+       tarjetas debajo: son turnos de una plaza y un rato corto, y con el peso de
+       un montón entero dejaban la faena de verdad a cuatro scrolls. */
+    .vol-fold {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: var(--csa-sp-4);
+        border-top: 1px solid var(--csa-rule);
+        margin-top: 28px; padding: 18px 0; min-height: 44px;
+        text-decoration: none; color: inherit;
+    }
+    /* Hover con FONDO y no con subrayado: la fila entera es el objetivo —44px de
+       alto— y subrayar sólo el texto sugiere que lo pulsable es el texto. Con el
+       fondo se ve que se pulsa toda la banda. */
+    .vol-fold { border-radius: var(--csa-radius-md); transition: background .12s ease; }
+    .vol-fold:hover {
+        color: inherit; text-decoration: none;
+        background: var(--csa-surface-alt);
+        box-shadow: 0 0 0 var(--csa-sp-3) var(--csa-surface-alt);
+    }
+    .vol-fold:hover .vol-fold__title,
+    .vol-fold:hover .vol-fold__go { text-decoration: none; }
+    .vol-fold__title {
+        display: block;
+        font-size: var(--csa-fs-xs); font-weight: 600;
+        letter-spacing: 0.1em; text-transform: uppercase; color: var(--csa-ink);
+    }
+    .vol-fold__hint {
+        display: block; margin-top: 5px;
+        font-size: var(--csa-fs-sm); line-height: 1.4; color: var(--csa-ink-soft);
+    }
+    .vol-fold__go {
+        flex-shrink: 0;
+        font-size: var(--csa-fs-sm); font-weight: 500; color: var(--csa-ink-soft);
+        white-space: nowrap;
+    }
+
+    /* ---- Filtros ----
+       La activa en VERDE SUAVE y no en negro sólido. Un negro relleno es el
+       elemento más pesado de la pantalla y estaba puesto en un control
+       secundario: pesaba más que el botón donde uno se apunta.
+       44px de alto porque se tocan con el pulgar, y envolviendo a dos filas en
+       vez de con scroll horizontal, que esconde la cuarta opción sin avisar. */
+    .vol-filters {
+        display: flex; flex-wrap: wrap; gap: var(--csa-sp-2);
+        margin-bottom: var(--csa-sp-4);
+    }
+    .vol-filter {
+        display: inline-flex; align-items: center; gap: 6px;
+        height: 44px; padding: 0 13px;
+        border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-pill);
+        background: var(--csa-surface); color: var(--csa-ink-soft);
+        font-family: var(--csa-sans); font-size: var(--csa-fs-sm); font-weight: 500;
+        cursor: pointer;
+    }
+    .vol-filter--on {
+        background: var(--csa-green-soft); border-color: var(--csa-green);
+        color: var(--csa-ink); font-weight: 600;
+    }
+    .vol-filter__n { font-weight: 500; color: var(--csa-ink-muted); }
+    .vol-filter--on .vol-filter__n { color: var(--csa-ink-soft); }
 
     @media (min-width: 640px) {
         .vol-tasks { display: grid; grid-template-columns: 1fr 1fr; }

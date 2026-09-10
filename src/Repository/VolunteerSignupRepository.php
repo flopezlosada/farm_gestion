@@ -136,6 +136,10 @@ class VolunteerSignupRepository extends ServiceEntityRepository
      * hacia atrás. Es lo que le da carne al contador: "6 h" no dice nada, pero
      * "6 h: dos repartos y una mañana de plantación" sí.
      *
+     * SÓLO LO QUE COMPUTA. Para la lista de la pantalla usa
+     * {@see findAnsweredFor()}, que trae también los "no pude": aquí sólo entra
+     * lo que suma horas.
+     *
      * @param Partner            $partner el socix
      * @param \DateTimeInterface $from    inicio del periodo, inclusive
      * @param \DateTimeInterface $to      fin del periodo, inclusive
@@ -144,18 +148,58 @@ class VolunteerSignupRepository extends ServiceEntityRepository
      */
     public function findDoneFor(Partner $partner, \DateTimeInterface $from, \DateTimeInterface $to): array
     {
+        return $this->answeredQb($partner, $from, $to)
+            ->andWhere('s.attended = true')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Todo lo que ya contestó en el periodo: lo que hizo Y lo que dijo que no
+     * pudo hacer.
+     *
+     * EXISTE PORQUE UN "NO PUDE" SE PERDÍA. Al contestar que no, la inscripción
+     * salía de los pendientes —correcto— pero no entraba en ninguna otra lista:
+     * la tarjeta desaparecía de la pantalla sin dejar rastro. Quien pulsaba no
+     * tenía forma de saber si su respuesta se había guardado, y quien se
+     * equivocaba de botón no tenía forma de corregirlo, porque ya no había nada
+     * que tocar.
+     *
+     * Va junto a lo hecho y no en una sección propia: una lista con el título
+     * "turnos a los que no fuiste" es un muro de la vergüenza, y esto es una
+     * asociación de voluntariado, no un control de fichaje. Quien pinte lo
+     * distingue por `getAttended()`; los "no pude" no traen minutos, que los
+     * borra {@see VolunteerSignup::markAbsent()}.
+     *
+     * @param Partner            $partner el socix
+     * @param \DateTimeInterface $from    inicio del periodo, inclusive
+     * @param \DateTimeInterface $to      fin del periodo, inclusive
+     *
+     * @return list<VolunteerSignup> lo contestado, de lo más reciente hacia atrás
+     */
+    public function findAnsweredFor(Partner $partner, \DateTimeInterface $from, \DateTimeInterface $to): array
+    {
+        return $this->answeredQb($partner, $from, $to)
+            ->andWhere('s.attended IS NOT NULL')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * El tronco común de las dos anteriores: sus inscripciones del periodo, de
+     * lo más reciente hacia atrás.
+     */
+    private function answeredQb(Partner $partner, \DateTimeInterface $from, \DateTimeInterface $to): QueryBuilder
+    {
         return $this->joinShift(false)
             ->addSelect('sh')
             ->addSelect('o')
             ->andWhere('s.partner = :partner')
-            ->andWhere('s.attended = true')
             ->andWhere('sh.startsAt BETWEEN :from AND :to')
             ->setParameter('partner', $partner)
             ->setParameter('from', $from)
             ->setParameter('to', $to)
-            ->orderBy('sh.startsAt', 'DESC')
-            ->getQuery()
-            ->getResult();
+            ->orderBy('sh.startsAt', 'DESC');
     }
 
     /**

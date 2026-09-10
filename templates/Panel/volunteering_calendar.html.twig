@@ -2,8 +2,13 @@
  #
  # ES LA MISMA REJILLA QUE EN GESTIÓN, en modo socix: sin arrastre, con casilla
  # para marcar varios y apuntarse de una vez, plazas en palabras, y lo de sus
- # áreas en color mientras el resto sale apagado —pero pulsable: apagado no es
- # prohibido. El socix no ve borradores, parados ni anulados.
+ # áreas con relleno mientras el resto va en blanco —los dos igual de nítidos y
+ # los dos pulsables—. El socix no ve borradores, parados ni anulados.
+ #
+ # LO DE OTRA ÁREA YA NO SE ATENÚA. Salía con opacity .34, que es el lenguaje
+ # universal de «deshabilitado», para decir justo lo contrario: que puedes
+ # apuntarte igual. La opacidad se reserva ahora a lo que de verdad no se puede
+ # tocar —lo que ya pasó— y de qué área es lo dice el relleno.
  #
  # En móvil la rejilla de siete columnas no cabe con dos turnos por día: el
  # mismo HTML se convierte por CSS en una lista por días con la fecha pegajosa y
@@ -20,18 +25,30 @@
 
 {% block title %}Voluntariado · Turnos de {{ month|format_date(pattern='MMMM', locale='es') }}{% endblock %}
 
+{# «Cuadrante» y NO «Calendario», también en la miga: en el menú del panel «Mi
+ # calendario» es el de la cesta, y llamar calendario a esto es fabricar justo la
+ # confusión que las dos vistas aisladas quieren evitar. #}
 {% block csa_crumbs %}
     <a href="{{ path('panel_volunteering') }}">Voluntariado</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <span class="csa-topbar__crumb-active">Calendario</span>
+    <span class="csa-topbar__crumb-active">Cuadrante</span>
 {% endblock %}
 
 {% block more_css %}
     {{ parent() }}
+    {% include '_components/volunteering_styles.html.twig' %}
     {% include '_components/shift_calendar_styles.html.twig' %}
 {% endblock %}
 
 {% block csa_main %}
+
+    {# Rejilla + panel lateral: esta pantalla SÍ aprovecha el ancho de más, así
+     # que se sale del ancho de lectura del panel. Ver panel_shell_styles. #}
+    <span class="csa-wide" hidden aria-hidden="true"></span>
+
+
+    {% include '_components/volunteering_tabs.html.twig' %}
+
     {% set keep = { tipo: current ? current.id : null, solo: only_mine ? 'mias' : null }|filter(v => v is not null) %}
     {% set has_alarm = false %}
     {% for items in days %}{% for item in items %}{% if item.kind == 'shift' and item.alarm %}{% set has_alarm = true %}{% endif %}{% endfor %}{% endfor %}
@@ -55,17 +72,31 @@
                     <a class="scal-nav__today" href="{{ path('panel_volunteering_calendar', keep) }}">Hoy</a>
                 {% endif %}
             </div>
+            {# ---- UNA SOLA FILA DE FILTROS, EXCLUYENTES ----
+             # Eran dos ejes mezclados en la misma tira: «sólo mis áreas / todas»
+             # por un lado y el área concreta por otro, cada uno con su propio
+             # activo. Se podían ver DOS pastillas negras a la vez —«Todas» y
+             # «Reparto»— diciendo cosas que se contradicen, y no había forma de
+             # saber qué estabas mirando.
+             #
+             # Ahora es un solo eje: o todas, o las tuyas, o un área. Una activa
+             # cada vez, y volver a pulsarla la quita. #}
             <div class="scal-nav__pills">
+                {% set sin_filtro = not only_mine and not current %}
+                <a class="scal-pill scal-pill--big{{ sin_filtro ? ' scal-pill--on' }}"
+                   href="{{ path('panel_volunteering_calendar', { mes: month|date('Y-m') }) }}">Todas</a>
+
                 {% if my_category_ids|length %}
-                    {# Par con estado real, «Todas» por defecto. #}
-                    <a class="scal-pill scal-pill--big{{ only_mine ? ' scal-pill--on' }}" href="{{ path('panel_volunteering_calendar', { mes: month|date('Y-m'), solo: 'mias' }) }}">Sólo mis áreas</a>
-                    <a class="scal-pill scal-pill--big{{ not only_mine ? ' scal-pill--on' }}" href="{{ path('panel_volunteering_calendar', { mes: month|date('Y-m') }) }}">Todas</a>
+                    <a class="scal-pill scal-pill--big{{ only_mine ? ' scal-pill--on' }}"
+                       href="{{ path('panel_volunteering_calendar', { mes: month|date('Y-m'), solo: 'mias' }) }}">Sólo mis áreas</a>
                 {% endif %}
-                {% if not only_mine and categories|length > 1 %}
+
+                {% if categories|length > 1 %}
                     <span class="scal-nav__sep"></span>
                     {% for category in categories %}
-                        <a class="scal-pill{{ current and current.id == category.id ? ' scal-pill--on' }}"
-                           href="{{ current and current.id == category.id
+                        {% set activa = current and current.id == category.id %}
+                        <a class="scal-pill{{ activa ? ' scal-pill--on' }}"
+                           href="{{ activa
                                ? path('panel_volunteering_calendar', { mes: month|date('Y-m') })
                                : path('panel_volunteering_calendar', { mes: month|date('Y-m'), tipo: category.id }) }}">{{ category.name }}</a>
                     {% endfor %}
@@ -81,14 +112,20 @@
                     {% if only_mine %}
                         Estás viendo <strong>sólo tus áreas: {{ my_areas }}</strong>. Pulsa «Todas» para ver también el resto.
                     {% else %}
-                        En color, <strong>tus áreas: {{ my_areas }}</strong>. Lo demás sale apagado, pero también puedes apuntarte.
+                        {# Ya no dice «apagado»: lo de otras áreas se ve igual de
+                         # nítido y sólo cambia el relleno. Decir «apagado» era
+                         # además la pista de que la señal estaba mal elegida. #}
+                        Con fondo, <strong>tus áreas: {{ my_areas }}</strong>. Lo demás también puedes cogerlo.
                     {% endif %}
                     Marca varios turnos con la casilla y apúntate a todos de una vez.
                 </span>
             </div>
         {% endif %}
 
-        {% include 'Volunteering/_shift_calendar_legend.html.twig' with { states: states, mode: 'socix', has_alarm: has_alarm } only %}
+        {% include 'Volunteering/_shift_calendar_legend.html.twig' with {
+            states: states, mode: 'socix', has_alarm: has_alarm,
+            has_areas: my_category_ids is not empty and not only_mine
+        } only %}
 
         {# Un solo formulario: las casillas de toda la rejilla se envían juntas. #}
         <form method="post" action="{{ path('panel_volunteering_signup_many') }}" class="scal-form">
@@ -111,7 +148,7 @@
             {# ============ BARRA DE SELECCIÓN ============
              # Sin JavaScript el botón va activo y con un texto que vale para
              # uno o para varios; con él, el recuento y los nombres de lo marcado. #}
-            <div class="scal-bar" data-scal-bar>
+            <div class="scal-bar" data-scal-bar hidden>
                 <span class="scal-bar__n" data-scal-count>0</span>
                 <span class="scal-bar__text"><strong data-scal-label>Marca los días a los que puedas venir</strong><span class="scal-bar__summary" data-scal-summary></span></span>
                 <button type="submit" class="scal-bar__go" data-scal-submit>Apuntarme a los días marcados</button>

@@ -2,27 +2,66 @@
  # código de color se aprende antes de leer la cuadrícula. Y sólo con los
  # estados que hay en pantalla, para no explicar colores que no se ven.
  #
- # Las muestras son el mismo rectángulo con barra izquierda que las fichas
- # reales, no puntos de color. En modo socix dicen lo que se puede hacer.
+ # EN MODO SOCIX EXPLICA LOS DOS EJES, que es lo que hacía falta: una ficha dice
+ # a la vez de qué área es (el fondo, más o menos vivo según sea de las tuyas) y
+ # si le falta gente (la barra de la izquierda). Sin decirlo, un fondo verde
+ # claro al lado de otro azul claro no significa nada.
  #
- # Espera: states (ShiftCalendar::statesPresent), mode, has_alarm. #}
-{% set labels = mode == 'socix'
-    ? { 'porvenir': 'Puedes apuntarte', 'cubierto': 'Completo', 'sincerrar': 'Ya pasó', 'hecho': 'Ya pasó' }
-    : { 'porvenir': 'Por venir', 'cubierto': 'Cubierto', 'sincerrar': 'Sin cerrar', 'hecho': 'Hecho', 'apagado': 'Sin publicar, parado o anulado' } %}
-{% set shown = [] %}
-<div class="scal-legend" aria-label="Qué significa cada color">
-    <span class="scal-legend__k">Colores</span>
-    {% for state, label in labels %}
-        {% if state in states and label not in shown %}
-            {% set shown = shown|merge([label]) %}
+ # En gestión se queda como estaba: allí el color es el ESTADO del turno, que es
+ # otra pregunta y otro trabajo.
+ #
+ # Espera: states (ShiftCalendar::statesPresent), mode, has_alarm, has_areas. #}
+{% if mode == 'socix' %}
+    <div class="scal-legend scal-legend--socix" aria-label="Qué significa cada color">
+        <span class="scal-legend__k">Cómo leerlo</span>
+
+        {# 1. La barra de la izquierda: la única pregunta que se contesta de un
+         # vistazo desde el otro lado de la habitación. #}
+        <span class="scal-legend__item">
+            <span class="scal-legend__sw scal-legend__sw--need"></span>Falta gente
+        </span>
+        <span class="scal-legend__item">
+            <span class="scal-legend__sw scal-legend__sw--ok"></span>Ya está cubierto
+        </span>
+
+        {# 2. Cada área tiene su color, siempre el mismo; lo que cambia es que
+         # las que no son tuyas van apagadas. #}
+        {% if has_areas|default(false) %}
+            <span class="scal-legend__sep" aria-hidden="true"></span>
             <span class="scal-legend__item">
-                <span class="scal-legend__sw scal-legend__sw--{{ state }}"></span>{{ label }}
+                <span class="scal-legend__sw scal-legend__sw--own"></span>Cada área, con su color
+            </span>
+            <span class="scal-legend__item">
+                <span class="scal-legend__sw scal-legend__sw--other"></span>Apagada, de otra área. Puedes venir igual
             </span>
         {% endif %}
-    {% endfor %}
-    {% if has_alarm %}
-        <span class="scal-legend__item scal-legend__item--alarm">
-            <span class="scal-legend__sw scal-legend__sw--porvenir scal-legend__sw--alarm"></span>{{ mode == 'socix' ? 'Faltan personas' : 'Le faltan plazas' }}
-        </span>
-    {% endif %}
-</div>
+
+        {# 3. Lo vencido: TACHADO. También va apagado, así que la raya es lo que
+         # lo separa de «no es de tus áreas». #}
+        {% if 'hecho' in states or 'sincerrar' in states %}
+            <span class="scal-legend__sep" aria-hidden="true"></span>
+            <span class="scal-legend__item">
+                <span class="scal-legend__sw scal-legend__sw--past"></span>Tachada, ya pasó
+            </span>
+        {% endif %}
+    </div>
+{% else %}
+    {% set labels = { 'porvenir': 'Por venir', 'cubierto': 'Cubierto', 'sincerrar': 'Sin cerrar', 'hecho': 'Hecho', 'apagado': 'Sin publicar, parado o anulado' } %}
+    {% set shown = [] %}
+    <div class="scal-legend" aria-label="Qué significa cada color">
+        <span class="scal-legend__k">Colores</span>
+        {% for state, label in labels %}
+            {% if state in states and label not in shown %}
+                {% set shown = shown|merge([label]) %}
+                <span class="scal-legend__item">
+                    <span class="scal-legend__sw scal-legend__sw--{{ state }}"></span>{{ label }}
+                </span>
+            {% endif %}
+        {% endfor %}
+        {% if has_alarm %}
+            <span class="scal-legend__item scal-legend__item--alarm">
+                <span class="scal-legend__sw scal-legend__sw--porvenir scal-legend__sw--alarm"></span>Le faltan plazas
+            </span>
+        {% endif %}
+    </div>
+{% endif %}

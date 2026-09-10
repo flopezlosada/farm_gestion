@@ -1,0 +1,137 @@
+{% extends '_layouts/csa_panel.html.twig' %}
+
+{% block title %}Voluntariado · Lo que llevas hecho{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('panel_volunteering') }}">Voluntariado</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('panel_volunteering_mine') }}">Mis turnos</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">El detalle</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/volunteering_styles.html.twig' %}
+{% endblock %}
+
+{#
+ # El detalle de lo que llevo hecho este año.
+ #
+ # PANTALLA PROPIA porque es lo único de «Mis turnos» que crece sin techo: en
+ # septiembre son siete líneas y en junio serán treinta. Desplegado allí,
+ # enterraba lo que sí se viene a hacer —el próximo turno, lo que falta por
+ # contestar—. Aquí se entra a propósito, y entonces la lista larga no estorba:
+ # es justo lo que se venía a ver.
+ #
+ # Lleva la barra de pestañas porque sigue siendo voluntariado, pero marca «Mis
+ # turnos», que es de donde cuelga.
+ #}
+{% block csa_main %}
+
+    {% import '_macros/volunteering.html.twig' as vol %}
+
+    {% include '_components/volunteering_tabs.html.twig' %}
+
+    <div class="csa-stack">
+
+        <section class="vol-group vol-group--first">
+            <div class="vol-group__head">
+                <h4 class="vol-group__title">Lo que llevas hecho este año</h4>
+            </div>
+
+            {% if my_minutes > 0 %}
+                <p class="vol-sum">{{ vol.duration(my_minutes) }}</p>
+            {% else %}
+                <p class="vol-sum vol-sum--zero">Este año todavía no has echado una mano.</p>
+            {% endif %}
+
+            {% if my_done is not empty %}
+                <ul class="vol-done">
+                    {% for signup in my_done %}
+                        {# Lo que dijo que no pudo hacer va en esta misma lista y
+                         # no en una sección propia: «turnos a los que no fuiste»
+                         # con encabezado es un muro de la vergüenza, y esto es
+                         # voluntariado, no un control de fichaje. Aquí sólo
+                         # confirma que su respuesta se guardó — y deja corregir
+                         # un botón pulsado por error. #}
+                        {% set no_fue = signup.attended is same as(false) %}
+                        <li class="vol-done__row{% if no_fue %} vol-done__row--absent{% endif %}">
+                            <span class="vol-done__what">
+                                <span class="vol-done__title">{{ signup.offer.title }}</span>
+                                {% if signup.coordination %}
+                                    {# Organizar también es trabajo, y quien lo hace
+                                     # merece verlo nombrado. #}
+                                    <span class="vol-done__role">lo organizaste</span>
+                                {% endif %}
+                                <span class="vol-done__when">{{ signup.startsAt|format_date('long', locale='es') }}</span>
+                            </span>
+                            {% if no_fue %}
+                                {# En palabras y no en blanco: un hueco donde los
+                                 # demás llevan la duración se lee como un fallo
+                                 # de la pantalla, no como una respuesta suya. #}
+                                <span class="vol-done__time vol-done__time--absent">dijiste que no podías</span>
+                            {% elseif signup.creditedMinutes %}
+                                <span class="vol-done__time">{{ vol.duration(signup.creditedMinutes) }}</span>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            {#
+             # La referencia se enseña SÓLO a quien va por debajo, y es la
+             # MEDIANA de quienes participan, no la media.
+             #
+             # La media está contaminada por los ceros: con mucha gente que no
+             # hace nada se hunde, y quien fue una tarde suelta sale "por encima
+             # de la media" cuando hace falta bastante más. Y enseñársela a quien
+             # va sobrado es peor todavía: aprende que hace el doble de lo normal
+             # y se relaja hasta la media. Es el efecto bumerán que documentaron
+             # Schultz y Cialdini con el consumo eléctrico, donde los hogares que
+             # menos gastaban SUBIERON al ver la media del barrio. A esa gente,
+             # aquí, no se le enseña nada.
+             #
+             # Y en texto, sin barra: una barra hacia la mediana la convierte en
+             # una meta, y esto no es una cuota.
+             #}
+            {% if show_median %}
+                <p class="vol-note">
+                    Quien echa una mano suele dedicar unas <strong>{{ vol.duration(median_minutes) }}</strong> al año.
+                    No es una cuota: es lo que sale de sumar lo que hace la gente.
+                </p>
+            {% elseif my_minutes > 0 %}
+                <p class="vol-note">Gracias — la asociación se sostiene con esto.</p>
+            {% endif %}
+
+            <p class="vol-note vol-note--faint">Sólo lo ves tú.</p>
+        </section>
+
+        {# Las horas de coordinar sólo se ven aquí: no generan inscripción, así
+         # que en la lista de turnos no aparecerían nunca. #}
+        {% if coordination_log is not empty %}
+            <section class="vol-group">
+                <div class="vol-group__head">
+                    <h4 class="vol-group__title">Horas de coordinación</h4>
+                    <span class="vol-group__hint">Lo que llevas apuntado por llevar un área.</span>
+                </div>
+
+                <ul class="vol-done">
+                    {% for entry in coordination_log %}
+                        <li class="vol-done__row">
+                            <span class="vol-done__what">
+                                <span class="vol-done__title">{{ entry.category.name }}</span>
+                                <span class="vol-done__when">
+                                    {{- entry.happenedOn|format_date('long', locale='es') -}}
+                                    {%- if entry.notes %} · {{ entry.notes }}{% endif -%}
+                                </span>
+                            </span>
+                            <span class="vol-done__time">{{ vol.duration(entry.minutes) }}</span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </section>
+        {% endif %}
+
+    </div>
+{% endblock %}

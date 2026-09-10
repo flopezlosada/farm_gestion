@@ -94,6 +94,11 @@ class PanelController extends AbstractController
         // enteras es lo que permite decir "y hay otras seis" en vez de enseñar tres
         // y callar que hay nueve, que es lo que hacía pensar que apenas hace falta
         // nada.
+        //
+        // Y sin las rutinas, que las deja fuera el propio repositorio: sacar al
+        // perro son dos turnos al día y en tres semanas suma más que todo el
+        // trabajo de campo junto. El aviso decía "hay 85 turnos esperando gente"
+        // cuando lo que de verdad necesitaba a alguien eran veinte.
         $stillNeeded = $this->isGranted('FEATURE_VOLUNTEERING')
             ? $volunteerShifts->findStillNeededFor(
                 new \DateTime(),
@@ -150,7 +155,15 @@ class PanelController extends AbstractController
             //
             // En la home se asoman unas pocas: una lista larga se lee como un muro
             // y no se lee.
-            'volunteering_shifts' => \array_slice($stillNeeded, 0, self::VOLUNTEERING_TEASER),
+            //
+            // Y uno por tarea: con tres huecos, una tarea semanal —"escardar los
+            // sábados"— los llenaba con el sábado 12, el 19 y el 26, dejando la
+            // portada anunciando una sola cosa que hacer cuando había seis.
+            'volunteering_shifts' => \array_slice(
+                $volunteerShifts->onePerOffer($stillNeeded),
+                0,
+                self::VOLUNTEERING_TEASER
+            ),
             // Cuántas hay en total. Enseñar tres y callar que hay nueve deja la
             // impresión de que apenas hace falta ayuda, que es lo contrario de lo
             // que pasa.
@@ -166,6 +179,14 @@ class PanelController extends AbstractController
             'my_contribution' => $this->isGranted('FEATURE_VOLUNTEERING')
                 ? $contributions->forPartner($partner)
                 : null,
+            // Las áreas que ha marcado. La tarjeta las usa para decir con
+            // palabras que un turno es de otra área en vez de atenuarlo, que es
+            // el lenguaje de «deshabilitado» y diría lo contrario de lo que se
+            // quiere: que puede apuntarse igual.
+            'my_category_ids' => array_map(
+                static fn ($category) => $category->getId(),
+                $partner->getVolunteerCategories()->toArray()
+            ),
         ]);
     }
 
