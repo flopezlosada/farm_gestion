@@ -41,12 +41,6 @@ class PickupReminderMailer
      */
     public const EFFECT_KIND = 'pickup_reminder';
 
-    /** Etiqueta de modalidad por id de BasketShare (solo quincenal y mensual reciben aviso). */
-    private const MODALITY_BY_SHARE = [
-        BasketShare::ID_BIWEEKLY => 'quincenal',
-        BasketShare::ID_MONTHLY => 'mensual',
-    ];
-
     public function __construct(
         private readonly MailerInterface $mailer,
         private readonly AppSettings $settings,
@@ -142,7 +136,7 @@ class PickupReminderMailer
 
         return [
             'partner' => $partner,
-            'modality' => self::MODALITY_BY_SHARE[$wb->getBasketShare()?->getId()] ?? 'de la CSA',
+            'modality' => $this->modalityLabel($wb->getBasketShare()?->getId()),
             'pickup_date' => $pickupDate,
             'node_name' => $node?->getName(),
             'was_shifted' => $this->wasShifted($pickupDate, $node),
@@ -150,6 +144,31 @@ class PickupReminderMailer
             'calendar_url' => $this->urlGenerator->generate('panel_calendar', [], UrlGeneratorInterface::ABSOLUTE_URL),
             'deadline' => $this->deadline->fromPhysicalDate($pickupDate),
         ];
+    }
+
+    /**
+     * Cómo se nombra la modalidad en el texto del aviso ("tu cesta quincenal").
+     *
+     * Se deriva de las MISMAS listas por cadencia con las que el comando elige
+     * destinatarixs, y no de un mapa propio: así una modalidad nueva entra en
+     * los dos sitios a la vez. Un mapa aparte ya se quedó corto —nombraba sólo
+     * las no compartidas— y a quien comparte cesta el correo le habría hablado
+     * de "tu cesta de la CSA" sin decirle su cadencia.
+     *
+     * Las compartidas se nombran igual que sus hermanas (quincenal, mensual):
+     * lo que le importa a quien lo lee es cada cuánto va a por su cesta, no el
+     * acuerdo por el que la parte con otra familia.
+     *
+     * @param int|null $shareId Id de la modalidad, o null si la cesta no la tiene.
+     * @return string Etiqueta para el texto, con un genérico como último recurso.
+     */
+    private function modalityLabel(?int $shareId): string
+    {
+        return match (true) {
+            in_array($shareId, BasketShare::IDS_BIWEEKLY, true) => 'quincenal',
+            in_array($shareId, BasketShare::IDS_MONTHLY, true) => 'mensual',
+            default => 'de la CSA',
+        };
     }
 
     /**

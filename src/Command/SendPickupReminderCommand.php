@@ -87,10 +87,17 @@ class SendPickupReminderCommand extends AbstractCronCommand
             $io->note('El recordatorio por email está desactivado en /gestion/settings: no se envía ningún correo ni se apunta como enviado. El aviso al móvil no depende de ese ajuste y sigue su curso.');
         }
 
+        // Las listas COMPLETAS por cadencia, no las constantes sueltas de la
+        // modalidad "normal". Quien comparte cesta con otra familia (quincenal
+        // compartida, mensual compartida) va a recogerla el mismo día y con la
+        // misma cadencia que quien no la comparte: compartir es un acuerdo
+        // administrativo, no otra forma de repartir. Pidiendo sólo
+        // ID_BIWEEKLY/ID_MONTHLY esas familias quedaban fuera de la consulta y
+        // nunca recibían el recordatorio.
         $recipients = $this->withoutCancelled(
             $this->weeklyBasketRepository->findPickedByDeliveryDateAndShares(
                 $target,
-                [BasketShare::ID_BIWEEKLY, BasketShare::ID_MONTHLY],
+                [...BasketShare::IDS_BIWEEKLY, ...BasketShare::IDS_MONTHLY],
             )
         );
 

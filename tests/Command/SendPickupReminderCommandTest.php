@@ -112,6 +112,69 @@ class SendPickupReminderCommandTest extends KernelTestCase
     }
 
     /**
+     * QUIEN COMPARTE CESTA TAMBIÉN RECIBE EL AVISO. Las modalidades compartidas
+     * —quincenal compartida y mensual compartida— reparten con la misma cadencia
+     * que sus hermanas y van a recoger el mismo día, pero la consulta pedía sólo
+     * las no compartidas y esas familias no recibieron nunca el recordatorio.
+     *
+     * Las semanales siguen fuera, y eso sí es deliberado: recogen todas las
+     * semanas y no hay nada que recordarles. El caso va en el mismo proveedor
+     * para que ampliar la selección de más no pase inadvertido.
+     *
+     * @dataProvider modalidadesYSiEsperanAviso
+     */
+    public function testAvisaATodaLaCadenciaQuincenalYMensualIncluidasLasCompartidas(int $shareId, bool $esperaAviso): void
+    {
+        self::bootKernel();
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $sufijo = uniqid();
+        $fecha = '2099-10-02';
+        $picks = $em->getRepository(WeeklyBasketStatus::class)->find(1);
+        $share = $em->getRepository(BasketShare::class)->find($shareId);
+
+        $basket = (new Basket())->setDate(new \DateTime($fecha))->setWeek(40)->setAmount(1);
+        $em->persist($basket);
+        $node = (new Node())->setName('Torremocha TEST ' . $sufijo)->setDeliveryWeekday(5);
+        $grupo = (new WeeklyBasketGroup())->setName('Bustarviejo')->setColor('#5a8fbf')->setNode($node);
+        $em->persist($node);
+        $em->persist($grupo);
+
+        $nombre = 'CompartidaSocix ' . $sufijo;
+        $wb = $this->makeWeeklyBasket($em, $basket, $share, $picks, $grupo, $fecha, $nombre);
+        $em->flush();
+
+        try {
+            $tester = $this->commandTester();
+            $tester->execute(['--dry-run' => true, '--date' => $fecha]);
+            $display = $tester->getDisplay();
+
+            $esperaAviso
+                ? $this->assertStringContainsString($nombre, $display, 'Esta modalidad recoge ese día y debe recibir el aviso.')
+                : $this->assertStringNotContainsString($nombre, $display, 'Las semanales recogen cada semana: no se les avisa.');
+        } finally {
+            $partner = $wb->getPartner();
+            $em->remove($wb);
+            $em->flush();
+            $em->remove($partner);
+            $em->remove($grupo);
+            $em->remove($node);
+            $em->remove($basket);
+            $em->flush();
+        }
+    }
+
+    /** @return iterable<string, array{int, bool}> */
+    public static function modalidadesYSiEsperanAviso(): iterable
+    {
+        yield 'quincenal compartida' => [BasketShare::ID_BIWEEKLY_SHARED, true];
+        yield 'mensual compartida' => [BasketShare::ID_MONTHLY_SHARED, true];
+        yield 'mensual' => [BasketShare::ID_MONTHLY, true];
+        yield 'semanal, fuera a propósito' => [BasketShare::ID_WEEKLY, false];
+    }
+
+    /**
      * Un reparto CANCELADO por una excepción de calendario no genera aviso, aun
      * cuando su WeeklyBasket siga viva (status "recoge") con delivery_date en el
      * día cancelado — el generador no materializa la cancelación. Es el modo de

@@ -243,43 +243,59 @@ class BasketShare
 
     /** Modalidad "solo huevos": la entrega no reparte cesta de verdura. */
     public const ID_ONLY_EGG = 5;
-    /** Modalidades compartidas (dos familias parten una cesta física). */
-    public const IDS_SHARED = [4, 6, 7];
+
+    /**
+     * Cada modalidad del catálogo con su nombre. Los ids sueltos NO se escriben
+     * como número en ningún sitio: una lista con literales anónimos no se lee, y
+     * de ahí han salido ya varios fallos en los que se usó la modalidad "normal"
+     * donde tocaba toda la cadencia y las familias que comparten cesta quedaron
+     * fuera del reparto, de los listados o de los avisos.
+     */
+    public const ID_WEEKLY = 1;
+    public const ID_WEEKLY_SHARED = 4;
     /** Modalidad quincenal (no compartida). */
     public const ID_BIWEEKLY = 2;
-    /**
-     * Modalidades de cadencia QUINCENAL: Quincenal (2) y Quincenal compartida
-     * (6). Ambas reparten cada dos semanas y, en un punto de cadencia semanal,
-     * usan la cohorte A/B (delivery_group) para saber qué viernes recogen. La
-     * compartida es quincenal a todos los efectos de reparto: tratarla como no
-     * quincenal le borra el turno y la saca de los listados (bug 2026-06-30,
-     * Ana Villa / Jose Carrascosa). El generador ya las une en
-     * findBasketPartnersBiweeklyNodeAware; el JS de los formularios muestra el
-     * turno para `== 2 || == 6`.
-     */
-    public const IDS_BIWEEKLY = [2, 6];
+    public const ID_BIWEEKLY_SHARED = 6;
     /** Modalidad mensual (reparto una vez al mes, según day_month_order). */
     public const ID_MONTHLY = 3;
+    public const ID_MONTHLY_SHARED = 7;
+
+    /** Modalidades compartidas (dos familias parten una cesta física). */
+    public const IDS_SHARED = [self::ID_WEEKLY_SHARED, self::ID_BIWEEKLY_SHARED, self::ID_MONTHLY_SHARED];
     /**
-     * Modalidades de cadencia MENSUAL: Mensual (3) y Mensual compartida (7).
-     * Reparten una vez al mes en la entrega que marca `day_month_order`.
+     * Modalidades de cadencia QUINCENAL: Quincenal y Quincenal compartida. Ambas
+     * reparten cada dos semanas y, en un punto de cadencia semanal, usan la
+     * cohorte A/B (delivery_group) para saber qué viernes recogen. La compartida
+     * es quincenal a todos los efectos: tratarla como si no lo fuera le borra el
+     * turno y la saca de los listados. El generador ya las une en
+     * findBasketPartnersBiweeklyNodeAware; el JS de los formularios muestra el
+     * turno para `== 2 || == 6`.
+     *
+     * ES ESTA LISTA, y no {@see self::ID_BIWEEKLY} suelta, lo que hay que pedir
+     * cuando la pregunta es "quién reparte cada dos semanas".
      */
-    public const IDS_MONTHLY = [3, 7];
+    public const IDS_BIWEEKLY = [self::ID_BIWEEKLY, self::ID_BIWEEKLY_SHARED];
+    /**
+     * Modalidades de cadencia MENSUAL: Mensual y Mensual compartida. Reparten
+     * una vez al mes en la entrega que marca `day_month_order`. Vale aquí la
+     * misma advertencia que en {@see self::IDS_BIWEEKLY}.
+     */
+    public const IDS_MONTHLY = [self::ID_MONTHLY, self::ID_MONTHLY_SHARED];
     /**
      * Modalidades que conservan `delivery_group` (el turno de viernes), cada
      * una por un motivo distinto:
-     *  - Quincenales (2, 6): el turno decide QUÉ viernes recogen.
-     *  - Mensuales (3, 7): el turno decide SOBRE QUÉ calendario se cuenta
+     *  - Quincenales: el turno decide QUÉ viernes recogen.
+     *  - Mensuales: el turno decide SOBRE QUÉ calendario se cuenta
      *    `day_month_order` — las entregas de ese turno en el mes en vez de los
      *    viernes del mes. Es opcional: sin turno, se cuentan los viernes.
      */
-    public const IDS_WITH_DELIVERY_GROUP = [2, 3, 6, 7];
+    public const IDS_WITH_DELIVERY_GROUP = [...self::IDS_BIWEEKLY, ...self::IDS_MONTHLY];
     /**
-     * Modalidades de reparto SEMANAL (cada semana): Semanal (1) y Semanal
-     * compartida (4). No caben en un punto de cadencia quincenal, que sólo
-     * reparte cada dos semanas.
+     * Modalidades de reparto SEMANAL (cada semana): Semanal y Semanal
+     * compartida. No caben en un punto de cadencia quincenal, que sólo reparte
+     * cada dos semanas.
      */
-    public const IDS_WEEKLY = [1, 4];
+    public const IDS_WEEKLY = [self::ID_WEEKLY, self::ID_WEEKLY_SHARED];
     /**
      * Todas las modalidades del catálogo, compuesta a partir de las listas por
      * cadencia para que no se desincronice al añadir una. Sirve para expresar
