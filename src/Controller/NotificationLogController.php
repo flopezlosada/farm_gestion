@@ -51,7 +51,11 @@ class NotificationLogController extends AbstractController
     #[Route('', name: 'notification_log_index', methods: ['GET'])]
     public function index(Request $request, PaginatorInterface $paginator): Response
     {
-        $filters = $this->resolveFilters($request);
+        $filters = $this->resolveFilters($request, [
+            NotificationLog::STATUS_SENT,
+            NotificationLog::STATUS_FAILED,
+            NotificationLog::STATUS_DISCARDED,
+        ]);
 
         $pagination = $paginator->paginate(
             $this->logs->findFilteredQb($filters)->getQuery(),
@@ -84,7 +88,12 @@ class NotificationLogController extends AbstractController
     #[Route('/tareas', name: 'notification_log_runs', methods: ['GET'])]
     public function runs(Request $request, PaginatorInterface $paginator): Response
     {
-        $filters = $this->resolveFilters($request);
+        $filters = $this->resolveFilters($request, [
+            CronRun::STATUS_DONE,
+            CronRun::STATUS_NOTHING_TO_DO,
+            CronRun::STATUS_DISABLED,
+            CronRun::STATUS_FAILED,
+        ]);
 
         $pagination = $paginator->paginate(
             $this->runs->findFilteredQb($filters)->getQuery(),
@@ -119,16 +128,24 @@ class NotificationLogController extends AbstractController
      * las dos pestañas para que cambiar de pestaña conserve el rango que
      * estabas mirando; cada una usa los que entiende y descarta el resto.
      *
+     * LOS ESTADOS VÁLIDOS LOS PONE CADA PESTAÑA, porque el vocabulario no es el
+     * mismo: un envío está entregado, fallido o descartado; una ejecución hizo
+     * trabajo, no tenía nada que hacer, estaba apagada o falló. Admitiendo los
+     * de las dos, una URL guardada con `?status=nothing_to_do` daría cero
+     * avisos sin explicar por qué — que es exactamente la confusión que esta
+     * pantalla existe para quitar.
+     *
      * Nota: {@see UsageStatsController} resuelve su rango de forma equivalente.
      * Son dos usos y cada uno tiene sus propios campos, así que de momento no
      * se extrae; si aparece un tercero, toca sacarlo a una pieza común.
      *
+     * @param string[] $allowedStatuses Estados que entiende la pestaña que llama.
      * @return array{
      *     from: \DateTimeImmutable, to: \DateTimeImmutable, until: \DateTimeImmutable,
      *     channel: ?string, kind: ?string, status: ?string, task: ?string, q: ?string, run: ?int
      * }
      */
-    private function resolveFilters(Request $request): array
+    private function resolveFilters(Request $request, array $allowedStatuses): array
     {
         $today = new \DateTimeImmutable('today');
         $to = $this->parseDate($request->query->getString('to'), $today);
@@ -150,14 +167,7 @@ class NotificationLogController extends AbstractController
             'until' => $to->modify('+1 day'),
             'channel' => $this->whitelisted($request, 'channel', [NotificationLog::CHANNEL_EMAIL, NotificationLog::CHANNEL_PUSH]),
             'kind' => trim($request->query->getString('kind')) ?: null,
-            'status' => $this->whitelisted($request, 'status', [
-                NotificationLog::STATUS_SENT,
-                NotificationLog::STATUS_FAILED,
-                NotificationLog::STATUS_DISCARDED,
-                CronRun::STATUS_DONE,
-                CronRun::STATUS_NOTHING_TO_DO,
-                CronRun::STATUS_DISABLED,
-            ]),
+            'status' => $this->whitelisted($request, 'status', $allowedStatuses),
             'task' => trim($request->query->getString('task')) ?: null,
             'q' => trim($request->query->getString('q')) ?: null,
             'run' => $request->query->getInt('run') ?: null,

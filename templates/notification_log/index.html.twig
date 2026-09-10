@@ -20,6 +20,12 @@
        canal Y el tipo Y el estado), no atajos excluyentes como el periodo. #}
     <form method="get" action="{{ path('notification_log_index') }}"
           style="display: flex; flex-wrap: wrap; gap: var(--csa-sp-4); align-items: flex-end;">
+        {# Si estás mirando los avisos de UNA ejecución, tocar otro filtro no
+           debe sacarte de ella sin avisar: el aviso de arriba desaparecería y
+           pasarías a ver el histórico entero creyendo que sigues dentro. #}
+        {% if filters.run %}
+            <input type="hidden" name="run" value="{{ filters.run }}">
+        {% endif %}
         <div style="display: flex; flex-direction: column;">
             <span style="{{ filter_label }}">Fechas a medida</span>
             <div style="display: flex; align-items: center; gap: var(--csa-sp-2);">

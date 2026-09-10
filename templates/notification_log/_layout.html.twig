@@ -16,6 +16,10 @@
 {% set current = app.request.attributes.get('_route') %}
 {% set range = { from: filters.from|date('Y-m-d'), to: filters.to|date('Y-m-d') } %}
 
+{# A nivel de plantilla y no dentro de un bloque: los rótulos los usan también
+ # los filtros propios de cada sub-pantalla, que viven en un bloque distinto. #}
+{% set filter_label = 'font-size: 0.7em; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--csa-ink-soft); margin-bottom: var(--csa-sp-1);' %}
+
 {% block title %}Registro de avisos{% endblock %}
 
 {% block csa_crumbs %}
@@ -43,8 +47,6 @@
             </li>
         {% endfor %}
     </ul>
-
-    {% set filter_label = 'font-size: 0.7em; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--csa-ink-soft); margin-bottom: var(--csa-sp-1);' %}
 
     <div style="display: flex; flex-wrap: wrap; gap: var(--csa-sp-6) var(--csa-sp-8); align-items: flex-start; margin-bottom: var(--csa-sp-4);">
         <div style="display: flex; flex-direction: column;">

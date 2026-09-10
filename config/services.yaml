@@ -83,15 +83,21 @@ services:
 
     # Bitácora del correo saliente: apunta cada envío en notification_log.
     #
-    # decoration_priority MÁS ALTA que la del interruptor general (que va a 0,
-    # el valor por defecto), así que la cadena queda
-    # RecordingMailer → KillSwitchMailer → mailer real. El orden es lo que
-    # permite registrar TAMBIÉN los correos que el interruptor descarta: por
-    # dentro, un envío descartado vuelve sin error y sería indistinguible de uno
-    # entregado. Invertirlos dejaría el registro mudo justo cuando más
-    # desconcierta que no llegue nada.
+    # Tiene que quedar POR FUERA del interruptor general para registrar también
+    # los correos que aquél descarta: cuando el maestro está apagado,
+    # KillSwitchMailer vuelve sin llamar a su inner y sin error, así que desde
+    # dentro un correo tirado es indistinguible de uno entregado. Por fuera se
+    # ve el intento y se apunta como descartado, que es justo lo que hace falta
+    # saber cuando "no llega nada".
+    #
+    # Y para quedar por fuera hace falta una prioridad MÁS BAJA, no más alta.
+    # DecoratorServicePass mete los decoradores en una SplPriorityQueue y va
+    # reasignando el alias del servicio decorado en cada vuelta, así que el
+    # ÚLTIMO procesado —el de menor prioridad— es el que acaba envolviendo a
+    # todos los demás. Con prioridad 10 este decorador quedaría DENTRO del
+    # interruptor y la rama "descartado" no se ejecutaría nunca.
     App\Mailer\RecordingMailer:
         decorates: mailer.mailer
-        decoration_priority: 10
+        decoration_priority: -10
         arguments:
             $inner: '@.inner'
