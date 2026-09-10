@@ -144,19 +144,34 @@ class PanelVolunteeringTabsTest extends AbstractPartnerAuthenticatedTest
         $em->persist($signup);
         $em->flush();
 
-        // Contesta que no pudo ir, por el mismo camino que la pantalla.
+        // El token, de una pantalla renderizada y no del gestor de CSRF: fuera
+        // de una petición no hay sesión de la que tirar. Vale cualquiera de las
+        // del módulo —todas usan el mismo id de token—, y así el test no depende
+        // de que este turno concreto entre en el tope de pendientes que se
+        // enseñan.
+        $crawler = $client->request('GET', '/panel/voluntariado');
+        $token = $crawler->filter('input[name="_csrf_token"]')->first()->attr('value');
+
         $client->request('POST', sprintf('/panel/voluntariado/%d/confirmar', $shift->getId()), [
             'attended' => '0',
-            '_csrf_token' => static::getContainer()->get('security.csrf.token_manager')
-                ->getToken('panel_volunteering')->getValue(),
+            '_csrf_token' => $token,
         ]);
         $client->followRedirect();
 
+        // En el detalle, que es donde va el histórico entero sin recortes.
+        $client->request('GET', '/panel/voluntariado/mis-turnos/historial');
         $this->assertSelectorTextContains('.vol-done', $titulo, 'Lo contestado tiene que seguir viéndose.');
 
-        $em->refresh($signup);
-        $this->assertFalse($signup->getAttended());
-        $this->assertNull($signup->getCreditedMinutes(), 'Un «no pude» no computa horas.');
+        // Releída del contenedor y no refrescada: cada petición del cliente
+        // reinicia el kernel, así que la referencia de arriba ya no está
+        // gestionada por el EntityManager que hay ahora.
+        $guardado = static::getContainer()->get(EntityManagerInterface::class)
+            ->getRepository(VolunteerSignup::class)
+            ->find($signup->getId());
+
+        $this->assertNotNull($guardado);
+        $this->assertFalse($guardado->getAttended());
+        $this->assertNull($guardado->getCreditedMinutes(), 'Un «no pude» no computa horas.');
     }
 
     private function socixWithModuleOn(): KernelBrowser
