@@ -751,8 +751,8 @@ class AppSettings
         ],
         self::CRON_PURGE_USAGE_HITS => [
             'group' => 'Tareas programadas',
-            'label' => 'Purgar el rastro de uso',
-            'help' => 'Borra periódicamente la telemetría de uso anterior al período de retención (app:purge-usage-hits), por minimización de datos. Apagada, el rastro se acumula sin límite.',
+            'label' => 'Purgar los rastros caducados',
+            'help' => 'Borra periódicamente lo que ya no se va a consultar (app:purge-usage-hits): la telemetría de uso a los 90 días, por minimización de datos, y el registro de avisos y de ejecuciones al año, que es material de diagnóstico y conviene conservar más. Apagada, esas tablas crecen sin límite.',
             'default' => true,
         ],
         self::CRON_INCOMPLETE_PROFILES => [

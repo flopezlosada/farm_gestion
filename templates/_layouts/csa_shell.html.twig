@@ -258,6 +258,8 @@
                                    (route starts with 'settings') and not (route starts with 'settings_diagnostics')) }}
                                 {{ _self.nav_link('Diagnóstico de envíos', path('settings_diagnostics'), 'fa-paper-plane',
                                    route starts with 'settings_diagnostics') }}
+                                {{ _self.nav_link('Registro de avisos', path('notification_log_index'), 'fa-history',
+                                   route starts with 'notification_log') }}
                                 {{ _self.nav_link('Estadísticas de uso', path('usage_stats_index'), 'fa-bar-chart',
                                    route starts with 'usage_stats') }}
                             </div>

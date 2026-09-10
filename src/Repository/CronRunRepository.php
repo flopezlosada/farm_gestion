@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\CronRun;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
@@ -45,6 +46,56 @@ class CronRunRepository extends ServiceEntityRepository
         }
 
         return $byTask;
+    }
+
+    /**
+     * Consulta del histórico completo de ejecuciones, con los filtros de la
+     * pantalla puestos. Sin ejecutar, para que la pagine el paginador.
+     *
+     * Comparte forma de filtros con la bitácora de avisos —mismo rango, mismos
+     * nombres— porque las dos pestañas se miran seguidas y cambiar de una a
+     * otra tiene que conservar el periodo que estabas consultando.
+     *
+     * @param array{from?: ?\DateTimeImmutable, until?: ?\DateTimeImmutable, task?: ?string, status?: ?string} $filters
+     */
+    public function findFilteredQb(array $filters): QueryBuilder
+    {
+        $qb = $this->createQueryBuilder('r')
+            ->orderBy('r.startedAt', 'DESC')
+            ->addOrderBy('r.id', 'DESC');
+
+        if (!empty($filters['from'])) {
+            $qb->andWhere('r.startedAt >= :from')->setParameter('from', $filters['from']);
+        }
+        if (!empty($filters['until'])) {
+            $qb->andWhere('r.startedAt < :until')->setParameter('until', $filters['until']);
+        }
+        if (!empty($filters['task'])) {
+            $qb->andWhere('r.taskKey = :task')->setParameter('task', $filters['task']);
+        }
+        if (!empty($filters['status'])) {
+            $qb->andWhere('r.status = :status')->setParameter('status', $filters['status']);
+        }
+
+        return $qb;
+    }
+
+    /**
+     * Borra las ejecuciones anteriores a una fecha y devuelve cuántas.
+     *
+     * La bitácora de avisos enlaza con estas filas; la clave ajena deja el
+     * enlace en blanco al borrarlas, así que un aviso viejo no desaparece, sólo
+     * deja de saber de qué pasada salió. Por eso las dos tablas se purgan con
+     * el mismo plazo.
+     */
+    public function purgeOlderThan(\DateTimeImmutable $before): int
+    {
+        return (int) $this->createQueryBuilder('r')
+            ->delete()
+            ->where('r.startedAt < :before')
+            ->setParameter('before', $before)
+            ->getQuery()
+            ->execute();
     }
 
     /**

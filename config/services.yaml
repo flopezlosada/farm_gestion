@@ -80,3 +80,24 @@ services:
         arguments:
             $inner: '@.inner'
             $logger: '@monolog.logger.access'
+
+    # Bitácora del correo saliente: apunta cada envío en notification_log.
+    #
+    # Tiene que quedar POR FUERA del interruptor general para registrar también
+    # los correos que aquél descarta: cuando el maestro está apagado,
+    # KillSwitchMailer vuelve sin llamar a su inner y sin error, así que desde
+    # dentro un correo tirado es indistinguible de uno entregado. Por fuera se
+    # ve el intento y se apunta como descartado, que es justo lo que hace falta
+    # saber cuando "no llega nada".
+    #
+    # Y para quedar por fuera hace falta una prioridad MÁS BAJA, no más alta.
+    # DecoratorServicePass mete los decoradores en una SplPriorityQueue y va
+    # reasignando el alias del servicio decorado en cada vuelta, así que el
+    # ÚLTIMO procesado —el de menor prioridad— es el que acaba envolviendo a
+    # todos los demás. Con prioridad 10 este decorador quedaría DENTRO del
+    # interruptor y la rama "descartado" no se ejecutaría nunca.
+    App\Mailer\RecordingMailer:
+        decorates: mailer.mailer
+        decoration_priority: -10
+        arguments:
+            $inner: '@.inner'

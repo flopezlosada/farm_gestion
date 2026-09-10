@@ -593,6 +593,95 @@
                 </section>
             {% endif %}
 
+            {# Avisos: por dónde puede recibirlos y qué se le ha mandado.
+             # Las dos cosas juntas porque la pregunta que trae aquí siempre es
+             # la misma —"dice que no le llega nada"— y tiene tres respuestas
+             # posibles que se distinguen entre sí: no se le mandó, se le mandó
+             # y falló, o lo tiene silenciado. Sólo admin. #}
+            {% if is_granted('ROLE_ADMIN') %}
+                <section class="prt-card" style="margin-top: 18px;">
+                    <header class="prt-card__head">
+                        <h2 class="prt-card__title"><span class="accent"></span>Avisos</h2>
+                    </header>
+                    <div class="prt-card__body">
+
+                        <dl class="prt-defs">
+                            <div class="prt-defs__row">
+                                <dt class="prt-defs__label">Correo</dt>
+                                <dd class="prt-defs__value{% if not partner.email %} prt-defs__value--muted{% endif %}">
+                                    {{ partner.email ?: 'Sin correo en la ficha: no puede recibir ninguno' }}
+                                </dd>
+                            </div>
+                            <div class="prt-defs__row">
+                                <dt class="prt-defs__label">Móvil</dt>
+                                <dd class="prt-defs__value{% if push_devices == 0 %} prt-defs__value--muted{% endif %}">
+                                    {% if push_devices > 0 %}
+                                        {{ push_devices }} navegador{{ push_devices == 1 ? '' : 'es' }} dado{{ push_devices == 1 ? '' : 's' }} de alta
+                                    {% else %}
+                                        Ningún navegador dado de alta: aunque lo tenga activado, no le puede llegar
+                                    {% endif %}
+                                </dd>
+                            </div>
+                            {% for topic in notification_topics %}
+                                <div class="prt-defs__row">
+                                    <dt class="prt-defs__label">{{ topic.label }}</dt>
+                                    <dd class="prt-defs__value">
+                                        {% for channel, wants in topic.channels %}
+                                            {{ csa.badge(
+                                                (channel == 'push' ? 'Móvil' : 'Correo') ~ (wants ? '' : ' silenciado'),
+                                                wants ? 'green' : 'neutral',
+                                                { sm: true }
+                                            ) }}
+                                        {% endfor %}
+                                    </dd>
+                                </div>
+                            {% endfor %}
+                        </dl>
+
+                        {% if notification_logs is not empty %}
+                            <div class="csa-table-wrap" style="margin-top: 14px;">
+                                <table class="csa-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="csa-table__col-tight">Cuándo</th>
+                                            <th class="csa-table__col-tight">Canal</th>
+                                            <th>Aviso</th>
+                                            <th class="csa-table__col-tight">Resultado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for log in notification_logs %}
+                                            <tr>
+                                                <td class="csa-table__col-tight">{{ log.sentAt|format_datetime('short', 'short', locale='es') }}</td>
+                                                <td class="csa-table__col-tight">{{ log.channel == 'push' ? 'Móvil' : 'Correo' }}</td>
+                                                <td>{{ log.subject ?: log.kind }}</td>
+                                                <td class="csa-table__col-tight">
+                                                    {% if log.status == 'sent' %}
+                                                        {{ csa.badge('Entregado', 'green', { sm: true }) }}
+                                                    {% elseif log.status == 'discarded' %}
+                                                        {{ csa.badge('Descartado', 'ochre', { sm: true }) }}
+                                                    {% else %}
+                                                        {{ csa.badge('Falló', 'terracotta', { sm: true }) }}
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p style="margin: 10px 0 0;">
+                                <a href="{{ path('notification_log_index', { q: partner.email }) }}">Ver el registro completo</a>
+                            </p>
+                        {% else %}
+                            <p class="csa-muted" style="margin: 14px 0 0;">
+                                No consta ningún aviso enviado. Ojo: el registro se estrenó en septiembre de 2026, así
+                                que de antes no hay nada aunque sí se enviaran.
+                            </p>
+                        {% endif %}
+                    </div>
+                </section>
+            {% endif %}
+
             {# Familia #}
             <section class="prt-card prt-card--ochre">
                 <header class="prt-card__head">

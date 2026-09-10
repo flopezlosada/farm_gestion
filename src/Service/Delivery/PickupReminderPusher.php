@@ -238,6 +238,12 @@ class PickupReminderPusher
                 $group['title'],
                 $group['body'],
                 $path,
+                // En la bitácora, el aviso al móvil y el correo de este mismo
+                // recordatorio se llaman IGUAL, y el canal es lo que los
+                // separa: quien busca "por qué no le llegó su recordatorio"
+                // quiere ver de una vez los dos intentos, no dos tipos de aviso
+                // distintos que resulta que eran el mismo.
+                PickupReminderMailer::EFFECT_KIND,
             );
         }
 

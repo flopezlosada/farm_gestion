@@ -164,6 +164,7 @@ class SendVolunteerRemindersCommand extends AbstractCronCommand
             // las llamadas, que es cómo dos avisos del mismo módulo acaban un día
             // llevando a pantallas distintas.
             $this->link->pathForKind(Notification::KIND_VOLUNTEERING_REMINDER),
+            'volunteer_reminder',
         );
     }
 

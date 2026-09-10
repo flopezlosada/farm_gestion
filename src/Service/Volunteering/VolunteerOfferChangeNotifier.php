@@ -125,6 +125,7 @@ class VolunteerOfferChangeNotifier
             // bandeja: era la TERCERA copia de '/panel/voluntariado' escrita a
             // mano en el módulo.
             $this->link->pathForKind(Notification::KIND_VOLUNTEERING_CHANGE),
+            'volunteer_change',
         );
 
         return \count($recipients);

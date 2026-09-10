@@ -17,7 +17,9 @@ use App\Form\PartnerType;
 use App\Entity\Basket;
 use App\Entity\BasketComponent;
 use App\Repository\BasketRepository;
+use App\Repository\NotificationLogRepository;
 use App\Repository\PartnerRepository;
+use App\Repository\PushSubscriptionRepository;
 use App\Service\Delivery\CohortChoiceBuilder;
 use App\Repository\WeeklyBasketGroupRepository;
 use App\Security\MagicLinkMailer;
@@ -31,6 +33,7 @@ use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Partner\BasketPricing;
 use App\Service\Partner\PartnerShareEventRecorder;
+use App\Service\Notification\NotificationPreferences;
 use App\Service\Partner\SharedBasketCohortSync;
 use Doctrine\ORM\EntityManagerInterface;
 use Knp\Component\Pager\PaginatorInterface;
@@ -293,6 +296,9 @@ class PartnerController extends AbstractController
         PickupRelocationOptions $relocationOptions,
         PartnerAccessPolicy $accessPolicy,
         \App\Repository\PartnerBasketExtraRepository $extraRepository,
+        NotificationLogRepository $notificationLogs,
+        NotificationPreferences $notificationPreferences,
+        PushSubscriptionRepository $pushSubscriptions,
         EntityManagerInterface $em,
     ): Response {
         $events = $partnerEventRepository->findForPartner($partner);
@@ -320,10 +326,15 @@ class PartnerController extends AbstractController
             }
         }
 
-        // Usuario de acceso vinculado a este socix (si lo tiene). La relación
+        // Usuarios de acceso vinculados a este socix (si los tiene). La relación
         // User->Partner es unidireccional, así que se busca por el lado inverso.
-        $linkedUser = $em->getRepository(\App\Entity\User::class)
-            ->findOneBy(['partner' => $partner]);
+        // Se piden TODOS y no uno: es la misma relación por la que se resuelve a
+        // quién mandar un aviso al móvil, así que contar los navegadores de una
+        // sola cuenta daría menos de los que de verdad lo reciben. La ficha
+        // sigue enseñando una, la primera, como hasta ahora.
+        $linkedUsers = $em->getRepository(\App\Entity\User::class)
+            ->findBy(['partner' => $partner]);
+        $linkedUser = $linkedUsers[0] ?? null;
 
         // Cestas que este socix paga (dona) a otrxs: PBS activas cuyo
         // payer_partner es él. Se muestra como bloque de sólo lectura en su
@@ -365,6 +376,16 @@ class PartnerController extends AbstractController
             // relación User->Partner). Alimenta la tarjeta "Acceso a la web".
             'access_user' => $accessPolicy->accountFor($partner),
             'self_registration_open' => $accessPolicy->isSelfRegistrationOpen(),
+            // Qué se le ha enviado y por dónde puede recibirlo. Las dos cosas
+            // juntas y no sólo el historial: "no le llegó nada" y "lo tiene
+            // silenciado" se ven igual en una lista vacía, y la segunda no es
+            // una avería.
+            'notification_logs' => $notificationLogs->findForPartner($partner),
+            'notification_topics' => $notificationPreferences->forPartner($partner),
+            // Sin ningún navegador dado de alta, el aviso al móvil no puede
+            // llegar por mucho que el tema esté activado: es la causa más común
+            // de "he activado el push y no me llega".
+            'push_devices' => $linkedUsers === [] ? 0 : count($pushSubscriptions->findByUsers($linkedUsers)),
         ]);
     }
 

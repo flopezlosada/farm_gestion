@@ -1,0 +1,116 @@
+{# ============================================================
+ # Registro de avisos · Ejecuciones: el histórico completo de las tareas.
+ #
+ # /gestion/settings enseña la ÚLTIMA ejecución de cada tarea, que sirve para
+ # "¿está viva?". Esto sirve para lo otro: "¿qué pasó el jueves pasado?".
+ # ============================================================ #}
+
+{% extends 'notification_log/_layout.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set tone_by_status = {
+    'done': 'green',
+    'nothing_to_do': 'sky',
+    'disabled': 'neutral',
+    'failed': 'terracotta'
+} %}
+
+{% block log_filters %}
+    <form method="get" action="{{ path('notification_log_runs') }}"
+          style="display: flex; flex-wrap: wrap; gap: var(--csa-sp-4); align-items: flex-end;">
+
+        <div style="display: flex; flex-direction: column;">
+            <span style="{{ filter_label }}">Fechas a medida</span>
+            <div style="display: flex; align-items: center; gap: var(--csa-sp-2);">
+                <input type="date" name="from" value="{{ range.from }}" class="csa-input csa-input--compact" aria-label="Desde">
+                <span class="csa-muted">–</span>
+                <input type="date" name="to" value="{{ range.to }}" class="csa-input csa-input--compact" aria-label="Hasta">
+            </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column;">
+            <span style="{{ filter_label }}">Tarea</span>
+            <select name="task" class="csa-input csa-input--compact" style="min-width: 220px;">
+                <option value="">Todas</option>
+                {% for key, label in tasks %}
+                    <option value="{{ key }}" {{ filters.task == key ? 'selected' : '' }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="display: flex; flex-direction: column;">
+            <span style="{{ filter_label }}">Resultado</span>
+            <select name="status" class="csa-input csa-input--compact">
+                <option value="">Todos</option>
+                {% for value, label in statuses %}
+                    <option value="{{ value }}" {{ filters.status == value ? 'selected' : '' }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <button type="submit" class="csa-btn csa-btn--sm csa-btn--secondary">Aplicar</button>
+    </form>
+{% endblock %}
+
+{% block log_body %}
+
+    <div class="csa-table-wrap">
+        <table class="csa-table">
+            <thead>
+                <tr>
+                    <th class="csa-table__col-tight">Arranque</th>
+                    <th>Tarea</th>
+                    <th class="csa-table__col-tight">Resultado</th>
+                    <th>Qué pasó</th>
+                    <th class="csa-table__col-tight">Avisos</th>
+                    <th class="csa-table__col-tight">Quién la lanzó</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for run in pagination %}
+                    <tr>
+                        <td class="csa-table__col-tight">
+                            {{ run.startedAt|format_datetime('short', 'short', locale='es') }}
+                        </td>
+                        <td>
+                            {{ tasks[run.taskKey]|default(run.taskKey) }}
+                            <div class="csa-muted" style="font-size: 0.85em;">{{ run.command }}</div>
+                        </td>
+                        <td class="csa-table__col-tight">
+                            {{ csa.badge(statuses[run.status]|default(run.status), tone_by_status[run.status]|default('neutral'), { sm: true }) }}
+                        </td>
+                        <td>{{ run.detail ?: '—' }}</td>
+                        <td class="csa-table__col-tight">
+                            {# Cero avisos no es un fallo: la mayoría de ejecuciones son
+                               "nada que hacer", y muchas tareas no mandan nada nunca. #}
+                            {% set sent = sent_by_run[run.id]|default(0) %}
+                            {% if sent > 0 %}
+                                <a href="{{ path('notification_log_index', range|merge({ run: run.id })) }}">{{ sent }}</a>
+                            {% else %}
+                                <span class="csa-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="csa-table__col-tight">
+                            {% if run.triggerSource == 'manual' %}
+                                Una persona
+                            {% elseif run.triggerSource == 'tick' %}
+                                El reloj
+                            {% else %}
+                                Programada
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="6" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                            No hay ejecuciones registradas en este periodo.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="grl-pagination">{{ knp_pagination_render(pagination) }}</div>
+
+{% endblock %}
