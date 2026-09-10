@@ -162,9 +162,16 @@ class PanelVolunteeringTabsTest extends AbstractPartnerAuthenticatedTest
         $client->request('GET', '/panel/voluntariado/mis-turnos/historial');
         $this->assertSelectorTextContains('.vol-done', $titulo, 'Lo contestado tiene que seguir viéndose.');
 
-        $em->refresh($signup);
-        $this->assertFalse($signup->getAttended());
-        $this->assertNull($signup->getCreditedMinutes(), 'Un «no pude» no computa horas.');
+        // Releída del contenedor y no refrescada: cada petición del cliente
+        // reinicia el kernel, así que la referencia de arriba ya no está
+        // gestionada por el EntityManager que hay ahora.
+        $guardado = static::getContainer()->get(EntityManagerInterface::class)
+            ->getRepository(VolunteerSignup::class)
+            ->find($signup->getId());
+
+        $this->assertNotNull($guardado);
+        $this->assertFalse($guardado->getAttended());
+        $this->assertNull($guardado->getCreditedMinutes(), 'Un «no pude» no computa horas.');
     }
 
     private function socixWithModuleOn(): KernelBrowser
