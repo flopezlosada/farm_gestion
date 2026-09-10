@@ -6,6 +6,7 @@ use App\Entity\CronRun;
 use App\Entity\NotificationLog;
 use App\Repository\CronRunRepository;
 use App\Repository\NotificationLogRepository;
+use App\Repository\PartnerRepository;
 use App\Service\Cron\CronTaskRegistry;
 use Knp\Component\Pager\PaginatorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -42,6 +43,7 @@ class NotificationLogController extends AbstractController
         private readonly NotificationLogRepository $logs,
         private readonly CronRunRepository $runs,
         private readonly CronTaskRegistry $cronTasks,
+        private readonly PartnerRepository $partners,
     ) {
     }
 
@@ -65,6 +67,7 @@ class NotificationLogController extends AbstractController
 
         return $this->render('notification_log/index.html.twig', [
             'pagination' => $pagination,
+            'partners_by_email' => $this->partnersByEmail($pagination),
             'summary' => $this->logs->summary($filters),
             'kinds' => $this->logs->distinctKinds(),
             'filters' => $filters,
@@ -121,6 +124,40 @@ class NotificationLogController extends AbstractController
                 CronRun::STATUS_FAILED => 'Falló',
             ],
         ]);
+    }
+
+    /**
+     * A quién corresponde cada dirección de correo de la página, en UNA
+     * consulta.
+     *
+     * El registro del correo guarda la dirección y no la persona, porque
+     * resolverla en el momento del envío costaría una consulta por correo justo
+     * en la tarea que más gente toca. Pero una tabla con cincuenta direcciones
+     * sueltas no se lee, así que se cruzan aquí: se listan los correos de la
+     * página y se piden sus fichas de golpe.
+     *
+     * @param iterable<\App\Entity\NotificationLog> $logs Los de la página actual.
+     * @return array<string, \App\Entity\Partner> correo => socix
+     */
+    private function partnersByEmail(iterable $logs): array
+    {
+        $emails = [];
+        foreach ($logs as $log) {
+            if ($log->getPartner() === null && $log->getChannel() === NotificationLog::CHANNEL_EMAIL) {
+                $emails[$log->getTarget()] = true;
+            }
+        }
+
+        if ($emails === []) {
+            return [];
+        }
+
+        $byEmail = [];
+        foreach ($this->partners->findBy(['email' => array_keys($emails)]) as $partner) {
+            $byEmail[(string) $partner->getEmail()] = $partner;
+        }
+
+        return $byEmail;
     }
 
     /**

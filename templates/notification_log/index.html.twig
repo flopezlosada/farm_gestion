@@ -124,8 +124,12 @@
                         </td>
                         <td>{{ log.kind }}</td>
                         <td>
-                            {% if log.partner %}
-                                <a class="csa-table__primary" href="{{ path('partner_show', { id: log.partner.id }) }}">{{ log.partner.name }} {{ log.partner.surname }}</a>
+                            {# El push conoce a la persona; el correo sólo la dirección, y la
+                               ficha se cruza al leer (partners_by_email). Sin ese cruce la
+                               tabla sería una lista de correos sueltos, que no se lee. #}
+                            {% set quien = log.partner ?? partners_by_email[log.target]|default(null) %}
+                            {% if quien %}
+                                <a class="csa-table__primary" href="{{ path('partner_show', { id: quien.id }) }}">{{ quien.name }} {{ quien.surname }}</a>
                                 <div class="csa-muted" style="font-size: 0.85em;">{{ log.target }}</div>
                             {% else %}
                                 {{ log.target }}
