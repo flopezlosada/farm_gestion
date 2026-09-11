@@ -9,6 +9,7 @@ use App\Service\Delivery\CancelledDeliveryFilter;
 use App\Service\Delivery\PickupNoticeCoverage;
 use App\Service\Delivery\PickupReminderMailer;
 use App\Service\Delivery\PickupReminderPusher;
+use App\Service\Notification\StaffAudience;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -59,6 +60,7 @@ class SendPickupReminderCommand extends AbstractCronCommand
         private readonly PickupReminderPusher $reminderPusher,
         private readonly MailerInterface $mailer,
         private readonly UrlGeneratorInterface $urlGenerator,
+        private readonly StaffAudience $staff,
     ) {
         parent::__construct();
     }
@@ -259,6 +261,12 @@ class SendPickupReminderCommand extends AbstractCronCommand
      * tampoco saldría, y el guardián lo daría por emitido para siempre. El
      * hueco queda igualmente en la pantalla y en el registro.
      *
+     * VA A QUIEN ADMINISTRA LA APLICACIÓN, no a un buzón configurado a mano:
+     * esto no es correspondencia de la asociación, es un fallo del sistema, y
+     * quien puede arreglarlo es quien tiene permisos para tocarlo. Además así
+     * no depende de que alguien se acuerde de rellenar un campo — un ajuste
+     * vacío deja el aviso mudo justo el día que hace falta.
+     *
      * @param array<string, mixed> $cobertura Resultado de {@see PickupNoticeCoverage::forDate()}.
      * @return string Coletilla para el resumen de la ejecución.
      */
@@ -276,11 +284,10 @@ class SendPickupReminderCommand extends AbstractCronCommand
             return '';
         }
 
-        $to = (string) $this->settings->getString(AppSettings::EMAIL_ADMIN_DELIVERY_SUMMARY_TO);
-        $recipients = array_values(array_filter(array_map('trim', explode(',', $to))));
+        $recipients = $this->staff->emailsWithRole('ROLE_ADMIN');
 
         if ($recipients === []) {
-            $io->note('Hay hueco pero no hay a quién avisar: configura el destinatario en /gestion/settings.');
+            $io->note('Hay hueco pero ninguna cuenta de administración tiene correo: el aviso queda en la pantalla de cobertura.');
 
             return '';
         }
