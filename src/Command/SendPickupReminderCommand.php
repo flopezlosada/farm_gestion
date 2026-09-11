@@ -9,12 +9,15 @@ use App\Service\Delivery\CancelledDeliveryFilter;
 use App\Service\Delivery\PickupNoticeCoverage;
 use App\Service\Delivery\PickupReminderMailer;
 use App\Service\Delivery\PickupReminderPusher;
+use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 /**
  * Envía el recordatorio de recogida a quincenales y mensuales, CONSCIENTE DEL
@@ -40,6 +43,13 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 #[AsCommand(name: 'app:send-pickup-reminders', description: 'Recordatorio de recogida a quincenales/mensuales, por nodo y fecha física.')]
 class SendPickupReminderCommand extends AbstractCronCommand
 {
+    /**
+     * Clase de efecto del aviso a administración. Separada de la del propio
+     * recordatorio: son dos cosas distintas y una no puede dar la otra por
+     * emitida.
+     */
+    private const COVERAGE_ALERT_KIND = 'coverage_alert';
+
     public function __construct(
         private readonly WeeklyBasketRepository $weeklyBasketRepository,
         private readonly CancelledDeliveryFilter $cancelledFilter,
@@ -47,6 +57,8 @@ class SendPickupReminderCommand extends AbstractCronCommand
         private readonly AppSettings $settings,
         private readonly PickupReminderMailer $reminderMailer,
         private readonly PickupReminderPusher $reminderPusher,
+        private readonly MailerInterface $mailer,
+        private readonly UrlGeneratorInterface $urlGenerator,
     ) {
         parent::__construct();
     }
@@ -186,7 +198,8 @@ class SendPickupReminderCommand extends AbstractCronCommand
         // selección ({@see PickupNoticeCoverage}), así que un hueco aquí
         // significa gente que recogía ese día, que tenía por dónde recibir el
         // aviso, y a la que esta misma ejecución no ha alcanzado.
-        $huecos = $this->coverage->forDate($target)['totals']['gap'];
+        $cobertura = $this->coverage->forDate($target);
+        $huecos = $cobertura['totals']['gap'];
         $aviso = '';
         if ($huecos > 0) {
             $aviso = sprintf(' · ⚠ %d sin avisar', $huecos);
@@ -197,6 +210,8 @@ class SendPickupReminderCommand extends AbstractCronCommand
                 $huecos,
                 $target->format('Y-m-d'),
             ));
+
+            $aviso .= $this->alertarAdministracion($io, $input, $target, $cobertura, $huecos);
         }
 
         // Un push mandado también es trabajo hecho, y una copia en la bandeja
@@ -225,6 +240,86 @@ class SendPickupReminderCommand extends AbstractCronCommand
         return $this->nothingToDo(($result['already'] > 0
             ? sprintf('%d destinatarios el %s, todos avisados ya', $result['already'], $target->format('Y-m-d'))
             : sprintf('%d destinatarios el %s, ninguno con email', $result['skipped'], $target->format('Y-m-d'))) . $aviso);
+    }
+
+    /**
+     * Escribe a administración contando que alguien se ha quedado sin aviso.
+     *
+     * SÓLO SE MANDA CUANDO HAY HUECO, y ésa es la decisión de diseño: un correo
+     * periódico que casi siempre dice "todo bien" deja de leerse en dos
+     * semanas, y entonces no sirve para nada. Que llegue significa que hay algo
+     * que mirar.
+     *
+     * Una vez por reparto, aunque el reloj repita la tarea: lo garantiza el
+     * guardián de idempotencia con la fecha del REPARTO como clave, no la de
+     * hoy. Si no, un tick horario mandaría el mismo aviso cada hora.
+     *
+     * Con el correo apagado no se intenta siquiera. Puede sonar a que es cuando
+     * más falta hace, pero es al revés: si los envíos están apagados, el aviso
+     * tampoco saldría, y el guardián lo daría por emitido para siempre. El
+     * hueco queda igualmente en la pantalla y en el registro.
+     *
+     * @param array<string, mixed> $cobertura Resultado de {@see PickupNoticeCoverage::forDate()}.
+     * @return string Coletilla para el resumen de la ejecución.
+     */
+    private function alertarAdministracion(
+        SymfonyStyle $io,
+        InputInterface $input,
+        \DateTimeImmutable $target,
+        array $cobertura,
+        int $huecos,
+    ): string {
+        if (!$this->settings->getBool(AppSettings::EMAIL_ENABLED)
+            || !$this->settings->getBool(AppSettings::EMAIL_COVERAGE_ALERT)) {
+            $io->note('El aviso a administración está desactivado: el hueco queda en el registro y en la pantalla de cobertura.');
+
+            return '';
+        }
+
+        $to = (string) $this->settings->getString(AppSettings::EMAIL_ADMIN_DELIVERY_SUMMARY_TO);
+        $recipients = array_values(array_filter(array_map('trim', explode(',', $to))));
+
+        if ($recipients === []) {
+            $io->note('Hay hueco pero no hay a quién avisar: configura el destinatario en /gestion/settings.');
+
+            return '';
+        }
+
+        $message = (new TemplatedEmail())
+            ->to(...$recipients)
+            ->subject(sprintf(
+                'CSA Vega · %d socix(s) sin aviso de su cesta del %s',
+                $huecos,
+                $target->format('d/m/Y'),
+            ))
+            ->htmlTemplate('email/coverage_alert.html.twig')
+            ->textTemplate('email/coverage_alert.txt.twig')
+            ->context([
+                'gap' => $huecos,
+                'pickup_date' => $target,
+                'rows' => $cobertura['rows'],
+                'coverage_url' => $this->urlGenerator->generate(
+                    'notification_log_coverage',
+                    ['date' => $target->format('Y-m-d')],
+                    UrlGeneratorInterface::ABSOLUTE_URL,
+                ),
+            ]);
+
+        $emitido = $this->emitOnce(
+            self::COVERAGE_ALERT_KIND,
+            fn () => $this->mailer->send($message),
+            $input,
+            on: $target,
+            target: implode(', ', $recipients),
+        );
+
+        if (!$emitido) {
+            return '';
+        }
+
+        $io->success(sprintf('Avisado a %s del hueco.', implode(', ', $recipients)));
+
+        return ' (avisada administración)';
     }
 
     /**

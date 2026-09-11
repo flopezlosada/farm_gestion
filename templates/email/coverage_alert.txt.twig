@@ -1,0 +1,13 @@
+{{ gap }} {{ gap == 1 ? 'socix se ha quedado' : 'socixs se han quedado' }} sin el aviso de su cesta
+
+En el reparto del {{ pickup_date|format_date('full', locale='es') }} {{ gap == 1 ? 'hay una persona' : 'hay ' ~ gap ~ ' personas' }} que {{ gap == 1 ? 'recoge' : 'recogen' }} cesta, que {{ gap == 1 ? 'tiene' : 'tienen' }} por dónde recibir el recordatorio, y a {{ gap == 1 ? 'quien' : 'quienes' }} no se ha avisado.
+
+{% for r in rows|filter(r => r.gap > 0) %}
+- {{ r.share }}: {{ r.picking }} recogen, {{ r.notified }} avisadxs, {{ r.gap }} sin avisar
+{% endfor %}
+
+Ver quiénes son: {{ coverage_url }}
+
+Si esto se repite en varios repartos seguidos, no son despistes: el recordatorio está dejando fuera a alguien de forma sistemática. En la pantalla de cobertura se ven los últimos repartos uno debajo de otro, que es donde se nota el patrón.
+
+Este correo sólo se manda cuando hay alguien sin avisar. Puedes apagarlo en Configuración → «Avisar si alguien se queda sin su recordatorio».
