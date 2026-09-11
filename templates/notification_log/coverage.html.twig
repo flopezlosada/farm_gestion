@@ -1,0 +1,181 @@
+{# ============================================================
+ # Registro de avisos · Cobertura: de quienes recogían, a cuántxs se avisó.
+ #
+ # Las otras dos pestañas cuentan lo que el sistema hizo. Ésta compara lo hecho
+ # con lo que había que hacer, que es lo único que descubre a quién NO se avisa.
+ #
+ # La serie de repartos va primero, y a propósito: un hueco suelto puede ser
+ # cualquier cosa, pero el mismo hueco cada dos semanas es un fallo del sistema.
+ # Eso sólo se ve poniendo los repartos uno debajo de otro.
+ # ============================================================ #}
+
+{% extends 'notification_log/_layout.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{# Ni periodo ni filtros: aquí la unidad es el reparto, no el día. #}
+{% block log_range %}{% endblock %}
+{% block log_filters %}{% endblock %}
+
+{% block log_body %}
+
+    {% set con_hueco = series|filter(t => t.gap > 0 and not t.unrecorded)|length %}
+
+    {% if con_hueco > 0 %}
+        {{ csa.callout(
+            'Hay repartos con gente que podía recibir el aviso y no lo recibió. Si el hueco se repite en varias fechas, no es un despiste: es que el sistema está dejando fuera a alguien de forma sistemática.',
+            'warning'
+        ) }}
+    {% endif %}
+
+    <h2 style="font-size: 1em; margin: var(--csa-sp-6) 0 var(--csa-sp-3);">Últimos repartos</h2>
+
+    <div class="csa-table-wrap">
+        <table class="csa-table">
+            <thead>
+                <tr>
+                    <th class="csa-table__col-tight">Reparto</th>
+                    <th class="csa-table__col-tight">Recogen</th>
+                    <th class="csa-table__col-tight">Avisadxs</th>
+                    <th class="csa-table__col-tight">Sin forma de avisar</th>
+                    <th class="csa-table__col-tight">Sin aviso ni motivo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for fecha, t in series %}
+                    <tr{% if fecha == selected %} style="background: var(--csa-surface-2);"{% endif %}>
+                        <td class="csa-table__col-tight">
+                            <a class="csa-table__primary" href="{{ path('notification_log_coverage', { date: fecha }) }}">
+                                {{ fecha|date('d/m/Y') }}
+                            </a>
+                        </td>
+                        <td class="csa-table__col-tight">{{ t.picking }}</td>
+                        <td class="csa-table__col-tight">{{ t.notified }}</td>
+                        <td class="csa-table__col-tight">
+                            {{ t.unreachable > 0 ? t.unreachable : '—' }}
+                        </td>
+                        <td class="csa-table__col-tight">
+                            {# Un reparto anterior al primer apunte no se juzga: entonces
+                               se avisaba igual y no quedaba constancia. Pintarlo en rojo
+                               sería acusar al sistema por un dato que falta. #}
+                            {% if t.unrecorded %}
+                                <span class="csa-muted">sin registro</span>
+                            {% elseif t.gap > 0 %}
+                                {{ csa.badge(t.gap, 'terracotta', { sm: true }) }}
+                            {% else %}
+                                {{ csa.badge('0', 'green', { sm: true }) }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="5" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                            No hay repartos materializados todavía.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <p class="csa-muted" style="margin: var(--csa-sp-3) 0 0; font-size: 0.85em;">
+        «Sin forma de avisar» es quien no tiene correo utilizable ni cuenta en la web: no es un fallo del
+        sistema, es una ficha a medias. «Sin aviso ni motivo» es quien sí podía recibirlo y no consta que
+        se le enviara — eso sí hay que mirarlo.
+        {% if first_record %}
+            De los repartos anteriores al {{ first_record|date('d/m/Y') }} no hay constancia: entonces se
+            avisaba igual, pero no se guardaba.
+        {% else %}
+            Todavía no hay ningún aviso registrado, así que aún no se puede comprobar nada.
+        {% endif %}
+    </p>
+
+    {% if detail %}
+        <h2 style="font-size: 1em; margin: var(--csa-sp-8) 0 var(--csa-sp-3);">
+            Reparto del {{ selected|date('d/m/Y') }}, por modalidad
+        </h2>
+
+        {% if detail.unrecorded and detail.rows is not empty %}
+            <p class="csa-muted" style="margin: 0 0 var(--csa-sp-3);">
+                Este reparto es anterior al registro de avisos: lo que se ve es quién recogía, pero no se
+                puede decir a quién se avisó.
+            </p>
+        {% endif %}
+
+        <div class="csa-table-wrap">
+            <table class="csa-table">
+                <thead>
+                    <tr>
+                        <th>Modalidad</th>
+                        <th class="csa-table__col-tight">¿Recibe aviso?</th>
+                        <th class="csa-table__col-tight">Recogen</th>
+                        <th class="csa-table__col-tight">Avisadxs</th>
+                        <th class="csa-table__col-tight">Sin forma de avisar</th>
+                        <th class="csa-table__col-tight">Sin aviso ni motivo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in detail.rows %}
+                        <tr>
+                            <td>{{ row.share }}</td>
+                            <td class="csa-table__col-tight">
+                                {# Se enseñan TAMBIÉN las modalidades que no reciben aviso, y no
+                                   es relleno: si alguien saca una de la lista del recordatorio,
+                                   aparecerá aquí con gente recogiendo y un "No" al lado. Así se
+                                   ve un cambio que, de otro modo, sólo se nota cuando alguien
+                                   escribe meses después. #}
+                                {{ row.in_scope ? 'Sí' : 'No, por diseño' }}
+                            </td>
+                            <td class="csa-table__col-tight">{{ row.picking }}</td>
+                            <td class="csa-table__col-tight">{{ row.notified }}</td>
+                            <td class="csa-table__col-tight">{{ row.unreachable > 0 ? row.unreachable : '—' }}</td>
+                            <td class="csa-table__col-tight">
+                                {% if row.gap > 0 %}
+                                    {{ csa.badge(row.gap, 'terracotta', { sm: true }) }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="6" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                                Ese día no había reparto, o estaba cancelado.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if detail.missing is not empty %}
+            <h2 style="font-size: 1em; margin: var(--csa-sp-8) 0 var(--csa-sp-3);">
+                Quiénes se quedaron sin aviso
+            </h2>
+            <div class="csa-table-wrap">
+                <table class="csa-table">
+                    <thead>
+                        <tr>
+                            <th>Socix</th>
+                            <th>Correo</th>
+                            <th class="csa-table__actions">Ficha</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for partner in detail.missing %}
+                            <tr>
+                                <td>
+                                    <a class="csa-table__primary" href="{{ path('partner_show', { id: partner.id }) }}">{{ partner.name }} {{ partner.surname }}</a>
+                                </td>
+                                <td>{{ partner.email ?: '—' }}</td>
+                                <td class="csa-table__actions">
+                                    <a href="{{ path('partner_show', { id: partner.id }) }}" title="Ver ficha" aria-label="Ver ficha"><i class="fa fa-eye"></i></a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+    {% endif %}
+
+{% endblock %}
