@@ -224,9 +224,14 @@ class SendPickupReminderCommandTest extends KernelTestCase
         try {
             $tester = $this->commandTester();
             $tester->execute(['--date' => $fecha]);
-            $display = $tester->getDisplay();
 
-            $this->assertStringContainsString('NO se les ha avisado', $display, 'La tarea tiene que delatar el hueco.');
+            // SymfonyStyle parte los avisos largos en varias líneas y los
+            // rellena con espacios hasta el ancho del bloque, así que buscar
+            // una frase entera en la salida cruda falla aunque el texto esté.
+            // Se comparan los espacios colapsados.
+            $plano = preg_replace('/\s+/', ' ', $tester->getDisplay());
+
+            $this->assertStringContainsString('NO se les ha avisado', $plano, 'La tarea tiene que delatar el hueco.');
         } finally {
             $partner = $wb->getPartner();
             $em->remove($wb);
