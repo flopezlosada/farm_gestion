@@ -12,6 +12,7 @@ use App\Repository\PartnerRepository;
 use App\Repository\UserRepository;
 use App\Service\Notification\IncompleteProfileNotifier;
 use App\Service\Notification\NotificationInbox;
+use App\Service\Notification\StaffAudience;
 use App\Service\Partner\PartnerProfileCompleteness;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Security\Core\Role\RoleHierarchy;
@@ -230,7 +231,10 @@ class IncompleteProfileNotifierTest extends TestCase
             $notifications,
             $inbox,
             new PartnerProfileCompleteness(),
-            new RoleHierarchy(self::HIERARCHY),
+            // Con la jerarquía REAL, no un doble: comprobar que el aviso llega a
+            // quien coordina exige resolver ROLE_ADMIN → … → ROLE_GESTION_SOCIXS,
+            // que es justo lo que se rompe cuando alguien lo resuelve con un LIKE.
+            new StaffAudience($userRepository, new RoleHierarchy(self::HIERARCHY)),
         );
     }
 

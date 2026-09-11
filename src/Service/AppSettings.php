@@ -71,6 +71,13 @@ class AppSettings
      */
     public const EMAIL_ADMIN_DELIVERY_SUMMARY_TO = 'email.admin_delivery_summary_to';
 
+    /**
+     * Aviso a administración cuando el recordatorio de recogida deja a alguien
+     * sin avisar. No es un digest ni un informe: sólo sale cuando hay un hueco
+     * de verdad, así que un correo suyo significa que hay algo que mirar.
+     */
+    public const EMAIL_COVERAGE_ALERT = 'email.coverage_alert';
+
     /** Envío del recordatorio de llegadas/salidas del albergue al equipo (app:send-albergue-arrivals-reminder). */
     public const EMAIL_ALBERGUE_REMINDER = 'email.albergue_reminder';
 
@@ -633,6 +640,12 @@ class AppSettings
             'group' => 'Emails internos',
             'label' => 'Resumen de cambios a administración',
             'help' => 'Digest periódico con los cambios autoservicio de lxs socixs (saltar cesta, mover, cambiar de nodo, huevos…). Configura la dirección de destino en el campo "Destinatario(s)" de abajo; si lo dejas vacío, no se envía.',
+            'default' => true,
+        ],
+        self::EMAIL_COVERAGE_ALERT => [
+            'group' => 'Emails internos',
+            'label' => 'Avisar si alguien se queda sin su recordatorio',
+            'help' => 'Cuando el recordatorio de recogida termina y detecta que alguien que recogía, y que podía recibir el aviso, se ha quedado sin él, avisa por correo. Va a las cuentas que administran la web (las que pueden arreglarlo), no a un buzón configurado: así no depende de que nadie rellene un campo. Sólo escribe cuando hay un hueco: si no llega nada, es que no lo hay.',
             'default' => true,
         ],
         self::EMAIL_VOLUNTEERING => [

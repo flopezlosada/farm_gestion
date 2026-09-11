@@ -9,6 +9,7 @@ use App\Entity\EmittedEffect;
 use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\Setting;
+use App\Entity\User;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
 use App\Entity\WeeklyBasketStatus;
@@ -241,6 +242,99 @@ class SendPickupReminderCommandTest extends KernelTestCase
             $em->remove($grupo);
             $em->remove($node);
             $em->remove($basket);
+            $em->flush();
+        }
+    }
+
+    /**
+     * Y además de escribirlo en su resumen, avisa a administración por correo.
+     *
+     * El escenario es el que de verdad puede pasar sin que nadie lo note: los
+     * envíos generales están encendidos pero el recordatorio concreto está
+     * apagado, así que la gente no recibe su aviso y el sistema sigue en verde.
+     * El correo a administración es lo que rompe ese silencio.
+     */
+    public function testAvisaPorCorreoAAdministracionCuandoHayHueco(): void
+    {
+        self::bootKernel();
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $settings = static::getContainer()->get(AppSettings::class);
+
+        // Fecha exclusiva: la cobertura cuenta todo lo que se recoge ese día.
+        $fecha = '2099-02-13';
+        $sufijo = uniqid();
+        $picks = $em->getRepository(WeeklyBasketStatus::class)->find(1);
+        $biweekly = $em->getRepository(BasketShare::class)->find(BasketShare::ID_BIWEEKLY);
+
+        $basket = (new Basket())->setDate(new \DateTime($fecha))->setWeek(25)->setAmount(1);
+        $em->persist($basket);
+        $node = (new Node())->setName('Torremocha TEST ' . $sufijo)->setDeliveryWeekday(5);
+        $grupo = (new WeeklyBasketGroup())->setName('Bustarviejo')->setColor('#5a8fbf')->setNode($node);
+        $em->persist($node);
+        $em->persist($grupo);
+
+        $wb = $this->makeWeeklyBasket($em, $basket, $biweekly, $picks, $grupo, $fecha, 'SinCorreoSocix ' . $sufijo);
+
+        $frontera = (new EmittedEffect())
+            ->setKind(PickupReminderMailer::EFFECT_KIND)
+            ->setReference('partner-0')
+            ->setOccurredOn(new \DateTimeImmutable('2099-02-06'))
+            ->setTarget('frontera@test.org');
+        $em->persist($frontera);
+        $em->flush();
+
+        // Quien recibe el aviso es quien ADMINISTRA la aplicación, así que hace
+        // falta una cuenta con ese permiso. Se le pone ROLE_ADMIN literal, pero
+        // el servicio resuelve la jerarquía: también valdría ROLE_SUPER_ADMIN.
+        $admin = (new User())
+            ->setUsername('coverage-admin-' . $sufijo)
+            ->setEmail('coverage-admin-' . $sufijo . '@test.org')
+            ->setPassword('x')
+            ->setEnabled(true)
+            ->setPasswordSet(true)
+            ->setRoles(['ROLE_ADMIN']);
+        $em->persist($admin);
+
+        // Envíos generales ON, recordatorio OFF: nadie recibe su aviso, pero el
+        // correo a administración sí puede salir.
+        $settings->setBool(AppSettings::EMAIL_ENABLED, true);
+        $settings->setBool(AppSettings::EMAIL_PICKUP_REMINDER, false);
+        $settings->setBool(AppSettings::EMAIL_COVERAGE_ALERT, true);
+
+        try {
+            $tester = $this->commandTester();
+            $tester->execute(['--date' => $fecha]);
+            $plano = preg_replace('/\s+/', ' ', $tester->getDisplay());
+
+            $this->assertStringContainsString(
+                'coverage-admin-' . $sufijo . '@test.org',
+                $plano,
+                'El hueco tiene que salir por correo a quien administra la aplicación.'
+            );
+        } finally {
+            $partner = $wb->getPartner();
+            $em->remove($wb);
+            $em->remove($frontera);
+            $em->flush();
+            $em->remove($partner);
+            $em->remove($admin);
+            $em->remove($grupo);
+            $em->remove($node);
+            $em->remove($basket);
+            foreach ($em->getRepository(EmittedEffect::class)->findBy(['kind' => 'coverage_alert']) as $efecto) {
+                $em->remove($efecto);
+            }
+            foreach ([
+                AppSettings::EMAIL_ENABLED,
+                AppSettings::EMAIL_PICKUP_REMINDER,
+                AppSettings::EMAIL_COVERAGE_ALERT,
+            ] as $clave) {
+                $ajuste = $em->getRepository(Setting::class)->findOneBy(['name' => $clave]);
+                if ($ajuste !== null) {
+                    $em->remove($ajuste);
+                }
+            }
             $em->flush();
         }
     }

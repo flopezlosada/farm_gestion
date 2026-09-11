@@ -9,7 +9,6 @@ use App\Repository\NotificationRepository;
 use App\Repository\PartnerRepository;
 use App\Repository\UserRepository;
 use App\Service\Partner\PartnerProfileCompleteness;
-use Symfony\Component\Security\Core\Role\RoleHierarchyInterface;
 
 /**
  * Persigue las fichas de socix a las que les faltan datos, por los dos lados: al
@@ -52,7 +51,7 @@ class IncompleteProfileNotifier
         private readonly NotificationRepository $notifications,
         private readonly NotificationInbox $inbox,
         private readonly PartnerProfileCompleteness $completeness,
-        private readonly RoleHierarchyInterface $roleHierarchy,
+        private readonly StaffAudience $staff,
     ) {
     }
 
@@ -188,26 +187,18 @@ class IncompleteProfileNotifier
     /**
      * Las cuentas que coordinan socixs, resolviendo la jerarquía de roles.
      *
-     * NO VALE BUSCAR EL ROL LITERAL en la columna: quien coordina suele tener
-     * ROLE_ADMIN, y de ahí a ROLE_GESTION_SOCIXS hay dos saltos
-     * (ROLE_ADMIN → ROLE_GESTION_SOCIXS_EDIT → ROLE_GESTION_SOCIXS). Con un LIKE
-     * el aviso no le llegaría a nadie, y el fallo sería invisible: una tarea que
-     * corre en verde sin avisar a nadie.
+     * Lo resuelve {@see StaffAudience} y no este servicio, porque la forma
+     * evidente de hacerlo —buscar el rol literal en la columna— está mal y
+     * falla en silencio: casi nadie tiene ROLE_GESTION_SOCIXS escrito, se llega
+     * por jerarquía desde ROLE_ADMIN. Teniendo esa respuesta en un solo sitio,
+     * el siguiente aviso interno que haga falta no puede equivocarse de otra
+     * manera.
      *
      * @return list<User> las cuentas que coordinan socixs
      */
     private function coordinators(): array
     {
-        $coordinators = [];
-
-        foreach ($this->users->findEnabled() as $user) {
-            $reachable = $this->roleHierarchy->getReachableRoleNames($user->getRoles());
-            if (\in_array(self::COORDINATOR_ROLE, $reachable, true)) {
-                $coordinators[] = $user;
-            }
-        }
-
-        return $coordinators;
+        return $this->staff->withRole(self::COORDINATOR_ROLE);
     }
 
     /**
