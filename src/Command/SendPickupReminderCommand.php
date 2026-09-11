@@ -6,6 +6,7 @@ use App\Entity\BasketShare;
 use App\Repository\WeeklyBasketRepository;
 use App\Service\AppSettings;
 use App\Service\Delivery\CancelledDeliveryFilter;
+use App\Service\Delivery\PickupNoticeCoverage;
 use App\Service\Delivery\PickupReminderMailer;
 use App\Service\Delivery\PickupReminderPusher;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -42,6 +43,7 @@ class SendPickupReminderCommand extends AbstractCronCommand
     public function __construct(
         private readonly WeeklyBasketRepository $weeklyBasketRepository,
         private readonly CancelledDeliveryFilter $cancelledFilter,
+        private readonly PickupNoticeCoverage $coverage,
         private readonly AppSettings $settings,
         private readonly PickupReminderMailer $reminderMailer,
         private readonly PickupReminderPusher $reminderPusher,
@@ -173,6 +175,30 @@ class SendPickupReminderCommand extends AbstractCronCommand
             ));
         }
 
+        // LA TAREA SE MIRA A SÍ MISMA AL TERMINAR, y no es adorno: es lo único
+        // que convierte este fallo en visible el mismo día. Cuando el
+        // recordatorio dejó fuera a las cestas compartidas, esta tarea salió en
+        // verde dos meses seguidos porque hacía exactamente lo que le habían
+        // pedido; lo que faltaba era alguien preguntando si lo que le habían
+        // pedido alcanzaba a todo el mundo.
+        //
+        // Se pregunta DESPUÉS de enviar y a quien no comparte su criterio de
+        // selección ({@see PickupNoticeCoverage}), así que un hueco aquí
+        // significa gente que recogía ese día, que tenía por dónde recibir el
+        // aviso, y a la que esta misma ejecución no ha alcanzado.
+        $huecos = $this->coverage->forDate($target)['totals']['gap'];
+        $aviso = '';
+        if ($huecos > 0) {
+            $aviso = sprintf(' · ⚠ %d sin avisar', $huecos);
+            $io->warning(sprintf(
+                '%d socix(s) recogen el %s, pueden recibir el aviso y NO se les ha avisado. '
+                . 'Míralo en Registro de avisos → Cobertura: si se repite en varios repartos, '
+                . 'el recordatorio está dejando fuera a alguien de forma sistemática.',
+                $huecos,
+                $target->format('Y-m-d'),
+            ));
+        }
+
         // Un push mandado también es trabajo hecho, y una copia en la bandeja
         // también: si sólo se mira el correo, el día en que todos los emails ya
         // constaran pero la copia se escribiera por primera vez, el planificador
@@ -182,22 +208,23 @@ class SendPickupReminderCommand extends AbstractCronCommand
         // "nada que hacer".
         if ($result['sent'] > 0 || $pushed['sent'] > 0 || $inbox['written'] > 0) {
             return $this->didWork(sprintf(
-                '%d recordatorios enviados para el %s (%d sin email, %d ya avisados) · %d aviso(s) al móvil · %d en la bandeja',
+                '%d recordatorios enviados para el %s (%d sin email, %d ya avisados) · %d aviso(s) al móvil · %d en la bandeja%s',
                 $result['sent'],
                 $target->format('Y-m-d'),
                 $result['skipped'],
                 $result['already'],
                 $pushed['sent'],
                 $inbox['written'],
+                $aviso,
             ));
         }
 
         // Sin envíos nuevos la tarea corrió sana, y el motivo importa: que todos
         // estuvieran ya avisados es el caso normal de una segunda pasada del
         // reloj, no una avería.
-        return $this->nothingToDo($result['already'] > 0
+        return $this->nothingToDo(($result['already'] > 0
             ? sprintf('%d destinatarios el %s, todos avisados ya', $result['already'], $target->format('Y-m-d'))
-            : sprintf('%d destinatarios el %s, ninguno con email', $result['skipped'], $target->format('Y-m-d')));
+            : sprintf('%d destinatarios el %s, ninguno con email', $result['skipped'], $target->format('Y-m-d'))) . $aviso);
     }
 
     /**

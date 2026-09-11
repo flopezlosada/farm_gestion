@@ -175,6 +175,77 @@ class SendPickupReminderCommandTest extends KernelTestCase
     }
 
     /**
+     * LA TAREA SE DELATA A SÍ MISMA: al terminar comprueba su propia cobertura,
+     * y si alguien que recogía y podía recibir el aviso se ha quedado sin él,
+     * lo dice en pantalla y en el registro de ejecuciones.
+     *
+     * El escenario es el más realista de todos: los envíos por correo están
+     * apagados y esta persona no tiene cuenta en la web, así que no le llega
+     * por ningún canal. Antes, eso salía en verde y en silencio — que es
+     * exactamente cómo pasaron desapercibidos dos meses sin avisar a las cestas
+     * compartidas.
+     */
+    public function testAlTerminarAvisaDeQuienSeQuedoSinAviso(): void
+    {
+        self::bootKernel();
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        // Fecha exclusiva de este test: la cobertura cuenta TODO lo que se
+        // recoge ese día, así que una cesta ajena cambiaría el número.
+        $fecha = '2099-06-05';
+        $sufijo = uniqid();
+        $picks = $em->getRepository(WeeklyBasketStatus::class)->find(1);
+        $biweekly = $em->getRepository(BasketShare::class)->find(BasketShare::ID_BIWEEKLY);
+
+        $basket = (new Basket())->setDate(new \DateTime($fecha))->setWeek(23)->setAmount(1);
+        $em->persist($basket);
+        $node = (new Node())->setName('Torremocha TEST ' . $sufijo)->setDeliveryWeekday(5);
+        $grupo = (new WeeklyBasketGroup())->setName('Bustarviejo')->setColor('#5a8fbf')->setNode($node);
+        $em->persist($node);
+        $em->persist($grupo);
+
+        // Tiene correo (así que se le PODÍA avisar) pero no cuenta de acceso, y
+        // el correo está apagado por defecto en db_test: no le llega nada.
+        $wb = $this->makeWeeklyBasket($em, $basket, $biweekly, $picks, $grupo, $fecha, 'SinAvisoSocix ' . $sufijo);
+
+        // Un apunte cualquiera ANTERIOR, para que la cobertura tenga desde
+        // dónde juzgar. Sin ningún apunte en la tabla, un reparto se considera
+        // anterior al registro y —con razón— no se afirma nada de él; entonces
+        // este test pasaría por el motivo equivocado.
+        $frontera = (new EmittedEffect())
+            ->setKind(PickupReminderMailer::EFFECT_KIND)
+            ->setReference('partner-0')
+            ->setOccurredOn(new \DateTimeImmutable('2099-06-01'))
+            ->setTarget('frontera@test.org');
+        $em->persist($frontera);
+        $em->flush();
+
+        try {
+            $tester = $this->commandTester();
+            $tester->execute(['--date' => $fecha]);
+
+            // SymfonyStyle parte los avisos largos en varias líneas y los
+            // rellena con espacios hasta el ancho del bloque, así que buscar
+            // una frase entera en la salida cruda falla aunque el texto esté.
+            // Se comparan los espacios colapsados.
+            $plano = preg_replace('/\s+/', ' ', $tester->getDisplay());
+
+            $this->assertStringContainsString('NO se les ha avisado', $plano, 'La tarea tiene que delatar el hueco.');
+        } finally {
+            $partner = $wb->getPartner();
+            $em->remove($wb);
+            $em->remove($frontera);
+            $em->flush();
+            $em->remove($partner);
+            $em->remove($grupo);
+            $em->remove($node);
+            $em->remove($basket);
+            $em->flush();
+        }
+    }
+
+    /**
      * Un reparto CANCELADO por una excepción de calendario no genera aviso, aun
      * cuando su WeeklyBasket siga viva (status "recoge") con delivery_date en el
      * día cancelado — el generador no materializa la cancelación. Es el modo de
