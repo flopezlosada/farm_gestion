@@ -40,7 +40,7 @@
                    hueco se concentra en una modalidad —que es la pista de que el
                    recordatorio está dejando fuera a un grupo entero— o está
                    repartido, que apunta a casos sueltos. #}
-                {% for r in rows if r.gap > 0 %}
+                {% for r in rows|filter(r => r.gap > 0) %}
                     <tr>
                         <td style="padding: 8px; border-bottom: 1px solid #eee;">{{ r.share }}</td>
                         <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">{{ r.picking }}</td>
