@@ -645,7 +645,7 @@ class AppSettings
         self::EMAIL_COVERAGE_ALERT => [
             'group' => 'Emails internos',
             'label' => 'Avisar si alguien se queda sin su recordatorio',
-            'help' => 'Cuando el recordatorio de recogida termina y detecta que alguien que recogía, y que podía recibir el aviso, se ha quedado sin él, manda un correo a administración. Sólo escribe cuando hay un hueco: si no llega nada, es que no lo hay. Usa el mismo destinatario que el resumen de cambios.',
+            'help' => 'Cuando el recordatorio de recogida termina y detecta que alguien que recogía, y que podía recibir el aviso, se ha quedado sin él, avisa por correo. Va a las cuentas que administran la web (las que pueden arreglarlo), no a un buzón configurado: así no depende de que nadie rellene un campo. Sólo escribe cuando hay un hueco: si no llega nada, es que no lo hay.',
             'default' => true,
         ],
         self::EMAIL_VOLUNTEERING => [
@@ -886,8 +886,8 @@ class AppSettings
     public const STRINGS = [
         self::EMAIL_ADMIN_DELIVERY_SUMMARY_TO => [
             'group' => 'Emails internos',
-            'label' => 'Destinatario(s) de los avisos a administración',
-            'help' => 'Dirección(es) de correo (separadas por comas) a las que llegan el resumen de cambios de socixs y el aviso de que alguien se ha quedado sin su recordatorio. Vacío = no se envía ninguno de los dos. Ejemplo: csa@csavegadejarama.org. Así no hace falta tocar el cron del servidor.',
+            'label' => 'Destinatario(s) del resumen a administración',
+            'help' => 'Dirección(es) de correo (separadas por comas) a las que llega el resumen de cambios de socixs. Vacío = no se envía. Ejemplo: csa@csavegadejarama.org. Así no hace falta tocar el cron del servidor.',
             'default' => '',
             // A diferencia del resto de STRINGS (que viven en pantallas concretas), este SÍ se
             // pinta en el form general de ajustes, junto a su toggle "Resumen de cambios a admin".

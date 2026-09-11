@@ -9,6 +9,7 @@ use App\Entity\EmittedEffect;
 use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\Setting;
+use App\Entity\User;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
 use App\Entity\WeeklyBasketStatus;
@@ -283,25 +284,41 @@ class SendPickupReminderCommandTest extends KernelTestCase
         $em->persist($frontera);
         $em->flush();
 
+        // Quien recibe el aviso es quien ADMINISTRA la aplicación, así que hace
+        // falta una cuenta con ese permiso. Se le pone ROLE_ADMIN literal, pero
+        // el servicio resuelve la jerarquía: también valdría ROLE_SUPER_ADMIN.
+        $admin = (new User())
+            ->setUsername('coverage-admin-' . $sufijo)
+            ->setEmail('coverage-admin-' . $sufijo . '@test.org')
+            ->setPassword('x')
+            ->setEnabled(true)
+            ->setPasswordSet(true)
+            ->setRoles(['ROLE_ADMIN']);
+        $em->persist($admin);
+
         // Envíos generales ON, recordatorio OFF: nadie recibe su aviso, pero el
         // correo a administración sí puede salir.
         $settings->setBool(AppSettings::EMAIL_ENABLED, true);
         $settings->setBool(AppSettings::EMAIL_PICKUP_REMINDER, false);
         $settings->setBool(AppSettings::EMAIL_COVERAGE_ALERT, true);
-        $settings->setString(AppSettings::EMAIL_ADMIN_DELIVERY_SUMMARY_TO, 'admin@test.org');
 
         try {
             $tester = $this->commandTester();
             $tester->execute(['--date' => $fecha]);
             $plano = preg_replace('/\s+/', ' ', $tester->getDisplay());
 
-            $this->assertStringContainsString('Avisado a admin@test.org', $plano, 'El hueco tiene que salir por correo a administración.');
+            $this->assertStringContainsString(
+                'coverage-admin-' . $sufijo . '@test.org',
+                $plano,
+                'El hueco tiene que salir por correo a quien administra la aplicación.'
+            );
         } finally {
             $partner = $wb->getPartner();
             $em->remove($wb);
             $em->remove($frontera);
             $em->flush();
             $em->remove($partner);
+            $em->remove($admin);
             $em->remove($grupo);
             $em->remove($node);
             $em->remove($basket);
@@ -312,7 +329,6 @@ class SendPickupReminderCommandTest extends KernelTestCase
                 AppSettings::EMAIL_ENABLED,
                 AppSettings::EMAIL_PICKUP_REMINDER,
                 AppSettings::EMAIL_COVERAGE_ALERT,
-                AppSettings::EMAIL_ADMIN_DELIVERY_SUMMARY_TO,
             ] as $clave) {
                 $ajuste = $em->getRepository(Setting::class)->findOneBy(['name' => $clave]);
                 if ($ajuste !== null) {
