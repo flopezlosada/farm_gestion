@@ -1,0 +1,73 @@
+{# ============================================================
+ # Aviso a administración: alguien se ha quedado sin su recordatorio.
+ #
+ # Este correo SÓLO sale cuando hay un hueco de verdad. Si se convierte en un
+ # correo periódico que casi siempre dice "todo bien", dejará de leerse, y
+ # entonces no sirve para nada. Que su llegada signifique algo es el diseño.
+ # ============================================================ #}
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Alguien se ha quedado sin aviso · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 720px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #b4553a; margin-top: 0;">
+        {{ gap }} {{ gap == 1 ? 'socix se ha quedado' : 'socixs se han quedado' }} sin el aviso de su cesta
+    </h2>
+
+    <p>
+        En el reparto del <strong>{{ pickup_date|format_date('full', locale='es') }}</strong>
+        {{ gap == 1 ? 'hay una persona' : 'hay ' ~ gap ~ ' personas' }} que
+        {{ gap == 1 ? 'recoge' : 'recogen' }} cesta, que {{ gap == 1 ? 'tiene' : 'tienen' }} por dónde
+        recibir el recordatorio, y a {{ gap == 1 ? 'quien' : 'quienes' }} no se ha avisado.
+    </p>
+
+    {% if rows is not empty %}
+        <table style="border-collapse: collapse; width: 100%; margin-top: 12px;">
+            <thead>
+                <tr style="background: #f3f0e8;">
+                    <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Modalidad</th>
+                    <th style="text-align: right; padding: 8px; border-bottom: 1px solid #ddd;">Recogen</th>
+                    <th style="text-align: right; padding: 8px; border-bottom: 1px solid #ddd;">Avisadxs</th>
+                    <th style="text-align: right; padding: 8px; border-bottom: 1px solid #ddd;">Sin avisar</th>
+                </tr>
+            </thead>
+            <tbody>
+                {# Sólo las modalidades con hueco: el desglose entero está en la
+                   pantalla, y aquí lo que hace falta es ver de un vistazo si el
+                   hueco se concentra en una modalidad —que es la pista de que el
+                   recordatorio está dejando fuera a un grupo entero— o está
+                   repartido, que apunta a casos sueltos. #}
+                {% for r in rows|filter(r => r.gap > 0) %}
+                    <tr>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee;">{{ r.share }}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">{{ r.picking }}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">{{ r.notified }}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right; color: #b4553a;"><strong>{{ r.gap }}</strong></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+
+    <p style="margin-top: 20px;">
+        <a href="{{ coverage_url }}" style="background: #5a8f3d; color: #fff; padding: 10px 18px; text-decoration: none; border-radius: 4px; display: inline-block;">
+            Ver quiénes son
+        </a>
+    </p>
+
+    <p style="color: #777; font-size: 0.9em; margin-top: 24px;">
+        Si esto se repite en varios repartos seguidos, no son despistes: el recordatorio está dejando
+        fuera a alguien de forma sistemática. En la pantalla de cobertura se ven los últimos repartos
+        uno debajo de otro, que es donde se nota el patrón.
+    </p>
+
+    <p style="color: #999; font-size: 0.85em;">
+        Este correo sólo se manda cuando hay alguien sin avisar. Puedes apagarlo en
+        Configuración → «Avisar si alguien se queda sin su recordatorio».
+    </p>
+
+</body>
+</html>

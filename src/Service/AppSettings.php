@@ -71,6 +71,13 @@ class AppSettings
      */
     public const EMAIL_ADMIN_DELIVERY_SUMMARY_TO = 'email.admin_delivery_summary_to';
 
+    /**
+     * Aviso a administración cuando el recordatorio de recogida deja a alguien
+     * sin avisar. No es un digest ni un informe: sólo sale cuando hay un hueco
+     * de verdad, así que un correo suyo significa que hay algo que mirar.
+     */
+    public const EMAIL_COVERAGE_ALERT = 'email.coverage_alert';
+
     /** Envío del recordatorio de llegadas/salidas del albergue al equipo (app:send-albergue-arrivals-reminder). */
     public const EMAIL_ALBERGUE_REMINDER = 'email.albergue_reminder';
 
@@ -635,6 +642,12 @@ class AppSettings
             'help' => 'Digest periódico con los cambios autoservicio de lxs socixs (saltar cesta, mover, cambiar de nodo, huevos…). Configura la dirección de destino en el campo "Destinatario(s)" de abajo; si lo dejas vacío, no se envía.',
             'default' => true,
         ],
+        self::EMAIL_COVERAGE_ALERT => [
+            'group' => 'Emails internos',
+            'label' => 'Avisar si alguien se queda sin su recordatorio',
+            'help' => 'Cuando el recordatorio de recogida termina y detecta que alguien que recogía, y que podía recibir el aviso, se ha quedado sin él, manda un correo a administración. Sólo escribe cuando hay un hueco: si no llega nada, es que no lo hay. Usa el mismo destinatario que el resumen de cambios.',
+            'default' => true,
+        ],
         self::EMAIL_VOLUNTEERING => [
             'group' => 'Envío de emails',
             'label' => 'Avisos de voluntariado por email',
@@ -873,8 +886,8 @@ class AppSettings
     public const STRINGS = [
         self::EMAIL_ADMIN_DELIVERY_SUMMARY_TO => [
             'group' => 'Emails internos',
-            'label' => 'Destinatario(s) del resumen a administración',
-            'help' => 'Dirección(es) de correo (separadas por comas) a las que llega el resumen de cambios de socixs. Vacío = no se envía. Ejemplo: csa@csavegadejarama.org. Así no hace falta tocar el cron del servidor.',
+            'label' => 'Destinatario(s) de los avisos a administración',
+            'help' => 'Dirección(es) de correo (separadas por comas) a las que llegan el resumen de cambios de socixs y el aviso de que alguien se ha quedado sin su recordatorio. Vacío = no se envía ninguno de los dos. Ejemplo: csa@csavegadejarama.org. Así no hace falta tocar el cron del servidor.',
             'default' => '',
             // A diferencia del resto de STRINGS (que viven en pantallas concretas), este SÍ se
             // pinta en el form general de ajustes, junto a su toggle "Resumen de cambios a admin".
