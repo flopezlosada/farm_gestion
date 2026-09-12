@@ -147,7 +147,9 @@ class SharedPairMoveTest extends KernelTestCase
         $from = $this->basket('2099-09-11', 37);
         $to = $this->basket('2099-09-18', 38);
 
+        // `color` también es NOT NULL en el esquema: el grupo se pinta en el listado.
         $group = (new WeeklyBasketGroup())->setName('PuntoTest ' . uniqid('', true));
+        $group->setColor('#cccccc');
         $this->em->persist($group);
         $this->em->persist(new PartnerNodeOverride($gladys, $from, $group));
         $this->em->flush();
