@@ -87,6 +87,15 @@
                 <div class="obl-field__value">{{ obligation.reference }}</div>
             </div>
         {% endif %}
+        {% if obligation.leadDays %}
+            <div class="obl-field">
+                <div class="obl-field__label">Hay que avisar antes del</div>
+                <div class="obl-field__value">
+                    {{ obligation.expiresOn|date_modify('-' ~ obligation.leadDays ~ ' days')|date('d/m/Y') }}
+                    <small>({{ obligation.leadDays }} días antes)</small>
+                </div>
+            </div>
+        {% endif %}
         {% if obligation.documentUrl %}
             <div class="obl-field">
                 <div class="obl-field__label">Documento</div>
