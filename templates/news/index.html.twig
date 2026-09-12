@@ -1,0 +1,63 @@
+{# ============================================================
+ # Novedades de la web — lo que se ha ido añadiendo, para quien entra.
+ #
+ # EL SHELL SE ELIGE SEGÚN QUIÉN ENTRA, igual que la bandeja de avisos y por el
+ # mismo motivo: esta página no es del panel del socix, la mira también quien
+ # gestiona. Se comprueba la FICHA de socix y no el rol, porque la jerarquía de
+ # security.yaml cuelga ROLE_PARTNER de ROLE_ADMIN y con `is_granted` el admin
+ # entraría por el menú del socix.
+ #
+ # SÓLO SE ENSEÑA LO YA ANUNCIADO. El controlador filtra; aquí no hay nada que
+ # decidir. Si esta página enseñara lo pendiente, la novedad estaría contada
+ # antes de que nadie pulsara nada.
+ # ============================================================ #}
+{% extends app.user.partner ? '_layouts/csa_panel.html.twig' : '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Novedades{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ app.user.partner ? path('panel') : path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Novedades</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header(
+        app.user.partner ? 'Mi área · Novedades' : 'La web · Novedades',
+        'Novedades de la web',
+        'Lo que hemos ido añadiendo, de lo más reciente a lo más antiguo.'
+    ) }}
+
+    <div class="csa-stack-lg csa-form-narrow">
+        {% if entries is empty %}
+            {% embed '_components/csa_card.html.twig' with { title: 'Novedades', icon: 'fa-bullhorn' } %}
+                {% block body %}
+                    {#- Un vacío que dice de qué se llenará: es más útil que
+                        confirmar que no hay nada. -#}
+                    <p class="csa-muted" style="margin:0;">
+                        Todavía no hay nada que contar. Cuando añadamos algo nuevo
+                        a la web, aparecerá aquí y te avisaremos.
+                    </p>
+                {% endblock %}
+            {% endembed %}
+        {% else %}
+            {% for entry in entries %}
+                {% embed '_components/csa_card.html.twig' with {
+                    title: entry.title,
+                    subtitle: entry.date|format_date('long', locale='es'),
+                    icon: 'fa-bullhorn',
+                    accent: 'sky'
+                } %}
+                    {% block body %}
+                        {#- El texto viene de un YAML escrito por el equipo, no de
+                            un formulario: aun así se escapa y sólo se respetan los
+                            saltos de línea. Contenido de fichero no es lo mismo que
+                            contenido de confianza para el navegador. -#}
+                        <p style="margin:0;">{{ entry.text|nl2br }}</p>
+                    {% endblock %}
+                {% endembed %}
+            {% endfor %}
+        {% endif %}
+    </div>
+{% endblock %}

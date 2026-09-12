@@ -64,7 +64,7 @@ class VolunteerAudienceResolver
             VolunteerCall::SCOPE_UNSPECIFIED => $offer->isOpenToAnyone()
                 ? $this->partners->findActiveWithoutVolunteerPreferences()
                 : [],
-            VolunteerCall::SCOPE_EVERYONE => $this->partners->findAllActive(),
+            VolunteerCall::SCOPE_EVERYONE => $this->partners->findVolunteeringAudience(),
             default => [],
         };
 
