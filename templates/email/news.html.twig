@@ -1,0 +1,87 @@
+{# ============================================================
+ # Novedades de la web — el correo.
+ #
+ # ESTE CORREO SE BASTA SOLO. De lxs socixs activxs, casi todxs tienen dirección
+ # de correo y sólo una minoría tiene cuenta para entrar en la web: un correo que
+ # dijera "entra a ver las novedades" sería, para la mayoría, una puerta cerrada.
+ # Por eso el texto completo de cada novedad viaja aquí dentro, y el botón sólo
+ # se pinta a quien puede usarlo.
+ #
+ # ESTILOS EN LÍNEA, sin hoja aparte y sin clases: los clientes de correo tiran
+ # el <style> del head con mucha alegría. Mismo criterio que el resto de correos
+ # del proyecto.
+ #
+ # Colores: el verde y el crema son los de la asociación, los mismos del
+ # recordatorio de la cesta. Que los correos se parezcan entre sí es lo que hace
+ # que se reconozcan de un vistazo en una bandeja llena.
+ # ============================================================ #}
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Novedades · CSA Vega de Jarama</title>
+</head>
+<body style="margin: 0; padding: 0; background: #f7f6f2;">
+<div style="font-family: Arial, Helvetica, sans-serif; color: #333; max-width: 580px; margin: 0 auto; padding: 24px;">
+
+    <div style="text-align: center; padding-bottom: 8px;">
+        <div style="font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: #8a8577;">
+            CSA Vega de Jarama
+        </div>
+        <h1 style="margin: 8px 0 0; font-size: 22px; color: #5a8f3d;">
+            {{ entries|length == 1 ? 'Hay algo nuevo en la web' : 'Hay ' ~ entries|length ~ ' cosas nuevas en la web' }}
+        </h1>
+    </div>
+
+    <p style="margin: 24px 0 8px;">Hola{% if partner %} {{ partner.name }}{% endif %},</p>
+
+    <p style="margin: 0 0 24px; color: #555;">
+        Te contamos lo último que hemos añadido:
+    </p>
+
+    {% for entry in entries %}
+        {# Una tarjeta por novedad, con la barra verde a la izquierda. Separarlas
+           visualmente es lo que evita que tres novedades se lean como un muro de
+           texto del que no se retiene ninguna. #}
+        <div style="background: #ffffff; border-left: 4px solid #5a8f3d; border-radius: 4px; padding: 16px 18px; margin-bottom: 14px;">
+            <div style="font-size: 12px; color: #8a8577; text-transform: uppercase; letter-spacing: 1px;">
+                {{ entry.date|format_date('long', locale='es') }}
+            </div>
+            <h2 style="margin: 6px 0 8px; font-size: 17px; color: #3f6b2a; line-height: 1.3;">
+                {{ entry.title }}
+            </h2>
+            <div style="margin: 0; color: #444; line-height: 1.55;">
+                {{ entry.text|nl2br }}
+            </div>
+        </div>
+    {% endfor %}
+
+    {% if can_act %}
+        <p style="text-align: center; margin: 28px 0 8px;">
+            <a href="{{ url }}"
+               style="background: #5a8f3d; color: #fff; text-decoration: none; padding: 12px 22px; border-radius: 6px; display: inline-block; font-weight: bold;">
+                Ver todas las novedades
+            </a>
+        </p>
+    {% endif %}
+
+    <p style="margin-top: 32px; padding-top: 16px; border-top: 1px solid #e5e2d8; color: #777; font-size: 13px; line-height: 1.5;">
+        Un abrazo,<br>
+        CSA Vega de Jarama<br>
+        <a href="https://csavegadejarama.org" style="color: #5a8f3d;">csavegadejarama.org</a>
+    </p>
+
+    {% if can_act %}
+        {# El enlace para dejar de recibirlo sólo a quien puede abrirlo. A quien no
+           tiene cuenta se le ofrecería una pantalla de login: peor que no ofrecer
+           nada, porque parece que no puede darse de baja. #}
+        <p style="color: #9a968a; font-size: 12px; line-height: 1.5;">
+            Si prefieres no recibir estas novedades, puedes desactivarlas en
+            <a href="{{ preferences_url }}" style="color: #9a968a;">tus preferencias de avisos</a>.
+        </p>
+    {% endif %}
+
+</div>
+</body>
+</html>

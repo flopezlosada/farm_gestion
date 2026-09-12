@@ -52,6 +52,9 @@ class NotificationLinkTest extends TestCase
         // El de quien coordina es un resumen ("12 fichas..."), así que sin llevar
         // al listado diría cuántas son y no cuáles: no sería accionable.
         yield 'fichas a medias lleva a su listado' => [Notification::KIND_PARTNERS_INCOMPLETE, 'partner_incomplete_profiles'];
+        // Las novedades llevan a la página donde están TODAS: quien no ha
+        // entrado en dos meses quiere ver lo que se perdió, no la última suelta.
+        yield 'las novedades llevan a su página' => [Notification::KIND_NEWS, 'news_index'];
         // Un aviso de una familia que aún no existe: cae en la bandeja y no revienta.
         yield 'lo desconocido cae en la bandeja' => ['algo.que.nadie.ha.declarado', 'notification_inbox'];
     }

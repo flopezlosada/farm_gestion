@@ -39,7 +39,7 @@ class PartnerVolunteeringAudienceTest extends KernelTestCase
         $silenciada = $this->makePartner($em, 'VolAudiencia Silenciada')->setVolunteeringOptOut(true);
         $em->flush();
 
-        $audience = $this->repository($em)->findAllActive();
+        $audience = $this->repository($em)->findVolunteeringAudience();
 
         $this->assertContains($dispuesta, $audience);
         $this->assertNotContains($silenciada, $audience);

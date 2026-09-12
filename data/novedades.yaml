@@ -1,0 +1,44 @@
+# =============================================================================
+# NOVEDADES DE LA WEB — lo que se le cuenta a lxs socixs cuando algo cambia.
+#
+# QUÉ ES: la lista de cosas nuevas que una persona socia NOTA al usar la web.
+# No es el registro de cambios del código. "Symfony 7.4" o "refactor del
+# repositorio" no van aquí: si nadie fuera del equipo lo nota, no es novedad.
+#
+# CÓMO SE USA: cada entrada se añade en el MISMO commit que hace la feature,
+# cuando está fresca y quien la escribió sabe qué cambia para quien la usa.
+# Luego administración entra en /gestion/novedades, ve lo que hay sin anunciar
+# y decide cuándo mandarlo. Escribirlo y anunciarlo son dos momentos distintos
+# a propósito: lo primero es del equipo, lo segundo de la asociación.
+#
+# POR QUÉ EN UN FICHERO Y NO EN LA BASE DE DATOS: así la novedad viaja con el
+# despliegue. Es imposible anunciar algo que todavía no está en producción, que
+# es el error que más caro sale — la gente entra a buscar lo que le has contado
+# y no está.
+#
+# REGLAS DEL FORMATO:
+#  - `id`: entero, único y CRECIENTE. Es lo que marca hasta dónde se ha
+#    anunciado ya, así que una entrada nueva SIEMPRE lleva el id más alto.
+#    Añadir una con un id menor que el último anunciado la deja invisible para
+#    siempre (la pantalla de gestión avisa si pasa).
+#  - `fecha`: AAAA-MM-DD. Sólo se enseña; no decide nada.
+#  - `titulo`: una línea, en lenguaje de persona. Es lo que se lee de un vistazo.
+#  - `texto`: dos o tres frases. Qué puede hacer ahora que antes no podía, y
+#    dónde. Sin jerga y sin nombres de pantallas internas.
+# =============================================================================
+
+- id: 1
+  fecha: '2026-09-12'
+  titulo: 'Ya puedes ver en la web todos los avisos que te mandamos'
+  texto: |
+    La campanita de arriba a la derecha guarda todo lo que te avisamos: cuándo
+    te toca recoger la cesta, los cambios de última hora y las peticiones de
+    ayuda. Aunque no te llegue el correo o tengas el móvil apagado, ahí está.
+
+- id: 2
+  fecha: '2026-09-12'
+  titulo: 'Esta misma página'
+  texto: |
+    A partir de ahora, cuando añadamos algo nuevo a la web te lo contamos aquí.
+    Si prefieres no recibirlo por correo, puedes desactivarlo en tu apartado de
+    avisos.
