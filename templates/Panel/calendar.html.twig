@@ -3,6 +3,10 @@
  # Reusa el partial compartido del calendario en SOLO LECTURA (etapa 1).
  # La edición (mover / no recoger) llega en una etapa posterior, con las
  # reglas de autoservicio y pensada para móvil.
+ #
+ # `route_shared_move` es la excepción: en una cesta compartida aquí no se
+ # mueve nada, se PIDE al otro hogar. Ese endpoint recibe la semana en el
+ # cuerpo, no en la ruta, por eso no lleva `shared_move_in_path`.
  # ============================================================ #}
 {% extends '_layouts/csa_panel.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
@@ -78,8 +82,6 @@
             csrf_move: csrf_token('panel_calendar_move'),
             csrf_egg_toggle: csrf_token('panel_calendar_eggs'),
             csrf_undo_accumulate: csrf_token('panel_calendar_move'),
-            {# Cesta compartida: aquí no se mueve nada, se PIDE. El endpoint recibe la
-               semana en el cuerpo (su ruta no la lleva), y el otro hogar decide. #}
             route_shared_move: 'panel_shared_basket_request_move',
             csrf_shared_move: csrf_token('panel_shared_basket_request'),
             shared_needs_consent: true,
