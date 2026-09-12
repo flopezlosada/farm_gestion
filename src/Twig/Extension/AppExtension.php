@@ -44,7 +44,32 @@ class AppExtension extends AbstractExtension
             new TwigFilter('month_names', array($this, 'month_names')),
             new TwigFilter('excerpt', array($this, 'excerpt')),
             new TwigFilter('time_ago', array($this, 'timeAgo')),
+            new TwigFilter('nombre_propio', array($this, 'nombrePropio')),
         );
+    }
+
+    /**
+     * Un nombre escrito como se escribe un nombre, no como se teclea en un
+     * formulario de altas.
+     *
+     * En el padrón los nombres están en MAYÚSCULAS: vienen de listados y de
+     * quince años de altas a mano. Eso da igual en una tabla de gestión, pero
+     * en algo que se le manda a la persona —"Hola EROS"— se lee como si se le
+     * estuviera gritando. Aquí sólo se arregla la presentación: el dato
+     * original no se toca, porque es con el que se busca y se cruza contra los
+     * listados en papel.
+     *
+     * Multibyte a propósito: sin `mb_`, "JOSÉ" se queda en "JOSÉ" y los acentos
+     * se rompen.
+     *
+     * @param string|null $value Nombre tal cual está guardado.
+     * @return string Nombre con la inicial de cada palabra en mayúscula.
+     */
+    public function nombrePropio(?string $value): string
+    {
+        $value = trim((string) $value);
+
+        return $value === '' ? '' : mb_convert_case($value, MB_CASE_TITLE, 'UTF-8');
     }
 
     /**
