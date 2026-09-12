@@ -160,6 +160,21 @@ class Obligation
     private ?User $responsible = null;
 
     /**
+     * Con cuántos días de antelación hay que PONERSE, cuando el propio documento
+     * lo impone. Nulo = basta con los escalones generales.
+     *
+     * No es una preferencia de aviso: es una cláusula. Los dos arrendamientos
+     * rústicos obligan a comunicar la no renovación con UN AÑO de antelación, y
+     * la cesión de La Cerrada con un mes. Con sólo los escalones generales —el
+     * más lejano son 90 días— el aviso de esos contratos llegaría cuando ya no
+     * se puede hacer nada, que es la peor forma de fallar que tiene un
+     * recordatorio: puntual e inútil.
+     *
+     * @ORM\Column(name="lead_days", type="integer", nullable=true)
+     */
+    private ?int $leadDays = null;
+
+    /**
      * Archivada: ya no aplica (se rescindió el convenio, se vendió la máquina).
      * No se borra, porque su historial de periodos es justo lo que hace falta
      * para responder "¿desde cuándo no tenemos esto?".
@@ -239,20 +254,26 @@ class Obligation
     }
 
     /**
-     * En qué estado está, dado el plazo de aviso que se aplique.
+     * En qué estado está.
      *
-     * @param int                     $noticeDays Días de antelación con los que se considera "hay que ponerse".
+     * El plazo que manda es el MAYOR entre el general y el que exija el propio
+     * documento: un contrato que obliga a avisar con un año no puede seguir
+     * pintándose en verde a los seis meses porque el escalón general sean 90
+     * días.
+     *
+     * @param int                     $noticeDays Plazo general de aviso.
      * @param \DateTimeInterface|null $today      Día de referencia (por defecto, hoy).
      * @return string Uno de los self::STATE_*.
      */
     public function state(int $noticeDays, ?\DateTimeInterface $today = null): string
     {
         $daysLeft = $this->daysLeft($today);
+        $threshold = max($noticeDays, $this->leadDays ?? 0);
 
         return match (true) {
             $daysLeft === null    => self::STATE_UNKNOWN,
             $daysLeft < 0         => self::STATE_EXPIRED,
-            $daysLeft <= $noticeDays => self::STATE_DUE,
+            $daysLeft <= $threshold => self::STATE_DUE,
             default               => self::STATE_VALID,
         };
     }
@@ -398,6 +419,21 @@ class Obligation
     public function setResponsible(?User $responsible): self
     {
         $this->responsible = $responsible;
+
+        return $this;
+    }
+
+    public function getLeadDays(): ?int
+    {
+        return $this->leadDays;
+    }
+
+    /**
+     * @param int|null $leadDays Antelación que exige el documento, en días.
+     */
+    public function setLeadDays(?int $leadDays): self
+    {
+        $this->leadDays = $leadDays;
 
         return $this;
     }

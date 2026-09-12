@@ -104,6 +104,23 @@ class ObligationTest extends TestCase
     }
 
     /**
+     * Con una antelación exigida por el documento, deja de estar «en regla»
+     * mucho antes: a 200 días de un contrato con un año de preaviso ya hay que
+     * ponerse, aunque el plazo general sean 90 días.
+     */
+    public function testLaAntelacionDelDocumentoAdelantaElEstado(): void
+    {
+        $obligation = new Obligation();
+        $obligation->addTerm($this->term(null, '2027-04-20'));
+        $hoy = new \DateTimeImmutable('2026-09-12');
+
+        $this->assertSame(Obligation::STATE_VALID, $obligation->state(90, $hoy));
+
+        $obligation->setLeadDays(365);
+        $this->assertSame(Obligation::STATE_DUE, $obligation->state(90, $hoy));
+    }
+
+    /**
      * Construye un periodo de validez.
      *
      * @param string|null $startsOn Inicio en formato Y-m-d, o null si no consta.

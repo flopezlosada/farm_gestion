@@ -57,6 +57,42 @@ class ObligationWatchTest extends TestCase
     }
 
     /**
+     * La antelación que exige el documento entra como un escalón más, y eso es
+     * lo que salva a los contratos de tierra: los dos arrendamientos rústicos
+     * obligan a comunicar la no renovación con un año, así que con sólo los
+     * escalones generales el aviso llegaría cuando ya no se puede comunicar.
+     */
+    public function testLaAntelacionDelDocumentoAnadeUnEscalonPropio(): void
+    {
+        // A 200 días no hay escalón general que valga (el mayor son 90), pero
+        // con un año de preaviso ya hay que ponerse.
+        $this->assertNull($this->watch->thresholdFor(200));
+        $this->assertSame(365, $this->watch->thresholdFor(200, 365));
+    }
+
+    /**
+     * Y NO sustituye a los generales: pasado el escalón propio, los de 90, 60,
+     * 30 y 7 siguen saliendo. El primero avisa de que hay que decidir; los
+     * otros, de que hay que ejecutar lo decidido.
+     */
+    public function testLaAntelacionDelDocumentoNoAnulaLosEscalonesGenerales(): void
+    {
+        $this->assertSame(90, $this->watch->thresholdFor(85, 365));
+        $this->assertSame(30, $this->watch->thresholdFor(20, 365));
+        $this->assertSame(0, $this->watch->thresholdFor(-3, 365));
+    }
+
+    /**
+     * Una antelación más corta que un escalón general no quita nada: a 60 días
+     * de algo con un mes de preaviso, el que manda sigue siendo el de 60.
+     */
+    public function testUnaAntelacionCortaNoDesplazaALosGenerales(): void
+    {
+        $this->assertSame(60, $this->watch->thresholdFor(45, 30));
+        $this->assertSame(30, $this->watch->thresholdFor(28, 30));
+    }
+
+    /**
      * El texto del asunto: es lo único que mucha gente va a leer.
      */
     public function testLaFraseDeUrgenciaSeLeeComoLaDiriaUnaPersona(): void

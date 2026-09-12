@@ -8,6 +8,7 @@ use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
+use Symfony\Component\Form\Extension\Core\Type\IntegerType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\Extension\Core\Type\UrlType;
@@ -63,6 +64,12 @@ class ObligationType extends AbstractType
                 // correo y no dice quién es.
                 'choice_label' => static fn (User $user): string => mb_strtolower($user->getDisplayName()),
                 'help' => 'Si se pone, el aviso de que caduca le llega también a esta persona, además de a quien tenga el permiso de Vencimientos.',
+            ])
+            ->add('leadDays', IntegerType::class, [
+                'label' => 'Hay que avisar con antelación de',
+                'required' => false,
+                'attr' => ['min' => 1, 'max' => 1095],
+                'help' => 'Sólo si el documento lo exige. Los dos arrendamientos de fincas obligan a comunicar la no renovación con un año (365); la cesión de La Cerrada, con un mes (30). Déjalo vacío si no hay ninguna cláusula así: los avisos normales salen igual.',
             ])
             ->add('documentUrl', UrlType::class, [
                 'label' => 'Dónde está el documento',

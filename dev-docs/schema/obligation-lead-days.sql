@@ -1,0 +1,34 @@
+-- ============================================================================
+-- Antelación exigida por el propio documento (DDL).
+--
+-- Columna nueva `obligation.lead_days`: con cuántos días de antelación hay que
+-- ponerse, cuando es el documento el que lo impone y no una preferencia.
+--
+-- POR QUÉ NO BASTABAN LOS ESCALONES GENERALES (90/60/30/7): al cargar los
+-- convenios reales apareció que los dos arrendamientos de fincas obligan a
+-- comunicar la no renovación con UN AÑO de antelación, y la cesión del edificio
+-- con un mes. Con el escalón más lejano en 90 días, el aviso de esos contratos
+-- llegaría cuando ya no se puede comunicar nada: puntual e inútil.
+--
+-- La antelación NO sustituye a los escalones generales, se suma como uno más.
+-- El de un año avisa cuando aún se puede decidir; los de 90/60/30/7 avisan
+-- cuando toca ejecutar lo decidido.
+--
+-- ANTES de aplicarlo, contrástalo con lo que Doctrine espera:
+--   ddev exec bin/console doctrine:schema:update --dump-sql | grep obligation
+--
+-- Aplicar a las TRES BBDD de trabajo: db (sandbox), db_prod_snapshot (golden)
+-- y db_test.
+--   ddev mysql db               < dev-docs/schema/obligation-lead-days.sql
+--   ddev mysql db_prod_snapshot < dev-docs/schema/obligation-lead-days.sql   # tras esto, bin/db-backup
+--   ddev mysql db_test          < dev-docs/schema/obligation-lead-days.sql
+--
+-- ORDEN RESPECTO AL CÓDIGO: 🔴 LA COLUMNA VA ANTES. Doctrine lista las columnas
+-- explícitamente, así que el código nuevo contra una tabla sin ella revienta la
+-- sección entera.
+--
+-- Nace a NULL en todas las filas: nulo significa «basta con los escalones
+-- generales», que es el caso de la mayoría.
+-- ============================================================================
+
+ALTER TABLE obligation ADD lead_days INT DEFAULT NULL;

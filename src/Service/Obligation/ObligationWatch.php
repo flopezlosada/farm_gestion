@@ -58,13 +58,18 @@ class ObligationWatch
     {
         $notices = [];
 
-        foreach ($this->obligations->findExpiringWithin(self::NOTICE_DAYS, $today) as $obligation) {
+        // La ventana de la consulta se ensancha hasta la antelación más larga
+        // que exija algún documento. Con la fija de 90 días, un contrato que
+        // obliga a avisar con un año ni siquiera entraría en la lista.
+        $window = max(self::NOTICE_DAYS, $this->obligations->longestLeadDays());
+
+        foreach ($this->obligations->findExpiringWithin($window, $today) as $obligation) {
             $daysLeft = $obligation->daysLeft($today);
             if ($daysLeft === null) {
                 continue;
             }
 
-            $threshold = $this->thresholdFor($daysLeft);
+            $threshold = $this->thresholdFor($daysLeft, $obligation->getLeadDays());
             if ($threshold === null) {
                 continue;
             }
@@ -83,11 +88,22 @@ class ObligationWatch
      * El escalón más urgente ya alcanzado, o null si aún no se ha cruzado
      * ninguno.
      *
-     * @param int $daysLeft Días hasta el vencimiento (negativo si ya pasó).
+     * La antelación propia del documento entra como un escalón más. No
+     * sustituye a los generales: un contrato con un año de preaviso avisa a los
+     * 365 días —cuando todavía se puede comunicar— y sigue avisando a los 90,
+     * 60, 30 y 7, que es cuando toca ejecutar lo que se decidió.
+     *
+     * @param int      $daysLeft Días hasta el vencimiento (negativo si ya pasó).
+     * @param int|null $leadDays Antelación exigida por el documento, si la hay.
      */
-    public function thresholdFor(int $daysLeft): ?int
+    public function thresholdFor(int $daysLeft, ?int $leadDays = null): ?int
     {
-        $crossed = array_filter(self::THRESHOLDS, static fn (int $t): bool => $daysLeft <= $t);
+        $thresholds = self::THRESHOLDS;
+        if ($leadDays !== null && $leadDays > 0) {
+            $thresholds[] = $leadDays;
+        }
+
+        $crossed = array_filter($thresholds, static fn (int $t): bool => $daysLeft <= $t);
 
         return $crossed === [] ? null : min($crossed);
     }

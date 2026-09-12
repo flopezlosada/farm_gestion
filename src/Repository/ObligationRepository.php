@@ -108,6 +108,23 @@ class ObligationRepository extends ServiceEntityRepository
     }
 
     /**
+     * La antelación más larga que exige algún documento vigilado, o 0 si
+     * ninguno exige nada.
+     *
+     * Sirve para ensanchar la ventana de búsqueda de los avisos: con una
+     * ventana fija, un contrato con un año de preaviso nunca entraría en la
+     * consulta y su aviso no saldría jamás.
+     */
+    public function longestLeadDays(): int
+    {
+        return (int) $this->createQueryBuilder('o')
+            ->select('COALESCE(MAX(o.leadDays), 0)')
+            ->andWhere('o.archived = false')
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /**
      * Cuántas hay en cada estado, para la tira de cifras de la pantalla.
      *
      * @param int $noticeDays Plazo de aviso con el que se juzga "por vencer".

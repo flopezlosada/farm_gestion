@@ -53,7 +53,12 @@ CREATE TABLE obligation (
     created_at DATETIME NOT NULL COMMENT '(DC2Type:datetime_immutable)',
     INDEX IDX_obligation_archived (archived),
     INDEX IDX_obligation_kind (kind),
-    INDEX IDX_obligation_responsible (responsible_id),
+    -- El índice de la clave ajena lleva el nombre que genera Doctrine, no uno
+    -- legible: es el único de esta tabla que la entidad NO declara (lo crea
+    -- sola al mapear el ManyToOne), y con un nombre propio
+    -- `doctrine:schema:update --dump-sql` propone renombrarlo en cada revisión
+    -- — ruido que acaba tapando un drift de verdad.
+    INDEX IDX_720EBF27602AD315 (responsible_id),
     PRIMARY KEY(id)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB;
 
