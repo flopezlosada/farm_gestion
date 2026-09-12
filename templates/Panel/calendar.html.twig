@@ -78,6 +78,12 @@
             csrf_move: csrf_token('panel_calendar_move'),
             csrf_egg_toggle: csrf_token('panel_calendar_eggs'),
             csrf_undo_accumulate: csrf_token('panel_calendar_move'),
+            {# Cesta compartida: aquí no se mueve nada, se PIDE. El endpoint recibe la
+               semana en el cuerpo (su ruta no la lleva), y el otro hogar decide. #}
+            route_shared_move: 'panel_shared_basket_request_move',
+            csrf_shared_move: csrf_token('panel_shared_basket_request'),
+            shared_needs_consent: true,
+            shared_other_name: partner.sharePartner ? partner.sharePartner.nameForDelivery : null,
         }
     } %}
 

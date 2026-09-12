@@ -58,6 +58,17 @@
             csrf_egg_toggle: csrf_token('calendar_component_' ~ partner.id),
             csrf_extra_remove: csrf_token('calendar_extra_' ~ partner.id),
             csrf_undo_accumulate: csrf_token('calendar_extra_' ~ partner.id),
+            {# Cesta compartida: el gestor la mueve, y el mismo endpoint de mover se
+               encarga de arrastrar las dos mitades. Sin consentimiento —lo aplica
+               administración—, pero con modal: mueve a alguien que no está delante. #}
+            route_shared_move: 'partner_delivery_calendar_move',
+            {# Su ruta lleva la semana EN EL PATH (…/calendar/move/{basketId}), a diferencia
+               de la del socix, que la manda en el cuerpo. El partial lo resuelve con el
+               `bid` del día que está pintando. #}
+            shared_move_in_path: true,
+            csrf_shared_move: csrf_token('calendar_move_' ~ partner.id),
+            shared_needs_consent: false,
+            shared_other_name: partner.sharePartner ? partner.sharePartner.nameForDelivery : null,
         }
     } %}
 

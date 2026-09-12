@@ -123,9 +123,13 @@ final class DeliveryCalendarViewBuilder
         // ofrece en compartidas (R1) ni en solo lectura ($withDropTargets = false).
         // Destinos de ARRASTRE, en el MISMO horizonte que la rejilla ($gridStart..$gridEnd) para
         // que solo se ofrezcan días soltables realmente a la vista. Dos variantes según el socio:
-        //  - NO compartida: mover la entrega ENTERA a un día libre del nodo ($dropDays).
-        //  - Compartida (R1): la cesta no se mueve, pero los HUEVOS sí (cada hogar los suyos)
-        //    → destinos donde el nodo reparte y el socio NO recoge ya huevos ($eggDropDays).
+        //  - Mover la entrega ENTERA a un día libre del nodo ($dropDays). En una cesta
+        //    COMPARTIDA también los hay: la cesta se mueve, pero con las dos mitades a la
+        //    vez, y quien decide es la pareja (ver SharedPairDeliveryEditor). Los destinos
+        //    se calculan con la ocupación de ESTE hogar; que el otro pueda también lo
+        //    comprueba el editor al aplicar, que es donde cuenta.
+        //  - Compartida con huevos: además, destinos para mover SÓLO los huevos, que no se
+        //    comparten → días donde el nodo reparte y este hogar aún no recoge huevos.
         // El endpoint de mover revalida; esto es solo para resaltar y permitir el drop.
         $dropDays = [];
         $eggDropDays = [];
@@ -140,16 +144,16 @@ final class DeliveryCalendarViewBuilder
                     ->getQuery()
                     ->getResult();
 
-                if ($partner->getSharePartner() === null) {
-                    // Ocupado = día con entrega real (un hueco por día).
-                    $occupied = [];
-                    foreach ($slots as $s) {
-                        if (!empty($s['items'])) {
-                            $occupied[$s['basket']->getId()] = true;
-                        }
+                // Ocupado = día con entrega real (un hueco por día).
+                $occupied = [];
+                foreach ($slots as $s) {
+                    if (!empty($s['items'])) {
+                        $occupied[$s['basket']->getId()] = true;
                     }
-                    $dropDays = $this->dropTargets($monthBaskets, $activeShare, $occupied, $today);
-                } elseif ($activeShare->getEggAmount() !== null) {
+                }
+                $dropDays = $this->dropTargets($monthBaskets, $activeShare, $occupied, $today);
+
+                if ($partner->getSharePartner() !== null && $activeShare->getEggAmount() !== null) {
                     // Compartida con huevos: destinos de HUEVOS. Ocupado = día que YA lleva huevos.
                     // Se mira en $gridSlots (mes actual + vecinos), NO solo en $slots: los destinos
                     // llegan hasta el mes siguiente (horizonte de la rejilla), y un día de ese mes que
@@ -196,6 +200,15 @@ final class DeliveryCalendarViewBuilder
             $eggDropTargets[] = ['basketId' => $targetBasketId, 'date' => new \DateTimeImmutable($ymd)];
         }
 
+        // Lo mismo para la CESTA. Lo usa el bloque de compartidas, que ofrece los días en
+        // una lista de botones en vez de por arrastre: en una compartida el gesto no
+        // termina en el calendario —termina en el otro hogar, que tiene que decir que sí—
+        // y un arrastre no es el sitio donde se explica eso.
+        $dropTargets = [];
+        foreach ($dropDays as $ymd => $targetBasketId) {
+            $dropTargets[] = ['basketId' => $targetBasketId, 'date' => new \DateTimeImmutable($ymd)];
+        }
+
         return [
             'partner' => $partner,
             'group' => $group,
@@ -208,6 +221,7 @@ final class DeliveryCalendarViewBuilder
             // ¿Hay días libres a los que mover una entrega? Un socio semanal recoge todas
             // las semanas → sin destino posible; sirve para ocultar el "Mover a otra fecha".
             'has_drop_targets' => $dropDays !== [],
+            'drop_targets' => $dropTargets,
             // ¿Y días donde YA recoge, a los que trasladar la cesta SUMANDO? (2 cestas ese día)
             'accumulate_targets' => $accumulateTargets,
             // Compartidas: ¿hay días a los que mover SOLO los huevos? (la cesta no se mueve, R1).

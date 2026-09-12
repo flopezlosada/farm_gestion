@@ -52,6 +52,14 @@
               url: path('panel_volunteering'), active: route starts with 'panel_volunteering', tab: true,
               hint: 'Lo que hace falta y lo que llevas hecho' },
         ] : [])
+        {# Sólo a quien comparte cesta: para el resto sería una pantalla que no le
+         # corresponde. `tab: false` —no ocupa hueco en la barra de abajo del móvil— porque
+         # se entra cuando llega un aviso, no a diario. #}
+        |merge(app.user.partner is defined and app.user.partner and app.user.partner.sharePartner and is_granted('FEATURE_PARTNER_SELFSERVICE') ? [
+            { label: 'Cesta compartida', short: 'Compartida', icon: 'fa-handshake-o',
+              url: path('panel_shared_basket'), active: route starts with 'panel_shared_basket', tab: false,
+              hint: 'Lo que decidís entre los dos hogares' },
+        ] : [])
         |merge(is_granted('FEATURE_SURVEYS') ? [
             { label: 'Encuestas', short: 'Encuestas', icon: 'fa-check-square-o',
               url: path('panel_survey_index'), active: route starts with 'panel_survey', tab: false,
