@@ -163,6 +163,14 @@
                                 <a href="{{ path('panel_notifications') }}" role="menuitem">
                                     <i class="fa fa-sliders" aria-hidden="true"></i> Cómo te avisamos
                                 </a>
+                                {# Las novedades viven aquí y no en el menú lateral:
+                                 # aquél es para las áreas de trabajo de cada semana
+                                 # —la cesta, el calendario, el voluntariado— y esto
+                                 # se lee de vez en cuando. Al lado de los avisos,
+                                 # que es de donde se llega la primera vez. #}
+                                <a href="{{ path('news_index') }}" role="menuitem">
+                                    <i class="fa fa-bullhorn" aria-hidden="true"></i> Novedades de la web
+                                </a>
                                 {# «Mis áreas» vive AQUÍ y no en las pestañas del
                                  # voluntariado. Es configuración que se contesta
                                  # una vez al año, y en la barra tenía el mismo

@@ -1,0 +1,72 @@
+{# ============================================================
+ # Novedades de la web — el correo.
+ #
+ # ESTE CORREO SE BASTA SOLO. De lxs socixs activxs, casi todxs tienen dirección
+ # de correo y sólo una minoría tiene cuenta para entrar en la web: un correo que
+ # dijera "entra a ver las novedades" sería, para la mayoría, una puerta cerrada.
+ # Por eso el texto completo de cada novedad viaja aquí dentro, y el botón sólo
+ # se pinta a quien puede usarlo.
+ #
+ # El logo, el ancho, los colores y el pie vienen del envoltorio común.
+ # ============================================================ #}
+{% extends 'email/_layout.html.twig' %}
+
+{% block title %}Novedades · CSA Vega de Jarama{% endblock %}
+
+{# Lo que se lee en la lista del gestor de correo junto al asunto: el titular de
+   la primera novedad, que es lo más concreto que se puede ofrecer ahí. #}
+{% block preheader %}{{ (entries|first).title }}{% endblock %}
+
+{% block heading %}
+    {{ entries|length == 1 ? 'Hay algo nuevo en la web' : 'Hay ' ~ entries|length ~ ' cosas nuevas en la web' }}
+{% endblock %}
+
+{% block content %}
+    <p style="margin:0 0 28px; color:#5a5b56;">
+        Hola{% if partner %} {{ partner.name|nombre_propio }}{% endif %}, te contamos lo último que hemos añadido.
+    </p>
+
+    {% for entry in entries %}
+        {# Cada novedad separada por una línea fina en vez de metida en una caja:
+           tres cajas seguidas se leen como tres avisos y esto es una sola
+           noticia con varias partes. La primera no lleva línea arriba. #}
+        <div style="{% if not loop.first %}border-top:1px solid #efeadb; padding-top:24px; {% endif %}margin-bottom:{{ loop.last ? '4' : '24' }}px;">
+            <div style="font-family:Helvetica,Arial,sans-serif; font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:#8a8b85; margin-bottom:6px;">
+                {{ entry.date|format_date('long', locale='es') }}
+            </div>
+            <div style="font-family:Georgia,'Times New Roman',serif; font-size:19px; line-height:1.3; color:#2f5226; margin-bottom:10px;">
+                {{ entry.title }}
+            </div>
+            <div style="color:#1c1d1a;">
+                {{ entry.text|nl2br }}
+            </div>
+        </div>
+    {% endfor %}
+
+    {% if can_act %}
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:32px auto 8px;">
+            <tr>
+                {# El botón como celda de tabla con su propio fondo: un <a> con
+                   padding se le queda plano a Outlook, que no pinta el relleno. #}
+                <td align="center" style="background:#4a7c3a; border-radius:6px;">
+                    <a href="{{ url }}"
+                       style="display:inline-block; padding:13px 26px; font-family:Helvetica,Arial,sans-serif; font-size:15px; font-weight:bold; color:#ffffff; text-decoration:none;">
+                        Ver todas las novedades
+                    </a>
+                </td>
+            </tr>
+        </table>
+    {% endif %}
+{% endblock %}
+
+{% block footnote %}
+    {% if can_act %}
+        {# El enlace para dejar de recibirlo, sólo a quien puede abrirlo: a quien
+           no tiene cuenta se le ofrecería una pantalla de login, que es peor que
+           no ofrecer nada porque parece que no puede darse de baja. #}
+        <div style="margin-top:16px; padding-top:14px; border-top:1px solid #e6e0d0; font-size:12px; color:#8a8b85;">
+            Si prefieres no recibir estas novedades, puedes desactivarlas en
+            <a href="{{ preferences_url }}" style="color:#8a8b85;">tus preferencias de avisos</a>.
+        </div>
+    {% endif %}
+{% endblock %}
