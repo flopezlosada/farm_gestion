@@ -87,6 +87,10 @@ class NotificationLogController extends AbstractController
             'kinds' => $this->logs->distinctKinds(),
             'filters' => $filters,
             'presets' => $this->presets(),
+            // Para poner NOMBRE a la ejecución de la que salió cada aviso. Un
+            // "#39" no dice nada; "Recordatorio de recogida" sí, y es lo que
+            // permite leer la columna sin abrir la otra pestaña.
+            'tasks' => $this->taskLabels(),
             'channels' => [
                 NotificationLog::CHANNEL_EMAIL => 'Correo',
                 NotificationLog::CHANNEL_PUSH => 'Móvil',
@@ -129,6 +133,7 @@ class NotificationLogController extends AbstractController
         return $this->render('notification_log/runs.html.twig', [
             'pagination' => $pagination,
             'sent_by_run' => $this->logs->countByRun($runIds),
+            'summary' => $this->runs->summary($filters),
             'filters' => $filters,
             'presets' => $this->presets(),
             'tasks' => $this->taskLabels(),

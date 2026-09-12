@@ -63,7 +63,13 @@ class NotificationLogRepository extends ServiceEntityRepository
             ->select('l.status AS status, COUNT(l.id) AS n')
             ->groupBy('l.status');
 
-        $this->applyFilters($qb, $filters);
+        // El resumen cuenta los cuatro estados SIEMPRE, también cuando estás
+        // filtrando por uno: en la pantalla es la fila de tarjetas con la que se
+        // salta de "entregados" a "fallidos". Si heredara el filtro, al pinchar
+        // una las otras tres se pondrían a cero y ya no habría por dónde volver.
+        $sinEstado = $filters;
+        $sinEstado['status'] = null;
+        $this->applyFilters($qb, $sinEstado);
 
         $counts = ['total' => 0, 'sent' => 0, 'failed' => 0, 'discarded' => 0];
         foreach ($qb->getQuery()->getScalarResult() as $row) {

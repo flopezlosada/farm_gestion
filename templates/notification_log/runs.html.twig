@@ -3,114 +3,151 @@
  #
  # /gestion/settings enseña la ÚLTIMA ejecución de cada tarea, que sirve para
  # "¿está viva?". Esto sirve para lo otro: "¿qué pasó el jueves pasado?".
+ #
+ # "Quién la lanzó" ya no gasta una columna: es la segunda línea de la fecha,
+ # que es donde se lee sin buscarla —el reloj o una persona, a esa hora—.
  # ============================================================ #}
 
 {% extends 'notification_log/_layout.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
-{% set tone_by_status = {
-    'done': 'green',
-    'nothing_to_do': 'sky',
-    'disabled': 'neutral',
-    'failed': 'terracotta'
+{% set chip_by_status = {
+    'done': 'ok',
+    'nothing_to_do': 'neutral',
+    'disabled': 'warn',
+    'failed': 'danger'
 } %}
 
-{% block log_filters %}
-    <form method="get" action="{{ path('notification_log_runs') }}"
-          style="display: flex; flex-wrap: wrap; gap: var(--csa-sp-4); align-items: flex-end;">
+{% set quien_lo_lanzo = {
+    'manual': 'a mano',
+    'tick': 'el reloj'
+} %}
 
-        <div style="display: flex; flex-direction: column;">
-            <span style="{{ filter_label }}">Fechas a medida</span>
-            <div style="display: flex; align-items: center; gap: var(--csa-sp-2);">
-                <input type="date" name="from" value="{{ range.from }}" class="csa-input csa-input--compact" aria-label="Desde">
-                <span class="csa-muted">–</span>
-                <input type="date" name="to" value="{{ range.to }}" class="csa-input csa-input--compact" aria-label="Hasta">
+{% block log_toolbar %}
+
+    {# Dentro del bloque: a nivel de plantilla, el código de la hija corre antes
+     # que el de la madre y `qs` todavía no existiría. #}
+    {% set qs_sin_estado = qs|filter((v, k) => k != 'status') %}
+
+    {# Las tarjetas filtran el listado. La que importa es "fallaron": una fila
+     # roja entre cincuenta verdes no se ve, y un número en rojo arriba sí. #}
+    {% set marca_activa = 'box-shadow: inset 0 0 0 2px var(--prl-ink);' %}
+    <div class="prl-stats">
+        <a class="prl-stat prl-stat--active" style="text-decoration: none; {{ filters.status == 'done' ? marca_activa }}"
+           href="{{ path('notification_log_runs', qs_sin_estado|merge(range)|merge({ status: 'done' })) }}">
+            <div class="v">{{ summary.done }}</div>
+            <div class="l">hicieron trabajo</div>
+        </a>
+        <a class="prl-stat" style="text-decoration: none; {{ filters.status == 'nothing_to_do' ? marca_activa }}"
+           href="{{ path('notification_log_runs', qs_sin_estado|merge(range)|merge({ status: 'nothing_to_do' })) }}">
+            <div class="v">{{ summary.nothing_to_do }}</div>
+            <div class="l">sin nada que hacer</div>
+        </a>
+        <a class="prl-stat prl-stat--paused" style="text-decoration: none; {{ filters.status == 'disabled' ? marca_activa }}"
+           href="{{ path('notification_log_runs', qs_sin_estado|merge(range)|merge({ status: 'disabled' })) }}">
+            <div class="v">{{ summary.disabled }}</div>
+            <div class="l">apagadas</div>
+        </a>
+        <a class="prl-stat prl-stat--leave" style="text-decoration: none; {{ filters.status == 'failed' ? marca_activa }}"
+           href="{{ path('notification_log_runs', qs_sin_estado|merge(range)|merge({ status: 'failed' })) }}">
+            <div class="v">{{ summary.failed }}</div>
+            <div class="l">fallaron</div>
+        </a>
+        <a class="prl-stat" style="text-decoration: none; {{ filters.status is null ? marca_activa }}"
+           href="{{ path('notification_log_runs', qs_sin_estado|merge(range)) }}">
+            <div class="v">{{ summary.total }}</div>
+            <div class="l">en total</div>
+        </a>
+    </div>
+
+    <form method="get" action="{{ path('notification_log_runs') }}" id="prl-filter-form">
+        {% if filters.status %}<input type="hidden" name="status" value="{{ filters.status }}">{% endif %}
+
+        <div class="prl-toolbar">
+            {% include 'notification_log/_period_filter.html.twig' %}
+
+            <div class="prl-filt-wrap">
+                <button type="button" class="prl-filt {{ filters.task ? 'has' : '' }}" data-pop-trigger="pop-tarea">
+                    {{ filters.task ? tasks[filters.task]|default(filters.task) : 'Tarea' }}
+                    <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="prl-pop" id="pop-tarea" hidden>
+                    <label><input type="radio" name="task" value="" {{ filters.task is null ? 'checked' : '' }}> Todas</label>
+                    {% for key, label in tasks %}
+                        <label><input type="radio" name="task" value="{{ key }}" {{ filters.task == key ? 'checked' : '' }}> {{ label }}</label>
+                    {% endfor %}
+                </div>
             </div>
-        </div>
 
-        <div style="display: flex; flex-direction: column;">
-            <span style="{{ filter_label }}">Tarea</span>
-            <select name="task" class="csa-input csa-input--compact" style="min-width: 220px;">
-                <option value="">Todas</option>
-                {% for key, label in tasks %}
-                    <option value="{{ key }}" {{ filters.task == key ? 'selected' : '' }}>{{ label }}</option>
-                {% endfor %}
-            </select>
-        </div>
+            {% if filters.task or filters.status %}
+                <a class="prl-filt prl-filt--clear" href="{{ path('notification_log_runs', range) }}">
+                    <i class="fa fa-times" aria-hidden="true"></i> Quitar filtros
+                </a>
+            {% endif %}
 
-        <div style="display: flex; flex-direction: column;">
-            <span style="{{ filter_label }}">Resultado</span>
-            <select name="status" class="csa-input csa-input--compact">
-                <option value="">Todos</option>
-                {% for value, label in statuses %}
-                    <option value="{{ value }}" {{ filters.status == value ? 'selected' : '' }}>{{ label }}</option>
-                {% endfor %}
-            </select>
+            <div class="spacer"></div>
+            <div class="counters"><b>{{ pagination.totalItemCount }}</b> ejecuciones</div>
         </div>
-
-        <button type="submit" class="csa-btn csa-btn--sm csa-btn--secondary">Aplicar</button>
     </form>
+
 {% endblock %}
 
 {% block log_body %}
 
-    <div class="csa-table-wrap">
-        <table class="csa-table">
+    <div class="prl-table-wrap">
+        <table class="prl-table">
             <thead>
                 <tr>
-                    <th class="csa-table__col-tight">Arranque</th>
-                    <th>Tarea</th>
-                    <th class="csa-table__col-tight">Resultado</th>
+                    <th class="tight" style="width: 116px;">Cuándo</th>
+                    <th style="width: 260px;">Tarea</th>
+                    <th class="tight" style="width: 150px;">Resultado</th>
                     <th>Qué pasó</th>
-                    <th class="csa-table__col-tight">Avisos</th>
-                    <th class="csa-table__col-tight">Quién la lanzó</th>
+                    <th class="tight" style="width: 88px;">Avisos</th>
                 </tr>
             </thead>
             <tbody>
                 {% for run in pagination %}
                     <tr>
-                        <td class="csa-table__col-tight">
-                            {{ run.startedAt|format_datetime('short', 'short', locale='es') }}
+                        <td class="tight">
+                            <div class="prl-pickup__name">{{ run.startedAt|date('d/m/y') }}</div>
+                            <div class="prl-person__meta">
+                                {{ run.startedAt|date('H:i') }} · {{ quien_lo_lanzo[run.triggerSource]|default('programada') }}
+                            </div>
                         </td>
+
                         <td>
-                            {{ tasks[run.taskKey]|default(run.taskKey) }}
-                            <div class="csa-muted" style="font-size: 0.85em;">{{ run.command }}</div>
+                            <div class="prl-pickup__name">{{ tasks[run.taskKey]|default(run.taskKey) }}</div>
+                            <span class="prl-person__meta" title="{{ run.command }}">{{ run.command }}</span>
                         </td>
-                        <td class="csa-table__col-tight">
-                            {{ csa.badge(statuses[run.status]|default(run.status), tone_by_status[run.status]|default('neutral'), { sm: true }) }}
+
+                        <td class="tight">
+                            <span class="prl-chip prl-chip--{{ chip_by_status[run.status]|default('neutral') }}">
+                                <span class="dot"></span>{{ statuses[run.status]|default(run.status) }}
+                            </span>
                         </td>
+
                         <td>{{ run.detail ?: '—' }}</td>
-                        <td class="csa-table__col-tight">
+
+                        <td class="tight">
                             {# Cero avisos no es un fallo: la mayoría de ejecuciones son
                                "nada que hacer", y muchas tareas no mandan nada nunca. #}
                             {% set sent = sent_by_run[run.id]|default(0) %}
                             {% if sent > 0 %}
                                 <a href="{{ path('notification_log_index', range|merge({ run: run.id })) }}">{{ sent }}</a>
                             {% else %}
-                                <span class="csa-muted">—</span>
-                            {% endif %}
-                        </td>
-                        <td class="csa-table__col-tight">
-                            {% if run.triggerSource == 'manual' %}
-                                Una persona
-                            {% elseif run.triggerSource == 'tick' %}
-                                El reloj
-                            {% else %}
-                                Programada
+                                <span class="prl-cell-muted">—</span>
                             {% endif %}
                         </td>
                     </tr>
                 {% else %}
                     <tr>
-                        <td colspan="6" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
-                            No hay ejecuciones registradas en este periodo.
-                        </td>
+                        <td colspan="5" class="prl-empty">No hay ejecuciones registradas en este periodo.</td>
                     </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 
-    <div class="grl-pagination">{{ knp_pagination_render(pagination) }}</div>
+    <div class="prl-pagination">{{ knp_pagination_render(pagination) }}</div>
 
 {% endblock %}
