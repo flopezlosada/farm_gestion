@@ -232,6 +232,16 @@ class AppSettings
     public const FEATURE_GRUPO_CONSUMO = 'feature.grupo_consumo';
 
     /**
+     * Cómo se paga un pedido del grupo de consumo: el texto que ve la socia
+     * cuando su pedido se confirma (número de cuenta y a nombre de quién).
+     *
+     * VIVE AQUÍ Y NO EN EL CÓDIGO porque es un dato bancario de la asociación y
+     * el repositorio es público. Vacío = no se pinta nada: mejor no decir nada
+     * que dar una cuenta equivocada.
+     */
+    public const CONSUMER_GROUP_PAYMENT_INFO = 'consumer_group.payment_info';
+
+    /**
      * Interruptores de las tareas programadas (crons). Apagado, el comando
      * correspondiente sale sin hacer nada en cuanto arranca: como el hosting es
      * solo-FTP y no podemos tocar el crontab desde la app, el cron sigue
@@ -925,6 +935,13 @@ class AppSettings
             'label' => 'Responder-a (Reply-To) de los emails',
             'help' => 'Si rellenas una dirección, las respuestas a los correos de la app irán ahí (el remitente sigue siendo noreply@). Útil en el rodaje, mientras lxs socixs aún no gestionan desde la web. Vacío = sin Reply-To.',
             'default' => '',
+        ],
+        self::CONSUMER_GROUP_PAYMENT_INFO => [
+            'group' => 'Grupo de consumo',
+            'label' => 'Cómo se paga un pedido',
+            'help' => 'Número de cuenta y a nombre de quién, tal cual lo verá la socia cuando su pedido se confirme. La app no cobra: esto es lo que le dice dónde transferir. Vacío = no se le enseña nada (mejor eso que una cuenta equivocada).',
+            'default' => '',
+            'general' => true,
         ],
     ];
 
