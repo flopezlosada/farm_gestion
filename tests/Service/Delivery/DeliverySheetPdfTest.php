@@ -108,7 +108,14 @@ class DeliverySheetPdfTest extends TestCase
             ->method('render')
             ->with('delivery/printable.html.twig', [
                 'basket' => $basket,
-                'sheets' => [['node' => $node, 'physical_date' => $day, 'sheet' => ['hoja']]],
+                'sheets' => [[
+                    'node' => $node,
+                    'physical_date' => $day,
+                    'sheet' => ['hoja'],
+                    // Los pedidos del grupo de consumo viajan con la hoja; aquí
+                    // vacíos, que es lo que devuelve el mock.
+                    'consumer_group' => [],
+                ]],
             ])
             ->willReturn(self::HTML);
 
