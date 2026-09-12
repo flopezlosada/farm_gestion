@@ -137,6 +137,77 @@ class LedgerCategoryMap
     ];
 
     /**
+     * Líneas del Excel del PRESUPUESTO. Es un vocabulario distinto del libro —más
+     * grueso— y ésa es justamente la razón de que hoy el seguimiento haya que
+     * teclearlo a mano: no hay puente automático entre las dos hojas.
+     *
+     * La clave lleva el bloque delante porque «Formación» y «Grupo de Consumo»
+     * aparecen en ingresos y en gastos con el mismo nombre.
+     *
+     * Dos simplificaciones conscientes: los tres conceptos salariales del
+     * presupuesto (salarios, temporeros y bonus) van todos a «Nóminas», y las dos
+     * líneas de suelo (alquiler de la finca y tierra) van las dos a «Tierra». En
+     * ambos casos el grupo —que es con lo que se compara— sigue cuadrando.
+     *
+     * @var array<string, array{0: string, 1: string}>
+     */
+    private const BUDGET_LINES = [
+        'INGRESOS|CUOTA' => ['INGRESOS', 'Cuotas de socixs'],
+        'INGRESOS|CUOTA - MANTENIMIENTO' => ['INGRESOS', 'Cuota de mantenimiento'],
+        'INGRESOS|DONACIÓN7SUBVENCIÓN' => ['INGRESOS', 'Donaciones y subvenciones'],
+        'INGRESOS|DONACIÓN/SUBVENCIÓN' => ['INGRESOS', 'Donaciones y subvenciones'],
+        'INGRESOS|FORMACIÓN' => ['INGRESOS', 'Formación'],
+        'INGRESOS|GRUPO DE CONSUMO' => ['INGRESOS', 'Grupo de consumo'],
+        'INGRESOS|MANCOMUNIDAD' => ['INGRESOS', 'Varios'],
+        'INGRESOS|DERRAMA' => ['INGRESOS', 'Varios'],
+        'INGRESOS|VARIOS' => ['INGRESOS', 'Varios'],
+
+        'GASTOS|ADMIN' => ['ADMINISTRACIÓN', 'Administración y gestoría'],
+        'GASTOS|COMISIONES' => ['ADMINISTRACIÓN', 'Comisiones bancarias'],
+        'GASTOS|TELÉFONO' => ['ADMINISTRACIÓN', 'Teléfono'],
+        'GASTOS|LOCAL' => ['ADMINISTRACIÓN', 'Local'],
+        'GASTOS|FORMACIÓN' => ['ADMINISTRACIÓN', 'Formación'],
+        'GASTOS|IMPUESTOS' => ['ADMINISTRACIÓN', 'Impuestos'],
+        'GASTOS|SEGUROS' => ['ADMINISTRACIÓN', 'Seguros'],
+        'GASTOS|ALQUILER FINCA' => ['HUERTA', 'Tierra'],
+        'GASTOS|TIERRA' => ['HUERTA', 'Tierra'],
+        'GASTOS|HUERTA' => ['HUERTA', 'Huerta'],
+        'GASTOS|SEMILLAS Y PLANTEL' => ['HUERTA', 'Semillas y plantel'],
+        'GASTOS|GASOLINA' => ['HUERTA', 'Gasolina'],
+        'GASTOS|ESTIERCOL + BIOLES' => ['HUERTA', 'Estiércol y biopreparados'],
+        'GASTOS|MANTENIMIENTO MAQUINARIA Y TRANSPORTE' => ['HUERTA', 'Mantenimiento y reparaciones'],
+        'GASTOS|SUELDOS - GASTOS SALARIALES' => ['SUELDOS', 'Nóminas'],
+        'GASTOS|SUELDOS TEMPOREROS' => ['SUELDOS', 'Nóminas'],
+        'GASTOS|BONUS' => ['SUELDOS', 'Nóminas'],
+        'GASTOS|IRPF' => ['SUELDOS', 'IRPF'],
+        'GASTOS|GRANO GALLINAS/HUEVOS COMPRADOS' => ['HUEVOS', 'Grano y huevos comprados'],
+        'GASTOS|GRUPO DE CONSUMO' => ['VARIOS', 'Grupo de consumo'],
+        'GASTOS|TRANSPORTE' => ['VARIOS', 'Transporte'],
+        'GASTOS|VARIOS' => ['VARIOS', 'Varios'],
+
+        'FINANCIACION|PRÉSTAMOS SOCIOS' => ['FINANCIACIÓN', 'Préstamos recibidos'],
+        'FINANCIACION|CUOTAS PRÉSTAMO' => ['FINANCIACIÓN', 'Cuotas de préstamo'],
+    ];
+
+    /**
+     * Grupo y partida para una línea del Excel del presupuesto. Todo lo que vaya en
+     * el bloque de inversión cae en la única partida de inversión: allí cada línea
+     * es una compra concreta (casetas, gallinas, tractor) y presupuestarlas por
+     * separado sólo sirve para que la mayoría queden a cero todo el año.
+     *
+     * @return array{0: string, 1: string}|null
+     */
+    public function resolveBudgetLine(string $block, string $label): ?array
+    {
+        $blockKey = $this->normalize($block);
+        if (str_starts_with($blockKey, 'INVERSI')) {
+            return ['INVERSIÓN', 'Inversión'];
+        }
+
+        return self::BUDGET_LINES[$blockKey.'|'.$this->normalize($label)] ?? null;
+    }
+
+    /**
      * Grupo y partida para una etiqueta del libro y un importe con signo, o null si
      * la etiqueta no se reconoce (para que la importación la liste en vez de
      * inventarse una partida).
