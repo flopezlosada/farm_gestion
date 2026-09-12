@@ -207,6 +207,10 @@
                                                 <span class="prl-chip prl-chip--activo"><span class="dot"></span>Pagado</span>
                                             {% else %}
                                                 <span class="prl-chip prl-chip--pausado"><span class="dot"></span>Pendiente</span>
+                                                {# El mismo concepto que se le pide a la socia, para poder
+                                                 # buscarlo en el extracto: en el banco aparece el titular de
+                                                 # la cuenta, que no siempre es quien figura aquí. #}
+                                                <div class="cg-order__ref">{{ order.paymentReference }}</div>
                                             {% endif %}
                                             {% if can_edit %}
                                                 <form method="post" action="{{ path('consumer_group_order_toggle_paid', { id: order.id }) }}" style="display:inline; margin-left: var(--csa-sp-2);">
@@ -335,6 +339,7 @@
         .prt-actionbar .prt-btn--danger .fa { color: var(--prt-terra, #b45d3a); }
         .prt-actionbar .prt-btn--danger:hover { background: var(--prt-terra-l, #fae6dc); border-color: var(--prt-terra-d, #7d3a1f); }
         .cg-order__lines { margin: 0; padding-left: var(--csa-sp-4); font-size: .9rem; }
+        .cg-order__ref { margin-top: var(--csa-sp-1); font-size: .8rem; color: var(--csa-muted); white-space: nowrap; }
         .cg-pay-summary { display: flex; align-items: center; gap: var(--csa-sp-3); flex-wrap: wrap; }
         .cg-pago-filter { display: inline-flex; gap: var(--csa-sp-2); }
         .cg-pago-filter .prl-btn.is-active { background: var(--prt-ink, #1d1c17); color: #fff; border-color: var(--prt-ink, #1d1c17); }

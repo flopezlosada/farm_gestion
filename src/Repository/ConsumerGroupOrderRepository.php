@@ -5,6 +5,7 @@ namespace App\Repository;
 use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\Partner;
+use App\Entity\Producer;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -74,6 +75,44 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
             ->orderBy('r.deliveryDate', 'DESC')
             ->getQuery()
             ->getResult();
+    }
+
+    /**
+     * El último pedido que hizo esta socia a este mismo productor, para poder
+     * ofrecerle «lo mismo que la vez pasada».
+     *
+     * SE BUSCA POR PRODUCTOR Y NO POR PRODUCTO SUELTO: lo que se repite es un
+     * pedido entero —las dos garrafas de aceite y el bote de aceitunas—, y es la
+     * forma en que la gente piensa lo que pide. Se excluye el pedido en curso
+     * porque lo que se ofrece es lo ANTERIOR; si no, se propondría copiar lo que
+     * ya está escrito en pantalla.
+     *
+     * @param Partner  $partner  la socia
+     * @param Producer $producer el productor del pedido actual
+     * @param int|null $exceptRoundId pedido en curso, que no cuenta como anterior
+     *
+     * @return ConsumerGroupOrder|null el más reciente por fecha de entrega, o null
+     */
+    public function findLastForPartnerAndProducer(Partner $partner, Producer $producer, ?int $exceptRoundId = null): ?ConsumerGroupOrder
+    {
+        // SIN fetch join de las líneas: con setMaxResults(1), el límite lo aplica
+        // la base a FILAS, así que un join de colección devolvería el pedido con
+        // una sola línea y el resto perdidas en silencio. Las líneas se cargan
+        // después, que es una consulta más sobre un único pedido.
+        $qb = $this->createQueryBuilder('o')
+            ->innerJoin('o.round', 'r')
+            ->where('o.partner = :partner')
+            ->andWhere('r.producer = :producer')
+            ->setParameter('partner', $partner)
+            ->setParameter('producer', $producer)
+            ->orderBy('r.deliveryDate', 'DESC')
+            ->setMaxResults(1);
+
+        if (null !== $exceptRoundId) {
+            $qb->andWhere('r.id <> :except')->setParameter('except', $exceptRoundId);
+        }
+
+        return $qb->getQuery()->getOneOrNullResult();
     }
 
     /**

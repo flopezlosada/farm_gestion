@@ -1,0 +1,12 @@
+{# Estilos del bloque de dinero (_payment.html.twig). Viven aparte porque ese
+ # parcial se pinta una vez por pedido en el listado y una vez en la ficha: con
+ # el <style> dentro, el listado lo repetiría tantas veces como pedidos tenga la
+ # socia. Se incluye UNA vez, desde el more_css de cada pantalla. #}
+<style>
+    .cg-money { display: flex; flex-direction: column; gap: var(--csa-sp-2);
+        margin-top: var(--csa-sp-3); padding: var(--csa-sp-3);
+        border: 1px solid var(--csa-rule); border-radius: 10px; }
+    .cg-money__row { display: flex; justify-content: space-between; align-items: baseline; gap: var(--csa-sp-3); }
+    .cg-money__ref { padding: .1em .4em; border-radius: 4px; background: var(--csa-surface-2, #f2f2ef); }
+    .cg-money__ok { color: var(--csa-ok, #3f7d3f); }
+</style>

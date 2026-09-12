@@ -1,0 +1,50 @@
+{# ============================================================
+ # Panel del socix · el dinero de UN pedido del grupo de consumo.
+ #
+ # Existe porque hasta ahora la socia no veía por ningún sitio
+ # cuánto costaba lo que había apuntado ni si constaba pagado,
+ # cuando además el pago es lo que decide si la entrega le
+ # aparece en el calendario. El importe lo sabía la entidad y lo
+ # veía sólo la comisión.
+ #
+ # Recibe:
+ #   - order         ConsumerGroupOrder (no vacío)
+ #   - payment_info  texto de configuración: dónde transferir ('' = no hay)
+ # ============================================================ #}
+
+{% set round = order.round %}
+
+<div class="cg-money">
+    <div class="cg-money__row">
+        <span>Tu pedido</span>
+        <strong>{{ order.total|number_format(2, ',', '.') }} €</strong>
+    </div>
+
+    {% if not round.confirmed %}
+        {# Aún no es firme: el importe es orientativo y NO hay que pagar nada.
+         # Decirlo evita el pago adelantado de algo que puede caerse por no
+         # llegar al mínimo, que es justo el lío que la comisión quería evitar. #}
+        <p class="csa-muted" style="margin: 0;">
+            Todavía no hay que pagar nada. Cuando se confirme que el pedido sale adelante,
+            te avisamos y aquí verás cómo hacerlo.
+        </p>
+    {% elseif order.paid %}
+        <p class="cg-money__ok" style="margin: 0;">
+            Pago recibido{% if order.paidAt %} el {{ order.paidAt|date('d/m/Y') }}{% endif %}. Gracias.
+        </p>
+    {% else %}
+        <p style="margin: 0;">
+            <b>Pendiente de pago.</b> Haz la transferencia poniendo como concepto
+            <code class="cg-money__ref">{{ order.paymentReference }}</code>.
+        </p>
+        {% if payment_info %}
+            <p class="csa-muted" style="margin: 0;">{{ payment_info|nl2br }}</p>
+        {% endif %}
+        {# La regla existe desde el principio y hasta ahora no se contaba en
+         # ninguna parte: quien no había pagado veía su calendario sin la entrega
+         # y no tenía forma de saber por qué. #}
+        <p class="csa-muted" style="margin: 0;">
+            La entrega aparece en tu calendario cuando nos consta el pago.
+        </p>
+    {% endif %}
+</div>
