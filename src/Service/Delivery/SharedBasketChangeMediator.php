@@ -7,6 +7,7 @@ use App\Entity\Partner;
 use App\Entity\SharedBasketChangeRequest;
 use App\Entity\WeeklyBasketGroup;
 use App\Repository\SharedBasketChangeRequestRepository;
+use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -35,6 +36,7 @@ final class SharedBasketChangeMediator
         private readonly SharedPairDeliveryEditor $editor,
         private readonly SharedBasketChangeRequestRepository $requests,
         private readonly SharedBasketChangeNotifier $notifier,
+        private readonly UserRepository $users,
     ) {
     }
 
@@ -55,6 +57,7 @@ final class SharedBasketChangeMediator
         // Se valida ANTES de molestar a nadie: pedir que alguien decida sobre un
         // cambio que ya se sabe imposible le hace perder el tiempo dos veces.
         $other = $this->editor->assertMoveAllowed($requester, $from, $to);
+        $this->assertCanAnswer($other);
         $this->assertNothingPending($requester, $other);
 
         $request = new SharedBasketChangeRequest($requester, $other, SharedBasketChangeRequest::KIND_MOVE);
@@ -78,6 +81,7 @@ final class SharedBasketChangeMediator
     public function requestRelocate(Partner $requester, Basket $basket, WeeklyBasketGroup $toGroup, ?string $note = null): SharedBasketChangeRequest
     {
         $other = $this->editor->counterpart($requester);
+        $this->assertCanAnswer($other);
         $this->assertNothingPending($requester, $other);
 
         $request = new SharedBasketChangeRequest($requester, $other, SharedBasketChangeRequest::KIND_RELOCATE);
@@ -102,6 +106,7 @@ final class SharedBasketChangeMediator
     public function requestModality(Partner $requester, array $payload, ?string $note = null): SharedBasketChangeRequest
     {
         $other = $this->editor->counterpart($requester);
+        $this->assertCanAnswer($other);
         $this->assertNothingPending($requester, $other);
 
         $request = new SharedBasketChangeRequest($requester, $other, SharedBasketChangeRequest::KIND_MODALITY);
@@ -256,6 +261,33 @@ final class SharedBasketChangeMediator
         }
         if (!$request->isActionable()) {
             throw new SharedPairException('Ese reparto ya pasó: la petición se quedó sin efecto.');
+        }
+    }
+
+    /**
+     * Que el otro hogar pueda contestar de verdad, o sea que tenga cuenta de acceso.
+     *
+     * NO ES UN DETALLE: hoy, de las catorce personas que comparten cesta en el padrón,
+     * dos tienen cuenta, y en ninguna pareja la tienen las dos. Sin esta comprobación, lo
+     * normal sería mandar una petición que nadie va a poder contestar nunca —y que además
+     * bloquearía las siguientes— con un correo que dice «entra en tu panel» a quien no
+     * tiene panel. Es mejor decirlo al pedirlo y mandar a esa persona a administración,
+     * que es quien sí puede aplicar el cambio hablando con los dos.
+     *
+     * Se cae solo según la gente vaya teniendo acceso: el día que el otro hogar entre, la
+     * comprobación deja de saltar sin tocar nada.
+     *
+     * @param Partner $counterpart Hogar que tendría que contestar.
+     *
+     * @throws SharedPairException Si no tiene ninguna cuenta con la que entrar.
+     */
+    private function assertCanAnswer(Partner $counterpart): void
+    {
+        if ([] === $this->users->findByPartners([$counterpart])) {
+            throw new SharedPairException(sprintf(
+                '%s todavía no tiene acceso a la web, así que no podría contestarte. Escribe a administración y lo cambian ellos.',
+                $counterpart->getNameForDelivery(),
+            ));
         }
     }
 
