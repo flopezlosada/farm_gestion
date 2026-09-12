@@ -184,11 +184,6 @@
                             <span class="prl-chip prl-chip--{{ chip_by_status[log.status]|default('neutral') }}">
                                 <span class="dot"></span>{{ statuses[log.status]|default(log.status) }}
                             </span>
-                            {% if log.error %}
-                                {# El motivo entero en el title: en la celda cabe una línea, y
-                                   los errores técnicos son párrafos con rutas dentro. #}
-                                <span class="prl-person__meta" style="max-width: 150px;" title="{{ log.error }}">{{ log.error }}</span>
-                            {% endif %}
                         </td>
 
                         <td class="tight">
@@ -204,6 +199,27 @@
                             {% endif %}
                         </td>
                     </tr>
+
+                    {% if log.error %}
+                        {# El motivo, a todo el ancho y bajo su fila.
+                           Estaba recortado en la celda del resultado con el texto
+                           completo en el `title`, y un motivo que hay que adivinar
+                           pasando el ratón no es un motivo: en el móvil no hay ratón,
+                           y aquí se viene justamente a saber POR QUÉ no salió. Ocupa
+                           sitio sólo cuando algo ha fallado, que es cuando importa.
+
+                           El fondo va en el `style` y no en una clase porque así gana
+                           al `tr:hover` de la tabla, que si no lo repinta de verde al
+                           pasar por encima —y esto no es una fila más, es un error. #}
+                        <tr>
+                            <td colspan="5" style="background: var(--prl-terra-l); padding: 9px 14px 11px;">
+                                <span style="font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+                                             font-weight: 600; color: var(--prl-terra-d); margin-right: 8px;">Motivo</span>
+                                <span style="font-family: 'Inter', sans-serif; font-size: 12px; line-height: 1.5;
+                                             color: var(--prl-ink); word-break: break-word;">{{ log.error }}</span>
+                            </td>
+                        </tr>
+                    {% endif %}
                 {% else %}
                     <tr>
                         <td colspan="5" class="prl-empty">
