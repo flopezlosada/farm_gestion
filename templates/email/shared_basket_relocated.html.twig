@@ -1,0 +1,38 @@
+{# Aviso de que la cesta COMPARTIDA de los dos hogares se recoge esa semana en otro punto.
+ # Va a los dos, también a quien lo pidió: es el acta de lo acordado.
+ # Contexto: name, basket_date, group_name, requested_by (null = lo aplicó administración). #}
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Vuestra cesta compartida cambia de punto de recogida · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 580px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Hola {{ name }},</h2>
+
+    <p>La cesta que compartís se recoge en otro punto, solo esa semana.</p>
+
+    <p style="background: #fdf3e0; border-left: 3px solid #d99820; padding: 10px 14px;">
+        La del <strong>{{ basket_date|format_date('full', locale='es') }}</strong>
+        la recogeréis en <strong>{{ group_name }}</strong>.
+    </p>
+
+    {% if requested_by %}
+        <p>El cambio lo pidió {{ requested_by }} y aplica a los dos hogares: la cesta es
+           una y va a un solo punto. Las demás semanas siguen como siempre.</p>
+    {% else %}
+        <p>El cambio lo ha hecho administración y aplica a los dos hogares: la cesta es
+           una y va a un solo punto. Las demás semanas siguen como siempre.</p>
+    {% endif %}
+
+    <p>No tienes que hacer nada más. Si esto no es lo que esperabas, avisa a administración.</p>
+
+    <p style="margin-top: 32px; color: #777; font-size: 13px;">
+        Un abrazo,<br>
+        CSA Vega de Jarama<br>
+        <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+</body>
+</html>

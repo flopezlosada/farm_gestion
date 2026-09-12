@@ -1,0 +1,19 @@
+Hola {{ name }},
+
+La cesta que compartís se recoge en otro punto, solo esa semana.
+
+La del {{ basket_date|format_date('full', locale='es') }} la recogeréis en {{ group_name }}.
+
+{% if requested_by %}
+El cambio lo pidió {{ requested_by }} y aplica a los dos hogares: la cesta es una
+y va a un solo punto. Las demás semanas siguen como siempre.
+{% else %}
+El cambio lo ha hecho administración y aplica a los dos hogares: la cesta es una
+y va a un solo punto. Las demás semanas siguen como siempre.
+{% endif %}
+
+No tienes que hacer nada más. Si esto no es lo que esperabas, avisa a administración.
+
+Un abrazo,
+CSA Vega de Jarama
+https://csavegadejarama.org

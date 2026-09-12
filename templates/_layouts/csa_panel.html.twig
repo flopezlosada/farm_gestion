@@ -36,7 +36,14 @@
          #
          # Para añadir un área —Grupo de consumo, Actividades…— se añade aquí una
          # entrada y aparece en los dos sitios. Con `soon: true` se enseña atenuada
-         # y sin enlace, para anunciar lo que viene sin prometer una fecha. #}
+         # y sin enlace, para anunciar lo que viene sin prometer una fecha.
+         #
+         # «Cesta compartida» sólo la ve quien comparte: para el resto sería una
+         # pantalla que no le corresponde. Va con `tab: false` —no ocupa hueco en la
+         # barra de abajo del móvil— porque se entra cuando llega un aviso, no a
+         # diario. (Los comentarios de cada entrada van AQUÍ y no entre los `merge`:
+         # dentro de un `{% set %}` de varias líneas, un comentario Twig rompe el
+         # lexer y se lleva por delante toda la plantilla.) #}
         {# El rótulo corto de voluntariado es el MISMO que el largo: «Echar mano»
          # obligaba a traducir entre el nombre del módulo y el de la pestaña, y
          # en la barra de abajo cabe «Voluntariado» de sobra. #}
@@ -51,6 +58,11 @@
             { label: 'Voluntariado', short: 'Voluntariado', icon: 'fa-hand-paper-o',
               url: path('panel_volunteering'), active: route starts with 'panel_volunteering', tab: true,
               hint: 'Lo que hace falta y lo que llevas hecho' },
+        ] : [])
+        |merge(app.user.partner is defined and app.user.partner and app.user.partner.sharePartner and is_granted('FEATURE_PARTNER_SELFSERVICE') ? [
+            { label: 'Cesta compartida', short: 'Compartida', icon: 'fa-handshake-o',
+              url: path('panel_shared_basket'), active: route starts with 'panel_shared_basket', tab: false,
+              hint: 'Lo que decidís entre los dos hogares' },
         ] : [])
         |merge(is_granted('FEATURE_SURVEYS') ? [
             { label: 'Encuestas', short: 'Encuestas', icon: 'fa-check-square-o',

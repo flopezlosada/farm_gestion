@@ -91,7 +91,16 @@
 {% endmacro %}
 
 {% if partner.sharePartner %}
-    {{ csa.callout('Esta cesta es compartida: el día de la cesta lo marca la alternancia con el otro hogar y no se cambia aquí. Los huevos sí puedes moverlos (no se comparten).', 'info', 'info-circle') }}
+    {# El texto dice lo que se puede hacer HOY, y eso cambió: la cesta ya se mueve, pero
+       con las dos mitades a la vez. Para el socix es una petición al otro hogar; para
+       quien gestiona, un cambio que arrastra a los dos. Lo que sigue sin poderse es
+       saltarse la semana: con media cesta sin dueño en el punto no está decidido qué se
+       hace, y eso lo decide la asociación, no el software. #}
+    {% if cal.shared_needs_consent|default(false) %}
+        {{ csa.callout('Esta cesta es compartida con ' ~ (cal.shared_other_name|default('otro hogar')) ~ ': para cambiarla de día se lo pides y lo acepta. Los huevos son tuyos y los mueves sin preguntar. Para no recoger una semana, escribe a administración.', 'info', 'info-circle') }}
+    {% else %}
+        {{ csa.callout('Cesta compartida: al cambiarla de día se mueven las dos mitades y se avisa a los dos hogares. Los huevos van por separado (cada hogar los suyos).', 'info', 'info-circle') }}
+    {% endif %}
 {% endif %}
 
 {# Banner del modo "mover por toque" (socio, sin arrastre): aparece al pulsar
@@ -478,6 +487,77 @@
                                 </form>
                             </div>
                         {% endif %}
+                    {% endif %}
+
+                    {# COMPARTIDAS — MOVER LA CESTA. La cesta es UNA y se parte entre dos hogares,
+                       así que su día no lo decide ninguno de los dos por su cuenta: o lo aplica
+                       administración (que ya ha hablado con ellos), o lo pide un hogar y lo acepta
+                       el otro. Lo que cambia entre las dos pantallas es la ruta y el texto del
+                       botón; el gesto —elegir día de una lista— es el mismo que el de los huevos,
+                       que en móvil ya funciona. La lista y no el arrastre: en una compartida el
+                       gesto no termina aquí, y eso hay que poder leerlo. #}
+                    {% if partner.sharePartner and not ro and selected_editable and cal.route_shared_move is defined and has_drop_targets|default(false) %}
+                        {# Las dos pantallas mandan la semana de forma distinta: la del gestor la
+                           lleva en la ruta, la del socix en el cuerpo (su endpoint no la tiene en
+                           el path). Se resuelve aquí, con el día que se está pintando. #}
+                        {% set shared_action = cal.shared_move_in_path|default(false)
+                            ? path(cal.route_shared_move, cal.idp|merge({ basketId: bid }))
+                            : path(cal.route_shared_move) %}
+                        <div class="rcal-eggmove" style="margin-top: var(--csa-sp-4);">
+                            <div class="rcal-sect"><i class="fa fa-arrows"></i> Cambiar el día de la cesta</div>
+                            <p class="csa-muted">
+                                {% if cal.shared_needs_consent|default(false) %}
+                                    La cesta la compartes con {{ cal.shared_other_name|default('el otro hogar') }}: elige el día que te vendría bien y se lo pedimos. No cambia nada hasta que conteste.
+                                {% else %}
+                                    Es una cesta compartida con {{ cal.shared_other_name|default('otro hogar') }}: al cambiarla de día se mueven las dos mitades y se avisa a los dos hogares.
+                                {% endif %}
+                            </p>
+                            {% if cal.shared_needs_consent|default(false) %}
+                                {# SOCIX: cada botón manda la PETICIÓN. Sin modal de confirmación:
+                                   esto no cambia el reparto, sólo pregunta al otro hogar, y el
+                                   párrafo de arriba ya lo dice. #}
+                                <form action="{{ shared_action }}" method="post" class="rcal-eggmove__form">
+                                    <input type="hidden" name="_csrf_token" value="{{ cal.csrf_shared_move }}">
+                                    <input type="hidden" name="basket_id" value="{{ bid }}">
+                                    {% for t in drop_targets|default([]) %}
+                                        <button type="submit" name="to_basket_id" value="{{ t.basketId }}"
+                                                class="csa-btn csa-btn--secondary csa-btn--block" style="margin-bottom: var(--csa-sp-2);">
+                                            <i class="fa fa-paper-plane-o"></i>
+                                            Pedir el {{ t.date|format_date(pattern='EEEE d MMM', locale='es') }}
+                                        </button>
+                                    {% endfor %}
+                                </form>
+                            {% else %}
+                                {# GESTOR: el cambio se aplica al confirmar, y arrastra a un hogar
+                                   que no ha pedido nada. Modal siempre: quien lo pulsa tiene que
+                                   leer a quién más está moviendo antes de moverlo. Uno por fecha,
+                                   porque cada uno confirma un destino distinto. #}
+                                {% for t in drop_targets|default([]) %}
+                                    <button type="button" class="csa-btn csa-btn--secondary csa-btn--block"
+                                            style="margin-bottom: var(--csa-sp-2);"
+                                            onclick="document.getElementById('confirm-sharedmove-{{ bid }}-{{ t.basketId }}').showModal()">
+                                        <i class="fa fa-arrows"></i> Mover al {{ t.date|format_date(pattern='EEEE d MMM', locale='es') }}
+                                    </button>
+                                    {{ csa.confirm_dialog('confirm-sharedmove-' ~ bid ~ '-' ~ t.basketId, {
+                                        variant: 'warning',
+                                        eyebrow: 'Cesta compartida',
+                                        title: 'Se mueven las dos mitades',
+                                        body: 'La cesta la comparten dos hogares y es una sola: al cambiarla de día se mueve también la de '
+                                            ~ cal.shared_other_name|default('el otro hogar')
+                                            ~ '. Se avisará a los dos por sus canales.',
+                                        confirm_label: 'Mover las dos',
+                                        action: shared_action,
+                                        csrf_token: cal.csrf_shared_move,
+                                        extra_fields: [
+                                            { name: 'basket_id', value: bid },
+                                            { name: 'to_basket_id', value: t.basketId },
+                                            { name: 'view_year', value: current.format('Y') },
+                                            { name: 'view_month', value: current.format('n') },
+                                        ],
+                                    }) }}
+                                {% endfor %}
+                            {% endif %}
+                        </div>
                     {% endif %}
 
                     {% if not readonly and dnd %}

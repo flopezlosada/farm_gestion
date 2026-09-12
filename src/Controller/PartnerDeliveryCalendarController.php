@@ -19,6 +19,9 @@ use App\Service\Delivery\ExtraBasketEditor;
 use App\Service\Delivery\ExtraBasketRemover;
 use App\Service\Delivery\PartnerEggScheduleEditor;
 use App\Service\Delivery\PartnerMonthResetter;
+use App\Service\Delivery\SharedBasketChangeNotifier;
+use App\Service\Delivery\SharedPairDeliveryEditor;
+use App\Service\Delivery\SharedPairException;
 use App\Service\Delivery\WeeklyBasketComponentEditor;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use Doctrine\ORM\EntityManagerInterface;
@@ -121,6 +124,8 @@ class PartnerDeliveryCalendarController extends AbstractController
         DeliveryShiftApplier $applier,
         AccumulatingMove $accumulatingMove,
         PartnerEggScheduleEditor $eggEditor,
+        SharedPairDeliveryEditor $pairEditor,
+        SharedBasketChangeNotifier $notifier,
         EntityManagerInterface $em,
     ): Response {
         $from = $basketRepository->find($basketId);
@@ -148,13 +153,52 @@ class PartnerDeliveryCalendarController extends AbstractController
             $componentId = 0;
         }
 
-        // R1: en una cesta compartida el DÍA de la cesta lo marca la alternancia con el otro
-        // hogar → no se mueve la entrega entera ni la verdura. Los HUEVOS no se comparten (cada
-        // hogar los suyos), así que mover SOLO el componente huevos sí se permite.
+        // COMPARTIDA: la cesta es UNA y se parte entre dos hogares, así que su día no es un
+        // dato de este socio sino de la pareja. Se mueve entera o no se mueve: el editor de
+        // pareja valida las dos mitades y las mueve en una transacción. La VERDURA sola
+        // tampoco se mueve (partiría la cesta compartida por componentes); los HUEVOS sí,
+        // que no se comparten, y siguen su camino de siempre más abajo.
         if ($partner->getSharePartner() !== null && $componentId !== BasketComponent::ID_EGGS) {
-            $this->addFlash('warning', 'Esta cesta es compartida: su día lo marca la alternancia con el otro hogar. Solo puedes mover los huevos, no la cesta.');
+            if ($componentId !== 0) {
+                $this->addFlash('warning', 'En una cesta compartida la verdura no se mueve por separado: se mueve la cesta entera, o solo los huevos.');
 
-            return $backToCalendar();
+                return $backToCalendar();
+            }
+
+            $to = $basketRepository->find((int) $request->request->get('to_basket_id', 0));
+            if ($to === null) {
+                $this->addFlash('error', 'Selecciona una fecha destino válida.');
+
+                return $backToCalendar();
+            }
+
+            try {
+                $other = $pairEditor->move($partner, $from, $to, 'gestor:' . $this->getUser()?->getId());
+            } catch (SharedPairException $e) {
+                $this->addFlash('error', $e->getMessage());
+
+                return $backToCalendar();
+            }
+
+            // Se avisa a los DOS hogares: ninguno de los dos ha pedido este cambio (lo hace
+            // administración), y quien no se entera se planta el viernes viejo en el punto.
+            $notifier->moved([$partner, $other], $from, $to);
+
+            $this->addFlash('success', sprintf(
+                'Cesta compartida movida del %s al %s. Se ha movido también la de %s, y se ha avisado a los dos hogares.',
+                $from->getDate()->format('d/m/Y'),
+                $to->getDate()->format('d/m/Y'),
+                $other->getNameForDelivery(),
+            ));
+
+            [$year, $month] = $this->returnMonth($request, $to);
+
+            return $this->redirectToRoute('partner_delivery_calendar', [
+                'id' => $partner->getId(),
+                'year' => $year,
+                'month' => $month,
+                'sel' => $to->getId(),
+            ]);
         }
 
         // HUEVOS: la lógica (invariantes + moveComponent) vive en el editor compartido con el

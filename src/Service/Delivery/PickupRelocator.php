@@ -54,14 +54,57 @@ final class PickupRelocator
      */
     public function relocate(Partner $partner, Basket $basket, WeeklyBasketGroup $toGroup, ?string $actor = null): ?PartnerNodeOverride
     {
-        // Las cestas COMPARTIDAS (alternancia entre dos hogares) NO se trasladan de nodo de
-        // momento: está sin definir cómo afecta al otro hogar (¿se traslada también?, ¿solo el
-        // turno de este?). Se bloquea aquí —no en cada controller— para que ningún punto de
-        // entrada (panel, ficha, listado) lo cuele. Ver deuda compartidas-traslado-nodo.
+        // Una cesta COMPARTIDA es una cesta física que acaba en UN punto: trasladar un hogar
+        // y no el otro la parte en dos sitios. El traslado existe, pero sólo coordinado, por
+        // {@see relocatePair}. Se bloquea aquí —no en cada controller— para que ningún punto
+        // de entrada (panel, ficha, listado) cuele el traslado de media cesta suelta.
         if ($partner->getSharePartner() !== null) {
-            throw new \LogicException('Las cestas compartidas no se pueden trasladar de nodo todavía (pendiente de definir cómo afecta al otro hogar).');
+            throw new \LogicException('Esta cesta es compartida: su punto de recogida se cambia para los dos hogares a la vez.');
         }
 
+        return $this->relocateOne($partner, $basket, $toGroup, $actor);
+    }
+
+    /**
+     * Traslada de punto los DOS hogares de una cesta compartida, a la vez y al mismo grupo.
+     *
+     * No valida que sean pareja ni que el plazo siga abierto: eso lo hace
+     * {@see SharedPairDeliveryEditor}, que es quien conoce la regla de la pareja y la única
+     * puerta por la que se llega aquí. Este método sólo garantiza lo que le toca al traslado:
+     * que las dos mitades acaban en el mismo punto o no se mueve ninguna.
+     *
+     * @param Partner           $one     Un hogar.
+     * @param Partner           $other   El otro hogar.
+     * @param Basket            $basket  Semana/ciclo de reparto.
+     * @param WeeklyBasketGroup $toGroup Grupo de recogida destino, el mismo para los dos.
+     * @param string|null       $actor   Quién origina (ver PartnerEvent::$actor).
+     *
+     * @throws \LogicException Si el traslado no es posible para alguno de los dos; en ese
+     *                         caso no se traslada ninguno.
+     */
+    public function relocatePair(Partner $one, Partner $other, Basket $basket, WeeklyBasketGroup $toGroup, ?string $actor = null): void
+    {
+        $this->em->wrapInTransaction(function () use ($one, $other, $basket, $toGroup, $actor): void {
+            $this->relocateOne($one, $basket, $toGroup, $actor);
+            $this->relocateOne($other, $basket, $toGroup, $actor);
+        });
+    }
+
+    /**
+     * El traslado en sí, para UN socio. Separado de {@see relocate} para que el traslado
+     * coordinado de una pareja pase por las mismas comprobaciones y la misma cascada sin
+     * tener que saltarse el guard de compartidas que protege la puerta de un solo hogar.
+     *
+     * @param Partner           $partner
+     * @param Basket            $basket
+     * @param WeeklyBasketGroup $toGroup
+     * @param string|null       $actor
+     *
+     * @return PartnerNodeOverride|null El override persistido, o null si el destino era su
+     *                                  propio nodo de casa (vuelta al patrón).
+     */
+    private function relocateOne(Partner $partner, Basket $basket, WeeklyBasketGroup $toGroup, ?string $actor = null): ?PartnerNodeOverride
+    {
         $destNode = $toGroup->getNode();
         if ($destNode === null) {
             throw new \LogicException('El grupo de destino no tiene un nodo de recogida asociado.');

@@ -1,0 +1,37 @@
+{# El otro hogar de la cesta compartida pide un cambio y espera respuesta.
+ # Contexto: name, requester_name, summary, note. #}
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Tienes que contestar a un cambio en vuestra cesta · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 580px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Hola {{ name }},</h2>
+
+    <p><strong>{{ requester_name }}</strong>, con quien compartes cesta, pide {{ summary }}.</p>
+
+    {% if note %}
+        <p style="background: #f4f4f2; border-left: 3px solid #bbb; padding: 10px 14px; font-style: italic;">
+            «{{ note }}»
+        </p>
+    {% endif %}
+
+    <p style="background: #fdf3e0; border-left: 3px solid #d99820; padding: 10px 14px;">
+        <strong>De momento no cambia nada.</strong> La cesta es una y se reparte entre
+        los dos hogares, así que el cambio sólo se aplica si tú dices que sí.
+    </p>
+
+    <p>Entra en tu panel, en <strong>Cesta compartida</strong>, y contesta. Si no te viene
+       bien, decir que no es una respuesta perfectamente válida: la cesta se queda como
+       está y avisamos a {{ requester_name }}.</p>
+
+    <p style="margin-top: 32px; color: #777; font-size: 13px;">
+        Un abrazo,<br>
+        CSA Vega de Jarama<br>
+        <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+</body>
+</html>

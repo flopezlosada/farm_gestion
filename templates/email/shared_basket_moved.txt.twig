@@ -1,0 +1,20 @@
+Hola {{ name }},
+
+La cesta que compartís cambia de día.
+
+En lugar del {{ from_date|format_date('full', locale='es') }}, la recogeréis el
+{{ to_date|format_date('full', locale='es') }}.
+
+{% if requested_by %}
+El cambio lo pidió {{ requested_by }} y ya está aplicado para los dos hogares:
+la cesta es una y se mueve entera.
+{% else %}
+El cambio lo ha hecho administración, y aplica a los dos hogares: la cesta es
+una y se mueve entera.
+{% endif %}
+
+No tienes que hacer nada más. Si esto no es lo que esperabas, avisa a administración.
+
+Un abrazo,
+CSA Vega de Jarama
+https://csavegadejarama.org

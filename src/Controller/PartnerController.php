@@ -29,7 +29,9 @@ use App\Service\Delivery\ExtraBasketEditor;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\NodeShareCoherence;
 use App\Service\Delivery\PickupRelocationOptions;
-use App\Service\Delivery\PickupRelocator;
+use App\Service\Delivery\SharedBasketChangeNotifier;
+use App\Service\Delivery\SharedPairDeliveryEditor;
+use App\Service\Delivery\SharedPairException;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Partner\BasketPricing;
 use App\Service\Partner\PartnerShareEventRecorder;
@@ -486,13 +488,18 @@ class PartnerController extends AbstractController
     /**
      * Traslada puntualmente la recogida de un socix a otro nodo/grupo en una semana
      * concreta (la cesta que ya tiene esa semana). El socix viene de la ruta; el gestor
-     * elige semana y grupo destino. Delega en PickupRelocator.
+     * elige semana y grupo destino.
      *
-     * @param Request           $request   Lleva basket_id, group_id y el token CSRF.
-     * @param Partner           $partner   Socix (de la ruta).
-     * @param BasketRepository  $basketRepo
+     * En una cesta compartida arrastra a los dos hogares, porque la cesta física es una
+     * y acaba en un punto. Eso lo resuelve {@see SharedPairDeliveryEditor::relocateWithPair},
+     * que también atiende el caso normal para que no haya dos caminos.
+     *
+     * @param Request                     $request    Lleva basket_id, group_id y el token CSRF.
+     * @param Partner                     $partner    Socix (de la ruta).
+     * @param BasketRepository            $basketRepo
      * @param WeeklyBasketGroupRepository $groupRepo
-     * @param PickupRelocator   $relocator
+     * @param SharedPairDeliveryEditor    $pairEditor
+     * @param SharedBasketChangeNotifier  $notifier   Avisa a los dos hogares si era compartida.
      */
     #[Route("/{id}/relocate-pickup", name: "partner_relocate_pickup", methods: ["POST"])]
     public function relocatePickup(
@@ -500,7 +507,8 @@ class PartnerController extends AbstractController
         Partner $partner,
         BasketRepository $basketRepo,
         WeeklyBasketGroupRepository $groupRepo,
-        PickupRelocator $relocator,
+        SharedPairDeliveryEditor $pairEditor,
+        SharedBasketChangeNotifier $notifier,
     ): Response {
         $back = ['id' => $partner->getId()];
 
@@ -516,10 +524,24 @@ class PartnerController extends AbstractController
             return $this->redirectToRoute('partner_show', $back);
         }
 
+        // En una cesta COMPARTIDA el traslado arrastra a los dos hogares: la cesta es una y
+        // acaba en un punto. El editor de pareja lo aplica a las dos mitades en una
+        // transacción y devuelve al otro hogar, para poder decirlo y avisarle.
         try {
-            $relocator->relocate($partner, $basket, $group, 'gestor:' . $this->getUser()->getId());
-        } catch (\LogicException $e) {
+            $other = $pairEditor->relocateWithPair($partner, $basket, $group, 'gestor:' . $this->getUser()->getId());
+        } catch (SharedPairException|\LogicException $e) {
             $this->addFlash('warning', $e->getMessage());
+            return $this->redirectToRoute('partner_show', $back);
+        }
+
+        if ($other !== null) {
+            $notifier->relocated([$partner, $other], $basket, $group);
+            $this->addFlash('success', sprintf(
+                'Traslado hecho: esa semana recogerán en "%s" los dos hogares (también %s). Se les ha avisado.',
+                $group->getName(),
+                $other->getNameForDelivery(),
+            ));
+
             return $this->redirectToRoute('partner_show', $back);
         }
 

@@ -1,0 +1,164 @@
+{% extends '_layouts/csa_panel.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{# ============================================================
+ # Los cambios que los dos hogares de una cesta compartida se piden entre sí.
+ #
+ # LO PRIMERO ES LO QUE ME TOCA CONTESTAR. Alguien entra aquí porque le ha llegado
+ # un aviso, no a pasear: lo que espera respuesta va arriba y con los dos botones a
+ # la vista. Lo que pedí yo va después, que es informativo.
+ #
+ # LA NEGATIVA NO ES UN BOTÓN DE SEGUNDA. Decir que no es una respuesta legítima —el
+ # otro hogar tiene sus planes— y esconderla detrás de un enlace pequeño empuja a
+ # aceptar por no buscarla. Los dos botones, uno al lado del otro.
+ # ============================================================ #}
+
+{% block title %}Cesta compartida{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('panel') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Cesta compartida</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header(
+        'Mi área · Cesta compartida',
+        'La cesta que compartes con ' ~ other.nameForDelivery,
+        'Es una sola cesta y la repartís entre los dos hogares, así que los cambios los decidís entre los dos.'
+    ) }}
+
+    <div class="csa-stack-lg csa-form-narrow">
+
+        {# ============ 1. LO QUE ME TOCA CONTESTAR ============ #}
+        {% embed '_components/csa_card.html.twig' with {
+            title: 'Esperando tu respuesta',
+            icon: 'fa-hand-paper-o'
+        } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+
+                {% if incoming is empty %}
+                    <p class="csa-muted">No hay nada que contestar ahora mismo.</p>
+                {% else %}
+                    {% for req in incoming %}
+                        <div class="csa-stack" style="padding-block: var(--csa-sp-3); border-bottom: 1px solid var(--csa-border);">
+                            <p>
+                                <strong>{{ req.requester.nameForDelivery }}</strong>
+                                pide {{ req.summary }}.
+                            </p>
+
+                            {% if req.note %}
+                                <p class="csa-muted" style="font-style: italic;">«{{ req.note }}»</p>
+                            {% endif %}
+
+                            {% if req.isActionable %}
+                                {% if req.kind == 'modality' %}
+                                    {{ csa.hint('Si dices que sí, queda acordado entre los dos y lo aplica administración: un cambio de modalidad afecta a la cuota.') }}
+                                {% else %}
+                                    {{ csa.hint('Si dices que sí, el cambio se aplica en ese momento para los dos hogares.') }}
+                                {% endif %}
+
+                                {# Dos formularios sueltos en un div, NO dentro de un <p>: un
+                                 # <form> dentro de un párrafo lo cierra por su cuenta y la
+                                 # maquetación se deshace (ya pasó en la pantalla de avisos). #}
+                                <div class="csa-row">
+                                    <form method="post" action="{{ path('panel_shared_basket_accept', {id: req.id}) }}" style="display:inline;">
+                                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_shared_basket_decide') }}">
+                                        <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Me viene bien</button>
+                                    </form>
+                                    <form method="post" action="{{ path('panel_shared_basket_reject', {id: req.id}) }}" style="display:inline;">
+                                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_shared_basket_decide') }}">
+                                        <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm">No puedo</button>
+                                    </form>
+                                </div>
+                            {% else %}
+                                {# Pendiente pero con el reparto ya pasado: no se puede contestar
+                                 # y no se ofrece un botón que sólo daría un error. #}
+                                {{ csa.callout('Ese reparto ya pasó, así que esta petición se quedó sin efecto.', 'warning', 'clock-o') }}
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endblock %}
+        {% endembed %}
+
+        {# ============ 2. LO QUE HE PEDIDO YO ============ #}
+        {% embed '_components/csa_card.html.twig' with {
+            title: 'Lo que has pedido',
+            icon: 'fa-paper-plane-o'
+        } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+
+                {% if outgoing is empty %}
+                    <p class="csa-muted">No tienes ninguna petición esperando respuesta.</p>
+                {% else %}
+                    {% for req in outgoing %}
+                        <div class="csa-stack" style="padding-block: var(--csa-sp-3); border-bottom: 1px solid var(--csa-border);">
+                            <p>
+                                Pediste {{ req.summary }}.
+                                {% if req.isActionable %}
+                                    <span class="csa-muted">Esperando a {{ req.counterpart.nameForDelivery }}.</span>
+                                {% else %}
+                                    <span class="csa-muted">Ese reparto ya pasó: se quedó sin efecto.</span>
+                                {% endif %}
+                            </p>
+
+                            {% if req.isActionable %}
+                                <form method="post" action="{{ path('panel_shared_basket_cancel', {id: req.id}) }}">
+                                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_shared_basket_decide') }}">
+                                    <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm">Retirar la petición</button>
+                                </form>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+
+                {{ csa.hint('Para pedir un cambio de día, entra en tu calendario y elige el día al que quieres llevar la cesta.') }}
+            {% endblock %}
+        {% endembed %}
+
+        {# ============ 3. CAMBIO DE MODALIDAD ============
+         # Aquí no se aplica nada: se acuerda. La cuota la lleva administración y la
+         # ley que empareja a los dos hogares obliga a cambiar las dos cestas a la
+         # vez, así que lo que esta pantalla aporta es que los dos hayan dicho que sí
+         # antes de que nadie toque nada. #}
+        {% embed '_components/csa_card.html.twig' with {
+            title: 'Cambiar la modalidad de la cesta',
+            icon: 'fa-exchange'
+        } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+
+                <form method="post" action="{{ path('panel_shared_basket_request_modality') }}" class="csa-stack">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_shared_basket_request') }}">
+
+                    <label>
+                        Modalidad que queréis
+                        <select name="basket_share_id" class="csa-select" required>
+                            <option value="">— elige —</option>
+                            {% for modality in modalities %}
+                                <option value="{{ modality.id }}">{{ modality.title }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+
+                    <label>
+                        Cuéntaselo a {{ other.nameForDelivery }} (opcional)
+                        <textarea name="note" class="csa-input" rows="2" maxlength="500"></textarea>
+                    </label>
+
+                    <p>
+                        <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Proponérselo</button>
+                    </p>
+
+                    {{ csa.hint('Si acepta, queda acordado y lo aplica administración. Vuestra cesta no cambia hasta entonces.') }}
+                </form>
+            {% endblock %}
+        {% endembed %}
+
+    </div>
+
+{% endblock %}
