@@ -302,6 +302,17 @@ class AppSettings
     public const CRON_VOLUNTEER_SHIFTS = 'cron.volunteer_shifts';
 
     /**
+     * Manda las novedades de la web que administración ha pedido contar.
+     *
+     * A diferencia del resto, no vigila una fecha ni un estado del dominio:
+     * vigila una DECISIÓN humana. Casi siempre no hay nada pedido y sale en
+     * verde sin hacer nada; cuando alguien pulsa el botón, el siguiente tick lo
+     * manda. Existe porque un envío a ~130 direcciones no cabe en una petición
+     * web ({@see \App\Command\AnnounceNewsCommand} lo explica).
+     */
+    public const CRON_NEWS = 'cron.news';
+
+    /**
      * MANIFIESTO DE TAREAS PROGRAMADAS: la fuente única de verdad sobre qué
      * debería ejecutarse, cuándo, y qué la inhibe. Clave del toggle =>
      * metadatos. Lo lee {@see \App\Service\Cron\CronTaskRegistry}.
@@ -588,6 +599,25 @@ class AppSettings
             'requires' => [self::FEATURE_VOLUNTEERING],
             'depends_on' => [],
         ],
+        self::CRON_NEWS => [
+            'command' => 'app:announce-news',
+            // Las tres vías. NO lleva el interruptor del correo en `requires`:
+            // allí inhibiría la tarea entera y dejaría sin novedades a quien las
+            // quiere en el móvil o las lee en la bandeja. El corte del correo se
+            // comprueba dentro, donde sólo afecta al correo.
+            'channels' => ['email', 'push', 'inbox'],
+            // Cada socix recibe la suya: no hay destinatario que configurar.
+            'needs_recipient' => false,
+            'confirm' => true,
+            'dry' => true,
+            // Por intervalo y no a una hora fija: lo que dispara esto es que
+            // alguien pulse un botón, y esperar al día siguiente convertiría
+            // "contarlo" en algo que no se sabe cuándo pasa.
+            'schedule' => ['freq' => 'interval', 'minutes' => 60],
+            'max_delay_hours' => 6,
+            'requires' => [],
+            'depends_on' => [],
+        ],
         // También por intervalo: un recordatorio que llega tarde es peor que no
         // mandarlo, porque gasta el canal sin traer a nadie.
         self::CRON_VOLUNTEER_REMINDERS => [
@@ -719,6 +749,12 @@ class AppSettings
             'label' => 'Recordar el voluntariado a quien se apuntó',
             'help' => 'Avisa a quien se apuntó a una tarea poco antes de que le toque, con la antelación configurada. Sin esto, alguien se apunta con dos semanas y el día que es no se acuerda. Requiere el módulo de voluntariado encendido.',
             'default' => false,
+        ],
+        self::CRON_NEWS => [
+            'group' => 'Tareas programadas',
+            'label' => 'Contar las novedades de la web',
+            'help' => 'Manda las novedades que hayas pedido contar desde la pantalla de Novedades: correo a cada socix con dirección, aviso en la bandeja de quien tenga cuenta y notificación a quien tenga el móvil activado. Mientras no pidas nada, no manda nada. APAGADA, el botón de “contárselo a lxs socixs” deja de tener efecto y lo pedido se queda esperando.',
+            'default' => true,
         ],
         self::CRON_VOLUNTEER_SHIFTS => [
             'group' => 'Tareas programadas',
