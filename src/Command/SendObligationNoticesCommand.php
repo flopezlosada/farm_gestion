@@ -70,6 +70,12 @@ class SendObligationNoticesCommand extends AbstractCronCommand
 
         $notices = $this->watch->dueNotices($today);
         if ($notices === []) {
+            // Se dice también POR PANTALLA y no sólo en el registro: en el cron
+            // del hosting, `var/log/cron.log` es lo único que se puede leer sin
+            // SSH, y un comando que no escribe nada hace indistinguible "no
+            // había nada que avisar" de "no llegó a ejecutarse".
+            $io->note('Ninguna obligación cruza un escalón de aviso.');
+
             return $this->nothingToDo('ninguna obligación cruza un escalón de aviso');
         }
 
@@ -132,6 +138,8 @@ class SendObligationNoticesCommand extends AbstractCronCommand
         }
 
         if ($sent === 0) {
+            $io->note('Todas avisadas ya: no se repite ningún correo.');
+
             return $this->nothingToDo(sprintf(
                 '%d en aviso, todas avisadas ya%s',
                 count($notices),

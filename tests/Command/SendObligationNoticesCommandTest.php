@@ -89,14 +89,14 @@ class SendObligationNoticesCommandTest extends KernelTestCase
         $tester = $this->commandTester();
         $tester->execute(['--dry-run' => true]);
 
-        $display = $tester->getDisplay();
+        $display = $this->plainDisplay($tester);
         $this->assertStringContainsString('TEST poliza en seco', $display);
         // 45 días cruza el escalón de 60, no el de 90: se avisa del más urgente.
         $this->assertStringContainsString('escalón 60', $display);
 
         // Y no ha quedado apuntado: la ejecución de verdad todavía debe avisar.
         $tester->execute([]);
-        $this->assertStringContainsString('1 aviso(s) enviados', $tester->getDisplay());
+        $this->assertStringContainsString('1 aviso(s) enviados', $this->plainDisplay($tester));
     }
 
     /**
@@ -111,7 +111,7 @@ class SendObligationNoticesCommandTest extends KernelTestCase
         $tester = $this->commandTester();
         $tester->execute([]);
 
-        $this->assertStringContainsString('ninguna obligación cruza', $tester->getDisplay());
+        $this->assertStringContainsString('Ninguna obligación cruza', $this->plainDisplay($tester));
     }
 
     /**
@@ -128,12 +128,26 @@ class SendObligationNoticesCommandTest extends KernelTestCase
         $tester = $this->commandTester();
 
         $tester->execute([]);
-        $this->assertStringContainsString('1 aviso(s) enviados', $tester->getDisplay());
+        $this->assertStringContainsString('1 aviso(s) enviados', $this->plainDisplay($tester));
 
         $tester->execute([]);
-        $display = $tester->getDisplay();
+        $display = $this->plainDisplay($tester);
         $this->assertStringNotContainsString('1 aviso(s) enviados', $display);
-        $this->assertStringContainsString('todas avisadas ya', $display);
+        $this->assertStringContainsString('Todas avisadas ya', $display);
+    }
+
+    /**
+     * La salida con los espacios normalizados.
+     *
+     * SymfonyStyle parte los avisos largos en varias líneas y las rellena con
+     * espacios para pintar el bloque, así que buscar una frase en la salida
+     * cruda falla aunque el texto esté.
+     *
+     * @param CommandTester $tester Ejecución ya corrida.
+     */
+    private function plainDisplay(CommandTester $tester): string
+    {
+        return preg_replace('/\s+/', ' ', $tester->getDisplay());
     }
 
     /**
