@@ -103,6 +103,14 @@ security:
     #                           áreas, y eso lo decide VolunteerOfferVoter.
     #                           Añadir un área nueva no debe exigir tocar este
     #                           fichero ni desplegar
+    #   ROLE_GESTION_VENCIMIENTOS  LECTURA del registro de vencimientos: qué
+    #                           convenios, registros, pólizas y cargos hay y
+    #                           cuándo caducan. NO es sólo mirar: quien lo tiene
+    #                           es quien RECIBE el aviso de que algo se acerca a
+    #                           su fecha, así que darlo es repartir la vigilancia
+    #   ROLE_GESTION_VENCIMIENTOS_EDIT  ESCRITURA de vencimientos (dar de alta
+    #                           una obligación, anotar una renovación,
+    #                           archivarla; incluye lectura por jerarquía)
     #   ROLE_WORKER             panel propio del trabajador (/work): fichar,
     #                           ver/corregir lo suyo, pedir vacaciones. Se DERIVA
     #                           de tener un Worker vinculado (como ROLE_PARTNER)
@@ -120,6 +128,7 @@ security:
             - ROLE_GESTION_LAR_EDIT
             - ROLE_GESTION_VOLUNTARIADO_EDIT
             - ROLE_GESTION_GRUPO_CONSUMO_EDIT
+            - ROLE_GESTION_VENCIMIENTOS_EDIT
             - ROLE_PARTNER
             - ROLE_WORKER
         # La escritura incluye la lectura (modelo lectura/escritura por sección).
@@ -137,6 +146,8 @@ security:
             - ROLE_GESTION_LAR
         ROLE_GESTION_GRUPO_CONSUMO_EDIT:
             - ROLE_GESTION_GRUPO_CONSUMO
+        ROLE_GESTION_VENCIMIENTOS_EDIT:
+            - ROLE_GESTION_VENCIMIENTOS
 
     providers:
         # Sin "property": Symfony delega en UserRepository::loadUserByIdentifier
@@ -290,11 +301,15 @@ security:
         # sabe de qué áreas es coordinadora cada persona. Un gateo por método a
         # secas dejaría fuera a quien más usa el módulo.
         - { path: ^/gestion/voluntariado, methods: [POST, PUT, PATCH, DELETE], roles: ROLE_GESTION_VOLUNTARIADO }
+        # Vencimientos (mismo modelo): lectura = ver qué caduca y cuándo; la
+        # escritura (dar de alta una obligación, anotar una renovación,
+        # archivarla) exige _EDIT. Antes de la regla genérica ^/gestion.
+        - { path: ^/gestion/vencimientos, methods: [POST, PUT, PATCH, DELETE], roles: ROLE_GESTION_VENCIMIENTOS_EDIT }
         # Cualquier rol de gestión permite entrar a /gestion. Dentro,
         # cada controller filtra con #[IsGranted('ROLE_GESTION_X')] según
         # su sección.
         - { path: ^/gestion,
-            roles: [ROLE_ADMIN, ROLE_GESTION_GRANJA, ROLE_GESTION_SOCIXS, ROLE_GESTION_REPARTO, ROLE_BLOG, ROLE_GESTION_ENCUESTAS, ROLE_GESTION_ALBERGUE, ROLE_GESTION_LABORAL, ROLE_GESTION_LAR, ROLE_GESTION_VOLUNTARIADO, ROLE_GESTION_GRUPO_CONSUMO] }
+            roles: [ROLE_ADMIN, ROLE_GESTION_GRANJA, ROLE_GESTION_SOCIXS, ROLE_GESTION_REPARTO, ROLE_BLOG, ROLE_GESTION_ENCUESTAS, ROLE_GESTION_ALBERGUE, ROLE_GESTION_LABORAL, ROLE_GESTION_LAR, ROLE_GESTION_VOLUNTARIADO, ROLE_GESTION_GRUPO_CONSUMO, ROLE_GESTION_VENCIMIENTOS] }
         # Panel del socix (lo construiremos en breve).
         - { path: ^/panel, roles: [ROLE_PARTNER, ROLE_ADMIN] }
         # Panel propio del trabajador: fichar, ver/corregir lo suyo, vacaciones.

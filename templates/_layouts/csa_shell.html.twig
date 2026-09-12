@@ -393,6 +393,16 @@
                         </div>
                     {% endif %}
 
+                    {% if is_granted('ROLE_GESTION_VENCIMIENTOS') and is_granted('FEATURE_VENCIMIENTOS') %}
+                        <div class="csa-navgroup{{ sec_collapsed }}">
+                            <button type="button" class="csa-navgroup__head">Vencimientos <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Lo que caduca', path('obligation_index'), 'fa-calendar-check-o',
+                                   route starts with 'obligation_') }}
+                            </div>
+                        </div>
+                    {% endif %}
+
                     {% if is_granted('ROLE_GESTION_LABORAL') and is_granted('FEATURE_LABORAL') %}
                         <div class="csa-navgroup{{ sec_collapsed }}">
                             <button type="button" class="csa-navgroup__head">Personal <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
