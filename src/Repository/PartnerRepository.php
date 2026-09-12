@@ -88,12 +88,34 @@ class PartnerRepository extends ServiceEntityRepository
      *
      * @return list<Partner> socixs activos que admiten avisos de voluntariado
      */
-    public function findAllActive(): array
+    public function findVolunteeringAudience(): array
     {
         return $this->createQueryBuilder('p')
             ->where('p.status = :status')
             ->andWhere('p.volunteering_opt_out = false')
             ->setParameter('status', Partner::STATUS_ACTIVO)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Todxs lxs socixs activxs, sin más filtro.
+     *
+     * Es la lista de "la asociación" para lo que va dirigido a todo el mundo,
+     * como las novedades de la web. No confundir con
+     * {@see findVolunteeringAudience()}, que descuenta a quien pidió que no se
+     * le llame para echar una mano: ése es un "no" sobre el voluntariado, no
+     * sobre todo lo demás.
+     *
+     * @return list<Partner> ordenadxs por nombre
+     */
+    public function findActive(): array
+    {
+        return $this->createQueryBuilder('p')
+            ->where('p.status = :status')
+            ->setParameter('status', Partner::STATUS_ACTIVO)
+            ->orderBy('p.name', 'ASC')
+            ->addOrderBy('p.surname', 'ASC')
             ->getQuery()
             ->getResult();
     }

@@ -81,6 +81,10 @@ class NotificationLink
             // resumen ("12 fichas..."), así que sin este destino no sería
             // accionable: diría cuántas son y no cuáles.
             str_starts_with($kind, 'partners.') => $this->urlGenerator->generate('partner_incomplete_profiles'),
+            // Las novedades llevan a la página donde están todas, y no sólo la
+            // última: quien no ha entrado en dos meses quiere ver lo que se
+            // perdió, no la de esta semana suelta.
+            str_starts_with($kind, 'news.') => $this->urlGenerator->generate('news_index'),
             // Cualquier otro no tiene mejor sitio que la bandeja. Es el caso de
             // un aviso viejo cuyo `kind` ya no se emite, y de uno nuevo al que se
             // le olvidó su línea aquí: molesta, pero no deja a nadie en un 404.

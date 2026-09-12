@@ -65,6 +65,15 @@ class Notification
     public const KIND_PROFILE_INCOMPLETE = 'profile.incomplete';
 
     /**
+     * Hay cosas nuevas en la web que se han contado a lxs socixs.
+     *
+     * Es el único aviso que no responde a nada que haya pasado en la cuenta de
+     * quien lo recibe: lo lanza a mano quien administra, cuando decide que hay
+     * algo que contar. Por eso no lo emite ninguna tarea programada.
+     */
+    public const KIND_NEWS = 'news.release';
+
+    /**
      * Hay fichas de socix con datos que faltan (va a quien coordina socixs).
      *
      * Uno resumen para toda la lista y no uno por socix: con cuarenta fichas
