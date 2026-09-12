@@ -50,7 +50,18 @@
         </header>
 
         <div class="cg-facts">
-            <div class="cg-fact"><span class="cg-fact__l">Cierre de apuntes</span><span class="cg-fact__v">{{ round.ordersCloseAt ? round.ordersCloseAt|date('d/m/Y H:i') : '—' }}</span></div>
+            <div class="cg-fact">
+                <span class="cg-fact__l">Cierre de apuntes</span>
+                <span class="cg-fact__v">
+                    {{ round.ordersCloseAt ? round.ordersCloseAt|date('d/m/Y H:i') : '—' }}
+                    {# El pedido sigue ABIERTO como estado, pero ya no entra nadie: es la
+                     # señal de que se puede pasar al productor sin que aparezcan
+                     # cantidades nuevas después. #}
+                    {% if round.status == 0 and round.ordersCloseAt and not round.canReceiveOrders %}
+                        <span class="cg-fact__note">· plazo vencido, ya no se apunta nadie</span>
+                    {% endif %}
+                </span>
+            </div>
             <div class="cg-fact"><span class="cg-fact__l">Entrega</span><span class="cg-fact__v">{{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}</span></div>
             <div class="cg-fact"><span class="cg-fact__l">Mínimo</span><span class="cg-fact__v">{{ round.minimumCondition ?: '—' }}</span></div>
             {% if round.confirmedAt %}<div class="cg-fact"><span class="cg-fact__l">Confirmado</span><span class="cg-fact__v">{{ round.confirmedAt|date('d/m/Y') }}</span></div>{% endif %}
@@ -71,7 +82,10 @@
 
         {% if can_edit %}
             <div class="prt-actionbar">
-                {% if round.canReceiveOrders %}
+                {# canManageOrders y no canReceiveOrders: pasado el plazo de apuntes, la
+                 # comisión sigue necesitando tocar la fecha de entrega o la nota al
+                 # productor — es justo entonces cuando habla con él. #}
+                {% if round.canManageOrders %}
                     <a href="{{ path('consumer_group_edit', { id: round.id }) }}" class="prt-btn prt-btn--primary"><i class="fa fa-pencil"></i> Editar</a>
                     <a href="{{ path('consumer_group_items', { id: round.id }) }}" class="prt-btn"><i class="fa fa-list"></i> Productos del pedido</a>
                 {% endif %}
@@ -101,7 +115,7 @@
             <div class="prt-card__body">
             {% if round.items is empty %}
                 <p class="csa-muted">Este pedido no tiene productos.
-                    {% if can_edit and round.canReceiveOrders %}<a href="{{ path('consumer_group_items', { id: round.id }) }}">Añádelos</a>.{% endif %}
+                    {% if can_edit and round.canManageOrders %}<a href="{{ path('consumer_group_items', { id: round.id }) }}">Añádelos</a>.{% endif %}
                 </p>
             {% else %}
                 <div class="prl prl-table-wrap">
@@ -322,6 +336,7 @@
         .cg-fact { display: flex; flex-direction: column; gap: 2px; }
         .cg-fact__l { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--prt-ink-faint, #8d8773); font-weight: 600; }
         .cg-fact__v { font-family: 'Fraunces', serif; font-weight: 600; font-size: 15px; color: var(--prt-ink, #1d1c17); }
+        .cg-fact__note { font-family: inherit; font-weight: 400; font-size: 12.5px; color: var(--prt-ink-faint, #8d8773); }
         .cg-notes { margin-top: var(--csa-sp-3); color: var(--prt-ink-soft, #5a564a); }
         .cg-notes p { margin: 0 0 var(--csa-sp-2); }
         /* Separar y dar contraste a la barra de acciones respecto a la cabecera. */

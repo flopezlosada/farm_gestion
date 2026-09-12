@@ -49,7 +49,10 @@ class ConsumerGroupAnnouncerTest extends TestCase
         $round = new ConsumerGroupRound();
         $round->setProducer($producer);
         $round->setTitle('Aceite de la cooperativa');
-        $round->setOrdersCloseAt(new \DateTime('2026-10-01 23:59'));
+        // Relativa y no absoluta: con una fecha escrita a mano, el día que pasara
+        // el plazo estos tests se pondrían rojos solos —y por un motivo que no
+        // tiene nada que ver con lo que comprueban—.
+        $round->setOrdersCloseAt(new \DateTime('+10 days'));
 
         $product = (new ConsumerGroupProduct())->setName('Aceite')->setUnit('garrafa de 5 L');
         $producer->addProduct($product);
