@@ -512,17 +512,13 @@
                        administración (que ya ha hablado con ellos), o lo pide un hogar y lo acepta
                        el otro.
 
-                       EN LAS DOS PANTALLAS Y SIEMPRE VISIBLE, igual que el bloque de los huevos de
-                       justo encima. Estuvo un rato sólo para quien pide, y quien aplicaba se quedaba
-                       con un aviso pequeño de "arrastra este día": los huevos tenían su bloque con su
-                       botón y la cesta no tenía nada, que es una asimetría que no se sostiene — y en
-                       una pantalla táctil, directamente, no había forma de cambiar el día.
-
-                       Lo que hubo que arreglar no era tener dos listas, era que las dos decían "Mover
-                       al viernes 18 sept" sin decir QUÉ movían. Con "la cesta" y "los huevos" en el
-                       rótulo, cada una se lee por lo que hace. El arrastre sigue existiendo en
-                       escritorio como atajo. #}
-                    {% if partner.sharePartner and not ro and selected_editable and cal.route_shared_move is defined and has_drop_targets|default(false) %}
+                       SÓLO PARA QUIEN PIDE (el panel del socix), y por eso es una lista de fechas y
+                       no el gesto de siempre: lo que se manda no es un cambio, es una pregunta al
+                       otro hogar, y eso hay que poder leerlo antes de pulsar. Quien APLICA el cambio
+                       usa lo mismo que en cualquier otra cesta —arrastrar, o el botón "Mover a otra
+                       fecha" del pie—, porque dos idiomas para la misma acción en la misma pantalla
+                       se leen como dos acciones distintas. #}
+                    {% if partner.sharePartner and not ro and cal.shared_needs_consent|default(false) and selected_editable and cal.route_shared_move is defined and has_drop_targets|default(false) %}
                         {# Las dos pantallas mandan la semana de forma distinta: la del gestor la
                            lleva en la ruta, la del socix en el cuerpo (su endpoint no la tiene en
                            el path). Se resuelve aquí, con el día que se está pintando. #}
@@ -531,53 +527,22 @@
                             : path(cal.route_shared_move) %}
                         <div class="rcal-eggmove" style="margin-top: var(--csa-sp-4);">
                             <div class="rcal-sect"><i class="fa fa-arrows"></i> Cambiar el día de la cesta</div>
-                            {% if cal.shared_needs_consent|default(false) %}
-                                <p class="csa-muted">
-                                    La cesta la compartes con {{ cal.shared_other_name|default('el otro hogar') }}: elige el día que te vendría bien y se lo pedimos. No cambia nada hasta que conteste.
-                                </p>
-                                {# Cada botón manda la PETICIÓN. Sin confirmación: esto no cambia el
-                                   reparto, sólo pregunta al otro hogar, y el párrafo de arriba lo dice. #}
-                                <form action="{{ shared_action }}" method="post" class="rcal-eggmove__form">
-                                    <input type="hidden" name="_csrf_token" value="{{ cal.csrf_shared_move }}">
-                                    <input type="hidden" name="basket_id" value="{{ bid }}">
-                                    {% for t in drop_targets|default([]) %}
-                                        <button type="submit" name="to_basket_id" value="{{ t.basketId }}"
-                                                class="csa-btn csa-btn--secondary csa-btn--block" style="margin-bottom: var(--csa-sp-2);">
-                                            <i class="fa fa-paper-plane-o"></i>
-                                            Pedir el {{ t.date|format_date(pattern='EEEE d MMM', locale='es') }}
-                                        </button>
-                                    {% endfor %}
-                                </form>
-                            {% else %}
-                                <p class="csa-muted">Se mueven las dos mitades, la de {{ cal.shared_other_name|default('el otro hogar') }} también, y se avisa a los dos hogares. Elige el día:</p>
-                                {# Un modal por fecha, porque cada uno confirma un destino distinto.
-                                   El mismo aviso que sale al soltarla arrastrando: quien lo hace tiene
-                                   que leer a quién más está moviendo antes de moverlo. #}
+                            <p class="csa-muted">
+                                La cesta la compartes con {{ cal.shared_other_name|default('el otro hogar') }}: elige el día que te vendría bien y se lo pedimos. No cambia nada hasta que conteste.
+                            </p>
+                            {# Cada botón manda la PETICIÓN. Sin confirmación: esto no cambia el
+                               reparto, sólo pregunta al otro hogar, y el párrafo de arriba lo dice. #}
+                            <form action="{{ shared_action }}" method="post" class="rcal-eggmove__form">
+                                <input type="hidden" name="_csrf_token" value="{{ cal.csrf_shared_move }}">
+                                <input type="hidden" name="basket_id" value="{{ bid }}">
                                 {% for t in drop_targets|default([]) %}
-                                    <button type="button" class="csa-btn csa-btn--secondary csa-btn--block"
-                                            style="margin-bottom: var(--csa-sp-2);"
-                                            onclick="document.getElementById('confirm-sharedmove-{{ bid }}-{{ t.basketId }}').showModal()">
-                                        <i class="fa fa-arrows"></i> Mover la cesta al {{ t.date|format_date(pattern='EEEE d MMM', locale='es') }}
+                                    <button type="submit" name="to_basket_id" value="{{ t.basketId }}"
+                                            class="csa-btn csa-btn--secondary csa-btn--block" style="margin-bottom: var(--csa-sp-2);">
+                                        <i class="fa fa-paper-plane-o"></i>
+                                        Pedir el {{ t.date|format_date(pattern='EEEE d MMM', locale='es') }}
                                     </button>
-                                    {{ csa.confirm_dialog('confirm-sharedmove-' ~ bid ~ '-' ~ t.basketId, {
-                                        variant: 'warning',
-                                        eyebrow: 'Cesta compartida',
-                                        title: 'Se mueven las dos mitades',
-                                        body: 'La cesta la comparten dos hogares y es una sola: al cambiarla de día se mueve también la de '
-                                            ~ cal.shared_other_name|default('el otro hogar')
-                                            ~ '. Se avisará a los dos por sus canales.',
-                                        confirm_label: 'Mover las dos',
-                                        action: shared_action,
-                                        csrf_token: cal.csrf_shared_move,
-                                        extra_fields: [
-                                            { name: 'basket_id', value: bid },
-                                            { name: 'to_basket_id', value: t.basketId },
-                                            { name: 'view_year', value: current.format('Y') },
-                                            { name: 'view_month', value: current.format('n') },
-                                        ],
-                                    }) }}
                                 {% endfor %}
-                            {% endif %}
+                            </form>
                         </div>
                     {% endif %}
 
@@ -586,12 +551,11 @@
                             <i class="fa fa-arrows"></i> Arrastra este día en el calendario para moverlo a otra fecha o a "No recoge".
                         </div>
                     {% elseif partner.sharePartner and selected_editable and not ro and not cal.shared_needs_consent|default(false) and has_drop_targets|default(false) %}
-                        {# El gesto de la cesta compartida ya tiene su bloque arriba, con botón por
-                           fecha, que es lo que funciona también con el dedo. Esto sólo anuncia el
-                           atajo de escritorio, y no nombra la papelera: a "No recoge" no se puede
-                           arrastrar una compartida. #}
+                        {# Mismo aviso que en una cesta normal y en el mismo sitio, sin nombrar la
+                           papelera: a "No recoge" no se puede arrastrar una compartida. El botón
+                           equivalente para el dedo está en el pie del panel. #}
                         <div class="rcal-hint rcal-dragonly" style="margin-top: var(--csa-sp-4);">
-                            <i class="fa fa-arrows"></i> También puedes arrastrar este día en el calendario. Se moverán las dos mitades.
+                            <i class="fa fa-arrows"></i> Arrastra este día en el calendario para moverlo a otra fecha. Se moverán las dos mitades.
                         </div>
                     {% endif %}
                 </div>
@@ -625,6 +589,23 @@
                                 </span>
                             </button>
                         </form>
+                    </div>
+                {% elseif partner.sharePartner and not ro and selected_editable and not cal.shared_needs_consent|default(false) and cal.route_move is defined and has_drop_targets|default(false) %}
+                    {# COMPARTIDA, desde la pantalla que APLICA el cambio. El pie normal no sirve
+                       —lleva el interruptor de "no recoge", que en una compartida no se puede—, pero
+                       el botón de mover sí, y tiene que ser EL MISMO que en una cesta normal: ahí el
+                       día se cambia arrastrando o, con el dedo, por este botón. Una lista de fechas
+                       sólo para las compartidas era un segundo idioma para la misma acción en la
+                       misma pantalla. El aviso de arrastrar va arriba, en el cuerpo, como en el
+                       resto. #}
+                    <div class="rcal-panel__ft">
+                        <button type="button" class="csa-btn csa-btn--secondary csa-btn--block rcal-tapmove" data-rcal-move-start
+                                data-rcal-move-url="{{ path(cal.route_move, cal.idp|merge({ basketId: bid })) }}"
+                                data-rcal-move-from="{{ bid }}"
+                                data-rcal-shared="{{ cal.shared_other_name|default('el otro hogar') }}"
+                                style="margin: 0;">
+                            <i class="fa fa-arrows"></i><span>Mover a otra fecha</span>
+                        </button>
                     </div>
                 {% elseif not partner.sharePartner and not ro %}
                     <div class="rcal-panel__ft">
