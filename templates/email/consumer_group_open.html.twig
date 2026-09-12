@@ -1,0 +1,89 @@
+{# ============================================================
+ # Aviso de que hay un pedido del grupo de consumo abierto.
+ #
+ # Va a toda socix activa que no haya silenciado el tema, así que
+ # lleva SIEMPRE el pie para apagarlo: un aviso que llega sin
+ # haberlo pedido tiene que decir cómo dejar de recibirlo.
+ #
+ # El servicio pasa:
+ #   - partner          Partner destinataria
+ #   - round            ConsumerGroupRound abierto
+ #   - url              ficha del pedido en el panel
+ #   - preferences_url  pantalla de avisos
+ #   - can_act          si puede entrar en la web (si no, sin botón)
+ # ============================================================ #}
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Pedido abierto · Grupo de consumo · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 580px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Hola {{ partner.name }},</h2>
+
+    <p>Hemos abierto un pedido del grupo de consumo: <strong>«{{ round.title }}»</strong>,
+       de {{ round.producer }}.</p>
+
+    {% if round.description %}
+        <p>{{ round.description|nl2br }}</p>
+    {% endif %}
+
+    {% if round.items|length %}
+        <h3 style="color: #5a8f3d;">Qué hay</h3>
+        <ul>
+            {% for item in round.items|slice(0, 10) %}
+                <li>{{ item.name }} · {{ item.price|number_format(2, ',', '.') }} € / {{ item.unit }}</li>
+            {% endfor %}
+        </ul>
+        {% if round.items|length > 10 %}
+            <p style="color: #777;">Y {{ round.items|length - 10 }} producto{{ round.items|length - 10 == 1 ? '' : 's' }} más.</p>
+        {% endif %}
+    {% endif %}
+
+    <p>
+        {% if round.ordersCloseAt %}
+            Puedes apuntarte hasta el <strong>{{ round.ordersCloseAt|format_datetime('full', 'short', locale='es') }}</strong>.
+        {% else %}
+            Ya puedes apuntarte.
+        {% endif %}
+        {% if round.deliveryDate %}
+            Si el pedido sale adelante, se entrega el
+            <strong>{{ round.deliveryDate|format_date('full', locale='es') }}</strong> en tu punto de recogida,
+            junto con la cesta.
+        {% endif %}
+    </p>
+
+    {# El apunte NO es vinculante hasta que la comisión confirma que se llega al
+     # mínimo del productor. Decirlo aquí evita la pregunta de "¿ya tengo que
+     # pagar?" y, sobre todo, que alguien pague antes de tiempo algo que puede
+     # caerse. #}
+    <p style="background: #f4f7f0; border-left: 3px solid #5a8f3d; padding: 12px 16px;">
+        Apuntarte no te compromete todavía: algunos productores piden un mínimo, y hasta que
+        no sepamos que se alcanza no se pide el pago. Si no sale, no pagas nada.
+    </p>
+
+    {% if can_act %}
+        <p style="text-align: center; margin: 24px 0;">
+            <a href="{{ url }}"
+               style="background: #5a8f3d; color: #fff; text-decoration: none; padding: 12px 22px; border-radius: 6px; display: inline-block;">
+                Apuntarme
+            </a>
+        </p>
+    {% else %}
+        <p>Para apuntarte, dínoslo en el reparto o contesta a este correo.</p>
+    {% endif %}
+
+    <p style="margin-top: 32px; color: #777; font-size: 13px;">
+        Un abrazo,<br>
+        CSA Vega de Jarama<br>
+        <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+    <p style="color: #999; font-size: 12px;">
+        ¿No quieres estos avisos? Puedes apagarlos en
+        <a href="{{ preferences_url }}">tus avisos</a> sin perder el de tu cesta.
+    </p>
+
+</body>
+</html>

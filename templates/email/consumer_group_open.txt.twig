@@ -1,0 +1,26 @@
+Hola {{ partner.name }},
+
+Hemos abierto un pedido del grupo de consumo: «{{ round.title }}», de {{ round.producer }}.
+{% if round.description %}
+{{ round.description }}
+{% endif %}
+{% if round.items|length %}
+Qué hay:
+{% for item in round.items|slice(0, 10) %}- {{ item.name }} · {{ item.price|number_format(2, ',', '.') }} € / {{ item.unit }}
+{% endfor %}{% if round.items|length > 10 %}Y {{ round.items|length - 10 }} producto{{ round.items|length - 10 == 1 ? '' : 's' }} más.
+{% endif %}{% endif %}
+{% if round.ordersCloseAt %}Puedes apuntarte hasta el {{ round.ordersCloseAt|format_datetime('full', 'short', locale='es') }}.{% else %}Ya puedes apuntarte.{% endif %}
+{% if round.deliveryDate %}Si el pedido sale adelante, se entrega el {{ round.deliveryDate|format_date('full', locale='es') }} en tu punto de recogida, junto con la cesta.{% endif %}
+
+Apuntarte no te compromete todavía: algunos productores piden un mínimo, y hasta que no
+sepamos que se alcanza no se pide el pago. Si no sale, no pagas nada.
+{% if can_act %}
+Apúntate aquí: {{ url }}
+{% else %}
+Para apuntarte, dínoslo en el reparto o contesta a este correo.
+{% endif %}
+Un abrazo,
+CSA Vega de Jarama
+https://csavegadejarama.org
+
+¿No quieres estos avisos? Puedes apagarlos en {{ preferences_url }} sin perder el de tu cesta.
