@@ -49,7 +49,6 @@ class NotificationExtension extends AbstractExtension
         'delivery_confirmation' => 'Confirmación de cambio de cesta',
         'delivery_sheet' => 'Listado del reparto',
         'admin_delivery_changes_summary' => 'Resumen de cambios para administración',
-        'admin_delivery_summary' => 'Resumen de cambios para administración',
         'coverage_alert' => 'Aviso de gente sin avisar',
         'egg_reschedule' => 'Cambio en los huevos',
         'news' => 'Novedades de la web',
@@ -69,6 +68,9 @@ class NotificationExtension extends AbstractExtension
         'volunteer_call' => 'Convocatoria de voluntariado',
         'volunteer_change' => 'Cambio en un turno de voluntariado',
         'volunteer_reminder' => 'Recordatorio de voluntariado',
+        // Lo que apunta RecordingMailer cuando el correo no sale de una
+        // plantilla y no hay de dónde deducir qué aviso es.
+        'sin_clasificar' => 'Sin clasificar',
     ];
 
     public function getFunctions(): array
