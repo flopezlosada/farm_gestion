@@ -235,7 +235,11 @@
                             </a>
                         {% else %}
                             <div class="rcal-cell empty{{ not day.inMonth ? ' out' }}{{ wknd ? ' wknd' }}{{ is_today ? ' rcal-today' }}"
-                                 {% if day.dropBasketId and not ro %}data-rcal-target data-rcal-to="{{ day.dropBasketId }}"{% endif %}>
+                                 {# Marca de destino SÓLO donde hay un gesto que la use. En una cesta
+                                    compartida no se arrastra —el día se cambia por la lista de botones
+                                    del panel, que explica que mueve a los dos hogares—, así que marcar
+                                    celdas ahí deja atributos muertos en el HTML. #}
+                                 {% if day.dropBasketId and not ro and partner.sharePartner is null %}data-rcal-target data-rcal-to="{{ day.dropBasketId }}"{% endif %}>
                                 <span class="n">{{ day.date.format('j') }}</span>
                                 {% if is_today %}<span class="rcal-today-tag">hoy</span>{% endif %}
                             </div>
