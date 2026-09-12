@@ -10,6 +10,7 @@ use App\Repository\SettingRepository;
 use App\Repository\UserRepository;
 use App\Security\PartnerAccessPolicy;
 use App\Service\AppSettings;
+use App\Service\Cron\EffectLedger;
 use App\Service\Notification\NotificationInbox;
 use App\Service\Notification\NotificationLink;
 use App\Service\Notification\NotificationPreferences;
@@ -24,41 +25,67 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 /**
  * Cuenta a lxs socixs lo que hay de nuevo en la web.
  *
- * SE ANUNCIA UNA TANDA, NO UNA NOVEDAD. Todo lo que está sin anunciar sale en
- * un único correo y un único aviso. Tres correos seguidos por tres cosas
- * pequeñas es exactamente lo que enseña a la gente a archivar sin leer lo que
- * mandamos, y aquí el contenido nunca es urgente: puede esperar a que haya algo
- * que contar.
+ * PEDIRLO Y MANDARLO SON DOS MOMENTOS, y esto es lo que más condiciona el
+ * diseño. Quien administra pulsa un botón y la petición web termina ahí: lo
+ * único que se guarda es hasta qué novedad se quiere contar. El envío lo hace
+ * después el planificador ({@see \App\Command\AnnounceNewsCommand}).
  *
- * EL CORREO SE BASTA SOLO, y es la decisión que ordena todo lo demás. De lxs
- * socixs activxs, la gran mayoría tiene dirección de correo y sólo una minoría
- * tiene cuenta para entrar: un correo que dijera "entra en la web a ver las
- * novedades" sería, para casi todo el mundo, una puerta cerrada. Así que el
- * texto completo viaja en el correo, y el enlace es un extra para quien puede
- * usarlo.
+ * No es ceremonia: son ~130 direcciones, el mayor envío del sistema, y cada
+ * correo es una transacción SMTP. Lanzarlo dentro del POST significa que en un
+ * hosting compartido el proceso se muere a mitad de lote por tiempo de
+ * ejecución; quien pulsó ve un error y no hay forma de saber a quién le llegó.
+ * {@see \App\Service\Push\PushSender} ya lo deja escrito para el push: un aviso
+ * masivo no se lanza desde una petición web.
  *
- * LO ANUNCIADO SE MARCA ANTES DE ENVIAR, misma regla que
- * {@see \App\Service\Volunteering\VolunteerCallNotifier}: si un fallo a mitad
- * del lote dejara el puntero sin mover, el siguiente intento volvería a escribir
- * a quien ya lo había recibido. Entre perder un anuncio y mandarlo dos veces,
- * se prefiere perderlo — y no se pierde gran cosa, porque las novedades siguen
- * en la web y el correo se puede volver a lanzar bajando el puntero a mano.
+ * DOS PUNTEROS Y NO UNO. `news.requested_through` es lo que se ha pedido contar;
+ * `news.announced_through`, lo que ya salió. Entre uno y otro está la tanda en
+ * camino. Con un solo puntero no habría forma de distinguir "pedido pero aún sin
+ * mandar" de "mandado", y al reanudar tras un corte no se sabría si volver a
+ * intentarlo.
  *
- * NO HAY INTERRUPTOR PROPIO en {@see AppSettings}, a diferencia de los avisos
- * automáticos. Aquí el interruptor es el botón: nadie manda esto sin querer.
- * Lo que sí se respeta es el corte general del correo ({@see AppSettings::EMAIL_ENABLED})
- * y lo que cada socix haya dicho en su pantalla de avisos.
+ * CADA CORREO SE APUNTA POR SEPARADO en {@see EffectLedger}, con la tanda y el
+ * socix en la referencia. Es lo que hace que un corte a mitad no sea un
+ * problema: el tick siguiente reintenta la tanda entera y el ledger se salta a
+ * quien ya recibió. Por eso —y a diferencia de un envío de un solo golpe— el
+ * puntero de lo anunciado se mueve AL FINAL: moverlo antes daría la tanda por
+ * contada sin saber a cuánta gente llegó.
+ *
+ * EL CORREO SE BASTA SOLO. De lxs socixs activxs, la gran mayoría tiene
+ * dirección y sólo una minoría tiene cuenta para entrar: un correo que dijera
+ * "entra en la web a ver las novedades" sería, para casi todo el mundo, una
+ * puerta cerrada. El texto completo viaja en el correo y el enlace es un extra
+ * para quien puede usarlo.
+ *
+ * NO HAY INTERRUPTOR PROPIO en {@see AppSettings} para el correo, a diferencia
+ * de los avisos automáticos: aquí el interruptor es el botón, nadie manda esto
+ * sin querer. Sí se respetan el corte general del correo
+ * ({@see AppSettings::EMAIL_ENABLED}) y lo que cada socix haya dicho en su
+ * pantalla de avisos.
  */
 class NewsAnnouncer
 {
     /**
-     * Hasta qué novedad se ha anunciado ya. Vive en la tabla de ajustes pero NO
-     * en el catálogo de {@see AppSettings}, y es a propósito: no es algo que
-     * administración deba tocar en la pantalla de configuración, es el estado
-     * interno del módulo. Ponerlo allí sería ofrecer un campo de texto capaz de
-     * reenviar un anuncio a toda la asociación por una errata.
+     * Hasta qué novedad se ha PEDIDO contar. La escribe el botón de
+     * administración.
+     *
+     * Vive en la tabla de ajustes pero NO en el catálogo de {@see AppSettings},
+     * y es a propósito: no es algo que se deba tocar en la pantalla de
+     * configuración, es el estado interno del módulo. Allí sería un campo de
+     * texto capaz de relanzar un anuncio a toda la asociación por una errata.
      */
-    private const POINTER = 'news.announced_through';
+    private const REQUESTED = 'news.requested_through';
+
+    /** Hasta qué novedad se ha contado ya de verdad. La escribe el planificador. */
+    private const ANNOUNCED = 'news.announced_through';
+
+    /** Clase de efecto del correo de novedades, una por socix y tanda. */
+    private const EFFECT_EMAIL = 'news_email';
+
+    /** Clase de efecto de la copia en la bandeja, una por tanda. */
+    private const EFFECT_INBOX = 'news_inbox';
+
+    /** Clase de efecto del aviso al móvil, una por tanda. */
+    private const EFFECT_PUSH = 'news_push';
 
     public function __construct(
         private readonly NewsCatalog $catalog,
@@ -70,6 +97,7 @@ class NewsAnnouncer
         private readonly NotificationLink $link,
         private readonly NotificationPreferences $preferences,
         private readonly PushSender $push,
+        private readonly EffectLedger $ledger,
         private readonly EntityManagerInterface $entityManager,
         private readonly MailerInterface $mailer,
         private readonly PartnerAccessPolicy $accessPolicy,
@@ -79,25 +107,54 @@ class NewsAnnouncer
     }
 
     /**
-     * El id de la última novedad anunciada, o 0 si nunca se ha anunciado nada.
+     * El id de la última novedad que se ha pedido contar, 0 si ninguna.
      */
-    public function announcedThrough(): int
+    public function requestedThrough(): int
     {
-        return (int) ($this->settings->findOneBy(['name' => self::POINTER])?->getValue() ?? 0);
+        return $this->pointer(self::REQUESTED);
     }
 
     /**
-     * Lo que está escrito y todavía no se ha contado.
+     * El id de la última novedad ya contada, 0 si ninguna.
+     */
+    public function announcedThrough(): int
+    {
+        return $this->pointer(self::ANNOUNCED);
+    }
+
+    /**
+     * Lo escrito que todavía no se ha pedido contar: lo que hay que revisar
+     * antes de darle al botón.
      *
      * @return list<NewsEntry> de la más reciente a la más antigua
      */
     public function pending(): array
     {
-        return $this->catalog->since($this->announcedThrough());
+        return $this->catalog->since($this->requestedThrough());
     }
 
     /**
-     * Lo ya anunciado, que es lo que se enseña en la web.
+     * Lo pedido que aún no ha salido: la tanda esperando al planificador.
+     *
+     * @return list<NewsEntry> de la más reciente a la más antigua
+     */
+    public function inFlight(): array
+    {
+        $announced = $this->announcedThrough();
+        $requested = $this->requestedThrough();
+
+        return array_values(array_filter(
+            $this->catalog->all(),
+            static fn (NewsEntry $entry): bool => $entry->id > $announced && $entry->id <= $requested
+        ));
+    }
+
+    /**
+     * Lo ya contado, que es lo que se enseña en la web.
+     *
+     * Lo pedido pero aún sin mandar NO se publica: si apareciera en la página
+     * antes de que saliera el aviso, quien pasara por ahí lo leería antes de que
+     * se lo contaran, y el aviso llegaría a hablar de algo ya visto.
      *
      * @return list<NewsEntry> de la más reciente a la más antigua
      */
@@ -107,93 +164,125 @@ class NewsAnnouncer
     }
 
     /**
-     * Cuenta las novedades pendientes a quien toca y mueve el puntero.
+     * Pide que se cuente todo lo escrito. Es lo que hace el botón.
      *
-     * TRES VÍAS, Y CADA UNA LLEGA A GENTE DISTINTA. El correo es el que alcanza
-     * a casi toda la asociación; la bandeja, sólo a quien tiene cuenta; el push,
-     * sólo a quien además ha activado los avisos en algún navegador. Por eso el
-     * correo se basta solo y las otras dos son un empujón para que quien usa la
-     * web se entere antes.
+     * NO ENVÍA NADA y devuelve en el acto. Es idempotente por construcción: dos
+     * pulsaciones seguidas escriben el mismo número, así que un doble clic o dos
+     * pestañas abiertas no pueden provocar dos anuncios.
+     *
+     * @return list<NewsEntry> lo que quedará en camino tras la petición
+     */
+    public function request(): array
+    {
+        $latest = $this->catalog->latestId();
+        if ($latest > $this->requestedThrough()) {
+            $this->movePointer(self::REQUESTED, $latest);
+        }
+
+        return $this->inFlight();
+    }
+
+    /**
+     * Manda la tanda pedida. Es lo que hace el planificador.
+     *
+     * EL REENVÍO ES SÓLO DEL CORREO, y no por descuido. Repetir la copia de la
+     * bandeja deja dos filas idénticas esperando a la misma persona, y repetir
+     * el push gasta un canal que no se recupera: quien recibe dos veces el mismo
+     * aviso del móvil lo apaga, y el permiso del navegador no se puede volver a
+     * pedir. Lo que se rescata con esto es el caso real —un lote de correo que
+     * se cortó a mitad— sin pagar por los otros dos.
+     *
+     * Para repetir una tanda YA CERRADA hay que bajar a mano el puntero
+     * `news.announced_through`: aquí sólo se reintenta lo que sigue en camino.
+     *
+     * @param bool $resend repite el correo a quien ya constaba avisadx
      *
      * @return array{entries: list<NewsEntry>, inbox: int, email: int, push: int}
      *         qué se contó y a cuánta gente por cada vía
      */
-    public function announce(): array
+    public function deliver(bool $resend = false): array
     {
-        $entries = $this->pending();
+        $entries = $this->inFlight();
         if ([] === $entries) {
             return ['entries' => [], 'inbox' => 0, 'email' => 0, 'push' => 0];
         }
 
-        $this->movePointer($this->catalog->latestId());
-
+        $batch = $this->requestedThrough();
         $active = $this->partners->findActive();
 
-        // La copia en la bandeja va a toda cuenta de socix activx SIN consultar
-        // preferencias: la bandeja es el suelo de los avisos, no un canal más
-        // ({@see NotificationInbox}). Quien apagó el correo y el móvil sigue
-        // encontrándolo al entrar, y por eso apagarlos se le puede permitir.
-        $inbox = $this->inbox->deliver(
-            $this->users->findByPartners($active),
-            Notification::KIND_NEWS,
-            $this->inboxTitle($entries),
-            $this->inboxBody($entries),
-        );
+        $inbox = $this->deliverInbox($entries, $batch, $active);
+        $email = $this->deliverEmail($entries, $batch, $resend);
+        $push = $this->deliverPush($entries, $batch, $active);
 
-        $email = $this->emailEnabled()
-            ? $this->email($entries, $this->preferences->filter(
-                $this->partners->findActiveWithEmail(),
-                NotificationTopic::NEWS,
-                NotificationTopic::CHANNEL_EMAIL,
-            ))
-            : 0;
-
-        // Al móvil sólo el titular: un push no es sitio para contar nada, es
-        // para que quien ya usa la web sepa que hay algo y entre a leerlo. El
-        // destino sale de NotificationLink, el MISMO sitio del que sale el de la
-        // fila de la bandeja, para que no puedan llevar a pantallas distintas.
-        $push = $this->push->sendToMany(
-            $this->users->findByPartners($this->preferences->filter(
-                $active,
-                NotificationTopic::NEWS,
-                NotificationTopic::CHANNEL_PUSH,
-            )),
-            $this->inboxTitle($entries),
-            $this->pushBody($entries),
-            $this->link->pathForKind(Notification::KIND_NEWS),
-            'news',
-        );
+        // AL FINAL, cuando ya se ha intentado todo: si el proceso muere antes de
+        // llegar aquí, el tick siguiente reintenta la tanda y el ledger se salta
+        // a quien ya recibió. Moverlo antes daría por contada una tanda que
+        // pudo quedarse en la mitad de la lista.
+        $this->movePointer(self::ANNOUNCED, $batch);
 
         return ['entries' => $entries, 'inbox' => $inbox, 'email' => $email, 'push' => $push];
     }
 
     /**
-     * Guarda hasta dónde se ha anunciado.
+     * La copia en la bandeja, a toda cuenta de socix activx.
      *
-     * @param int $id id de la última novedad contada
+     * SIN CONSULTAR PREFERENCIAS: la bandeja es el suelo de los avisos, no un
+     * canal más ({@see NotificationInbox}). Quien apagó el correo y el móvil
+     * sigue encontrándolo al entrar, y es justo lo que permite que apagarlos sea
+     * aceptable.
+     *
+     * @param list<NewsEntry> $entries lo que se cuenta
+     * @param int             $batch   id de la tanda, para el apunte
+     * @param list<Partner>   $active  socixs activxs
+     *
+     * @return int cuántas copias se escribieron
      */
-    private function movePointer(int $id): void
+    private function deliverInbox(array $entries, int $batch, array $active): int
     {
-        $setting = $this->settings->findOneBy(['name' => self::POINTER]) ?? (new Setting())->setName(self::POINTER);
-        $setting->setValue((string) $id);
+        $written = 0;
 
-        $this->entityManager->persist($setting);
-        $this->entityManager->flush();
+        // Una sola escritura para toda la tanda: si se corta a mitad, el flush
+        // no llega a la base y el reintento la repite entera sin duplicar nada.
+        $this->onceOrLog(self::EFFECT_INBOX, (string) $batch, function () use ($entries, $active, &$written): void {
+            $written = $this->inbox->deliver(
+                $this->users->findByPartners($active),
+                Notification::KIND_NEWS,
+                $this->headline($entries),
+                $this->inboxBody($entries),
+            );
+        });
+
+        return $written;
     }
 
     /**
-     * Manda el correo, uno por persona.
+     * El correo, uno por persona y con su propio apunte.
+     *
+     * El apunte va POR SOCIX y no por tanda porque es el único envío que se hace
+     * de uno en uno: si el proceso se queda sin tiempo en el correo ochenta, el
+     * tick siguiente arranca en el ochenta y uno en vez de volver a escribir a
+     * los ochenta primeros.
      *
      * Uno por persona y no un envío con todo el mundo en copia: las direcciones
      * de lxs socixs no se enseñan unas a otras.
      *
-     * @param list<NewsEntry> $entries  lo que se cuenta
-     * @param list<Partner>   $partners a quiénes
+     * @param list<NewsEntry> $entries lo que se cuenta
+     * @param int             $batch   id de la tanda, para el apunte
+     * @param bool            $resend  repite a quien ya constaba avisadx
      *
-     * @return int cuántos correos salieron
+     * @return int cuántos correos salieron en esta pasada
      */
-    private function email(array $entries, array $partners): int
+    private function deliverEmail(array $entries, int $batch, bool $resend): int
     {
+        if (!$this->appSettings->getBool(AppSettings::EMAIL_ENABLED)) {
+            return 0;
+        }
+
+        $partners = $this->preferences->filter(
+            $this->partners->findActiveWithEmail(),
+            NotificationTopic::NEWS,
+            NotificationTopic::CHANNEL_EMAIL,
+        );
         if ([] === $partners) {
             return 0;
         }
@@ -204,13 +293,15 @@ class NewsAnnouncer
 
         $sent = 0;
         foreach ($partners as $partner) {
-            $address = $partner->getEmail();
+            $address = $partner->getemail();
             if (!$address) {
                 continue;
             }
 
-            try {
-                $this->mailer->send(
+            $done = $this->onceOrLog(
+                self::EFFECT_EMAIL,
+                $batch . ':' . $partner->getId(),
+                fn () => $this->mailer->send(
                     (new TemplatedEmail())
                         ->to($address)
                         ->subject($subject)
@@ -227,20 +318,108 @@ class NewsAnnouncer
                             // voluntariado y el recordatorio de la cesta.
                             'can_act' => $this->accessPolicy->canUseActionLinks($partner),
                         ])
-                );
+                ),
+                $address,
+                $resend,
+            );
+
+            if ($done) {
                 ++$sent;
-            } catch (\Throwable $e) {
-                // Un correo que falla no aborta la tanda: son doscientas
-                // direcciones y una caída de SMTP a mitad dejaría a media
-                // asociación sin enterarse de nada.
-                $this->logger->error('No se pudo enviar el correo de novedades', [
-                    'partner' => $partner->getId(),
-                    'exception' => $e,
-                ]);
             }
         }
 
         return $sent;
+    }
+
+    /**
+     * El aviso al móvil, en un solo lote.
+     *
+     * @param list<NewsEntry> $entries lo que se cuenta
+     * @param int             $batch   id de la tanda, para el apunte
+     * @param list<Partner>   $active  socixs activxs
+     *
+     * @return int a cuántas cuentas llegó
+     */
+    private function deliverPush(array $entries, int $batch, array $active): int
+    {
+        $recipients = $this->users->findByPartners($this->preferences->filter(
+            $active,
+            NotificationTopic::NEWS,
+            NotificationTopic::CHANNEL_PUSH,
+        ));
+        if ([] === $recipients) {
+            return 0;
+        }
+
+        $sent = 0;
+        $this->onceOrLog(self::EFFECT_PUSH, (string) $batch, function () use ($entries, $recipients, &$sent): void {
+            // Al móvil sólo el titular: un push no es sitio para contar nada, es
+            // para que quien ya usa la web sepa que hay algo y entre a leerlo. El
+            // destino sale de NotificationLink, el MISMO sitio del que sale el de
+            // la fila de la bandeja, para que no puedan llevar a pantallas
+            // distintas.
+            $sent = $this->push->sendToMany(
+                $recipients,
+                $this->headline($entries),
+                $this->pushBody($entries),
+                $this->link->pathForKind(Notification::KIND_NEWS),
+                'news',
+            );
+        });
+
+        return $sent;
+    }
+
+    /**
+     * Produce el efecto una sola vez y se traga el fallo.
+     *
+     * El ledger relanza la excepción para que quien llama decida; aquí la
+     * decisión es siempre la misma: un correo que falla no puede abortar la
+     * tanda. Son ~130 direcciones y una caída de SMTP a mitad dejaría a media
+     * asociación sin enterarse. El apunte ya se ha retirado, así que el tick
+     * siguiente lo reintenta.
+     *
+     * @param string      $kind      clase de efecto
+     * @param string      $reference referencia única del efecto
+     * @param callable    $effect    lo que hay que hacer
+     * @param string|null $target    destino, para el registro
+     * @param bool        $resend    lo produce aunque ya constara emitido
+     *
+     * @return bool true si el efecto se produjo en esta pasada
+     */
+    private function onceOrLog(string $kind, string $reference, callable $effect, ?string $target = null, bool $resend = false): bool
+    {
+        try {
+            return $this->ledger->once($kind, $reference, new \DateTimeImmutable('today'), $effect, $target, $resend);
+        } catch (\Throwable $e) {
+            $this->logger->error('No se pudo entregar el aviso de novedades', [
+                'kind' => $kind,
+                'reference' => $reference,
+                'exception' => $e,
+            ]);
+
+            return false;
+        }
+    }
+
+    /**
+     * El valor de un puntero, 0 si todavía no tiene fila.
+     */
+    private function pointer(string $name): int
+    {
+        return (int) ($this->settings->findOneBy(['name' => $name])?->getValue() ?? 0);
+    }
+
+    /**
+     * Guarda un puntero.
+     */
+    private function movePointer(string $name, int $id): void
+    {
+        $setting = $this->settings->findOneBy(['name' => $name]) ?? (new Setting())->setName($name);
+        $setting->setValue((string) $id);
+
+        $this->entityManager->persist($setting);
+        $this->entityManager->flush();
     }
 
     /**
@@ -260,11 +439,11 @@ class NewsAnnouncer
     }
 
     /**
-     * El titular del aviso de la bandeja.
+     * El titular del aviso de la bandeja y del móvil.
      *
      * @param list<NewsEntry> $entries lo que se cuenta
      */
-    private function inboxTitle(array $entries): string
+    private function headline(array $entries): string
     {
         return 1 === \count($entries)
             ? $entries[0]->title
@@ -302,14 +481,5 @@ class NewsAnnouncer
     private function pushBody(array $entries): ?string
     {
         return 1 === \count($entries) ? null : 'Entra a verlas.';
-    }
-
-    /**
-     * Si el correo saliente está permitido. El tema no tiene interruptor propio
-     * —el botón lo es—, pero el corte general manda sobre todo.
-     */
-    private function emailEnabled(): bool
-    {
-        return $this->appSettings->getBool(AppSettings::EMAIL_ENABLED);
     }
 }

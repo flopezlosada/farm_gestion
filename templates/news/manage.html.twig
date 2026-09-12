@@ -30,6 +30,54 @@
 
     <div class="csa-stack-lg">
 
+        {% if in_flight is not empty %}
+            {# Estado intermedio: pedido pero aún sin salir. Se enseña porque si
+               no, entre que se pulsa el botón y el reloj hace su pasada la
+               pantalla se quedaría igual que antes de pulsar y parecería que no
+               ha pasado nada. #}
+            {% embed '_components/csa_card.html.twig' with {
+                title: 'En camino',
+                subtitle: in_flight|length == 1 ? 'Una novedad esperando al reloj' : in_flight|length ~ ' novedades esperando al reloj',
+                icon: 'fa-paper-plane',
+                accent: 'sky'
+            } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+
+                    {% if task_enabled %}
+                        <p style="margin: 0 0 var(--csa-sp-4);">
+                            Ya está pedido. El envío lo hace el reloj en su próxima
+                            pasada, como mucho dentro de una hora: son unos ciento
+                            treinta correos y no caben en un clic sin arriesgarse a
+                            que se queden a medias.
+                        </p>
+                    {% else %}
+                        {# La tarea apagada convierte el botón en un botón que no
+                           hace nada, y eso sólo se descubriría preguntando por qué
+                           no llegó el correo. #}
+                        {{ csa.callout(
+                            'La tarea «Contar las novedades de la web» está apagada en Configuración, así que esto no va a salir hasta que la enciendas.',
+                            'warning',
+                            'exclamation-triangle'
+                        ) }}
+                    {% endif %}
+
+                    <ul class="csa-list">
+                        {% for entry in in_flight %}
+                            <li class="csa-list__item">
+                                <span class="csa-list__body">
+                                    <span class="csa-list__primary">{{ entry.title }}</span>
+                                    <span class="csa-list__secondary csa-list__meta">
+                                        {{ entry.date|format_date('long', locale='es') }}
+                                    </span>
+                                </span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
+
         {% embed '_components/csa_card.html.twig' with {
             title: 'Sin contar todavía',
             subtitle: pending is empty ? 'No hay nada pendiente' : (pending|length == 1 ? 'Una novedad esperando' : pending|length ~ ' novedades esperando'),
@@ -77,7 +125,7 @@
                         variant: 'warning',
                         eyebrow: 'Se manda a toda la asociación',
                         title: pending|length == 1 ? 'Contar esta novedad' : 'Contar estas ' ~ pending|length ~ ' novedades',
-                        body: 'Saldrá un correo a cada socix con dirección, un aviso en la bandeja de quien tenga cuenta y una notificación a quien tenga los avisos del móvil activados. Un correo enviado no se puede recoger.',
+                        body: 'Saldrá en la próxima hora: un correo a cada socix con dirección, un aviso en la bandeja de quien tenga cuenta y una notificación a quien tenga los avisos del móvil activados. Un correo enviado no se puede recoger.',
                         confirm_label: 'Sí, contarlo',
                         action: path('news_announce'),
                         csrf_name: '_token',
@@ -122,6 +170,8 @@
             al ya contado, el anuncio pasó por encima de ella. -#}
         <p class="csa-muted" style="font-size: 0.85em;">
             Contado hasta la novedad nº {{ announced_through }} · la última escrita es la nº {{ latest_id }}.
+            El envío lo hace la tarea «Contar las novedades de la web», que puedes ver en
+            <a href="{{ path('settings_index') }}">Configuración</a>.
         </p>
 
     </div>
