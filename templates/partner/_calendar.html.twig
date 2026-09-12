@@ -599,7 +599,15 @@
                        misma pantalla. El aviso de arrastrar va arriba, en el cuerpo, como en el
                        resto. #}
                     <div class="rcal-panel__ft">
-                        <button type="button" class="csa-btn csa-btn--secondary csa-btn--block rcal-tapmove" data-rcal-move-start
+                        {# SIN `rcal-tapmove`: esa clase la esconde en cuanto el puntero es fino, y
+                           aquí el botón tiene que estar siempre. En una cesta normal se puede
+                           esconder porque en escritorio queda el arrastre, que todo el mundo conoce;
+                           en una compartida el arrastre mueve a dos familias y manda dos avisos, así
+                           que el camino explícito no puede depender de adivinar un gesto. Además, el
+                           media query mira el PUNTERO y no el ancho: estrechando la ventana en un
+                           escritorio se ve el diseño de móvil con el botón táctil oculto, y ahí no
+                           había forma de mover la cesta. #}
+                        <button type="button" class="csa-btn csa-btn--secondary csa-btn--block" data-rcal-move-start
                                 data-rcal-move-url="{{ path(cal.route_move, cal.idp|merge({ basketId: bid })) }}"
                                 data-rcal-move-from="{{ bid }}"
                                 data-rcal-shared="{{ cal.shared_other_name|default('el otro hogar') }}"
