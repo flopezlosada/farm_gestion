@@ -112,11 +112,24 @@
                 {% endif %}
             </div>
         {% else %}
-            {# Pedido no abierto: resumen del pedido y estado. #}
+            {# Pedido que ya no admite apuntes: resumen del pedido y estado.
+             #
+             # Con el plazo vencido el ESTADO sigue siendo «Abierto» —lo cierra la
+             # comisión cuando pasa el pedido al productor—, así que pintar aquí la
+             # etiqueta del estado diría «Abierto» justo encima de «ya no admite
+             # cambios». Lo que le ha pasado a la socia es que se le pasó el plazo, y
+             # eso es lo que se le cuenta. #}
+            {% set plazo_vencido = round.status == 0 %}
             <div class="csa-card">
-                <span class="prl-chip prl-chip--pausado"><span class="dot"></span>{{ round.statusLabel }}</span>
+                <span class="prl-chip prl-chip--pausado"><span class="dot"></span>{{ plazo_vencido ? 'Plazo cerrado' : round.statusLabel }}</span>
                 <p class="csa-muted">
-                    Este pedido ya no admite cambios. Entrega prevista el
+                    {% if plazo_vencido %}
+                        El plazo para apuntarse terminó
+                        {% if round.ordersCloseAt %}el <b>{{ round.ordersCloseAt|date('d/m/Y H:i') }}</b>{% endif %}.
+                    {% else %}
+                        Este pedido ya no admite cambios.
+                    {% endif %}
+                    Entrega prevista el
                     <b>{{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}</b>.
                 </p>
 
