@@ -177,24 +177,31 @@
                            Las "no recoge" (saltadas) ya NO llegan aquí: viven en la papelera
                            y su día sale libre. #}
                         {% set no_pickup = slot.items is empty %}
-                        {# Editable = entrega real, futura y no compartida (R1), si no es solo
-                           lectura. Es lo que marca un día como DESTINO de un traslado sumando,
-                           y vale para los dos gestos (arrastre y toque). #}
-                        {% set day_editable = not no_pickup and partner.sharePartner is null and slot.date > date('today') and not ro %}
-                        {# Arrastrable = lo anterior, pero solo en escritorio (`dnd`): arrastrar
-                           a la papelera = no recoger esa semana. Con el dedo se usa el botón
-                           "Mover a otra fecha" del panel, que no necesita estos atributos. #}
-                        {% set day_grab = day_editable and dnd %}
+                        {# Una entrega real y futura se puede TOCAR mientras la pantalla no sea
+                           de solo lectura. De ahí salen dos permisos distintos, y hay que
+                           separarlos porque la cesta compartida tiene uno y no el otro. #}
+                        {% set day_future = not no_pickup and slot.date > date('today') and not ro %}
+                        {# ACUMULABLE: destino de un "traslado sumando" (ese día pasa a llevar dos
+                           cestas). En una compartida no se ofrece — media cesta duplicada no es
+                           una cesta, y qué se monta ese día es decisión del reparto. #}
+                        {% set day_editable = day_future and partner.sharePartner is null %}
+                        {# ARRASTRABLE: sólo en escritorio (`dnd`). SÍ en compartidas: la cesta se
+                           mueve, con las dos mitades a la vez. Lo que cambia es que al soltar se
+                           pide confirmación —arrastrar no pregunta nada, y ese gesto mueve también
+                           al otro hogar y le manda un aviso— y que la papelera no la acepta, porque
+                           "no recoger" sigue sin poder hacerse en una compartida. Con el dedo se usa
+                           el botón del panel, que no necesita estos atributos. #}
+                        {% set day_grab = day_future and dnd %}
                         {# Se navega al mes LÓGICO del Basket (su viernes-ciclo), que para las
                            entregas del mes coincide con el visible, pero para una que se cuela
                            por fecha física desde un mes vecino es donde el panel la resuelve. #}
                         <a href="{{ path(cal.route_view, cal.idp|merge({ year: slot.basket.date.format('Y'), month: slot.basket.date.format('n'), sel: slot.basket.id })) }}"
                            class="rcal-cell {{ no_pickup ? 'rcal-skip' : 'rcal-pick' }}{{ is_sel ? ' sel' }}{{ is_today ? ' rcal-today' }}{{ day_grab ? ' rcal-grab' }}{{ not day.inMonth ? ' out' }}"
                            {% if day_editable %}data-rcal-accumulate-to="{{ slot.basket.id }}" data-rcal-accumulate-date="{{ slot.date|format_date(pattern='EEEE d MMM', locale='es') }}"{% endif %}
-                           {% if day_grab %}draggable="true" data-rcal-draggable data-rcal-kind="grid" data-rcal-skip-url="{{ path(cal.route_skip, cal.idp|merge({ basketId: slot.basket.id })) }}" data-rcal-move-url="{{ path(cal.route_move, cal.idp|merge({ basketId: slot.basket.id })) }}"{% endif %}>
+                           {% if day_grab %}draggable="true" data-rcal-draggable data-rcal-kind="grid" data-rcal-skip-url="{{ path(cal.route_skip, cal.idp|merge({ basketId: slot.basket.id })) }}" data-rcal-move-url="{{ path(cal.route_move, cal.idp|merge({ basketId: slot.basket.id })) }}"{% if partner.sharePartner %} data-rcal-shared="{{ cal.shared_other_name|default('el otro hogar') }}"{% endif %}{% endif %}>
                             <span class="n">{{ day.date.format('j') }}</span>
                             {% if is_today %}<span class="rcal-today-tag">hoy</span>{% endif %}
-                            {% if day_grab %}<span class="rcal-grip" title="Arrastra para mover o no recoger"><i class="fa fa-arrows"></i></span>{% endif %}
+                            {% if day_grab %}<span class="rcal-grip" title="{{ partner.sharePartner ? 'Arrastra para cambiar el día (mueve las dos mitades)' : 'Arrastra para mover o no recoger' }}"><i class="fa fa-arrows"></i></span>{% endif %}
                             {% if no_pickup %}
                                 <span class="x"><i class="fa fa-ban"></i></span>
                             {% else %}
@@ -235,11 +242,7 @@
                             </a>
                         {% else %}
                             <div class="rcal-cell empty{{ not day.inMonth ? ' out' }}{{ wknd ? ' wknd' }}{{ is_today ? ' rcal-today' }}"
-                                 {# Marca de destino SÓLO donde hay un gesto que la use. En una cesta
-                                    compartida no se arrastra —el día se cambia por la lista de botones
-                                    del panel, que explica que mueve a los dos hogares—, así que marcar
-                                    celdas ahí deja atributos muertos en el HTML. #}
-                                 {% if day.dropBasketId and not ro and partner.sharePartner is null %}data-rcal-target data-rcal-to="{{ day.dropBasketId }}"{% endif %}>
+                                 {% if day.dropBasketId and not ro %}data-rcal-target data-rcal-to="{{ day.dropBasketId }}" data-rcal-to-date="{{ day.date|format_date(pattern='EEEE d MMM', locale='es') }}"{% endif %}>
                                 <span class="n">{{ day.date.format('j') }}</span>
                                 {% if is_today %}<span class="rcal-today-tag">hoy</span>{% endif %}
                             </div>
@@ -652,11 +655,44 @@
 </dialog>
 {% endif %}
 
+{# Modal de confirmación del cambio de día en una cesta COMPARTIDA. El arrastre no pregunta
+   nada por su cuenta, y aquí el gesto mueve la cesta de DOS familias y les manda un aviso:
+   quien lo hace tiene que leer a quién está moviendo antes de soltarlo. Mismo sitio y mismo
+   motivo que el de arriba: fuera de .rcal para sobrevivir al refresco AJAX. #}
+{% if partner.sharePartner and not ro and cal.route_move is defined %}
+<dialog id="rcal-shared-modal" class="csa-modal csa-modal--warning" role="alertdialog" aria-labelledby="rcal-shared-title">
+    <button class="csa-modal__close" type="button" aria-label="Cerrar" onclick="this.closest('dialog').close()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+    </button>
+    <header class="csa-modal__header">
+        <span class="csa-modal__icon" aria-hidden="true"><i class="fa fa-exclamation-triangle"></i></span>
+        <div class="csa-modal__heading">
+            <span class="csa-modal__eyebrow">Cesta compartida</span>
+            <h2 class="csa-modal__title" id="rcal-shared-title">Se mueven las dos mitades</h2>
+        </div>
+    </header>
+    <div class="csa-modal__body">
+        <p>Esta cesta la comparten dos hogares y es una sola: al llevarla al <strong id="rcal-shared-day">otro día</strong> se mueve también la de <strong>{{ cal.shared_other_name|default('el otro hogar') }}</strong>.</p>
+        <p class="csa-muted">Se avisará a los dos por sus canales.</p>
+    </div>
+    <footer class="csa-modal__footer">
+        <button type="button" class="csa-modal__btn csa-modal__btn--ghost" onclick="this.closest('dialog').close()" autofocus>Cancelar</button>
+        <button type="button" class="csa-modal__btn csa-modal__btn--primary" id="rcal-shared-confirm">Sí, mover las dos</button>
+    </footer>
+</dialog>
+{% endif %}
+
 {# Interacción del calendario: arrastrar (escritorio, solo si `dnd`) y mover por TOQUE
    (móvil, siempre). Van juntos a propósito: comparten el token, el modal de traslado
    sumando y el re-vinculado tras cada refresco AJAX. Separados, el gesto de acumular solo
-   existía arrastrando y con el dedo era inalcanzable. #}
-{% if partner.sharePartner is null and not ro and cal.route_move is defined %}
+   existía arrastrando y con el dedo era inalcanzable.
+
+   TAMBIÉN EN COMPARTIDAS, desde que la cesta de dos hogares puede cambiar de día. Antes
+   este bloque no se cargaba ahí, y por eso en esa ficha no había arrastre: no es que
+   estuviera desactivado, es que no había JS. Lo que sigue apagado dentro son los dos gestos
+   que en una compartida no existen —la papelera ("no recoge") y el traslado sumando—, y el
+   movimiento pide confirmación antes de salir, porque arrastra también al otro hogar. #}
+{% if not ro and cal.route_move is defined %}
 <script>
 (function () {
     const SKIP_CSRF = {{ (cal.csrf_skip|default(''))|json_encode|raw }};
@@ -682,6 +718,24 @@
         if (dayEl) dayEl.textContent = dateLabel || 'ese día';
         if (accConfirm) accConfirm.disabled = false; // rearmar en cada apertura.
         accModal.showModal();
+    }
+
+    // Cesta COMPARTIDA: soltarla en otro día mueve las DOS mitades y avisa a los dos
+    // hogares, así que se confirma antes de mandar nada. Mismo patrón que el de arriba.
+    const sharedModal = document.getElementById('rcal-shared-modal');
+    let pendingShared = null;
+    function openShared(dateLabel, run) {
+        if (!sharedModal) { // sin <dialog>: respaldo con confirm nativo.
+            if (window.confirm('Esta cesta es compartida: se moverán las dos mitades y se avisará a los dos hogares. ¿Sigo?')) {
+                run();
+            }
+            return;
+        }
+        pendingShared = run;
+        const dayEl = document.getElementById('rcal-shared-day');
+        if (dayEl) dayEl.textContent = dateLabel || 'otro día';
+        if (sharedConfirm) sharedConfirm.disabled = false; // rearmar en cada apertura.
+        sharedModal.showModal();
     }
 
     let dragged = null;
@@ -746,6 +800,10 @@
             // Destinos válidos: días libres del nodo. Para una ficha de rejilla, además
             // la papelera (no recoge).
             cal.querySelectorAll('[data-rcal-target]').forEach(function (el) { el.classList.add('rcal-dragok'); });
+            // Una cesta COMPARTIDA sólo admite cambiar de día: ni la papelera ("no recoge",
+            // que ahí no se puede) ni el traslado sumando. Se sale antes de resaltarlos para
+            // no ofrecer un destino que el servidor va a rechazar.
+            if (card.dataset.rcalShared) return;
             if (card.dataset.rcalKind === 'grid') {
                 const tray = cal.querySelector('.rcal-tray');
                 if (tray) tray.classList.add('rcal-dragok');
@@ -764,7 +822,16 @@
 
         cal.querySelectorAll('[data-rcal-target]').forEach(function (cell) {
             wireDrop(cell, {
-                grid: function (card) { send(card.dataset.rcalMoveUrl, Object.assign({ to_basket_id: cell.dataset.rcalTo, _csrf_token: MOVE_CSRF }, view)); },
+                grid: function (card) {
+                    const fields = Object.assign({ to_basket_id: cell.dataset.rcalTo, _csrf_token: MOVE_CSRF }, view);
+                    // Compartida: confirmar primero, que esto mueve a dos familias.
+                    if (card.dataset.rcalShared) {
+                        openShared(cell.dataset.rcalToDate, function () { send(card.dataset.rcalMoveUrl, fields); });
+
+                        return;
+                    }
+                    send(card.dataset.rcalMoveUrl, fields);
+                },
                 tray: function (card) { send(card.dataset.rcalRecoverUrl, Object.assign({ to_basket_id: cell.dataset.rcalTo, _csrf_token: MOVE_CSRF }, view)); },
             });
         });
@@ -786,7 +853,13 @@
         const tray = cal.querySelector('.rcal-tray');
         if (tray) {
             wireDrop(tray, {
-                grid: function (card) { send(card.dataset.rcalSkipUrl, { _csrf_token: SKIP_CSRF }); },
+                // "No recoger" no existe en una compartida: si una mitad salta y la otra no,
+                // queda media cesta sin dueño en el punto. El servidor lo rechaza igualmente;
+                // aquí se ignora el gesto para no pasear a nadie hasta un mensaje de error.
+                grid: function (card) {
+                    if (card.dataset.rcalShared) return;
+                    send(card.dataset.rcalSkipUrl, { _csrf_token: SKIP_CSRF });
+                },
             });
         }
     }
@@ -924,6 +997,18 @@
             if (!pendingAcc) return;
             const run = pendingAcc;
             pendingAcc = null;
+            run();
+        });
+    }
+
+    const sharedConfirm = document.getElementById('rcal-shared-confirm');
+    if (sharedConfirm) {
+        sharedConfirm.addEventListener('click', function () {
+            sharedConfirm.disabled = true; // evita doble envío por doble-click/Enter.
+            if (sharedModal) sharedModal.close();
+            if (!pendingShared) return;
+            const run = pendingShared;
+            pendingShared = null;
             run();
         });
     }
