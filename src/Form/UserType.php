@@ -70,6 +70,7 @@ class UserType extends AbstractType
         // socixs, y por eso tiene sección propia: lectura para ver rondas,
         // catálogo y apuntes; escritura para llevarlas.
         'grupo_consumo' => ['label' => 'Grupo de consumo', 'read' => 'ROLE_GESTION_GRUPO_CONSUMO', 'edit' => 'ROLE_GESTION_GRUPO_CONSUMO_EDIT'],
+        'contabilidad' => ['label' => 'Contabilidad',     'read' => 'ROLE_GESTION_CONTABILIDAD', 'edit' => 'ROLE_GESTION_CONTABILIDAD_EDIT'],
     ];
 
     public function buildForm(FormBuilderInterface $builder, array $options): void

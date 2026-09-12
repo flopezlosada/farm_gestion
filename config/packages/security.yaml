@@ -120,6 +120,7 @@ security:
             - ROLE_GESTION_LAR_EDIT
             - ROLE_GESTION_VOLUNTARIADO_EDIT
             - ROLE_GESTION_GRUPO_CONSUMO_EDIT
+            - ROLE_GESTION_CONTABILIDAD_EDIT
             - ROLE_PARTNER
             - ROLE_WORKER
         # La escritura incluye la lectura (modelo lectura/escritura por sección).
@@ -137,6 +138,8 @@ security:
             - ROLE_GESTION_LAR
         ROLE_GESTION_GRUPO_CONSUMO_EDIT:
             - ROLE_GESTION_GRUPO_CONSUMO
+        ROLE_GESTION_CONTABILIDAD_EDIT:
+            - ROLE_GESTION_CONTABILIDAD
 
     providers:
         # Sin "property": Symfony delega en UserRepository::loadUserByIdentifier
@@ -290,11 +293,17 @@ security:
         # sabe de qué áreas es coordinadora cada persona. Un gateo por método a
         # secas dejaría fuera a quien más usa el módulo.
         - { path: ^/gestion/voluntariado, methods: [POST, PUT, PATCH, DELETE], roles: ROLE_GESTION_VOLUNTARIADO }
+        # Contabilidad (mismo modelo): lectura = ver el libro, los saldos y el
+        # seguimiento del presupuesto; la escritura (anotar, corregir o borrar
+        # apuntes, tocar el catálogo de partidas y el presupuesto, todo
+        # POST/PUT/PATCH/DELETE) exige _EDIT. Antes de la regla genérica ^/gestion.
+        # Path en inglés (convención del proyecto).
+        - { path: ^/gestion/accounting, methods: [POST, PUT, PATCH, DELETE], roles: ROLE_GESTION_CONTABILIDAD_EDIT }
         # Cualquier rol de gestión permite entrar a /gestion. Dentro,
         # cada controller filtra con #[IsGranted('ROLE_GESTION_X')] según
         # su sección.
         - { path: ^/gestion,
-            roles: [ROLE_ADMIN, ROLE_GESTION_GRANJA, ROLE_GESTION_SOCIXS, ROLE_GESTION_REPARTO, ROLE_BLOG, ROLE_GESTION_ENCUESTAS, ROLE_GESTION_ALBERGUE, ROLE_GESTION_LABORAL, ROLE_GESTION_LAR, ROLE_GESTION_VOLUNTARIADO, ROLE_GESTION_GRUPO_CONSUMO] }
+            roles: [ROLE_ADMIN, ROLE_GESTION_GRANJA, ROLE_GESTION_SOCIXS, ROLE_GESTION_REPARTO, ROLE_BLOG, ROLE_GESTION_ENCUESTAS, ROLE_GESTION_ALBERGUE, ROLE_GESTION_LABORAL, ROLE_GESTION_LAR, ROLE_GESTION_VOLUNTARIADO, ROLE_GESTION_GRUPO_CONSUMO, ROLE_GESTION_CONTABILIDAD] }
         # Panel del socix (lo construiremos en breve).
         - { path: ^/panel, roles: [ROLE_PARTNER, ROLE_ADMIN] }
         # Panel propio del trabajador: fichar, ver/corregir lo suyo, vacaciones.
