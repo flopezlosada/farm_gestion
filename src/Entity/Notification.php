@@ -61,6 +61,9 @@ class Notification
     /** Tu cambio puntual de reparto se ha anulado al cerrarse la semana. */
     public const KIND_SHIFT_CANCELLED = 'pickup.shift_cancelled';
 
+    /** Se ha abierto un pedido del grupo de consumo al que puedes apuntarte. */
+    public const KIND_CONSUMER_GROUP_OPEN = 'consumer_group.open';
+
     /**
      * La cesta que compartes con otro hogar ha cambiado de día o de punto.
      *

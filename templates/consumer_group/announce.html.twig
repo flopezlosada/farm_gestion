@@ -1,0 +1,82 @@
+{# ============================================================
+ # Paso intermedio del aviso de apertura: a cuánta gente llega por
+ # cada vía ANTES de mandar nada. El aviso va a toda la asociación
+ # y sólo se manda una vez, así que no se dispara desde un botón
+ # suelto de la ficha.
+ #
+ # El controller pasa:
+ #   - round     ConsumerGroupRound abierto y con productos
+ #   - audience  { total, email, push, emailEnabled }
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Avisar del pedido · Grupo de consumo{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_index') }}">Grupo de consumo</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_show', { id: round.id }) }}">{{ round.title }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Avisar</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    {{ csa.page_header('Grupo de consumo', 'Avisar del pedido', round.title) }}
+
+    <div class="csa-card csa-form-narrow">
+        {% if round.announcedAt %}
+            <p>
+                De este pedido <strong>ya se avisó</strong> el
+                {{ round.announcedAt|format_datetime('long', 'short', locale='es') }}.
+                Volver a avisar sólo repite el correo, y sólo a quien ya lo recibió:
+                la bandeja y el móvil no se repiten (dos avisos idénticos son la forma
+                más rápida de que alguien los apague para siempre).
+            </p>
+        {% else %}
+            <p>
+                Vas a avisar a <strong>toda la asociación</strong> de que este pedido está
+                abierto. Es el aviso que antes daba alguien por el grupo de mensajería, así
+                que hazlo cuando los productos y los precios estén como quieres.
+            </p>
+        {% endif %}
+
+        <p>
+            Hay <strong>{{ audience.total }}</strong> socia{{ audience.total == 1 ? '' : 's' }} activa{{ audience.total == 1 ? '' : 's' }}.
+            De ellas, <strong>{{ audience.email }}</strong> recibirá{{ audience.email == 1 ? '' : 'n' }} el correo
+            y <strong>{{ audience.push }}</strong> el aviso en el móvil (sólo quien lo tenga dado de alta
+            en su navegador).
+            La copia en la bandeja de la web le llega a todo el mundo que tenga cuenta.
+        </p>
+
+        {% if not audience.emailEnabled %}
+            <p class="csa-muted">
+                El interruptor general de correo está apagado: se escribirá la bandeja y saldrá
+                el aviso al móvil, pero no se enviará ningún correo.
+            </p>
+        {% endif %}
+
+        <form method="post" action="{{ path('consumer_group_announce', { id: round.id }) }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_announce_' ~ round.id) }}">
+
+            {% if round.announcedAt %}
+                <label class="cg-check" style="display: inline-flex; align-items: center; gap: var(--csa-sp-2); margin: var(--csa-sp-3) 0;">
+                    <input type="checkbox" name="resend" value="1">
+                    <span>Repetir el correo a quien ya lo recibió</span>
+                </label>
+            {% endif %}
+
+            <div class="csa-row" style="justify-content: flex-end; margin-top: var(--csa-sp-4);">
+                {{ csa.btn('Cancelar', { variant: 'ghost', href: path('consumer_group_show', { id: round.id }) }) }}
+                <button type="submit" class="csa-btn csa-btn--primary">
+                    {{ round.announcedAt ? 'Volver a avisar' : 'Avisar a las socias' }}
+                </button>
+            </div>
+        </form>
+    </div>
+
+{% endblock %}

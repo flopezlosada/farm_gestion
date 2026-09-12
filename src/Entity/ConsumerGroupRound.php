@@ -15,14 +15,17 @@ use Gedmo\Mapping\Annotation as Gedmo;
  * las socias se apuntan mientras está abierto, y en la fecha de entrega el
  * producto llega con la cesta del socio en su nodo.
  *
- * Ciclo de estados (ver {@see canReceiveOrders()} y el servicio de transiciones):
+ * Estado del PLAZO (ver {@see canReceiveOrders()} y el servicio de transiciones):
  *   OPEN       apuntes abiertos; las socias añaden/editan sus líneas.
  *   CLOSED     cerrado el plazo de apuntes; se agregan cantidades por producto.
- *   CONFIRMED  la comisión confirma que se supera el mínimo del productor. SOLO
- *              aquí el pedido pasa a ser vinculante y se pide el pago (fuera de
- *              la app, por transferencia).
  *   CANCELLED  no se alcanzó el mínimo (o se anula); nadie paga.
  *   DELIVERED  entregado con la cesta.
+ *
+ * Y aparte, el flag {@see $confirmed}: la comisión confirma que se supera el
+ * mínimo del productor. SOLO entonces el pedido de las socias es vinculante y se
+ * les pide el pago (fuera de la app, por transferencia). No es un estado del
+ * plazo, y por eso está separado: un pedido confirmado sigue admitiendo apuntes
+ * hasta que se cierra.
  *
  * El MÍNIMO del productor NO se automatiza: su unidad varía (importe, cantidad,
  * nº de pedidos) e incluso se desconoce. Se guarda como texto informativo
@@ -137,6 +140,18 @@ class ConsumerGroupRound
 
     /** @ORM\Column(type="datetime", nullable=true) */
     private ?\DateTime $cancelledAt = null;
+
+    /**
+     * Cuándo se avisó a la asociación de que este pedido está abierto.
+     *
+     * Es la memoria VISIBLE del aviso: la pantalla dice cuándo salió y el botón
+     * cambia de «avisar» a «volver a avisar». Que no se mande dos veces lo
+     * garantiza aparte el registro de efectos
+     * ({@see \App\Service\ConsumerGroup\ConsumerGroupAnnouncer}); esta columna no
+     * es el candado, es lo que lee la comisión.
+     * @ORM\Column(type="datetime", nullable=true)
+     */
+    private ?\DateTime $announcedAt = null;
 
     /**
      * Fecha y hora de cierre de apuntes. Pasada esta fecha, la ronda ya no
@@ -357,6 +372,20 @@ class ConsumerGroupRound
     public function setCancelledAt(?\DateTime $cancelledAt): self
     {
         $this->cancelledAt = $cancelledAt;
+        return $this;
+    }
+
+    /**
+     * Cuándo se avisó de la apertura, o null si todavía no se ha avisado.
+     */
+    public function getAnnouncedAt(): ?\DateTime
+    {
+        return $this->announcedAt;
+    }
+
+    public function setAnnouncedAt(?\DateTime $announcedAt): self
+    {
+        $this->announcedAt = $announcedAt;
         return $this;
     }
 

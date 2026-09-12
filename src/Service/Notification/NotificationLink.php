@@ -75,6 +75,12 @@ class NotificationLink
             // llevan a la pantalla de voluntariado del socix, que enseña las dos
             // cosas: lo abierto y lo que llevas apuntado.
             str_starts_with($kind, 'volunteering.') => $this->urlGenerator->generate('panel_volunteering'),
+            // El pedido del grupo de consumo lleva al listado del panel y no a la
+            // ficha del pedido: aquí sólo se sabe la CLASE de aviso, no de cuál
+            // era, y el listado enseña todo lo abierto —incluido lo que se haya
+            // abierto después—. El correo, que sí conoce el pedido, sí apunta a
+            // su ficha.
+            str_starts_with($kind, 'consumer_group.') => $this->urlGenerator->generate('panel_consumer_group_index'),
             // "Faltan datos en tu ficha" lleva a la pantalla donde se rellenan, y
             // no a la bandeja: el aviso ya dice qué falta, así que lo único que
             // queda por hacer es el formulario. Un aviso que pide algo tiene que

@@ -39,6 +39,9 @@ final class NotificationTopic
     /** Novedades: lo que se va añadiendo a la web. */
     public const NEWS = 'news';
 
+    /** Grupo de consumo: se ha abierto un pedido colectivo al que apuntarse. */
+    public const CONSUMER_GROUP = 'consumer_group';
+
     /**
      * El catálogo. Clave => etiqueta, ayuda, feature que lo habilita (o null) y
      * canales por los que se manda de verdad.
@@ -73,6 +76,16 @@ final class NotificationTopic
             // apagar el push entero y se quedaría también sin el aviso de su
             // cesta, que es el que de verdad importa. Y el permiso del
             // navegador, una vez denegado, no se puede volver a pedir.
+            'channels' => [self::CHANNEL_EMAIL, self::CHANNEL_PUSH],
+        ],
+        self::CONSUMER_GROUP => [
+            'label' => 'Grupo de consumo',
+            'help' => 'Cuando se abre un pedido de aceite, fruta o legumbre al que puedes apuntarte. Son unos pocos al año.',
+            'feature' => AppSettings::FEATURE_GRUPO_CONSUMO,
+            // Encendido por defecto, como todos: el pedido está abierto a toda
+            // la asociación, así que el aviso también. Quien no consuma nada de
+            // esto lo apaga aquí y no vuelve a enterarse, sin tener que renunciar
+            // al aviso de su cesta.
             'channels' => [self::CHANNEL_EMAIL, self::CHANNEL_PUSH],
         ],
     ];
