@@ -5,7 +5,9 @@
  # El controller pasa:
  #   - open_rounds     ConsumerGroupRound[] abiertos
  #   - order_by_round  array round_id => ConsumerGroupOrder de la socia
- #   - confirmed       ConsumerGroupOrder[] en pedidos confirmados
+ #   - confirmed       ConsumerGroupOrder[] confirmados y por entregar
+ #   - past            ConsumerGroupOrder[] confirmados ya entregados (historial)
+ #   - payment_info    texto de configuración: dónde transferir ('' = no hay)
  # ============================================================ #}
 
 {% extends '_layouts/csa_panel.html.twig' %}
@@ -50,6 +52,10 @@
                             <div class="cg-round-card__cta">
                                 {% if mine and not mine.empty %}
                                     <span class="prl-chip prl-chip--activo"><span class="dot"></span>Ya apuntada</span>
+                                    {# Lo que lleva pedido, en la propia tarjeta: es el dato por
+                                     # el que se entra a mirar, y así no hay que abrir la ficha
+                                     # para recordarlo. #}
+                                    <div class="cg-round-card__amount">{{ mine.total|number_format(2, ',', '.') }} €</div>
                                 {% else %}
                                     <span class="csa-btn csa-btn--primary csa-btn--sm">Apuntarme</span>
                                 {% endif %}
@@ -80,6 +86,30 @@
                                         {% endif %}
                                     {% endfor %}
                                 </ul>
+
+                                {% include 'Panel/consumer_group/_payment.html.twig' with { order: order, payment_info: payment_info } only %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </section>
+        {% endif %}
+
+        {# ============ HISTORIAL ============ #}
+        {% if past is not empty %}
+            <section>
+                <h2 class="csa-section-title">Lo que ya te llevaste</h2>
+                <div class="csa-stack">
+                    {% for order in past %}
+                        {% set round = order.round %}
+                        <div class="cg-round-card cg-round-card--past">
+                            <div class="cg-round-card__body">
+                                <div class="cg-round-card__title">{{ round.title }}</div>
+                                <div class="cg-round-card__meta">
+                                    {{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}
+                                    · {{ order.total|number_format(2, ',', '.') }} €
+                                    {%- if not order.paid %} · pendiente de pago{% endif %}
+                                </div>
                             </div>
                         </div>
                     {% endfor %}
@@ -103,5 +133,8 @@
         .cg-round-card__title { font-weight: 600; }
         .cg-round-card__meta { font-size: .85rem; color: var(--csa-muted); }
         .cg-round-card__lines { margin: var(--csa-sp-2) 0 0; padding-left: var(--csa-sp-4); font-size: .9rem; }
+        .cg-round-card__amount { margin-top: var(--csa-sp-2); font-weight: 600; text-align: right; }
+        .cg-round-card--past { background: transparent; }
     </style>
+    {% include 'Panel/consumer_group/_money_styles.html.twig' %}
 {% endblock %}

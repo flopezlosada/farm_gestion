@@ -163,6 +163,23 @@ class ConsumerGroupOrder
         return round($total, 2);
     }
 
+    /**
+     * Concepto con el que hacer la transferencia de este pedido.
+     *
+     * EXISTE PARA QUE LA COMISIÓN PUEDA CONCILIAR EL EXTRACTO. La app no cobra:
+     * alguien mira los ingresos del banco y marca a mano quién ha pagado. Sin un
+     * concepto acordado, en el extracto aparecen nombres de titulares de cuenta
+     * que no siempre son los de la socia y ninguna pista de a qué pedido
+     * corresponde el ingreso, así que la conciliación se hace preguntando.
+     *
+     * Lleva el número de pedido y el nombre, que es lo que hace falta para
+     * casarlo: corto, porque el campo de concepto del banco recorta.
+     */
+    public function getPaymentReference(): string
+    {
+        return sprintf('GC%d %s', $this->round?->getId() ?? 0, (string) $this->partner);
+    }
+
     public function isPaid(): bool
     {
         return $this->paid;
