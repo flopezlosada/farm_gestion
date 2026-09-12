@@ -37,8 +37,8 @@
 
 - id: 2
   fecha: '2026-09-12'
-  titulo: 'Esta misma página'
+  titulo: 'Te contaremos por aquí lo que vayamos añadiendo'
   texto: |
-    A partir de ahora, cuando añadamos algo nuevo a la web te lo contamos aquí.
-    Si prefieres no recibirlo por correo, puedes desactivarlo en tu apartado de
-    avisos.
+    Cada vez que la web estrene algo que puedas usar, te llegará un correo como
+    este y te quedará también en tus avisos. Será de vez en cuando, nunca urgente.
+    Y si prefieres no recibirlo, puedes desactivarlo en tus preferencias de avisos.
