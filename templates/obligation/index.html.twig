@@ -154,8 +154,9 @@
     </div>
 
     <p class="obl-foot">
-        Los avisos por correo salen {{ thresholds|slice(0, thresholds|length - 1)|join(', ') }} y 0 días antes de cada fecha,
-        a quien tenga permiso de Vencimientos y a la persona responsable de cada ficha.
+        Los avisos por correo salen {{ thresholds|filter(t => t > 0)|join(', ') }} días antes de cada fecha,
+        y el mismo día del vencimiento. Llegan a quien tenga permiso de Vencimientos y a la persona
+        responsable de cada ficha.
     </p>
 
 </div>

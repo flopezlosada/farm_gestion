@@ -66,7 +66,9 @@
                 {%- endif -%}
             </div>
             {% if obligation.expiresOn %}
-                <div class="obl-head__date">Vigente hasta el {{ obligation.expiresOn|date('d/m/Y') }}</div>
+                <div class="obl-head__date">
+                    {{ days < 0 ? 'La fecha era el' : 'Vigente hasta el' }} {{ obligation.expiresOn|date('d/m/Y') }}
+                </div>
             {% else %}
                 <div class="obl-head__date">Sin ningún periodo anotado, esta ficha no vigila nada.</div>
             {% endif %}
