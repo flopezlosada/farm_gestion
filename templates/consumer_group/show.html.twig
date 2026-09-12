@@ -54,6 +54,9 @@
             <div class="cg-fact"><span class="cg-fact__l">Entrega</span><span class="cg-fact__v">{{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}</span></div>
             <div class="cg-fact"><span class="cg-fact__l">Mínimo</span><span class="cg-fact__v">{{ round.minimumCondition ?: '—' }}</span></div>
             {% if round.confirmedAt %}<div class="cg-fact"><span class="cg-fact__l">Confirmado</span><span class="cg-fact__v">{{ round.confirmedAt|date('d/m/Y') }}</span></div>{% endif %}
+            {# Sin aviso, el pedido existe pero no lo ha visto nadie: es un dato de
+             # primera línea, no un detalle de trazabilidad. #}
+            <div class="cg-fact"><span class="cg-fact__l">Avisado</span><span class="cg-fact__v">{{ round.announcedAt ? round.announcedAt|date('d/m/Y H:i') : 'todavía no' }}</span></div>
             {% if round.deliveredAt %}<div class="cg-fact"><span class="cg-fact__l">Entregado</span><span class="cg-fact__v">{{ round.deliveredAt|date('d/m/Y') }}</span></div>{% endif %}
             {% if round.cancelledAt %}<div class="cg-fact"><span class="cg-fact__l">Cancelado</span><span class="cg-fact__v">{{ round.cancelledAt|date('d/m/Y') }}</span></div>{% endif %}
         </div>
@@ -74,6 +77,9 @@
                 {% endif %}
                 {% if can_confirm %}
                     <a href="{{ path('consumer_group_confirm', { id: round.id }) }}" class="prt-btn prt-btn--primary"><i class="fa fa-check"></i> Confirmar pedido</a>
+                {% endif %}
+                {% if can_announce %}
+                    <a href="{{ path('consumer_group_announce', { id: round.id }) }}" class="prt-btn"><i class="fa fa-bullhorn"></i> {{ round.announcedAt ? 'Volver a avisar' : 'Avisar a las socias' }}</a>
                 {% endif %}
                 {% for to in transitions %}
                     <form method="post" action="{{ path('consumer_group_transition', { id: round.id }) }}" style="display:inline;"

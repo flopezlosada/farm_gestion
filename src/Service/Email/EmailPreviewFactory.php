@@ -2,7 +2,11 @@
 
 namespace App\Service\Email;
 
+use App\Entity\ConsumerGroupProduct;
+use App\Entity\ConsumerGroupRound;
+use App\Entity\ConsumerGroupRoundItem;
 use App\Entity\Partner;
+use App\Entity\Producer;
 use App\Entity\User;
 use App\Repository\PartnerEventRepository;
 use App\Repository\PartnerRepository;
@@ -32,6 +36,7 @@ class EmailPreviewFactory
         'magic_link' => 'email/magic_link.html.twig',
         'pickup_reminder' => 'email/pickup_reminder.html.twig',
         'admin_summary' => 'email/admin_delivery_changes_summary.html.twig',
+        'consumer_group_open' => 'email/consumer_group_open.html.twig',
     ];
 
     public function __construct(
@@ -62,6 +67,7 @@ class EmailPreviewFactory
             'magic_link' => $this->magicLinkContext(),
             'pickup_reminder' => $this->pickupReminderContext(),
             'admin_summary' => $this->adminSummaryContext(),
+            'consumer_group_open' => $this->consumerGroupOpenContext(),
         };
 
         return ['template' => $template, 'context' => $context];
@@ -115,6 +121,41 @@ class EmailPreviewFactory
             'calendar_url' => $this->urls->generate('panel_calendar', [], UrlGeneratorInterface::ABSOLUTE_URL),
             // Deadline coherente con los ajustes de cierre, sobre la fecha de ejemplo.
             'deadline' => $this->deadline->fromPhysicalDate($pickupDate),
+        ];
+    }
+
+    /**
+     * Aviso de pedido abierto del grupo de consumo, con un pedido de ejemplo
+     * construido en memoria.
+     *
+     * NO se busca un pedido real en la base, a diferencia de las demás previews:
+     * el módulo va detrás de un feature-flag y lo normal mientras está en rodaje
+     * es que no haya ninguno, así que la preview saldría vacía justo cuando más
+     * se mira —al preparar el primer envío—. El socix sí es real, que es lo que
+     * enseña cómo queda el saludo.
+     *
+     * @return array<string, mixed>
+     */
+    private function consumerGroupOpenContext(): array
+    {
+        $producer = (new Producer())->setName('Almazara de la Sierra');
+        $product = (new ConsumerGroupProduct())->setName('Aceite de oliva virgen extra')->setUnit('garrafa de 5 L');
+        $producer->addProduct($product);
+
+        $round = (new ConsumerGroupRound())
+            ->setTitle('Aceite de la nueva cosecha')
+            ->setProducer($producer)
+            ->setDescription('Cosecha temprana, sin filtrar. Se recoge con la cesta.')
+            ->setOrdersCloseAt(new \DateTime('+10 days'))
+            ->setDeliveryDate(new \DateTime('+17 days'));
+        $round->addItem(new ConsumerGroupRoundItem($round, $product, '42.00'));
+
+        return [
+            'partner' => $this->partners->findOneBy([]) ?? (new Partner())->setName('Ejemplo'),
+            'round' => $round,
+            'url' => $this->urls->generate('panel_consumer_group_index', [], UrlGeneratorInterface::ABSOLUTE_URL),
+            'preferences_url' => $this->urls->generate('panel_notifications', [], UrlGeneratorInterface::ABSOLUTE_URL),
+            'can_act' => true,
         ];
     }
 
