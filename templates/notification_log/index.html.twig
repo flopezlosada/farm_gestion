@@ -5,9 +5,11 @@
  # ya pintada): aquí pagina el servidor, porque el registro crece sin techo y
  # traerse un año entero para enseñar cincuenta filas se cae solo.
  #
- # Siete columnas se quedaron en cinco. Canal y destinatarix son la misma
- # pregunta ("¿a quién, y por dónde?") y ahora el canal es el icono de la
+ # Siete columnas se quedaron en cinco más la ficha. Canal y destinatarix son la
+ # misma pregunta ("¿a quién, y por dónde?") y ahora el canal es el icono de la
  # persona; tipo y asunto también ("¿qué se le mandó?") y van una encima de otra.
+ # El motivo de un fallo no está aquí: vive en la ficha del aviso, porque es un
+ # párrafo técnico y en una fila sólo cabe recortado, que es no decir nada.
  # ============================================================ #}
 
 {% extends 'notification_log/_layout.html.twig' %}
@@ -135,8 +137,9 @@
                     <th class="tight" style="width: 104px;">Cuándo</th>
                     <th>Destinatarix</th>
                     <th>Aviso</th>
-                    <th class="tight" style="width: 168px;">Resultado</th>
-                    <th class="tight" style="width: 196px;">Salió de</th>
+                    <th class="tight" style="width: 130px;">Resultado</th>
+                    <th class="tight" style="width: 186px;">Salió de</th>
+                    <th class="actions">Ficha</th>
                 </tr>
             </thead>
             <tbody>
@@ -198,31 +201,22 @@
                                 <span class="prl-cell-muted">a mano</span>
                             {% endif %}
                         </td>
+
+                        {# El motivo del fallo NO se pinta aquí. Son párrafos técnicos
+                           con rutas dentro: recortados no dicen nada y enteros revientan
+                           el listado. Van en la ficha, que es donde caben. #}
+                        <td class="actions">
+                            <a href="{{ path('notification_log_show', { id: log.id }) }}"
+                               {% if log.error %}style="color: var(--prl-terra-d);"{% endif %}
+                               title="{{ log.error ? 'Ver por qué no salió' : 'Ver la ficha del aviso' }}"
+                               aria-label="Ver la ficha del aviso">
+                                <i class="fa fa-{{ log.error ? 'exclamation-circle' : 'eye' }}" aria-hidden="true"></i>
+                            </a>
+                        </td>
                     </tr>
-
-                    {% if log.error %}
-                        {# El motivo, a todo el ancho y bajo su fila.
-                           Estaba recortado en la celda del resultado con el texto
-                           completo en el `title`, y un motivo que hay que adivinar
-                           pasando el ratón no es un motivo: en el móvil no hay ratón,
-                           y aquí se viene justamente a saber POR QUÉ no salió. Ocupa
-                           sitio sólo cuando algo ha fallado, que es cuando importa.
-
-                           El fondo va en el `style` y no en una clase porque así gana
-                           al `tr:hover` de la tabla, que si no lo repinta de verde al
-                           pasar por encima —y esto no es una fila más, es un error. #}
-                        <tr>
-                            <td colspan="5" style="background: var(--prl-terra-l); padding: 9px 14px 11px;">
-                                <span style="font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
-                                             font-weight: 600; color: var(--prl-terra-d); margin-right: 8px;">Motivo</span>
-                                <span style="font-family: 'Inter', sans-serif; font-size: 12px; line-height: 1.5;
-                                             color: var(--prl-ink); word-break: break-word;">{{ log.error }}</span>
-                            </td>
-                        </tr>
-                    {% endif %}
                 {% else %}
                     <tr>
-                        <td colspan="5" class="prl-empty">
+                        <td colspan="6" class="prl-empty">
                             No hay avisos registrados con estos filtros.
                             {# El registro empezó a escribirse con esta pantalla: antes de
                                eso no hay nada que enseñar, y conviene decirlo para que un
