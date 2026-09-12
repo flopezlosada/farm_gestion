@@ -2,6 +2,8 @@
 
 namespace App\Controller;
 
+use App\Entity\ConsumerGroupProduct;
+use App\Entity\Image;
 use App\Entity\Producer;
 use App\Form\ProducerType;
 use App\Repository\ProducerRepository;
@@ -64,10 +66,19 @@ class ProducerController extends AbstractController
      * Ficha del productor con su catálogo.
      */
     #[Route('/{id}', name: 'consumer_group_producer_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(Producer $producer): Response
+    public function show(Producer $producer, EntityManagerInterface $em): Response
     {
+        // Las fotos del catálogo, en una consulta: la tabla las pinta por fila y
+        // preguntar una vez por producto sería un N+1 con veinte referencias.
+        $productIds = [];
+        foreach ($producer->getProducts() as $product) {
+            $productIds[] = $product->getId();
+        }
+
         return $this->render('producer/show.html.twig', [
             'producer' => $producer,
+            'photos' => $em->getRepository(Image::class)
+                ->findOneForObjects(ConsumerGroupProduct::OBJECT_CLASS, array_filter($productIds)),
         ]);
     }
 

@@ -11,11 +11,25 @@ use Symfony\Component\Validator\Constraints as Assert;
  * ronda al añadirlo, pero el precio efectivo de cada ronda vive en
  * {@see ConsumerGroupRoundItem} porque varía de una ronda a otra.
  *
+ * LA FOTO NO ES UNA COLUMNA DE AQUÍ. Se guarda como {@see Image} polimórfica
+ * ({@see self::OBJECT_CLASS} + id), que es el mecanismo de subida que ya usa el
+ * resto del proyecto —el LAR, el blog— con su carpeta, su borrado y su
+ * `webPath`. Hubo una columna `image` de tipo string, declarada en julio «lista
+ * para cuando se cablee el widget»: nunca se cableó, nadie la escribió, y montar
+ * un segundo mecanismo de subida sólo para este módulo habría sido duplicar lo
+ * que ya funciona.
+ *
  * @ORM\Table(name="consumer_group_product")
  * @ORM\Entity(repositoryClass="App\Repository\ConsumerGroupProductRepository")
  */
 class ConsumerGroupProduct
 {
+    /**
+     * Discriminante de la media polimórfica ({@see Image::getObjectClass()}).
+     * Mismo patrón que {@see LarProject::OBJECT_CLASS}.
+     */
+    public const OBJECT_CLASS = 'consumergroupproduct';
+
     /**
      * @ORM\Id
      * @ORM\GeneratedValue
@@ -44,13 +58,6 @@ class ConsumerGroupProduct
     #[Assert\NotBlank]
     #[Assert\Length(max: 180)]
     private string $name = '';
-
-    /**
-     * Ruta de la imagen del producto (opcional). El widget de subida se cablea
-     * aparte; el campo queda listo.
-     * @ORM\Column(type="string", length=255, nullable=true)
-     */
-    private ?string $image = null;
 
     /**
      * Unidad de venta (p. ej. "kg", "L", "docena", "caja", "ud"). Texto libre: los
@@ -112,17 +119,6 @@ class ConsumerGroupProduct
     public function setCategory(?ConsumerGroupCategory $category): self
     {
         $this->category = $category;
-        return $this;
-    }
-
-    public function getImage(): ?string
-    {
-        return $this->image;
-    }
-
-    public function setImage(?string $image): self
-    {
-        $this->image = $image;
         return $this;
     }
 
