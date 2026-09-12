@@ -8,6 +8,7 @@ use App\Entity\Partner;
 use App\Form\ConsumerGroupRoundType;
 use App\Repository\ConsumerGroupOrderRepository;
 use App\Repository\ConsumerGroupRoundRepository;
+use App\Service\ConsumerGroup\ConsumerGroupAnnouncer;
 use App\Service\ConsumerGroup\ConsumerGroupNotifier;
 use App\Service\ConsumerGroup\InvalidRoundTransition;
 use App\Service\ConsumerGroup\ConsumerGroupStats;
@@ -24,7 +25,7 @@ use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
- * Gestión del GRUPO DE CONSUMO para la comisión: pedidos de pedido colectivo sobre el
+ * Gestión del GRUPO DE CONSUMO para la comisión: pedidos colectivos sobre el
  * catálogo de productores, seguimiento de apuntes y transiciones de estado.
  *
  * Acceso: feature-flag de rodaje + ROLE_GESTION_GRUPO_CONSUMO; la escritura la exige
@@ -94,7 +95,7 @@ class ConsumerGroupController extends AbstractController
      * Ficha del pedido: productos, apuntes agregados y transiciones disponibles.
      */
     #[Route('/{id}', name: 'consumer_group_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(ConsumerGroupRound $round, OrderAggregator $aggregator, RoundStateMachine $machine): Response
+    public function show(ConsumerGroupRound $round, OrderAggregator $aggregator, RoundStateMachine $machine, ConsumerGroupAnnouncer $announcer): Response
     {
         // Pedidos no vacíos del pedido, ordenados por socia, con su total y estado
         // de pago, más un resumen de cobro para la comisión.
@@ -121,6 +122,9 @@ class ConsumerGroupController extends AbstractController
             'aggregate'   => $aggregator->aggregate($round),
             'transitions' => $machine->allowedTransitions($round),
             'can_confirm' => $machine->canConfirm($round),
+            // La regla de cuándo tiene sentido avisar vive en el announcer, no
+            // repetida en la plantilla: si cambia, cambia en un sitio.
+            'can_announce' => $announcer->canAnnounce($round),
             'socias'      => $socias,
             'payment'     => [
                 'count'        => count($socias),
@@ -133,13 +137,17 @@ class ConsumerGroupController extends AbstractController
 
     /**
      * Editar la cabecera del pedido (no el productor: sus productos cuelgan de ese
-     * catálogo). Solo mientras está abierto.
+     * catálogo).
+     *
+     * Mientras la comisión pueda gestionarlo, y no sólo mientras admita apuntes:
+     * pasado el plazo, ajustar la fecha de entrega o la nota al productor sigue
+     * haciendo falta —de hecho es justo entonces cuando se habla con él—.
      */
     #[Route('/{id}/edit', name: 'consumer_group_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     public function edit(Request $request, ConsumerGroupRound $round, EntityManagerInterface $em): Response
     {
-        if (!$round->canReceiveOrders()) {
-            $this->addFlash('warning', 'Sólo se pueden editar pedidos abiertos.');
+        if (!$round->canManageOrders()) {
+            $this->addFlash('warning', 'Este pedido ya no se puede editar.');
 
             return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
         }
@@ -162,13 +170,13 @@ class ConsumerGroupController extends AbstractController
 
     /**
      * Productos del pedido: elegir qué productos del catálogo del productor entran
-     * y a qué precio de pedido. Solo mientras está abierto.
+     * y a qué precio de pedido. Mientras la comisión pueda gestionarlo.
      */
     #[Route('/{id}/items', name: 'consumer_group_items', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     public function items(Request $request, ConsumerGroupRound $round, RoundItemEditor $itemEditor, EntityManagerInterface $em): Response
     {
-        if (!$round->canReceiveOrders()) {
-            $this->addFlash('warning', 'Sólo se pueden cambiar los productos de un pedido abierto.');
+        if (!$round->canManageOrders()) {
+            $this->addFlash('warning', 'Este pedido ya no admite cambios en sus productos.');
 
             return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
         }
@@ -311,6 +319,52 @@ class ConsumerGroupController extends AbstractController
         return $this->render('consumer_group/confirm.html.twig', [
             'round' => $round,
             'stats' => $notifier->recipientStats($round),
+        ]);
+    }
+
+    /**
+     * Avisar a la asociación de que el pedido está abierto, con paso intermedio:
+     * a cuánta gente llega por cada vía antes de mandar nada.
+     *
+     * El aviso es MANUAL a propósito: la comisión abre el pedido y ajusta
+     * productos y precios antes de enseñarlo, así que avisar al guardar mandaría
+     * a todo el mundo a un catálogo a medias. Ver
+     * {@see ConsumerGroupAnnouncer}.
+     */
+    #[Route('/{id}/announce', name: 'consumer_group_announce', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
+    public function announce(Request $request, ConsumerGroupRound $round, ConsumerGroupAnnouncer $announcer): Response
+    {
+        if (!$announcer->canAnnounce($round)) {
+            $this->addFlash('warning', 'Sólo se avisa de un pedido abierto y con productos.');
+
+            return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
+        }
+
+        if ($request->isMethod('POST')) {
+            if (!$this->isCsrfTokenValid('consumer_group_announce_'.$round->getId(), (string) $request->request->get('_token'))) {
+                $this->addFlash('warning', 'Token de seguridad inválido.');
+
+                return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
+            }
+
+            // El reenvío sólo se ofrece si ya se avisó: es una orden humana
+            // ("ese correo no llegó"), no algo que se marque de paso.
+            $resend = null !== $round->getAnnouncedAt() && $request->request->getBoolean('resend');
+            $result = $announcer->announce($round, $resend);
+
+            $this->addFlash('success', sprintf(
+                'Aviso enviado: %d en la bandeja, %d por correo, %d al móvil.',
+                $result['inbox'],
+                $result['email'],
+                $result['push'],
+            ));
+
+            return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
+        }
+
+        return $this->render('consumer_group/announce.html.twig', [
+            'round' => $round,
+            'audience' => $announcer->audience(),
         ]);
     }
 

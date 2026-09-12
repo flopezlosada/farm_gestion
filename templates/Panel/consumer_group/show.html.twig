@@ -4,10 +4,13 @@
  # resumen de su pedido y el estado.
  #
  # El controller pasa:
- #   - round       ConsumerGroupRound
- #   - order       ConsumerGroupOrder|null (el de la socia)
- #   - quantities  array product_id => cantidad ya pedida
- #   - can_order   bool (¿el pedido admite pedidos?)
+ #   - round         ConsumerGroupRound
+ #   - order         ConsumerGroupOrder|null (el de la socia)
+ #   - quantities    array item_id => cantidad ya pedida
+ #   - can_order     bool (¿el pedido admite pedidos?)
+ #   - repeatable    array item_id => cantidad del último pedido a este productor
+ #   - photos        array product_id => Image (la foto del producto, si tiene)
+ #   - payment_info  texto de configuración: dónde transferir ('' = no hay)
  # ============================================================ #}
 
 {% extends '_layouts/csa_panel.html.twig' %}
@@ -38,30 +41,78 @@
                 <p class="csa-muted" style="margin-top: 0;">
                     Cierre de apuntes: <b>{{ round.ordersCloseAt ? round.ordersCloseAt|date('d/m/Y H:i') : '—' }}</b>.
                     Entrega el <b>{{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}</b> con tu cesta.
-                    Puedes cambiar tu pedido hasta el cierre; no pagas nada hasta que la comisión confirme el pedido.
+                    Puedes cambiar tu pedido hasta el cierre.
+                    {# Un pedido confirmado sigue admitiendo cambios, pero ya NO es cierto
+                     # que no haya que pagar: decirlo aquí contradecía al bloque de pago
+                     # que aparece justo debajo pidiendo la transferencia. #}
+                    {% if not round.confirmed %}No pagas nada hasta que la comisión confirme el pedido.{% endif %}
                 </p>
+
+                {# Un pedido puede estar CONFIRMADO y seguir abierto a cambios: es
+                 # entonces cuando hay que pagar, así que el bloque del dinero también
+                 # va aquí y no sólo en el resumen de los cerrados. #}
+                {% if order and not order.empty %}
+                    {% include 'Panel/consumer_group/_payment.html.twig' with { order: order, payment_info: payment_info } only %}
+                {% endif %}
 
                 {% if round.items is empty %}
                     <p class="csa-muted">Este pedido todavía no tiene productos.</p>
                 {% else %}
-                    <form method="post" action="{{ path('panel_consumer_group_order', { id: round.id }) }}">
+                    <form method="post" action="{{ path('panel_consumer_group_order', { id: round.id }) }}" data-cg-order>
                         <input type="hidden" name="_token" value="{{ csrf_token('panel_consumer_group_order_' ~ round.id) }}">
+
+                        {% if repeatable is not empty %}
+                            {# En los pedidos que se repiten —aceite, legumbre— casi todo el
+                             # mundo pide lo mismo cada vez. Rellenarlo a mano es el trabajo
+                             # que hace que se deje para luego y se pase el plazo. #}
+                            <p style="margin-top: 0;">
+                                <button type="button" class="csa-btn csa-btn--sm"
+                                        data-cg-repeat="{{ repeatable|json_encode|e('html_attr') }}">
+                                    Pedir lo mismo que la vez pasada
+                                </button>
+                            </p>
+                        {% endif %}
+
                         <div class="cg-order-form">
                             {% for item in round.items %}
+                                {% set foto = item.product ? photos[item.product.id]|default(null) : null %}
                                 <div class="cg-order-line">
+                                    {# La foto, cuando la hay, delante del nombre: una lista de
+                                     # texto se lee como un albarán; con la imagen del bote se
+                                     # reconoce lo que se está pidiendo. #}
+                                    {% if foto %}
+                                        <img class="cg-order-line__photo" src="{{ asset(foto.webPath) }}" alt="">
+                                    {% endif %}
                                     <label class="cg-order-line__label" for="cg-qty-{{ item.id }}">
                                         {{ item.name }}
                                         <span class="csa-muted">· {{ item.price|number_format(2, ',', '.') }} € / {{ item.unit }}</span>
+                                        {% if item.product and item.product.description %}
+                                            <span class="cg-order-line__desc">{{ item.product.description }}</span>
+                                        {% endif %}
                                     </label>
                                     <input type="number" min="0" step="0.01" inputmode="decimal"
                                            id="cg-qty-{{ item.id }}"
                                            name="quantity[{{ item.id }}]"
                                            value="{{ quantities[item.id]|default('') }}"
                                            class="csa-input cg-order-line__qty"
-                                           placeholder="0">
+                                           placeholder="0"
+                                           data-cg-price="{{ item.price }}">
                                     <span class="cg-order-line__unit">{{ item.unit }}</span>
                                 </div>
                             {% endfor %}
+                        </div>
+
+                        {# El total se va sumando mientras se teclea: sin él, la socia
+                         # rellena cantidades a ciegas y no sabe lo que lleva pedido hasta
+                         # que alguien se lo dice.
+                         #
+                         # Se pinta YA CALCULADO desde el servidor y el JavaScript sólo lo
+                         # va actualizando: si se pinta a cero y se espera al script, quien
+                         # entra a mirar lo que pidió lee "0,00 €" hasta que el navegador
+                         # termine, y con el JavaScript bloqueado lo lee para siempre. #}
+                        <div class="cg-order-total">
+                            <span>Total de tu pedido</span>
+                            <strong data-cg-total>{{ (order ? order.total : 0)|number_format(2, ',', '.') }} €</strong>
                         </div>
 
                         <div class="csa-row" style="justify-content: flex-end; margin-top: var(--csa-sp-4);">
@@ -72,11 +123,24 @@
                 {% endif %}
             </div>
         {% else %}
-            {# Pedido no abierto: resumen del pedido y estado. #}
+            {# Pedido que ya no admite apuntes: resumen del pedido y estado.
+             #
+             # Con el plazo vencido el ESTADO sigue siendo «Abierto» —lo cierra la
+             # comisión cuando pasa el pedido al productor—, así que pintar aquí la
+             # etiqueta del estado diría «Abierto» justo encima de «ya no admite
+             # cambios». Lo que le ha pasado a la socia es que se le pasó el plazo, y
+             # eso es lo que se le cuenta. #}
+            {% set plazo_vencido = round.status == 0 %}
             <div class="csa-card">
-                <span class="prl-chip prl-chip--pausado"><span class="dot"></span>{{ round.statusLabel }}</span>
+                <span class="prl-chip prl-chip--pausado"><span class="dot"></span>{{ plazo_vencido ? 'Plazo cerrado' : round.statusLabel }}</span>
                 <p class="csa-muted">
-                    Este pedido ya no admite cambios. Entrega prevista el
+                    {% if plazo_vencido %}
+                        El plazo para apuntarse terminó
+                        {% if round.ordersCloseAt %}el <b>{{ round.ordersCloseAt|date('d/m/Y H:i') }}</b>{% endif %}.
+                    {% else %}
+                        Este pedido ya no admite cambios.
+                    {% endif %}
+                    Entrega prevista el
                     <b>{{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}</b>.
                 </p>
 
@@ -85,10 +149,15 @@
                     <ul class="cg-order-summary">
                         {% for line in order.lines %}
                             {% if line.quantity > 0 %}
-                                <li>{{ line.quantity|number_format(2, ',', '.') }} {{ line.roundItem.unit }} · {{ line.roundItem.name }}</li>
+                                <li>
+                                    {{ line.quantity|number_format(2, ',', '.') }} {{ line.roundItem.unit }} · {{ line.roundItem.name }}
+                                    <span class="csa-muted">· {{ line.subtotal|number_format(2, ',', '.') }} €</span>
+                                </li>
                             {% endif %}
                         {% endfor %}
                     </ul>
+
+                    {% include 'Panel/consumer_group/_payment.html.twig' with { order: order, payment_info: payment_info } only %}
                 {% else %}
                     <p class="csa-muted">No te apuntaste a este pedido.</p>
                 {% endif %}
@@ -110,8 +179,62 @@
         .cg-order-form { display: flex; flex-direction: column; gap: var(--csa-sp-3); }
         .cg-order-line { display: flex; align-items: center; gap: var(--csa-sp-3); }
         .cg-order-line__label { flex: 1; }
+        .cg-order-line__photo { flex: 0 0 56px; width: 56px; height: 56px; object-fit: cover; border-radius: 8px; }
+        .cg-order-line__desc { display: block; font-size: .85rem; color: var(--csa-muted); }
         .cg-order-line__qty { flex: 0 0 7rem; }
         .cg-order-line__unit { flex: 0 0 4rem; color: var(--csa-muted); }
         .cg-order-summary { margin: 0; padding-left: var(--csa-sp-4); }
+        .cg-order-total { display: flex; justify-content: space-between; align-items: baseline;
+            gap: var(--csa-sp-3); margin-top: var(--csa-sp-4); padding-top: var(--csa-sp-3);
+            border-top: 1px solid var(--csa-rule); font-size: 1.05rem; }
     </style>
+    {% include 'Panel/consumer_group/_money_styles.html.twig' %}
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    <script>
+        (function () {
+            var form = document.querySelector('[data-cg-order]');
+            if (!form) { return; }
+
+            var out = form.querySelector('[data-cg-total]');
+            var inputs = form.querySelectorAll('[data-cg-price]');
+
+            /* Suma lo apuntado. Acepta la coma decimal, que es como se escribe aquí
+               (el input numérico del móvil ofrece coma en español). */
+            function render() {
+                var total = 0;
+                inputs.forEach(function (input) {
+                    var qty = parseFloat(String(input.value).replace(',', '.'));
+                    var price = parseFloat(input.getAttribute('data-cg-price'));
+                    if (!isNaN(qty) && qty > 0 && !isNaN(price)) { total += qty * price; }
+                });
+                out.textContent = total.toLocaleString('es-ES', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                }) + ' €';
+            }
+
+            form.addEventListener('input', render);
+
+            var repeat = form.querySelector('[data-cg-repeat]');
+            if (repeat) {
+                repeat.addEventListener('click', function () {
+                    var previous = JSON.parse(repeat.getAttribute('data-cg-repeat'));
+                    Object.keys(previous).forEach(function (id) {
+                        var input = form.querySelector('[name="quantity[' + id + ']"]');
+                        if (input) { input.value = previous[id]; }
+                    });
+                    render();
+                    /* Se rellena, no se envía: la socia revisa y cambia lo que quiera
+                       antes de guardar. Un botón que pidiera solo nunca dejaría quitar
+                       el bote de aceitunas que este mes no quiere. */
+                    repeat.disabled = true;
+                });
+            }
+
+            render();
+        })();
+    </script>
 {% endblock %}

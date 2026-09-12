@@ -4,6 +4,7 @@ namespace App\Tests\Service\Delivery;
 
 use App\Entity\Basket;
 use App\Entity\Node;
+use App\Service\ConsumerGroup\NodeConsumerGroupDeliveries;
 use App\Service\Delivery\DeliveryModeResolver;
 use App\Service\Delivery\DeliverySheetPdf;
 use App\Service\Delivery\NodeDeliveryDate;
@@ -107,7 +108,14 @@ class DeliverySheetPdfTest extends TestCase
             ->method('render')
             ->with('delivery/printable.html.twig', [
                 'basket' => $basket,
-                'sheets' => [['node' => $node, 'physical_date' => $day, 'sheet' => ['hoja']]],
+                'sheets' => [[
+                    'node' => $node,
+                    'physical_date' => $day,
+                    'sheet' => ['hoja'],
+                    // Los pedidos del grupo de consumo viajan con la hoja; aquí
+                    // vacíos, que es lo que devuelve el mock.
+                    'consumer_group' => [],
+                ]],
             ])
             ->willReturn(self::HTML);
 
@@ -139,12 +147,19 @@ class DeliverySheetPdfTest extends TestCase
         $modeResolver = $this->createMock(DeliveryModeResolver::class);
         $modeResolver->method('mode')->willReturn($mode);
 
+        // Los pedidos del grupo de consumo, en un mock vacío: aquí se prueba la
+        // decisión piedra/dibujo y el PDF, no lo que se entrega además de las
+        // cestas — eso tiene su propio test.
+        $consumerGroup = $this->createMock(NodeConsumerGroupDeliveries::class);
+        $consumerGroup->method('forNodeAndDate')->willReturn([]);
+
         return new DeliverySheetPdf(
             $twig ?? $this->createMock(Environment::class),
             $sheetBuilder ?? $this->createMock(NodeDeliverySheet::class),
             $modeResolver,
             $generator ?? $this->createMock(WeeklyBasketGenerator::class),
             $nodeDeliveryDate ?? $this->createMock(NodeDeliveryDate::class),
+            $consumerGroup,
         );
     }
 }

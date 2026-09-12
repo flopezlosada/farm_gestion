@@ -12,5 +12,29 @@ twig:
       # Sólo la PÚBLICA: es la que el navegador necesita para suscribirse y no
       # es secreta. La privada no sale del servidor.
       app_vapid_public_key: '%env(VAPID_PUBLIC_KEY)%'
+      # El logo que se INCRUSTA en los correos, en versión ligera (141px, 21 KB
+      # frente a los 140 KB del original): un correo sale hasta ciento cuarenta y
+      # cinco veces y el logo viaja dentro de cada uno.
+      #
+      # Se incrusta en vez de enlazarse a la web a propósito. Una imagen remota
+      # la bloquean de serie varios clientes de correo hasta que quien lo recibe
+      # pulsa "mostrar imágenes", y el resultado es que la asociación se presenta
+      # con un cuadro roto justo a la gente que menos trato tiene con esto. La
+      # incrustada se ve sin pedir permiso.
+      #
+      # Va por el NAMESPACE `@images` de aquí abajo y no por una ruta de disco:
+      # `email.image()` resuelve el fichero con el cargador de plantillas de
+      # Twig, no con el sistema de ficheros, así que una ruta absoluta da
+      # "Unable to find template". No depende del symlink de assets ni de que el
+      # dominio sea accesible desde donde corre el envío.
+      # La arroba va DOBLE: en la configuración de Symfony un valor que empieza
+      # por "@" es una referencia a un servicio, así que con una sola el
+      # contenedor busca un servicio llamado "images/csa_logo_email.png" y la
+      # aplicación no arranca. "@@" se resuelve como una arroba literal.
+      csa_email_logo: '@@images/csa_logo_email.png'
     paths:
       '%kernel.project_dir%/vendor/knplabs/knp-paginator-bundle/templates': KnpPaginator
+      # Imágenes que se INCRUSTAN en correos (no las que sirve la web). Están
+      # aquí porque `email.image()` las busca por el cargador de Twig; esta
+      # carpeta ya viaja al servidor con el despliegue.
+      '%kernel.project_dir%/src/Resources/public/img': images

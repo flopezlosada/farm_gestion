@@ -60,6 +60,10 @@ class NotificationLink
     public function pathForKind(string $kind): string
     {
         return match (true) {
+            // La petición del otro hogar lleva a donde se contesta, y va ANTES que la
+            // familia 'pickup.' porque si no la absorbe: un aviso que pide algo tiene
+            // que abrir el sitio donde se hace, no el panel donde no hay botón.
+            Notification::KIND_SHARED_REQUEST === $kind => $this->urlGenerator->generate('panel_shared_basket'),
             // El aviso de la cesta lleva al panel y no al calendario: dice "te
             // toca el miércoles", y el panel es la pantalla del "qué me toca",
             // con la próxima entrega, el nodo y la hora arriba del todo. Quien
@@ -71,16 +75,32 @@ class NotificationLink
             // llevan a la pantalla de voluntariado del socix, que enseña las dos
             // cosas: lo abierto y lo que llevas apuntado.
             str_starts_with($kind, 'volunteering.') => $this->urlGenerator->generate('panel_volunteering'),
+            // El pedido del grupo de consumo lleva al listado del panel y no a la
+            // ficha del pedido: aquí sólo se sabe la CLASE de aviso, no de cuál
+            // era, y el listado enseña todo lo abierto —incluido lo que se haya
+            // abierto después—. El correo, que sí conoce el pedido, sí apunta a
+            // su ficha.
+            str_starts_with($kind, 'consumer_group.') => $this->urlGenerator->generate('panel_consumer_group_index'),
             // "Faltan datos en tu ficha" lleva a la pantalla donde se rellenan, y
             // no a la bandeja: el aviso ya dice qué falta, así que lo único que
             // queda por hacer es el formulario. Un aviso que pide algo tiene que
             // abrir el sitio donde se hace.
             str_starts_with($kind, 'profile.') => $this->urlGenerator->generate('panel_profile'),
+            // El acuerdo de modalidad de una cesta compartida lleva al listado de
+            // socixs: nombra a los dos hogares, y desde ahí se llega a la ficha
+            // donde se aplica. No hay pantalla propia de acuerdos —son un puñado
+            // al año— y mandar a quien coordina al panel del socix, que es donde
+            // caería por ser un aviso de cesta, habría sido un 403.
+            Notification::KIND_PARTNERS_SHARED_CHANGE === $kind => $this->urlGenerator->generate('partner_index'),
             // El de quien coordina lleva al listado de fichas a medias, que es
             // donde están todas con lo que le falta a cada una. El aviso es un
             // resumen ("12 fichas..."), así que sin este destino no sería
             // accionable: diría cuántas son y no cuáles.
             str_starts_with($kind, 'partners.') => $this->urlGenerator->generate('partner_incomplete_profiles'),
+            // Las novedades llevan a la página donde están todas, y no sólo la
+            // última: quien no ha entrado en dos meses quiere ver lo que se
+            // perdió, no la de esta semana suelta.
+            str_starts_with($kind, 'news.') => $this->urlGenerator->generate('news_index'),
             // Cualquier otro no tiene mejor sitio que la bandeja. Es el caso de
             // un aviso viejo cuyo `kind` ya no se emite, y de uno nuevo al que se
             // le olvidó su línea aquí: molesta, pero no deja a nadie en un 404.

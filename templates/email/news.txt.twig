@@ -1,0 +1,19 @@
+{# Versión en texto plano. No es un trámite: hay clientes que no pintan HTML y
+   filtros antispam que penalizan el correo que sólo lo lleva. Dice lo mismo, sin
+   el botón — aquí no hay dónde pulsar, así que el enlace va escrito. #}
+Hola{% if partner %} {{ partner.name|nombre_propio }}{% endif %}, te contamos lo último que hemos añadido a la web.
+{% for entry in entries %}
+{{ entry.date|format_date('long', locale='es')|upper }}
+{{ entry.title }}
+
+{{ entry.text }}
+{% endfor %}
+{% if can_act %}
+Puedes verlas todas aquí: {{ url }}
+{% endif %}
+Un abrazo,
+CSA Vega de Jarama
+https://csavegadejarama.org
+{% if can_act %}
+Si prefieres no recibir estas novedades, puedes desactivarlas en tus preferencias de avisos: {{ preferences_url }}
+{% endif %}

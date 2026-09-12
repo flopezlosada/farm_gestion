@@ -22,6 +22,7 @@ use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketItemRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Repository\WeeklyBasketStatusRepository;
+use App\Service\ConsumerGroup\NodeConsumerGroupDeliveries;
 use App\Service\Delivery\DeliveryLine;
 use App\Service\Delivery\DeliveryModeResolver;
 use App\Service\Delivery\DeliveryShiftApplier;
@@ -33,6 +34,9 @@ use App\Service\Delivery\MonthlyDeliveryMatrix;
 use App\Service\Delivery\NodeDeliveryCounter;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\PickupRelocator;
+use App\Service\Delivery\SharedBasketChangeNotifier;
+use App\Service\Delivery\SharedPairDeliveryEditor;
+use App\Service\Delivery\SharedPairException;
 use App\Service\Delivery\NodeDeliverySheet;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use Doctrine\ORM\EntityManagerInterface;
@@ -501,6 +505,8 @@ class DeliveryController extends AbstractController
         PartnerRepository $partnerRepo,
         WeeklyBasketGroupRepository $groupRepo,
         PickupRelocator $relocator,
+        SharedPairDeliveryEditor $pairEditor,
+        SharedBasketChangeNotifier $notifier,
     ): Response {
         $back = ['nodeId' => $node->getId(), 'basketId' => $basket->getId()];
 
@@ -517,6 +523,30 @@ class DeliveryController extends AbstractController
         }
 
         $partnerName = trim(($partner->getName() ?? '') . ' ' . ($partner->getSurname() ?? ''));
+
+        // COMPARTIDA: la cesta física es una y acaba en un punto, así que el traslado se
+        // lleva a los dos hogares. Va por su propio camino —y no por relocateWithPair— para
+        // no perder de vista lo que este listado sí necesita distinguir: si el destino era
+        // el nodo de casa, el traslado no es tal, es una vuelta al patrón.
+        if ($partner->getSharePartner() !== null) {
+            try {
+                $other = $pairEditor->relocate($partner, $basket, $group, 'gestor:' . $this->getUser()->getId());
+            } catch (SharedPairException|\LogicException $e) {
+                $this->addFlash('warning', $e->getMessage());
+
+                return $this->redirectToRoute('delivery_by_node', $back);
+            }
+
+            $notifier->relocated([$partner, $other], $basket, $group);
+            $this->addFlash('notice', sprintf(
+                '%s y %s recogerán esa semana en "%s": la cesta es compartida y va entera. Se les ha avisado.',
+                $partnerName,
+                $other->getNameForDelivery(),
+                $group->getName(),
+            ));
+
+            return $this->redirectToRoute('delivery_by_node', $back);
+        }
 
         try {
             $override = $relocator->relocate($partner, $basket, $group, 'gestor:' . $this->getUser()->getId());
@@ -643,6 +673,7 @@ class DeliveryController extends AbstractController
         NodeDeliveryCounter $deliveryCounter,
         PartnerBasketExtraRepository $partnerBasketExtraRepo,
         HelperDeliveryResolver $helperDeliveryResolver,
+        NodeConsumerGroupDeliveries $consumerGroupDeliveries,
         Request $request,
     ): Response {
         $orden = $request->query->get('orden', 'grupo');
@@ -839,6 +870,10 @@ class DeliveryController extends AbstractController
             'partner_ids_with_extra' => array_keys($partnerBasketExtraRepo->extrasByPartnerForBasket($basket)),
             'helper_rows' => $helperRows,
             'totals' => $totals,
+            // Los pedidos del grupo de consumo que se entregan esa semana en este
+            // punto. Aquí y en el PDF: quien prepara el reparto mira la pantalla,
+            // y quien va al nodo se lleva el papel.
+            'consumer_group_orders' => $consumerGroupDeliveries->forNodeAndDate($node, $physicalDate),
         ]);
     }
 

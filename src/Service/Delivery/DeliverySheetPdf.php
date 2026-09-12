@@ -4,6 +4,7 @@ namespace App\Service\Delivery;
 
 use App\Entity\Basket;
 use App\Entity\Node;
+use App\Service\ConsumerGroup\NodeConsumerGroupDeliveries;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 use Twig\Environment;
@@ -30,6 +31,7 @@ class DeliverySheetPdf
         private readonly DeliveryModeResolver $modeResolver,
         private readonly WeeklyBasketGenerator $generator,
         private readonly NodeDeliveryDate $nodeDeliveryDate,
+        private readonly NodeConsumerGroupDeliveries $consumerGroupDeliveries,
     ) {
     }
 
@@ -79,10 +81,17 @@ class DeliverySheetPdf
             if ($sheet === null) {
                 continue;
             }
+            $physicalDate = $this->nodeDeliveryDate->physicalDateFor($basket, $node);
             $sheets[] = [
                 'node' => $node,
-                'physical_date' => $this->nodeDeliveryDate->physicalDateFor($basket, $node),
+                'physical_date' => $physicalDate,
                 'sheet' => $sheet,
+                // Los pedidos del grupo de consumo que se entregan esa semana en
+                // ese punto. Van en su propia sección al final de la hoja y no
+                // mezclados con las cestas: es otro reparto —otros bultos, otra
+                // gente apuntada— y mezclarlo obligaría a leer dos cosas a la vez
+                // en la única hoja que se lleva al nodo.
+                'consumer_group' => $this->consumerGroupDeliveries->forNodeAndDate($node, $physicalDate),
             ];
         }
 

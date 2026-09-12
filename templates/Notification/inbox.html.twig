@@ -47,6 +47,7 @@
     {% set look = {
         'pickup':       { icon: 'fa-shopping-basket', tone: 'green' },
         'volunteering': { icon: 'fa-hand-paper-o',    tone: 'ochre' },
+        'news':         { icon: 'fa-bullhorn',        tone: 'sky' },
     }[n.kind|split('.')|first]|default({ icon: 'fa-bell-o', tone: 'sky' }) %}
 
     <li class="csa-list__item">

@@ -181,8 +181,10 @@ class PickupRelocatorTest extends TestCase
 
     public function testThrowsWhenPartnerSharesBasket(): void
     {
-        // Las cestas COMPARTIDAS (alternancia entre dos hogares) no se trasladan de nodo de
-        // momento: el guard salta antes de tocar nada (sin definir cómo afecta al otro hogar).
+        // Una cesta COMPARTIDA es una cesta física que acaba en UN punto: trasladar a un
+        // hogar por esta puerta la partiría en dos sitios. El traslado existe, pero sólo
+        // coordinado (relocatePair, desde SharedPairDeliveryEditor); aquí el guard salta
+        // antes de tocar nada.
         $partner = $this->createMock(Partner::class);
         $partner->method('getSharePartner')->willReturn($this->createMock(Partner::class));
         $toGroup = $this->group(20, $this->node(2));
