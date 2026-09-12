@@ -127,10 +127,14 @@ class NewsControllerTest extends AbstractAuthenticatedTest
     {
         $client = $this->createAuthenticatedClient();
 
-        $client->request('POST', '/gestion/novedades/anunciar', ['_token' => $this->token($client)]);
+        // El token se guarda porque tras el primer POST la pantalla ya no pinta
+        // el diálogo del que se lee. Sigue siendo válido: usarlo no lo invalida.
+        $token = $this->token($client);
+
+        $client->request('POST', '/gestion/novedades/anunciar', ['_token' => $token]);
         $primero = $this->pointer(self::REQUESTED);
 
-        $client->request('POST', '/gestion/novedades/anunciar', ['_token' => $this->token($client)]);
+        $client->request('POST', '/gestion/novedades/anunciar', ['_token' => $token]);
 
         self::assertSame($primero, $this->pointer(self::REQUESTED));
     }
@@ -151,19 +155,27 @@ class NewsControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
-     * El token de la acción.
+     * El token del formulario de confirmación de la pantalla.
      *
-     * Se pide al gestor de tokens y no se lee del formulario a propósito: en
-     * cuanto la tanda está pedida la pantalla ya no pinta el diálogo, así que
-     * leerlo de ahí devolvería una cadena vacía en la segunda pulsación y el
-     * test pasaría por el motivo equivocado —fallo de token, no idempotencia—.
+     * 🔴 NO se le pide al gestor de tokens, aunque sea lo que parece más
+     * directo: su almacén es la SESIÓN, y fuera de una petición no hay ninguna
+     * —`SessionNotFoundException`—. Sale del HTML, que es además lo que hace de
+     * verdad un navegador.
+     *
+     * Quien necesite pulsar dos veces tiene que GUARDARSE este valor: en cuanto
+     * la tanda está pedida la pantalla ya no pinta el diálogo, así que una
+     * segunda llamada aquí devolvería cadena vacía y el test pasaría por el
+     * motivo equivocado —token inválido en vez de idempotencia—. El token sigue
+     * siendo válido tras usarlo: Symfony no lo invalida por consumirlo.
      */
     private function token(\Symfony\Bundle\FrameworkBundle\KernelBrowser $client): string
     {
-        return static::getContainer()
-            ->get('security.csrf.token_manager')
-            ->getToken('announce_news')
-            ->getValue();
+        $crawler = $client->request('GET', '/gestion/novedades');
+        $input = $crawler->filter('#confirm-announce-news input[name="_token"]');
+
+        self::assertGreaterThan(0, $input->count(), 'La pantalla tiene que ofrecer el diálogo de confirmación.');
+
+        return (string) $input->attr('value');
     }
 
     /**
