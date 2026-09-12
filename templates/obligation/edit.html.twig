@@ -1,0 +1,25 @@
+{# Edición de los datos de una obligación — shell csa.
+ # Las fechas NO se editan aquí: se anotan como renovación en la ficha. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}{{ obligation.name }} · Editar{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('obligation_index') }}">Vencimientos</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('obligation_show', { id: obligation.id }) }}">{{ obligation.name }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Editar</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Vencimientos', obligation.name, 'Las fechas no se tocan aquí: cada renovación se anota en la ficha, y así queda el historial.') }}
+
+    {{ include('obligation/_form.html.twig', {
+        submit_label: 'Guardar',
+        cancel_path: path('obligation_show', { id: obligation.id })
+    }) }}
+{% endblock %}

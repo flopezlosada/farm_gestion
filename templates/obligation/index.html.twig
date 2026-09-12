@@ -1,0 +1,162 @@
+{# Registro de vencimientos — lo que caduca y cuándo.
+ # Mismo lenguaje visual que el listado de socixs/LAR (stat strip + tabla prl-*). #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Vencimientos{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Vencimientos</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    <style>
+        /* Los días que quedan son el dato que se viene a mirar: se leen de un
+           vistazo o la pantalla no sirve. */
+        .obl-when { display: flex; flex-direction: column; gap: 2px; }
+        .obl-when__days { font-weight: 700; }
+        .obl-when__date { font-size: 12px; color: var(--csa-text-muted, #6b7280); }
+        .obl-when--expired .obl-when__days { color: #b42318; }
+        .obl-when--due .obl-when__days { color: #b54708; }
+        .obl-when--unknown .obl-when__days { color: var(--csa-text-muted, #6b7280); font-weight: 500; }
+        .obl-actions { display: flex; align-items: center; gap: 8px; justify-content: flex-end; flex-wrap: nowrap; }
+        .obl-row--archived { opacity: .55; }
+        .obl-foot { margin-top: 14px; font-size: 12px; color: var(--csa-text-muted, #6b7280); }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Vencimientos',
+        'Lo que hay que mantener vigente',
+        'Convenios, registros oficiales, pólizas, concesiones y cargos. Si algo de esto caduca sin que nadie se entere, deja de haber huerta, seguro o representación legal.'
+    ) }}
+
+    {# ============ STAT STRIP ============ #}
+    <div class="prl-stats">
+        <div class="prl-stat">
+            <div class="v">{{ counts.total }}</div>
+            <div class="l">vigilados</div>
+        </div>
+        <div class="prl-stat prl-stat--leave">
+            <div class="v">{{ counts.expired }}</div>
+            <div class="l">caducados</div>
+        </div>
+        <div class="prl-stat prl-stat--paused">
+            <div class="v">{{ counts.due }}</div>
+            <div class="l">en aviso</div>
+        </div>
+        <div class="prl-stat prl-stat--active">
+            <div class="v">{{ counts.valid }}</div>
+            <div class="l">en regla</div>
+        </div>
+    </div>
+
+    {% if counts.unknown > 0 %}
+        {{ csa.callout(
+            counts.unknown ~ ' ficha(s) sin ninguna fecha anotada: no se vigilan ni avisan. Están al final de la lista.',
+            'warning'
+        ) }}
+    {% endif %}
+
+    {# ============ TOOLBAR ============ #}
+    <div class="prl-toolbar">
+        <div class="counters">
+            <b>{{ obligations|length }}</b> ficha{{ obligations|length == 1 ? '' : 's' }}
+        </div>
+        <div class="spacer"></div>
+        <a href="{{ path('obligation_index', include_archived ? {} : { archivadas: 1 }) }}" class="prl-btn">
+            <i class="fa fa-archive"></i> {{ include_archived ? 'Ocultar archivadas' : 'Ver archivadas' }}
+        </a>
+        {% if is_granted('ROLE_GESTION_VENCIMIENTOS_EDIT') %}
+            <a href="{{ path('obligation_new') }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Nueva</a>
+        {% endif %}
+    </div>
+
+    {# ============ TABLA ============ #}
+    <div class="prl-table-wrap">
+        {% if obligations is empty %}
+            <div class="prl-empty">
+                Todavía no hay nada dado de alta. Empieza por lo que más duele perder: los convenios de las parcelas.
+            </div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th>Qué es</th>
+                        <th class="tight">Caduca</th>
+                        <th class="tight">Quién se ocupa</th>
+                        <th class="actions"><span class="sr-only">Acciones</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for obligation in obligations %}
+                        {% set days = obligation.daysLeft() %}
+                        {% set state = obligation.state(notice_days) %}
+                        <tr class="{{ obligation.archived ? 'obl-row--archived' }}">
+                            <td>
+                                <div class="prl-person">
+                                    <span class="prl-person__avatar prl-person__avatar--ochre" aria-hidden="true">
+                                        <i class="fa fa-file-text-o"></i>
+                                    </span>
+                                    <div class="prl-person__body">
+                                        <a class="prl-person__name" href="{{ path('obligation_show', { id: obligation.id }) }}">{{ obligation.name }}</a>
+                                        <span class="prl-person__meta">
+                                            {{ obligation.kindLabel }}{% if obligation.counterparty %} · {{ obligation.counterparty }}{% endif %}
+                                        </span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="tight">
+                                <div class="obl-when obl-when--{{ state }}">
+                                    <span class="obl-when__days">
+                                        {%- if days is null -%}
+                                            Sin fecha
+                                        {%- elseif days < 0 -%}
+                                            Caducó
+                                        {%- elseif days == 0 -%}
+                                            Hoy
+                                        {%- else -%}
+                                            {{ days }} día{{ days == 1 ? '' : 's' }}
+                                        {%- endif -%}
+                                    </span>
+                                    {% if obligation.expiresOn %}
+                                        <span class="obl-when__date">{{ obligation.expiresOn|date('d/m/Y') }}</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="tight">
+                                {% if obligation.responsible %}
+                                    <span class="prl-chip prl-chip--mod"><span class="dot"></span>{{ obligation.responsible.displayName|lower }}</span>
+                                {% else %}
+                                    <span class="prl-chip prl-chip--pausado"><span class="dot"></span>Sin asignar</span>
+                                {% endif %}
+                            </td>
+                            <td class="actions">
+                                <div class="obl-actions">
+                                    {% if obligation.documentUrl %}
+                                        <a href="{{ obligation.documentUrl }}" target="_blank" rel="noopener" title="Ver el documento" aria-label="Ver el documento"><i class="fa fa-external-link"></i></a>
+                                    {% endif %}
+                                    <a href="{{ path('obligation_show', { id: obligation.id }) }}" title="Abrir la ficha" aria-label="Abrir la ficha"><i class="fa fa-eye"></i></a>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+    <p class="obl-foot">
+        Los avisos por correo salen {{ thresholds|slice(0, thresholds|length - 1)|join(', ') }} y 0 días antes de cada fecha,
+        a quien tenga permiso de Vencimientos y a la persona responsable de cada ficha.
+    </p>
+
+</div>
+{% endblock %}

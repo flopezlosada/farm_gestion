@@ -1,0 +1,197 @@
+{# Ficha de una obligación: qué es, cuándo caduca y el historial de renovaciones. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set days = obligation.daysLeft() %}
+{% set state = obligation.state(notice_days) %}
+
+{% block title %}{{ obligation.name }} · Vencimientos{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('obligation_index') }}">Vencimientos</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ obligation.name }}</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    <style>
+        /* El titular de la ficha ES la fecha: lo primero que se quiere saber al
+           abrirla es si hay que correr o no. */
+        .obl-head { display: flex; flex-wrap: wrap; gap: 18px; align-items: baseline;
+                    padding: 18px 20px; border-radius: 10px; margin-bottom: 18px;
+                    background: var(--csa-surface-2, #f7f7f5); border-left: 4px solid #9ca3af; }
+        .obl-head--due { border-left-color: #b54708; background: #fffaf0; }
+        .obl-head--expired { border-left-color: #b42318; background: #fff5f4; }
+        .obl-head--valid { border-left-color: #2e7d4f; }
+        .obl-head__days { font-size: 26px; font-weight: 700; line-height: 1.1; }
+        .obl-head__date { color: var(--csa-text-muted, #6b7280); }
+        .obl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px 26px; margin-bottom: 22px; }
+        .obl-field__label { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--csa-text-muted, #6b7280); }
+        .obl-field__value { font-weight: 600; }
+        .obl-notes { white-space: pre-wrap; background: var(--csa-surface-2, #f7f7f5); padding: 14px 16px; border-radius: 8px; margin-bottom: 22px; }
+        .obl-section-title { font-size: 15px; font-weight: 700; margin: 26px 0 10px; }
+        .obl-renew { background: var(--csa-surface-2, #f7f7f5); padding: 16px 18px; border-radius: 10px; }
+        .obl-renew form { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px 18px; align-items: end; }
+        .obl-actions-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header(obligation.kindLabel, obligation.name, obligation.counterparty ? 'Con ' ~ obligation.counterparty : null) }}
+
+    {% if obligation.archived %}
+        {{ csa.callout('Esta ficha está archivada: no se vigila y no genera avisos.', 'info') }}
+    {% endif %}
+
+    {# ============ EL TITULAR: LA FECHA ============ #}
+    <div class="obl-head obl-head--{{ state }}">
+        <div>
+            <div class="obl-head__days">
+                {%- if days is null -%}
+                    Sin fecha anotada
+                {%- elseif days < 0 -%}
+                    Caducó hace {{ days|abs }} día{{ days == -1 ? '' : 's' }}
+                {%- elseif days == 0 -%}
+                    Caduca hoy
+                {%- elseif days == 1 -%}
+                    Caduca mañana
+                {%- else -%}
+                    Quedan {{ days }} días
+                {%- endif -%}
+            </div>
+            {% if obligation.expiresOn %}
+                <div class="obl-head__date">Vigente hasta el {{ obligation.expiresOn|date('d/m/Y') }}</div>
+            {% else %}
+                <div class="obl-head__date">Sin ningún periodo anotado, esta ficha no vigila nada.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ============ DATOS ============ #}
+    <div class="obl-grid">
+        <div class="obl-field">
+            <div class="obl-field__label">Quién se ocupa</div>
+            <div class="obl-field__value">{{ obligation.responsible ? obligation.responsible.displayName|lower : '— sin asignar —' }}</div>
+        </div>
+        {% if obligation.reference %}
+            <div class="obl-field">
+                <div class="obl-field__label">Póliza o expediente</div>
+                <div class="obl-field__value">{{ obligation.reference }}</div>
+            </div>
+        {% endif %}
+        {% if obligation.documentUrl %}
+            <div class="obl-field">
+                <div class="obl-field__label">Documento</div>
+                <div class="obl-field__value">
+                    <a href="{{ obligation.documentUrl }}" target="_blank" rel="noopener">Abrir <i class="fa fa-external-link"></i></a>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    {% if obligation.notes %}
+        <div class="obl-notes">{{ obligation.notes }}</div>
+    {% endif %}
+
+    {% if is_granted('ROLE_GESTION_VENCIMIENTOS_EDIT') %}
+        <div class="obl-actions-bar">
+            <a href="{{ path('obligation_edit', { id: obligation.id }) }}" class="prl-btn"><i class="fa fa-pencil"></i> Editar datos</a>
+            <button type="button" class="prl-btn" onclick="document.getElementById('dlg-obl-archive').showModal()">
+                <i class="fa fa-archive"></i> {{ obligation.archived ? 'Volver a vigilar' : 'Archivar' }}
+            </button>
+            {{ csa.confirm_dialog('dlg-obl-archive', {
+                variant: obligation.archived ? 'info' : 'warning',
+                eyebrow: obligation.archived ? 'Volver a vigilar' : 'Dejar de vigilar',
+                title: obligation.archived ? 'Devolver «' ~ obligation.name ~ '» a la vigilancia' : 'Archivar «' ~ obligation.name ~ '»',
+                body: obligation.archived
+                    ? 'Volverá a aparecer en el listado y a avisar cuando se acerque su fecha.'
+                    : 'Deja de aparecer en el listado y deja de avisar. No se borra nada: el historial se conserva.',
+                confirm_label: obligation.archived ? 'Volver a vigilar' : 'Archivar',
+                action: path('obligation_archive', { id: obligation.id }),
+                csrf_token: csrf_token('obligation_archive' ~ obligation.id),
+                csrf_name: '_token',
+            }) }}
+        </div>
+    {% endif %}
+
+    {# ============ ANOTAR RENOVACIÓN ============ #}
+    {% if is_granted('ROLE_GESTION_VENCIMIENTOS_EDIT') and not obligation.archived %}
+        <div class="obl-section-title">Anotar una renovación</div>
+        <div class="obl-renew">
+            <p class="obl-head__date" style="margin-bottom:12px">
+                Cuando se renueve, anota aquí la fecha nueva. Con eso vuelve a vigilarse sola: no hay que tocar nada más.
+            </p>
+            {{ form_start(renewal_form) }}
+                {{ form_row(renewal_form.startsOn) }}
+                {{ form_row(renewal_form.endsOn) }}
+                {{ form_row(renewal_form.documentUrl) }}
+                {{ form_row(renewal_form.notes) }}
+                <div>
+                    <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-check"></i> Anotar</button>
+                </div>
+            {{ form_end(renewal_form) }}
+        </div>
+    {% endif %}
+
+    {# ============ HISTORIAL ============ #}
+    <div class="obl-section-title">Historial</div>
+    <div class="prl-table-wrap">
+        {% if obligation.terms is empty %}
+            <div class="prl-empty">Todavía no hay ningún periodo anotado.</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th class="tight">Desde</th>
+                        <th class="tight">Hasta</th>
+                        <th>Apunte</th>
+                        <th class="actions"><span class="sr-only">Acciones</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for term in obligation.terms|sort((a, b) => b.endsOn <=> a.endsOn) %}
+                        <tr>
+                            <td class="tight">{{ term.startsOn ? term.startsOn|date('d/m/Y') : '—' }}</td>
+                            <td class="tight">
+                                <b>{{ term.endsOn|date('d/m/Y') }}</b>
+                                {% if obligation.expiresOn and term.endsOn == obligation.expiresOn %}
+                                    <span class="prl-chip prl-chip--activo"><span class="dot"></span>Vigente</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ term.notes ?: '' }}
+                                {% if term.documentUrl %}
+                                    <a href="{{ term.documentUrl }}" target="_blank" rel="noopener" title="Documento firmado"><i class="fa fa-external-link"></i></a>
+                                {% endif %}
+                            </td>
+                            <td class="actions">
+                                {% if is_granted('ROLE_GESTION_VENCIMIENTOS_EDIT') %}
+                                    <button type="button" class="prl-btn prl-btn--danger prl-btn--sm" title="Borrar periodo" aria-label="Borrar periodo"
+                                            onclick="document.getElementById('dlg-obl-term-{{ term.id }}').showModal()"><i class="fa fa-trash"></i></button>
+                                    {{ csa.confirm_dialog('dlg-obl-term-' ~ term.id, {
+                                        variant: 'danger',
+                                        eyebrow: 'Acción permanente',
+                                        title: 'Borrar el periodo que acaba el ' ~ term.endsOn|date('d/m/Y'),
+                                        body: 'Esto es para corregir una fecha mal tecleada, no para deshacer una renovación. Si era el último periodo, la ficha se queda sin fecha y deja de avisar.',
+                                        confirm_label: 'Borrar',
+                                        action: path('obligation_term_delete', { id: obligation.id, termId: term.id }),
+                                        csrf_token: csrf_token('obligation_term_delete' ~ term.id),
+                                        csrf_name: '_token',
+                                    }) }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}
