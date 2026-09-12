@@ -68,6 +68,10 @@ class SharedPairMoveTest extends KernelTestCase
             $share->setStartDate(new \DateTime('2099-01-01'));
             $share->setIsActive(true);
             $share->setDayMonthOrder(1);
+            // Los dos precios son NOT NULL en el esquema aunque aquí no pinten nada: media
+            // cesta al mes y sin huevos.
+            $share->setMonthPrice('30.00');
+            $share->setEggMonthPrice('0.00');
             $this->em->persist($share);
 
             $households[] = $partner;
