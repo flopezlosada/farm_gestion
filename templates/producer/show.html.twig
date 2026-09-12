@@ -63,7 +63,19 @@
                     <tbody>
                         {% for product in producer.products %}
                             <tr>
-                                <td>{{ product.name }}{% if product.description %} <span class="csa-muted">— {{ product.description }}</span>{% endif %}</td>
+                                <td>
+                                    {# Miniatura en el listado para ver de un vistazo a qué
+                                     # producto le falta foto: es lo que verá la socia. #}
+                                    <div class="cg-cat-row">
+                                        {% set foto = photos[product.id]|default(null) %}
+                                        {% if foto %}
+                                            <img class="cg-cat-row__photo" src="{{ asset(foto.webPath) }}" alt="">
+                                        {% else %}
+                                            <span class="cg-cat-row__photo cg-cat-row__photo--empty" aria-hidden="true"><i class="fa fa-camera"></i></span>
+                                        {% endif %}
+                                        <span>{{ product.name }}{% if product.description %} <span class="csa-muted">— {{ product.description }}</span>{% endif %}</span>
+                                    </div>
+                                </td>
                                 <td class="tight">{{ product.category ? product.category.name : '—' }}</td>
                                 <td class="tight">{{ product.unit }}</td>
                                 <td class="tight">{{ product.referencePrice is not null ? product.referencePrice|number_format(2, ',', '.') ~ ' €' : '—' }}</td>
@@ -102,6 +114,10 @@
     {{ parent() }}
     {% include 'partner/_listing_styles.html.twig' %}
     <style>
+        .cg-cat-row { display: flex; align-items: center; gap: var(--csa-sp-3); }
+        .cg-cat-row__photo { flex: 0 0 40px; width: 40px; height: 40px; object-fit: cover; border-radius: 6px; }
+        .cg-cat-row__photo--empty { display: inline-flex; align-items: center; justify-content: center;
+            background: var(--csa-surface-2, #f2f2ef); color: var(--csa-muted); font-size: .8rem; }
         .cg-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--csa-sp-3); margin: 0; }
         .cg-meta dt { font-size: .8rem; color: var(--csa-muted); }
         .cg-meta dd { margin: 0; font-weight: 600; }

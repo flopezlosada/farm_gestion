@@ -21,6 +21,47 @@ class ImageRepository extends EntityRepository
      * @param string|int $foreignKey Id de la entidad anfitriona.
      * @return \App\Entity\Image[]
      */
+    /**
+     * La imagen de VARIAS entidades anfitrionas de la misma clase, en UNA
+     * consulta, indexada por el id de cada una.
+     *
+     * Para pintar un listado con miniatura sin preguntar una vez por fila: el
+     * catálogo de un productor son veinte productos, y el formulario con el que
+     * se apunta la socia los recorre enteros.
+     *
+     * Si una entidad tuviera más de una imagen se queda la más reciente, que es
+     * la que ordena {@see findForObject()}.
+     *
+     * @param string    $objectClass clase lógica (p.ej. "consumergroupproduct")
+     * @param list<int> $ids         ids de las entidades anfitrionas
+     *
+     * @return array<int, \App\Entity\Image> id => imagen
+     */
+    public function findOneForObjects(string $objectClass, array $ids): array
+    {
+        if ([] === $ids) {
+            return [];
+        }
+
+        $images = $this->createQueryBuilder('i')
+            ->andWhere('i.objectClass = :object_class')
+            ->andWhere('i.foreignKey IN (:ids)')
+            ->setParameter('object_class', $objectClass)
+            ->setParameter('ids', array_map('strval', $ids))
+            ->orderBy('i.created', 'DESC')
+            ->getQuery()
+            ->getResult();
+
+        $byId = [];
+        foreach ($images as $image) {
+            // La primera de cada id gana: vienen ordenadas de más reciente a más
+            // antigua, igual que en findForObject().
+            $byId[(int) $image->getForeignKey()] ??= $image;
+        }
+
+        return $byId;
+    }
+
     public function findForObject(string $objectClass, $foreignKey): array
     {
         return $this->createQueryBuilder('i')

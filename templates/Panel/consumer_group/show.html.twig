@@ -9,6 +9,7 @@
  #   - quantities    array item_id => cantidad ya pedida
  #   - can_order     bool (¿el pedido admite pedidos?)
  #   - repeatable    array item_id => cantidad del último pedido a este productor
+ #   - photos        array product_id => Image (la foto del producto, si tiene)
  #   - payment_info  texto de configuración: dónde transferir ('' = no hay)
  # ============================================================ #}
 
@@ -74,10 +75,20 @@
 
                         <div class="cg-order-form">
                             {% for item in round.items %}
+                                {% set foto = item.product ? photos[item.product.id]|default(null) : null %}
                                 <div class="cg-order-line">
+                                    {# La foto, cuando la hay, delante del nombre: una lista de
+                                     # texto se lee como un albarán; con la imagen del bote se
+                                     # reconoce lo que se está pidiendo. #}
+                                    {% if foto %}
+                                        <img class="cg-order-line__photo" src="{{ asset(foto.webPath) }}" alt="">
+                                    {% endif %}
                                     <label class="cg-order-line__label" for="cg-qty-{{ item.id }}">
                                         {{ item.name }}
                                         <span class="csa-muted">· {{ item.price|number_format(2, ',', '.') }} € / {{ item.unit }}</span>
+                                        {% if item.product and item.product.description %}
+                                            <span class="cg-order-line__desc">{{ item.product.description }}</span>
+                                        {% endif %}
                                     </label>
                                     <input type="number" min="0" step="0.01" inputmode="decimal"
                                            id="cg-qty-{{ item.id }}"
@@ -155,6 +166,8 @@
         .cg-order-form { display: flex; flex-direction: column; gap: var(--csa-sp-3); }
         .cg-order-line { display: flex; align-items: center; gap: var(--csa-sp-3); }
         .cg-order-line__label { flex: 1; }
+        .cg-order-line__photo { flex: 0 0 56px; width: 56px; height: 56px; object-fit: cover; border-radius: 8px; }
+        .cg-order-line__desc { display: block; font-size: .85rem; color: var(--csa-muted); }
         .cg-order-line__qty { flex: 0 0 7rem; }
         .cg-order-line__unit { flex: 0 0 4rem; color: var(--csa-muted); }
         .cg-order-summary { margin: 0; padding-left: var(--csa-sp-4); }
