@@ -2,8 +2,11 @@
  # Listado de reparto imprimible (dompdf). Standalone: NO extiende el shell.
  # Recibe (de DeliveryController::printablePdf):
  #   - basket   Basket del día.
- #   - sheets   list<{node, physical_date:?Date, sheet}> donde sheet es la
- #              estructura de NodeDeliverySheet (groups, shared, totals).
+ #   - sheets   list<{node, physical_date:?Date, sheet, consumer_group}> donde
+ #              sheet es la estructura de NodeDeliverySheet (groups, shared,
+ #              totals) y consumer_group los pedidos del grupo de consumo que se
+ #              entregan esa semana en ese punto (puede no venir: el listado
+ #              mensual y la proyección arman sus propias hojas).
  #
  # Replica el Excel que usan hoy (docs/Listado Sierra 2026_04_30.pdf): rejilla
  # densa con líneas, localidad con color en cada fila, "CESTAS" + cantidad,
@@ -99,6 +102,14 @@
     .totals .lbl { background: #9bbb59; color: #fff; font-size: 8px; letter-spacing: .06em; }
     .totals .val { background: #eaf1dd; text-align: center; font-size: 13px; min-width: 44px; }
 
+    /* Grupo de consumo */
+    .cg { margin-top: 10px; width: 100%; }
+    .cg td, .cg th { border: 0.5px solid #b7b7b7; padding: 3px 5px; vertical-align: top; }
+    .cg-title { background: #4f81bd; color: #fff; font-size: 8px; letter-spacing: .1em;
+        text-transform: uppercase; text-align: left; }
+    .cg-name { font-weight: bold; width: 38%; }
+    .cg-lines { font-size: 9px; }
+
     /* Trozo recortable */
     .cut-title { font-weight: bold; font-size: 10px; letter-spacing: .04em; margin: 4px 0 6px; text-transform: uppercase; }
     .cut-box { border: 1.5px dashed #777; padding: 8px; }
@@ -179,6 +190,30 @@
                 <td class="val">{{ m.num(sheet.totals.docenas) }}</td>
             </tr>
         </table>
+
+        {# ---- Grupo de consumo ----
+           En su propia sección y no mezclado con las cestas: es otro reparto,
+           con otros bultos y otra gente apuntada. Sin pedidos esa semana no se
+           pinta nada, que es lo normal: son unos pocos al año. #}
+        {% if s.consumer_group is defined and s.consumer_group is not empty %}
+            <table class="cg">
+                <tr>
+                    <th class="cg-title" colspan="2">GRUPO DE CONSUMO · {{ s.consumer_group|length }} pedido{{ s.consumer_group|length == 1 ? '' : 's' }}</th>
+                </tr>
+                {% for order in s.consumer_group %}
+                    <tr>
+                        <td class="cg-name">{{ order.partner }}</td>
+                        <td class="cg-lines">
+                            {% for line in order.lines %}
+                                {# m.num y no m.qty: qty es de cestas, donde 0 se pinta «*» y
+                                   0,5 «½». Aquí 1,5 son kilo y medio de naranjas. #}
+                                {{ m.num(line.quantity) }} {{ line.unit }} · {{ line.name }}{% if not loop.last %}<br>{% endif %}
+                            {% endfor %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </table>
+        {% endif %}
     </div>
 
     {# Trozo recortable de Trabensol: solo-huevos (código H) del grupo Trabensol.

@@ -22,6 +22,7 @@ use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketItemRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Repository\WeeklyBasketStatusRepository;
+use App\Service\ConsumerGroup\NodeConsumerGroupDeliveries;
 use App\Service\Delivery\DeliveryLine;
 use App\Service\Delivery\DeliveryModeResolver;
 use App\Service\Delivery\DeliveryShiftApplier;
@@ -672,6 +673,7 @@ class DeliveryController extends AbstractController
         NodeDeliveryCounter $deliveryCounter,
         PartnerBasketExtraRepository $partnerBasketExtraRepo,
         HelperDeliveryResolver $helperDeliveryResolver,
+        NodeConsumerGroupDeliveries $consumerGroupDeliveries,
         Request $request,
     ): Response {
         $orden = $request->query->get('orden', 'grupo');
@@ -868,6 +870,10 @@ class DeliveryController extends AbstractController
             'partner_ids_with_extra' => array_keys($partnerBasketExtraRepo->extrasByPartnerForBasket($basket)),
             'helper_rows' => $helperRows,
             'totals' => $totals,
+            // Los pedidos del grupo de consumo que se entregan esa semana en este
+            // punto. Aquí y en el PDF: quien prepara el reparto mira la pantalla,
+            // y quien va al nodo se lleva el papel.
+            'consumer_group_orders' => $consumerGroupDeliveries->forNodeAndDate($node, $physicalDate),
         ]);
     }
 
