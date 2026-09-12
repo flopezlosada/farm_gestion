@@ -150,7 +150,13 @@
   /* Afordancias por DISPOSITIVO (no por rol): el arrastre es para puntero fino con hover
      (escritorio); el botón "mover por toque" y demás, para pantallas táctiles. Así el socio
      en escritorio arrastra igual que el gestor, y en el móvil usa el toque. */
-  @media (hover: hover) and (pointer: fine) { .rcal-tapmove { display: none !important; } }
+  /* El botón de mover por toque YA NO SE ESCONDE en escritorio. Lo hacía con
+     `(hover: hover) and (pointer: fine)`, dando por supuesto que quien tiene ratón
+     arrastra, y eso deja sin ninguna vía a dos casos reales: la ventana estrecha de
+     un navegador de escritorio —el diseño se hace de móvil pero el puntero sigue
+     siendo fino, así que no salía ni el botón ni cabía arrastrar— y los híbridos con
+     pantalla táctil y ratón. Un botón explícito no le estorba a quien arrastra; que
+     el gesto sea el único camino sí le estorba a todo el que no lo adivina. */
   @media (hover: none), (pointer: coarse) { .rcal-dragonly { display: none !important; } }
 
   /* --- modo "mover por toque" (móvil) --- */
