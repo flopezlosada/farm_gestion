@@ -1,0 +1,31 @@
+{# Los dos hogares han acordado un cambio de modalidad. NO está aplicado: lo aplica
+ # administración, porque lleva cuota detrás.
+ # Contexto: name, summary, requester_name, other_name. #}
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Vuestro cambio de modalidad queda acordado · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 580px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Hola {{ name }},</h2>
+
+    <p>{{ requester_name }} y {{ other_name }} habéis acordado {{ summary }}.</p>
+
+    <p style="background: #fdf3e0; border-left: 3px solid #d99820; padding: 10px 14px;">
+        <strong>Todavía no está aplicado.</strong> Un cambio de modalidad afecta a la
+        cuota, así que lo revisa y lo aplica administración. Ya les hemos avisado.
+    </p>
+
+    <p>Hasta entonces, vuestra cesta sigue exactamente como está: mismos días y misma
+       cantidad. Os escribirán si hace falta aclarar algo.</p>
+
+    <p style="margin-top: 32px; color: #777; font-size: 13px;">
+        Un abrazo,<br>
+        CSA Vega de Jarama<br>
+        <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+</body>
+</html>
