@@ -1050,10 +1050,12 @@ class PanelController extends AbstractController
         // Componente al que se limita el movimiento (huevos), o 0 = entrega entera.
         $componentId = (int) $request->request->get('component_id', 0);
 
-        // R1: la cesta compartida no cambia de día (lo marca la alternancia). Los HUEVOS no se
-        // comparten (cada hogar los suyos) → mover SOLO el componente huevos sí se permite.
+        // COMPARTIDA: el día de la cesta no lo decide un hogar solo, así que por aquí no se
+        // mueve. Se PIDE al otro hogar, por `panel_shared_basket_request_move`, que es a
+        // donde apunta el calendario. Los HUEVOS sí (cada hogar los suyos) y siguen abajo.
+        // Camino defensivo: desde la pantalla ya no se llega, pero un POST repetido sí.
         if ($partner->getSharePartner() !== null && $componentId !== BasketComponent::ID_EGGS) {
-            $this->addFlash('warning', 'Tu cesta es compartida: el día lo marca la alternancia con el otro hogar. Solo puedes mover los huevos, no la cesta.');
+            $this->addFlash('warning', 'Tu cesta es compartida: el cambio de día se le pide al otro hogar desde tu calendario, y se aplica cuando acepta.');
 
             return $backToFrom();
         }

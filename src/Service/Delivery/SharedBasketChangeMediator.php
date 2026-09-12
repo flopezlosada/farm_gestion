@@ -149,9 +149,17 @@ final class SharedBasketChangeMediator
                 // Revalida y aplica. Si el plazo cerró o el día destino se ocupó desde
                 // que se pidió, salta aquí con su motivo y la petición sigue pendiente
                 // para que quien contesta entienda qué pasó.
-                $this->editor->move($requester, $from, $to, $actor);
-                $request->accept();
-                $this->em->flush();
+                //
+                // El cambio y la respuesta se guardan JUNTOS. Por separado —el editor
+                // confirma lo suyo y el `accept()` va en otro flush— basta que el proceso
+                // muera en medio (un timeout del hosting, que los ha dado) para que la
+                // cesta quede movida y la petición siga pendiente: el otro hogar podría
+                // «rechazar» después un cambio ya aplicado, y se le diría que la cesta se
+                // queda como estaba siendo mentira.
+                $this->em->wrapInTransaction(function () use ($requester, $from, $to, $actor, $request): void {
+                    $this->editor->move($requester, $from, $to, $actor);
+                    $request->accept();
+                });
 
                 $this->notifier->moved([$requester, $decider], $from, $to, $requester->getNameForDelivery());
 
@@ -164,9 +172,11 @@ final class SharedBasketChangeMediator
                     throw new SharedPairException('Esa petición está incompleta: avisa a administración.');
                 }
 
-                $this->editor->relocate($requester, $basket, $group, $actor);
-                $request->accept();
-                $this->em->flush();
+                // Misma unidad que el cambio, por lo mismo que en el caso de arriba.
+                $this->em->wrapInTransaction(function () use ($requester, $basket, $group, $actor, $request): void {
+                    $this->editor->relocate($requester, $basket, $group, $actor);
+                    $request->accept();
+                });
 
                 $this->notifier->relocated([$requester, $decider], $basket, $group, $requester->getNameForDelivery());
 

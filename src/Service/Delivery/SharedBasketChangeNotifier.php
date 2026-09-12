@@ -6,6 +6,7 @@ use App\Entity\Basket;
 use App\Entity\Notification;
 use App\Entity\Partner;
 use App\Entity\SharedBasketChangeRequest;
+use App\Entity\User;
 use App\Entity\WeeklyBasketGroup;
 use App\Repository\UserRepository;
 use App\Service\Notification\NotificationInbox;
@@ -205,7 +206,7 @@ final class SharedBasketChangeNotifier
         if ([] !== $staff) {
             $this->inbox->deliver(
                 $staff,
-                Notification::KIND_SHARED_CHANGE,
+                Notification::KIND_PARTNERS_SHARED_CHANGE,
                 'Cambio de modalidad acordado en una cesta compartida',
                 sprintf(
                     '%s y %s han acordado %s. Falta aplicarlo.',
@@ -253,8 +254,13 @@ final class SharedBasketChangeNotifier
         array $context,
         string $kind = Notification::KIND_SHARED_CHANGE,
     ): int {
-        $this->recordInbox($households, $title, $body, $kind);
-        $this->pushTo($households, $title, $body, $kind);
+        // Las cuentas, UNA vez para los tres canales. Son dos hogares, así que no es un
+        // problema de escala, pero la bandeja y el push preguntaban lo mismo dos veces
+        // seguidas y el segundo no aportaba nada.
+        $accounts = $this->users->findByPartners($households);
+
+        $this->recordInbox($accounts, $title, $body, $kind);
+        $this->pushTo($households, $accounts, $title, $body, $kind);
 
         $sent = 0;
         foreach ($this->preferences->filter($households, NotificationTopic::PICKUP, NotificationTopic::CHANNEL_EMAIL) as $partner) {
@@ -290,40 +296,55 @@ final class SharedBasketChangeNotifier
     }
 
     /**
-     * Deja la copia en la bandeja de cada hogar que tenga cuenta de acceso.
+     * Deja la copia en la bandeja. Quien no tiene cuenta de acceso no tiene bandeja donde
+     * mirar, así que sencillamente no le llega ninguna fila.
      *
-     * @param list<Partner> $households A quiénes avisar.
-     * @param string        $title      Titular.
-     * @param string        $body       Detalle.
-     * @param string        $kind       Constante Notification::KIND_*.
+     * @param list<User>  $accounts Cuentas de los hogares.
+     * @param string      $title    Titular.
+     * @param string      $body     Detalle.
+     * @param string      $kind     Constante Notification::KIND_*.
      */
-    private function recordInbox(array $households, string $title, string $body, string $kind): void
+    private function recordInbox(array $accounts, string $title, string $body, string $kind): void
     {
-        $recipients = $this->users->findByPartners($households);
-        if ([] === $recipients) {
+        if ([] === $accounts) {
             return;
         }
 
-        $this->inbox->deliver($recipients, $kind, $title, $body);
+        $this->inbox->deliver($accounts, $kind, $title, $body);
     }
 
     /**
      * Manda el aviso al móvil de quien lo quiera y lo tenga activado.
      *
      * @param list<Partner> $households A quiénes avisar.
+     * @param list<User>    $accounts   Sus cuentas, ya resueltas.
      * @param string        $title      Titular.
      * @param string        $body       Detalle.
      * @param string        $kind       Constante Notification::KIND_*.
      */
-    private function pushTo(array $households, string $title, string $body, string $kind): void
+    private function pushTo(array $households, array $accounts, string $title, string $body, string $kind): void
     {
-        $wanted = $this->preferences->filter($households, NotificationTopic::PICKUP, NotificationTopic::CHANNEL_PUSH);
+        $wanted = [];
+        foreach ($this->preferences->filter($households, NotificationTopic::PICKUP, NotificationTopic::CHANNEL_PUSH) as $partner) {
+            $wanted[(int) $partner->getId()] = true;
+        }
         if ([] === $wanted) {
             return;
         }
 
+        // Se filtran las cuentas ya traídas en vez de volver a pedirlas: un socix puede
+        // tener más de una cuenta (histórico del dump), así que se mira su socix, no la
+        // cuenta.
+        $recipients = array_values(array_filter(
+            $accounts,
+            static fn (User $user): bool => isset($wanted[(int) $user->getPartner()?->getId()])
+        ));
+        if ([] === $recipients) {
+            return;
+        }
+
         $this->push->sendToMany(
-            $this->users->findByPartners($wanted),
+            $recipients,
             $title,
             $body,
             $this->link->pathForKind($kind),

@@ -74,6 +74,18 @@ class Notification
     /** El otro hogar de tu cesta compartida pide un cambio y espera tu respuesta. */
     public const KIND_SHARED_REQUEST = 'pickup.shared_request';
 
+    /**
+     * Dos hogares han acordado un cambio de modalidad y falta aplicarlo (va a quien
+     * coordina socixs).
+     *
+     * Familia 'partners.' y no 'pickup.' aunque hable de una cesta: el destino de un
+     * aviso sale de su clase, y los de 'pickup.' abren el panel del socix, que exige
+     * ROLE_PARTNER. Quien coordina socixs no lo tiene —sólo lo alcanza ROLE_ADMIN—, así
+     * que ese aviso le habría llevado a un 403. Mismo reparto que en las fichas
+     * incompletas, que tienen un kind para el socix y otro para el equipo.
+     */
+    public const KIND_PARTNERS_SHARED_CHANGE = 'partners.shared_change';
+
     /** A tu ficha le faltan datos que puedes rellenar tú (va al socix). */
     public const KIND_PROFILE_INCOMPLETE = 'profile.incomplete';
 

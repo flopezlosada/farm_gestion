@@ -100,10 +100,21 @@ final class SharedPairDeliveryEditor
         // Una sola unidad de trabajo: si la segunda mitad revienta, la primera no se
         // queda movida. El applier hace flush por su cuenta en cada llamada, así que
         // sin esto el fallo dejaría a la pareja partida entre dos viernes.
-        $this->em->wrapInTransaction(function () use ($partner, $other, $from, $to, $actor): void {
-            $this->applier->move($partner, $from, $to, $actor);
-            $this->applier->move($other, $from, $to, $actor);
-        });
+        //
+        // Y el motivo sale traducido, como en {@see relocate()}: el applier tiene guardas
+        // propias que las de aquí no reproducen —un traslado de punto en esa misma semana,
+        // un cambio puntual ya existente— y las lanza como \LogicException con su mensaje
+        // ya escrito para leerse. Sin esta traducción, ese mensaje se convierte en un 500
+        // en la única pantalla que no lo espera, y quien lo ve no se entera de que sólo
+        // tenía que quitar antes el traslado de nodo.
+        try {
+            $this->em->wrapInTransaction(function () use ($partner, $other, $from, $to, $actor): void {
+                $this->applier->move($partner, $from, $to, $actor);
+                $this->applier->move($other, $from, $to, $actor);
+            });
+        } catch (\LogicException $e) {
+            throw new SharedPairException($e->getMessage(), 0, $e);
+        }
 
         return $other;
     }

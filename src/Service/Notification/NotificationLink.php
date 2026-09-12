@@ -80,6 +80,12 @@ class NotificationLink
             // queda por hacer es el formulario. Un aviso que pide algo tiene que
             // abrir el sitio donde se hace.
             str_starts_with($kind, 'profile.') => $this->urlGenerator->generate('panel_profile'),
+            // El acuerdo de modalidad de una cesta compartida lleva al listado de
+            // socixs: nombra a los dos hogares, y desde ahí se llega a la ficha
+            // donde se aplica. No hay pantalla propia de acuerdos —son un puñado
+            // al año— y mandar a quien coordina al panel del socix, que es donde
+            // caería por ser un aviso de cesta, habría sido un 403.
+            Notification::KIND_PARTNERS_SHARED_CHANGE === $kind => $this->urlGenerator->generate('partner_index'),
             // El de quien coordina lleva al listado de fichas a medias, que es
             // donde están todas con lo que le falta a cada una. El aviso es un
             // resumen ("12 fichas..."), así que sin este destino no sería
