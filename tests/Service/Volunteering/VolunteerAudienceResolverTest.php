@@ -143,7 +143,7 @@ class VolunteerAudienceResolverTest extends TestCase
     private function repositoryReturning(array $partners): PartnerRepository
     {
         $repository = $this->createMock(PartnerRepository::class);
-        $repository->method('findAllActive')->willReturn($partners);
+        $repository->method('findVolunteeringAudience')->willReturn($partners);
         $repository->method('findActiveWithoutVolunteerPreferences')->willReturn($partners);
         $repository->method('findActiveMatchingVolunteerCategories')->willReturn($partners);
 

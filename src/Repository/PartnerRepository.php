@@ -88,7 +88,7 @@ class PartnerRepository extends ServiceEntityRepository
      *
      * @return list<Partner> socixs activos que admiten avisos de voluntariado
      */
-    public function findAllActive(): array
+    public function findVolunteeringAudience(): array
     {
         return $this->createQueryBuilder('p')
             ->where('p.status = :status')
@@ -102,11 +102,12 @@ class PartnerRepository extends ServiceEntityRepository
      * Todxs lxs socixs activxs, sin más filtro.
      *
      * Es la lista de "la asociación" para lo que va dirigido a todo el mundo,
-     * como el aviso de que hay un pedido del grupo de consumo abierto.
+     * como las novedades de la web o el aviso de que hay un pedido del grupo de
+     * consumo abierto.
      *
-     * NO CONFUNDIR CON {@see findAllActive()}, que pese al nombre descuenta a
-     * quien pidió que no se le llame para echar una mano: ése es un "no" sobre
-     * el voluntariado, no sobre todo lo demás, y reutilizarlo aquí dejaría sin
+     * No confundir con {@see findVolunteeringAudience()}, que descuenta a quien
+     * pidió que no se le llame para echar una mano: ése es un "no" sobre el
+     * voluntariado, no sobre todo lo demás, y reutilizarlo aquí dejaría sin
      * enterarse de un pedido de aceite a quien sólo dijo que no puede ir a la
      * huerta. Lo que cada socix no quiere recibir se pregunta en
      * {@see \App\Service\Notification\NotificationPreferences}, tema a tema.

@@ -36,6 +36,9 @@ final class NotificationTopic
     /** Voluntariado: hace falta gente, y recordatorios de lo que te toca. */
     public const VOLUNTEERING = 'volunteering';
 
+    /** Novedades: lo que se va añadiendo a la web. */
+    public const NEWS = 'news';
+
     /** Grupo de consumo: se ha abierto un pedido colectivo al que apuntarse. */
     public const CONSUMER_GROUP = 'consumer_group';
 
@@ -61,6 +64,18 @@ final class NotificationTopic
             // (AppSettings::EMAIL_VOLUNTEERING, apagado por defecto). El
             // recordatorio de «te toca mañana» sigue siendo sólo push: quien se
             // apuntó ya sabe que va, y ahí un correo más es ruido.
+            'channels' => [self::CHANNEL_EMAIL, self::CHANNEL_PUSH],
+        ],
+        self::NEWS => [
+            'label' => 'Novedades de la web',
+            'help' => 'Cuando añadimos algo nuevo que puedas usar. De vez en cuando, nunca urgente.',
+            'feature' => null,
+            // Los dos canales, cada uno con su casilla. Que el móvil se pueda
+            // apagar POR SEPARADO es justo lo que permite mandarlo: sin esa
+            // casilla, quien no quisiera enterarse de las novedades tendría que
+            // apagar el push entero y se quedaría también sin el aviso de su
+            // cesta, que es el que de verdad importa. Y el permiso del
+            // navegador, una vez denegado, no se puede volver a pedir.
             'channels' => [self::CHANNEL_EMAIL, self::CHANNEL_PUSH],
         ],
         self::CONSUMER_GROUP => [

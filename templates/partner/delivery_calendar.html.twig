@@ -38,7 +38,14 @@
     {# route_undo_accumulate apunta a la MISMA ruta que quitar la extra: ese endpoint mira
        de dónde viene el añadido del día y, si son cestas trasladadas, las devuelve a su
        semana en vez de perderlas. Una sola puerta para el añadido de un día = imposible
-       dejar cestas huérfanas. #}
+       dejar cestas huérfanas.
+
+       CESTA COMPARTIDA: el gestor la mueve, y el mismo endpoint de mover arrastra las dos
+       mitades. Sin consentimiento —lo aplica administración— pero con modal, porque mueve
+       a alguien que no está delante. Su ruta lleva la semana EN EL PATH
+       (…/calendar/move/{basketId}), de ahí `shared_move_in_path`; la del socix la manda en
+       el cuerpo. (Estos comentarios van AQUÍ y no entre las claves del `with`: dentro de
+       una expresión Twig, un comentario rompe el lexer y tumba la plantilla entera.) #}
     {% include 'partner/_calendar.html.twig' with {
         cal: {
             dnd: true,
@@ -58,6 +65,11 @@
             csrf_egg_toggle: csrf_token('calendar_component_' ~ partner.id),
             csrf_extra_remove: csrf_token('calendar_extra_' ~ partner.id),
             csrf_undo_accumulate: csrf_token('calendar_extra_' ~ partner.id),
+            route_shared_move: 'partner_delivery_calendar_move',
+            shared_move_in_path: true,
+            csrf_shared_move: csrf_token('calendar_move_' ~ partner.id),
+            shared_needs_consent: false,
+            shared_other_name: partner.sharePartner ? partner.sharePartner.nameForDelivery : null,
         }
     } %}
 

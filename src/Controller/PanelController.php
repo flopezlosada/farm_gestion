@@ -35,6 +35,8 @@ use App\Service\Delivery\ExtraBasketEditor;
 use App\Service\Delivery\PartnerEggScheduleEditor;
 use App\Service\Delivery\PickupRelocationOptions;
 use App\Service\Delivery\PickupRelocator;
+use App\Service\Delivery\SharedBasketChangeMediator;
+use App\Service\Delivery\SharedPairException;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
 use App\Service\Notification\NotificationPreferences;
@@ -454,6 +456,7 @@ class PanelController extends AbstractController
         BasketRepository $basketRepository,
         WeeklyBasketGroupRepository $weeklyBasketGroupRepository,
         PickupRelocator $relocator,
+        SharedBasketChangeMediator $mediator,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
@@ -483,6 +486,27 @@ class PanelController extends AbstractController
         if ($group === null) {
             $this->addFlash('error', 'Selecciona un nodo de recogida válido.');
             return $this->redirectToRoute('panel');
+        }
+
+        // COMPARTIDA: la cesta física es una y va a UN punto, así que trasladarla no es
+        // una decisión de este hogar. Se le pide al otro y se aplica cuando acepte; hasta
+        // entonces no cambia nada. El resto del autoservicio sigue igual.
+        if ($partner->getSharePartner() !== null) {
+            try {
+                $created = $mediator->requestRelocate($partner, $basket, $group, null);
+            } catch (SharedPairException $e) {
+                $this->addFlash('warning', $e->getMessage());
+
+                return $this->redirectToRoute('panel');
+            }
+
+            $this->addFlash('notice', sprintf(
+                'Se lo hemos pedido a %s: la cesta es una y la recogeríais los dos en "%s" esa semana. No cambia nada hasta que conteste.',
+                $created->getCounterpart()?->getNameForDelivery() ?? 'el otro hogar',
+                $group->getName(),
+            ));
+
+            return $this->redirectToRoute('panel_shared_basket');
         }
 
         // El traslado (crear/re-apuntar el override, cascadear a piedra si la semana ya está
@@ -1026,10 +1050,12 @@ class PanelController extends AbstractController
         // Componente al que se limita el movimiento (huevos), o 0 = entrega entera.
         $componentId = (int) $request->request->get('component_id', 0);
 
-        // R1: la cesta compartida no cambia de día (lo marca la alternancia). Los HUEVOS no se
-        // comparten (cada hogar los suyos) → mover SOLO el componente huevos sí se permite.
+        // COMPARTIDA: el día de la cesta no lo decide un hogar solo, así que por aquí no se
+        // mueve. Se PIDE al otro hogar, por `panel_shared_basket_request_move`, que es a
+        // donde apunta el calendario. Los HUEVOS sí (cada hogar los suyos) y siguen abajo.
+        // Camino defensivo: desde la pantalla ya no se llega, pero un POST repetido sí.
         if ($partner->getSharePartner() !== null && $componentId !== BasketComponent::ID_EGGS) {
-            $this->addFlash('warning', 'Tu cesta es compartida: el día lo marca la alternancia con el otro hogar. Solo puedes mover los huevos, no la cesta.');
+            $this->addFlash('warning', 'Tu cesta es compartida: el cambio de día se le pide al otro hogar desde tu calendario, y se aplica cuando acepta.');
 
             return $backToFrom();
         }
