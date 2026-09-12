@@ -1,0 +1,103 @@
+{# ============================================================
+ # Envoltorio común de los correos de la asociación: logo, ancho, colores y pie.
+ #
+ # QUÉ APORTA: que un correo nuestro se reconozca de un vistazo en una bandeja
+ # llena, y que no haya que volver a decidir el ancho, la tipografía y los
+ # márgenes cada vez que se escribe uno. Quien escriba un correo nuevo hereda
+ # esto y sólo se ocupa de lo que tiene que decir.
+ #
+ # CON TABLAS Y ESTILOS EN LÍNEA, y no es código antiguo por descuido: los
+ # clientes de correo tiran el <style> del <head> con mucha alegría y varios
+ # (Outlook de escritorio, sobre todo) no respetan `max-width` en un <div>. La
+ # tabla centrada de ancho fijo es lo único que se ve igual en todos.
+ #
+ # LOS COLORES SON LOS DEL SISTEMA DE DISEÑO (assets/css/csa/01-tokens.css),
+ # copiados a mano porque aquí no hay variables CSS que valgan. Si allí cambian,
+ # aquí también: el verde es --csa-green (#4a7c3a), la tinta --csa-ink (#1c1d1a)
+ # y la banda de la cabecera --csa-sage-bg (#e8ede0), que es la que armoniza con
+ # el verde agua de la copa del árbol del logo.
+ #
+ # CÓMO SE USA:
+ #   {% extends 'email/_layout.html.twig' %}
+ #   {% block preheader %}Lo que se lee en la lista, antes de abrir{% endblock %}
+ #   {% block heading %}El titular{% endblock %}
+ #   {% block content %}…{% endblock %}
+ #   {% block footnote %}Letra pequeña opcional, bajo la firma{% endblock %}
+ #
+ # De momento lo usa sólo el correo de novedades. Los demás correos del
+ # proyecto son anteriores y siguen con su HTML propio; migrarlos es trabajo
+ # aparte y no hace falta hacerlo de golpe.
+ # ============================================================ #}
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}CSA Vega de Jarama{% endblock %}</title>
+</head>
+<body style="margin:0; padding:0; background:#f0efec; -webkit-font-smoothing:antialiased;">
+
+{# La primera línea que enseña el gestor de correo junto al asunto, antes de
+   abrir nada. Oculta en el cuerpo. Sin esto, ahí se cuela el primer texto que
+   pille —normalmente "CSA VEGA DE JARAMA"—, que no aporta nada porque el
+   remitente ya lo dice. #}
+<div style="display:none; font-size:1px; color:#f0efec; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden;">
+    {% block preheader %}{% endblock %}
+</div>
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f0efec;">
+    <tr>
+        <td align="center" style="padding:24px 12px;">
+
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="580"
+                   style="width:580px; max-width:100%; background:#ffffff; border:1px solid #e6e0d0; border-radius:10px; overflow:hidden;">
+
+                {# Cabecera: el árbol sobre la banda sage. El logo va INCRUSTADO
+                   (`email.image` lo adjunta y devuelve su cid), así se ve sin que
+                   nadie tenga que pulsar "mostrar imágenes". #}
+                <tr>
+                    <td align="center" style="background:#e8ede0; padding:28px 24px 22px;">
+                        <img src="{{ email.image(csa_email_logo) }}"
+                             alt="CSA Vega de Jarama"
+                             width="100"
+                             style="width:100px; height:auto; display:block; border:0;">
+                        <div style="font-family:Georgia,'Times New Roman',serif; font-size:13px; letter-spacing:3px; text-transform:uppercase; color:#4a5a48; padding-top:14px;">
+                            Vega de Jarama
+                        </div>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding:32px 36px 8px; font-family:Georgia,'Times New Roman',serif;">
+                        <h1 style="margin:0; font-size:25px; line-height:1.25; font-weight:normal; color:#1c1d1a;">
+                            {% block heading %}{% endblock %}
+                        </h1>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td style="padding:0 36px 32px; font-family:Helvetica,Arial,sans-serif; font-size:15px; line-height:1.6; color:#1c1d1a;">
+                        {% block content %}{% endblock %}
+                    </td>
+                </tr>
+
+                {# Pie: la firma, sobre fondo distinto para que se lea como cierre
+                   y no como un párrafo más. #}
+                <tr>
+                    <td style="background:#f5f5f3; border-top:1px solid #e6e0d0; padding:24px 36px; font-family:Helvetica,Arial,sans-serif; font-size:13px; line-height:1.6; color:#5a5b56;">
+                        Un abrazo,<br>
+                        <strong style="color:#1c1d1a;">CSA Vega de Jarama</strong><br>
+                        <a href="https://csavegadejarama.org" style="color:#4a7c3a; text-decoration:none;">csavegadejarama.org</a>
+
+                        {% block footnote %}{% endblock %}
+                    </td>
+                </tr>
+
+            </table>
+
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>
