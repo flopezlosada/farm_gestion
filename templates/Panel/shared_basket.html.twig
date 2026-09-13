@@ -29,9 +29,15 @@
         'Es una sola cesta y la repartís entre los dos hogares, así que los cambios los decidís entre los dos.'
     ) }}
 
-    <div class="csa-stack-lg csa-form-narrow">
+    {# Sin `csa-form-narrow`: ese contenedor centra con `margin: 0 auto` y dejaba las
+       tarjetas desplazadas respecto al título de la página, que va a la izquierda. #}
+    <div class="csa-stack-lg">
 
-        {# ============ 1. LO QUE ME TOCA CONTESTAR ============ #}
+        {# ============ 1. LO QUE ME TOCA CONTESTAR ============
+         # La tarjeta SÓLO SI HAY ALGO. Esta pantalla se abre desde un aviso —"tienes que
+         # contestar a un cambio"— y lo primero que debe verse es eso, no dos cajas
+         # anunciando que no hay nada. Lo que no existe no ocupa sitio. #}
+        {% if incoming is not empty %}
         {% embed '_components/csa_card.html.twig' with {
             title: 'Esperando tu respuesta',
             icon: 'fa-hand-paper-o'
@@ -39,11 +45,8 @@
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
 
-                {% if incoming is empty %}
-                    <p class="csa-muted">No hay nada que contestar ahora mismo.</p>
-                {% else %}
                     {% for req in incoming %}
-                        <div class="csa-stack" style="padding-block: var(--csa-sp-3); border-bottom: 1px solid var(--csa-border);">
+                        <div class="csa-stack" style="padding-block: var(--csa-sp-3); border-bottom: 1px solid var(--csa-rule-soft);">
                             <p>
                                 <strong>{{ req.requester.nameForDelivery }}</strong>
                                 pide {{ req.summary }}.
@@ -80,11 +83,12 @@
                             {% endif %}
                         </div>
                     {% endfor %}
-                {% endif %}
             {% endblock %}
         {% endembed %}
+        {% endif %}
 
         {# ============ 2. LO QUE HE PEDIDO YO ============ #}
+        {% if outgoing is not empty %}
         {% embed '_components/csa_card.html.twig' with {
             title: 'Lo que has pedido',
             icon: 'fa-paper-plane-o'
@@ -92,11 +96,8 @@
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
 
-                {% if outgoing is empty %}
-                    <p class="csa-muted">No tienes ninguna petición esperando respuesta.</p>
-                {% else %}
                     {% for req in outgoing %}
-                        <div class="csa-stack" style="padding-block: var(--csa-sp-3); border-bottom: 1px solid var(--csa-border);">
+                        <div class="csa-stack" style="padding-block: var(--csa-sp-3); border-bottom: 1px solid var(--csa-rule-soft);">
                             <p>
                                 Pediste {{ req.summary }}.
                                 {% if req.isActionable %}
@@ -114,13 +115,35 @@
                             {% endif %}
                         </div>
                     {% endfor %}
-                {% endif %}
 
-                {{ csa.hint('Para pedir un cambio de día, entra en tu calendario y elige el día al que quieres llevar la cesta.') }}
             {% endblock %}
         {% endembed %}
+        {% endif %}
+
+        {# ============ 2a. ACORDADO, PENDIENTE DE ADMINISTRACIÓN ============
+         # Un cambio de modalidad aceptado NO está aplicado: lo aplica administración. Hasta
+         # entonces sigue en curso, así que no puede leerse en "Lo último" como si fuera
+         # historia — que es justo lo que confundía— ni permitir proponer otro encima. #}
+        {% if agreed is not empty %}
+        {% embed '_components/csa_card.html.twig' with {
+            title: 'Acordado, en manos de administración',
+            icon: 'fa-hourglass-half'
+        } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                {% for req in agreed %}
+                    <p>Los dos habéis dicho que sí a {{ req.summary }}. Falta que administración lo aplique; vuestra cesta sigue como está hasta entonces.</p>
+                {% endfor %}
+                {{ csa.callout('Mientras esto no esté hecho no se pueden pedir más cambios: primero que quede aplicado.', 'info', 'info-circle') }}
+            {% endblock %}
+        {% endembed %}
+        {% endif %}
 
         {# ============ 3. CAMBIO DE MODALIDAD ============
+         # No se ofrece si ya hay uno acordado esperando a administración: el servidor lo
+         # rechazaría igual, y un formulario que sólo sirve para llevarse un error no es un
+         # formulario. #}
+        {% if agreed is empty %}
          # Aquí no se aplica nada: se acuerda. La cuota la lleva administración y la
          # ley que empareja a los dos hogares obliga a cambiar las dos cestas a la
          # vez, así que lo que esta pantalla aporta es que los dos hayan dicho que sí
@@ -132,7 +155,10 @@
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
 
-                <form method="post" action="{{ path('panel_shared_basket_request_modality') }}" class="csa-stack">
+                {# `data-csa-dropdowns`: el desplegable del sistema operativo no se puede estilar
+                   y aquí salía en gris del SO, roto respecto al resto. El componente es OPT-IN,
+                   hay que pedirlo. #}
+                <form method="post" action="{{ path('panel_shared_basket_request_modality') }}" class="csa-stack" data-csa-dropdowns>
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_shared_basket_request') }}">
 
                     <label>
@@ -140,7 +166,7 @@
                         <select name="basket_share_id" class="csa-select" required>
                             <option value="">— elige —</option>
                             {% for modality in modalities %}
-                                <option value="{{ modality.id }}">{{ modality.title }}</option>
+                                <option value="{{ modality.id }}">{{ modality.name }}</option>
                             {% endfor %}
                         </select>
                     </label>
@@ -154,10 +180,45 @@
                         <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Proponérselo</button>
                     </p>
 
-                    {{ csa.hint('Si acepta, queda acordado y lo aplica administración. Vuestra cesta no cambia hasta entonces.') }}
+                    <p class="csa-muted" style="font-size: var(--csa-fs-sm);">Si acepta, queda acordado y lo aplica administración. Vuestra cesta no cambia hasta entonces.</p>
                 </form>
             {% endblock %}
         {% endembed %}
+        {% endif %}
+
+        {# ============ EL HISTORIAL, AL FINAL Y RECOGIDO ============
+         # Estuvo arriba y como tarjeta normal, y era lo más llamativo de la pantalla: cuatro
+         # líneas de cosas ya resueltas por delante de lo único que hay que hacer. Un historial
+         # se consulta cuando alguien quiere reconstruir qué pasó, no cada vez que se entra.
+         # Va plegado, así que ocupa una línea; quien lo necesite lo abre. #}
+        {% if decided is not empty %}
+            {# Estilos aquí y no una clase de la casa: el desplegable del panel (`prt-fold`)
+               tiene su CSS dentro de la plantilla de la portada, así que fuera de allí no
+               existe. Son cuatro declaraciones para una línea plegada. #}
+            <details style="margin-top: var(--csa-sp-4);">
+                <summary style="cursor: pointer; color: var(--csa-ink-soft); font-size: var(--csa-fs-sm);">Historial de cambios ({{ decided|length }})</summary>
+                <div style="padding-top: var(--csa-sp-3);">
+                    {% set agreed_ids = [] %}
+                    {% for a in agreed %}{% set agreed_ids = agreed_ids|merge([a.id]) %}{% endfor %}
+                    {# `|filter` y no `for ... if`: Twig 3 quitó esa forma. #}
+                    {% for req in decided|filter(r => r.id not in agreed_ids) %}
+                        <p style="display: flex; gap: var(--csa-sp-3); align-items: baseline; padding-block: var(--csa-sp-2); border-bottom: 1px solid var(--csa-rule-soft); font-size: var(--csa-fs-sm); margin: 0;">
+                            <span class="csa-muted" style="min-width: 4.5em;">{{ req.decidedAt|format_date(pattern='d MMM', locale='es') }}</span>
+                            <span>
+                                {{ req.requester.nameForDelivery }} pidió {{ req.summary }} ·
+                                {% if req.status == 'accepted' %}
+                                    {{ req.counterpart.nameForDelivery }} dijo que sí
+                                {% elseif req.status == 'rejected' %}
+                                    {{ req.counterpart.nameForDelivery }} dijo que no
+                                {% else %}
+                                    se retiró antes de contestarla
+                                {% endif %}
+                            </span>
+                        </p>
+                    {% endfor %}
+                </div>
+            </details>
+        {% endif %}
 
     </div>
 

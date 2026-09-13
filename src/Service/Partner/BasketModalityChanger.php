@@ -2,6 +2,7 @@
 
 namespace App\Service\Partner;
 
+use App\Entity\BasketShare;
 use App\Entity\PartnerBasketShare;
 use App\Repository\PartnerBasketShareRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -50,7 +51,7 @@ class BasketModalityChanger
      * @return PartnerBasketShare La PBS antigua, ya cerrada.
      * @throws \DomainException Si el socio no tiene cesta vigente en la víspera.
      */
-    public function applyChange(PartnerBasketShare $new, \DateTimeInterface $effective, ?string $actor = null): PartnerBasketShare
+    public function applyChange(PartnerBasketShare $new, \DateTimeInterface $effective, ?string $actor = null, bool $cascadeToMate = true): PartnerBasketShare
     {
         $partner = $new->getPartner();
         $dayBefore = \DateTime::createFromInterface($effective)->modify('-1 day');
@@ -112,6 +113,74 @@ class BasketModalityChanger
         }
         $this->em->flush();
 
+        // CESTA COMPARTIDA: el cambio arrastra al otro hogar. Es UNA cesta que dos familias
+        // parten, y la ley L22 exige que las dos suscripciones tengan la misma modalidad y
+        // la misma cohorte u orden del mes. Cambiar sólo una deja a la pareja imposible de
+        // repartir: ya pasó —una socia se quedó sin entregas al pasar la otra a mensual—.
+        if ($cascadeToMate) {
+            $this->cascadeToMate($new, $effective, $actor);
+        }
+
         return $old;
+    }
+
+    /**
+     * Repite el cambio en la cesta del otro hogar, conservando lo que es suyo.
+     *
+     * De la cesta nueva viaja lo que define a la PAREJA —modalidad, orden del mes y turno—;
+     * de la suya se conserva lo que es de su casa: los huevos y el precio. Compartir cesta
+     * no es compartir la docena ni la cuota.
+     *
+     * @param PartnerBasketShare $new       Cesta nueva del hogar que originó el cambio.
+     * @param \DateTimeInterface $effective Desde cuándo.
+     * @param string|null        $actor     Quién lo hizo.
+     */
+    private function cascadeToMate(PartnerBasketShare $new, \DateTimeInterface $effective, ?string $actor): void
+    {
+        $mate = $new->getPartner()?->getSharePartner();
+        if (null === $mate) {
+            return;
+        }
+
+        // Si la modalidad nueva NO es compartida, la pareja deja de tener sentido y eso es
+        // otra conversación (con quién sigue compartiendo, o si ya no comparte). No se
+        // arrastra a nadie a una cesta entera por la puerta de atrás.
+        $modalityId = $new->getBasketShare()?->getId();
+        if (!in_array($modalityId, BasketShare::IDS_SHARED, true)) {
+            return;
+        }
+
+        $mateOld = $this->shareRepository->findLatestActiveForPartner($mate);
+        if (null === $mateOld) {
+            return;
+        }
+
+        // Ya está como debe: no se parte su histórico por gusto.
+        if ($mateOld->getBasketShare()?->getId() === $modalityId
+            && $mateOld->getDayMonthOrder() === $new->getDayMonthOrder()
+            && $mateOld->getDeliveryGroup() === $new->getDeliveryGroup()
+        ) {
+            return;
+        }
+
+        $mateNew = new PartnerBasketShare();
+        $mateNew->setPartner($mate);
+        // De la pareja:
+        $mateNew->setBasketShare($new->getBasketShare());
+        $mateNew->setDayMonthOrder($new->getDayMonthOrder());
+        $mateNew->setDeliveryGroup($new->getDeliveryGroup());
+        // De su casa:
+        $mateNew->setEggAmount($mateOld->getEggAmount());
+        $mateNew->setEggPeriod($mateOld->getEggPeriod());
+        $mateNew->setEggDayMonthOrder($mateOld->getEggDayMonthOrder());
+        $mateNew->setMonthPrice($mateOld->getMonthPrice());
+        $mateNew->setEggMonthPrice($mateOld->getEggMonthPrice());
+        $mateNew->setAmount($mateOld->getAmount());
+        $mateNew->setVegetablesBasketAmount($mateOld->getVegetablesBasketAmount());
+        $mateNew->setTransportPrice($mateOld->getTransportPrice());
+        $mateNew->setPayerPartner($mateOld->getPayerPartner());
+
+        // Sin volver a cascadear: si no, los dos hogares se arrastrarían el uno al otro.
+        $this->applyChange($mateNew, $effective, $actor, cascadeToMate: false);
     }
 }

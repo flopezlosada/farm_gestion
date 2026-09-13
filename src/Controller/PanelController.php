@@ -18,6 +18,7 @@ use App\Form\PartnerProfileType;
 use App\Repository\BasketRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
+use App\Repository\SharedBasketChangeRequestRepository;
 use App\Repository\VolunteerCategoryRepository;
 use App\Repository\VolunteerShiftRepository;
 use App\Repository\VolunteerSignupRepository;
@@ -686,7 +687,12 @@ class PanelController extends AbstractController
      * @return Response
      */
     #[Route('/calendar', name: 'panel_calendar', methods: ['GET'])]
-    public function calendar(Request $request, DeliveryCalendarViewBuilder $viewBuilder, PartnerConsumerGroupDeliveries $cgDeliveryService): Response
+    public function calendar(
+        Request $request,
+        DeliveryCalendarViewBuilder $viewBuilder,
+        PartnerConsumerGroupDeliveries $cgDeliveryService,
+        SharedBasketChangeRequestRepository $sharedRequests,
+    ): Response
     {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
@@ -715,7 +721,22 @@ class PanelController extends AbstractController
             ? $cgDeliveryService->upcomingForPartner($this->getUser()->getPartner())
             : [];
 
+        // Peticiones de cambio VIVAS de esta cesta compartida, indexadas por la semana a la
+        // que se refieren. El calendario las necesita para no volver a ofrecer un cambio que
+        // ya está pedido: sin esto, el día se ve igual antes y después de pedirlo y el botón
+        // sigue invitando a pedir lo mismo otra vez.
+        $pendingShared = [];
+        if (null !== $partner->getSharePartner()) {
+            foreach ($sharedRequests->findPendingFrom($partner) as $pending) {
+                $basketId = $pending->getBasket()?->getId();
+                if (null !== $basketId && $pending->isActionable()) {
+                    $pendingShared[$basketId] = $pending;
+                }
+            }
+        }
+
         return $this->render('Panel/calendar.html.twig', $view + [
+            'pending_shared' => $pendingShared,
             'can_self_serve' => $canSelfServe,
             'cg_deliveries' => $cgDeliveries,
             // Día pinchado con pedido pero sin cesta: el panel se dibuja por fecha.
