@@ -29,7 +29,11 @@
         .obl-head--valid { border-left-color: #2e7d4f; }
         .obl-head__days { font-size: 26px; font-weight: 700; line-height: 1.1; }
         .obl-head__date { color: var(--csa-text-muted, #6b7280); }
-        .obl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px 26px; margin-bottom: 22px; }
+        /* auto-FILL y no auto-fit: con auto-fit, dos datos se estiran hasta
+           ocupar media pantalla cada uno y la ficha parece descuadrada. Con
+           auto-fill las columnas conservan su ancho y los datos quedan
+           alineados entre sí, haya dos o haya seis. */
+        .obl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px 26px; margin-bottom: 22px; }
         .obl-field__label { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--csa-text-muted, #6b7280); }
         .obl-field__value { font-weight: 600; }
         .obl-notes { white-space: pre-wrap; background: var(--csa-surface-2, #f7f7f5); padding: 14px 16px; border-radius: 8px; margin-bottom: 22px; }
