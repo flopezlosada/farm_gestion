@@ -68,10 +68,26 @@ class PanelSharedBasketController extends AbstractController
             return $this->redirectToRoute('panel');
         }
 
-        $current = $shares->findActiveForPartner($partner, new \DateTime('today'))?->getBasketShare()?->getId();
+        // LA ÚLTIMA CESTA CONTRATADA, NO LA QUE SE RECOGE HOY. Un cambio de modalidad
+        // entra en vigor a principio de mes, así que entre que administración lo aplica y
+        // que empieza pasan semanas. Preguntando por la de hoy, el acuerdo seguía
+        // saliendo como "en manos de administración" todo ese tiempo —con el cambio ya
+        // hecho— y de paso les impedía pedir ninguna otra cosa. Es el mismo finder que
+        // usa el cambio de modalidad para saber qué cesta sustituye.
+        $latest = $shares->findLatestActiveForPartner($partner);
+        $current = $latest?->getBasketShare()?->getId();
+
+        // Cesta ya contratada que aún no ha empezado: es lo que hay que poder leer cuando
+        // el cartel de "falta aplicarlo" desaparece. Sin esto, quien entra a ver en qué
+        // quedó aquello no encuentra nada.
+        $startsOn = $latest?->getStartDate();
+        $upcoming = $startsOn instanceof \DateTimeInterface && $startsOn > new \DateTime('today')
+            ? $latest
+            : null;
 
         return $this->render('Panel/shared_basket.html.twig', [
             'other' => $other,
+            'upcoming' => $upcoming,
             'incoming' => $requests->findPendingFor($partner),
             'outgoing' => $requests->findPendingFrom($partner),
             // Lo contestado en las últimas semanas: es donde aterriza quien abre el aviso
