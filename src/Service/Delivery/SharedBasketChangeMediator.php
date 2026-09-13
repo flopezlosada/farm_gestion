@@ -7,6 +7,7 @@ use App\Entity\Partner;
 use App\Entity\SharedBasketChangeRequest;
 use App\Entity\WeeklyBasketGroup;
 use App\Repository\SharedBasketChangeRequestRepository;
+use App\Repository\PartnerBasketShareRepository;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -37,6 +38,7 @@ final class SharedBasketChangeMediator
         private readonly SharedBasketChangeRequestRepository $requests,
         private readonly SharedBasketChangeNotifier $notifier,
         private readonly UserRepository $users,
+        private readonly PartnerBasketShareRepository $shares,
     ) {
     }
 
@@ -311,6 +313,15 @@ final class SharedBasketChangeMediator
      */
     private function assertNothingPending(Partner $one, Partner $other): void
     {
+        // Un cambio de MODALIDAD ya acordado y aún sin aplicar cuenta como vivo, aunque su
+        // estado diga "aceptada": aceptar no lo aplica —lo aplica administración—, así que
+        // hasta entonces la pareja tiene un acuerdo en curso. Dejar pedir otra cosa encima
+        // sería acumular acuerdos que administración tendría que desenredar.
+        $currentId = $this->shares->findActiveForPartner($one, new \DateTime('today'))?->getBasketShare()?->getId();
+        if ([] !== $this->requests->findAgreedModalityPending($one, $other, $currentId)) {
+            throw new SharedPairException('Ya tenéis acordado un cambio de modalidad y administración todavía no lo ha aplicado. Esperad a que esté hecho.');
+        }
+
         foreach ($this->requests->findPendingBetween($one, $other) as $pending) {
             // Una pendiente cuyo reparto ya pasó no estorba: nadie va a contestarla y
             // bloquear por ella dejaría a la pareja sin poder pedir nada nunca más.
