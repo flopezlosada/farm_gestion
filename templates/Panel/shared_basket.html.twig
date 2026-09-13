@@ -29,7 +29,9 @@
         'Es una sola cesta y la repartís entre los dos hogares, así que los cambios los decidís entre los dos.'
     ) }}
 
-    <div class="csa-stack-lg csa-form-narrow">
+    {# Sin `csa-form-narrow`: ese contenedor centra con `margin: 0 auto` y dejaba las
+       tarjetas desplazadas respecto al título de la página, que va a la izquierda. #}
+    <div class="csa-stack-lg">
 
         {# ============ 1. LO QUE ME TOCA CONTESTAR ============
          # La tarjeta SÓLO SI HAY ALGO. Esta pantalla se abre desde un aviso —"tienes que
@@ -44,7 +46,7 @@
                 {% import '_macros/csa.html.twig' as csa %}
 
                     {% for req in incoming %}
-                        <div class="csa-stack" style="padding-block: var(--csa-sp-3); border-bottom: 1px solid var(--csa-border);">
+                        <div class="csa-stack" style="padding-block: var(--csa-sp-3); border-bottom: 1px solid var(--csa-rule-soft);">
                             <p>
                                 <strong>{{ req.requester.nameForDelivery }}</strong>
                                 pide {{ req.summary }}.
@@ -95,7 +97,7 @@
                 {% import '_macros/csa.html.twig' as csa %}
 
                     {% for req in outgoing %}
-                        <div class="csa-stack" style="padding-block: var(--csa-sp-3); border-bottom: 1px solid var(--csa-border);">
+                        <div class="csa-stack" style="padding-block: var(--csa-sp-3); border-bottom: 1px solid var(--csa-rule-soft);">
                             <p>
                                 Pediste {{ req.summary }}.
                                 {% if req.isActionable %}
@@ -200,16 +202,18 @@
                     {% for a in agreed %}{% set agreed_ids = agreed_ids|merge([a.id]) %}{% endfor %}
                     {# `|filter` y no `for ... if`: Twig 3 quitó esa forma. #}
                     {% for req in decided|filter(r => r.id not in agreed_ids) %}
-                        <p class="csa-muted" style="padding-block: var(--csa-sp-2); border-bottom: 1px solid var(--csa-border);">
-                            {{ req.requester.nameForDelivery }} pidió {{ req.summary }}.
-                            {% if req.status == 'accepted' %}
-                                {{ req.counterpart.nameForDelivery }} dijo que sí.
-                            {% elseif req.status == 'rejected' %}
-                                {{ req.counterpart.nameForDelivery }} dijo que no.
-                            {% else %}
-                                Se retiró antes de contestarla.
-                            {% endif %}
-                            {{ req.decidedAt|format_date(pattern='d MMM', locale='es') }}
+                        <p style="display: flex; gap: var(--csa-sp-3); align-items: baseline; padding-block: var(--csa-sp-2); border-bottom: 1px solid var(--csa-rule-soft); font-size: var(--csa-fs-sm); margin: 0;">
+                            <span class="csa-muted" style="min-width: 4.5em;">{{ req.decidedAt|format_date(pattern='d MMM', locale='es') }}</span>
+                            <span>
+                                {{ req.requester.nameForDelivery }} pidió {{ req.summary }} ·
+                                {% if req.status == 'accepted' %}
+                                    {{ req.counterpart.nameForDelivery }} dijo que sí
+                                {% elseif req.status == 'rejected' %}
+                                    {{ req.counterpart.nameForDelivery }} dijo que no
+                                {% else %}
+                                    se retiró antes de contestarla
+                                {% endif %}
+                            </span>
                         </p>
                     {% endfor %}
                 </div>
