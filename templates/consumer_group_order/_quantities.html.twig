@@ -1,8 +1,8 @@
 {# Inputs de cantidad por producto del pedido. Espera: round, quantities (map).
  #
- # Mismo criterio que el formulario del socix: lo que se pide son BULTOS (una
- # garrafa, un saco, una caja), así que el paso es 1. Con step="0.01" las flechas
- # subían de céntimo en céntimo y se acababa apuntando «0,03 garrafas de 5 L».
+ # Mismo criterio que el formulario del socix: el salto lo dice el PRODUCTO —una
+ # garrafa o una caja no se parten; el queso se pide de medio en medio—. Con
+ # step="0.01" para todos se acababa apuntando «0,03 garrafas de 5 L».
  #
  # La unidad va SOLO en la etiqueta, junto al precio, que es donde se entiende;
  # repetirla detrás del campo la decía dos veces en la misma línea. #}
@@ -12,9 +12,12 @@
             <label class="cgo-line__label" for="cgo-q-{{ item.id }}">
                 {{ item.name }} <span class="csa-muted">· {{ item.price|number_format(2, ',', '.') }} € / {{ item.unit }}</span>
             </label>
-            <input type="number" min="0" step="1" inputmode="numeric" id="cgo-q-{{ item.id }}"
+            {% set medios = item.product and item.product.halfUnits %}
+            <input type="number" min="0"
+                   step="{{ medios ? '0.5' : '1' }}"
+                   inputmode="{{ medios ? 'decimal' : 'numeric' }}" id="cgo-q-{{ item.id }}"
                    name="quantity[{{ item.id }}]"
-                   value="{{ quantities[item.id] is defined ? quantities[item.id]|number_format(0) : '' }}"
+                   value="{{ quantities[item.id] is defined ? quantities[item.id] + 0 : '' }}"
                    class="csa-input cgo-line__qty" placeholder="0">
             <span class="cgo-line__sub">
                 {%- set pedido = quantities[item.id]|default(0) -%}

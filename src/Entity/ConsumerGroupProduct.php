@@ -69,6 +69,20 @@ class ConsumerGroupProduct
     private string $unit = '';
 
     /**
+     * ¿Se puede pedir en MEDIAS unidades (medio kilo, media caja)?
+     *
+     * Lo decide cada producto y no el formulario, que es lo que estaba mal: con
+     * un paso decimal para todos, las flechas del campo llevaban a pedir «0,03
+     * garrafas de 5 L». Una garrafa no se parte; medio kilo de queso sí se pide.
+     *
+     * Medias y no decimales libres: lo que se vende por peso en un grupo de
+     * consumo se pide de medio en medio. Con decimales libres vuelve a colarse
+     * el 0,03, y quien lo teclee no lo verá raro hasta que llegue al productor.
+     * @ORM\Column(name="half_units", type="boolean", options={"default": false})
+     */
+    private bool $halfUnits = false;
+
+    /**
      * Descripción del producto (variedad, formato, origen…), opcional.
      * @ORM\Column(type="text", nullable=true)
      */
@@ -142,6 +156,29 @@ class ConsumerGroupProduct
     {
         $this->unit = $unit;
         return $this;
+    }
+
+    /**
+     * ¿Admite medias unidades? {@see $halfUnits}.
+     */
+    public function isHalfUnits(): bool
+    {
+        return $this->halfUnits;
+    }
+
+    public function setHalfUnits(bool $halfUnits): self
+    {
+        $this->halfUnits = $halfUnits;
+        return $this;
+    }
+
+    /**
+     * El salto con el que se pide este producto, para el campo del formulario y
+     * para la normalización: media unidad o unidad entera.
+     */
+    public function orderStep(): float
+    {
+        return $this->halfUnits ? 0.5 : 1.0;
     }
 
     public function getDescription(): ?string
