@@ -90,14 +90,32 @@
                                             <span class="cg-order-line__desc">{{ item.product.description }}</span>
                                         {% endif %}
                                     </label>
-                                    <input type="number" min="0" step="0.01" inputmode="decimal"
+                                    {# LO QUE SE PIDE SON BULTOS, NO FRACCIONES: una garrafa de 5 L,
+                                     # un saco, una caja. Con step="0.01" las flechas subían de
+                                     # céntimo en céntimo y se acababa pidiendo «0,03 garrafas de
+                                     # 5 L», que no quiere decir nada y además llegaba así al
+                                     # pedido del productor. El granel por peso está fuera de
+                                     # alcance por decisión de la comisión; si algún día entra,
+                                     # será un campo del producto y no el paso por defecto. #}
+                                    <input type="number" min="0" step="1" inputmode="numeric"
                                            id="cg-qty-{{ item.id }}"
                                            name="quantity[{{ item.id }}]"
-                                           value="{{ quantities[item.id]|default('') }}"
+                                           {# Sin decimales: lo guardado es «2.00» y el campo pide
+                                            # unidades. Vacío sigue vacío, para que se vea el
+                                            # placeholder en vez de un 0. #}
+                                           value="{{ quantities[item.id] is defined ? quantities[item.id]|number_format(0) : '' }}"
                                            class="csa-input cg-order-line__qty"
                                            placeholder="0"
                                            data-cg-price="{{ item.price }}">
-                                    <span class="cg-order-line__unit">{{ item.unit }}</span>
+                                    {# Aquí iba la unidad OTRA VEZ —ya está en la etiqueta, al lado
+                                     # del precio, que es donde se entiende—. En su lugar, lo que
+                                     # no se sabía: cuánto suma esta línea. #}
+                                    {# Ya calculado desde el servidor, como el total: el JavaScript
+                                     # sólo lo va actualizando. #}
+                                    <span class="cg-order-line__sub" data-cg-sub>
+                                        {%- set pedido = quantities[item.id]|default(0) -%}
+                                        {%- if pedido > 0 %}{{ (pedido * item.price)|number_format(2, ',', '.') }} €{% endif -%}
+                                    </span>
                                 </div>
                             {% endfor %}
                         </div>
@@ -168,8 +186,8 @@
         .cg-order-line__label { flex: 1; }
         .cg-order-line__photo { flex: 0 0 56px; width: 56px; height: 56px; object-fit: cover; border-radius: 8px; }
         .cg-order-line__desc { display: block; font-size: .85rem; color: var(--csa-muted); }
-        .cg-order-line__qty { flex: 0 0 7rem; }
-        .cg-order-line__unit { flex: 0 0 4rem; color: var(--csa-muted); }
+        .cg-order-line__qty { flex: 0 0 6rem; }
+        .cg-order-line__sub { flex: 0 0 5.5rem; text-align: right; font-weight: 600; }
         .cg-order-summary { margin: 0; padding-left: var(--csa-sp-4); }
         .cg-order-total { display: flex; justify-content: space-between; align-items: baseline;
             gap: var(--csa-sp-3); margin-top: var(--csa-sp-4); padding-top: var(--csa-sp-3);
@@ -188,19 +206,35 @@
             var out = form.querySelector('[data-cg-total]');
             var inputs = form.querySelectorAll('[data-cg-price]');
 
-            /* Suma lo apuntado. Acepta la coma decimal, que es como se escribe aquí
-               (el input numérico del móvil ofrece coma en español). */
+            /* Formatea un importe en euros. */
+            function euros(n) {
+                return n.toLocaleString('es-ES', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                }) + ' €';
+            }
+
+            /* Suma lo apuntado y, de paso, escribe lo que suma cada línea. Acepta
+               la coma decimal por si alguien la teclea, aunque el campo pida
+               unidades enteras. */
             function render() {
                 var total = 0;
                 inputs.forEach(function (input) {
                     var qty = parseFloat(String(input.value).replace(',', '.'));
                     var price = parseFloat(input.getAttribute('data-cg-price'));
-                    if (!isNaN(qty) && qty > 0 && !isNaN(price)) { total += qty * price; }
+                    var sub = input.parentElement.querySelector('[data-cg-sub]');
+                    var line = 0;
+
+                    if (!isNaN(qty) && qty > 0 && !isNaN(price)) {
+                        line = qty * price;
+                        total += line;
+                    }
+
+                    /* Vacío cuando no se ha pedido nada: una columna de «0,00 €»
+                       repetidos es ruido, y lo que importa es lo que sí llevas. */
+                    if (sub) { sub.textContent = line > 0 ? euros(line) : ''; }
                 });
-                out.textContent = total.toLocaleString('es-ES', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2
-                }) + ' €';
+                out.textContent = euros(total);
             }
 
             form.addEventListener('input', render);
