@@ -10,6 +10,14 @@ parameters:
     # en el contenedor).
     app.session.max_idle_time: 7200
 
+    # Archivo de los documentos de vencimientos (convenios, pólizas, censos).
+    # FUERA de public/ a propósito: lo que cuelga del docroot lo sirve Apache sin
+    # pasar por Symfony y sin comprobar permisos, y estos papeles llevan DNIs,
+    # IBAN y firmas. Se sirven por ObligationController, que exige el rol.
+    # El despliegue sube por delta de hashes y no borra lo que no conoce, así
+    # que esta carpeta sobrevive a los deploys; no la incluyas en el repo.
+    app.obligation_documents_dir: '%kernel.project_dir%/var/documentos/vencimientos'
+
 services:
     # default configuration for services in *this* file
     _defaults:

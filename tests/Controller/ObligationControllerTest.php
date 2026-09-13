@@ -6,6 +6,7 @@ use App\Entity\Obligation;
 use App\Entity\Setting;
 use App\Service\AppSettings;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
  * El ciclo completo del registro de vencimientos por HTTP: que el módulo está
@@ -135,6 +136,120 @@ class ObligationControllerTest extends AbstractAuthenticatedTest
 
         $this->assertSame('2100-01-31', $renewed->expiresOn()->format('Y-m-d'), 'La renovación no movió el vencimiento.');
         $this->assertCount(2, $renewed->getTerms(), 'La renovación pisó el periodo anterior en vez de añadir uno.');
+    }
+
+    /**
+     * El papel se sube al dar de alta y se abre desde la ficha. Va por un
+     * controlador y no por una URL de Apache porque los convenios llevan DNIs
+     * e IBAN: fuera de `public/`, quien no tenga el permiso no los ve.
+     */
+    public function testElDocumentoSubidoEnElAltaSePuedeAbrirDespues(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+
+        $crawler = $client->request('GET', '/gestion/vencimientos/nueva');
+        $form = $crawler->filter('form')->form([
+            'obligation[name]' => 'Convenio con documento',
+            'obligation[kind]' => Obligation::KIND_AGREEMENT,
+            'obligation[firstEndsOn]' => '2099-06-30',
+        ]);
+        $form['obligation[document]']->upload($this->samplePdf());
+        $client->submit($form);
+        $this->assertResponseRedirects();
+
+        $obligation = $this->findByName('Convenio con documento');
+        $this->assertNotNull($obligation->getDocumentFile(), 'El alta no archivó el documento.');
+
+        $client->request('GET', sprintf('/gestion/vencimientos/%d/documento', $obligation->getId()));
+
+        $this->assertResponseIsSuccessful();
+        $this->assertStringContainsString(
+            'inline',
+            (string) $client->getResponse()->headers->get('Content-Disposition'),
+            'Un PDF debería abrirse en el navegador, no descargarse.'
+        );
+    }
+
+    /**
+     * El escaneado casi nunca está el día que se anota la fecha, así que cada
+     * periodo del historial admite que se le suba el papel después. Sin esto,
+     * archivarlo obligaría a borrar el periodo y rehacerlo.
+     */
+    public function testSeLePuedeSubirElPapelAUnPeriodoYaAnotado(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+
+        $crawler = $client->request('GET', '/gestion/vencimientos/nueva');
+        $client->submit($crawler->filter('form')->form([
+            'obligation[name]' => 'Ficha con historial',
+            'obligation[kind]' => Obligation::KIND_OTHER,
+            'obligation[firstEndsOn]' => '2099-09-30',
+        ]));
+
+        $obligation = $this->findByName('Ficha con historial');
+        $id = $obligation->getId();
+        $termId = $obligation->getTerms()->first()->getId();
+
+        $crawler = $client->request('GET', sprintf('/gestion/vencimientos/%d', $id));
+        $token = $crawler->filter(sprintf('form[action$="/periodo/%d/documento"] input[name="_token"]', $termId))->attr('value');
+
+        $client->request(
+            'POST',
+            sprintf('/gestion/vencimientos/%d/periodo/%d/documento', $id, $termId),
+            ['_token' => $token],
+            ['document' => new UploadedFile($this->samplePdf(), 'convenio-firmado.pdf', 'application/pdf', null, true)]
+        );
+        $this->assertResponseRedirects();
+
+        $term = $this->reload($id)->getTerms()->first();
+        $this->assertNotNull($term->getDocumentFile(), 'El periodo se quedó sin su documento.');
+
+        $client->request('GET', sprintf('/gestion/vencimientos/%d/periodo/%d/documento', $id, $termId));
+        $this->assertResponseIsSuccessful();
+    }
+
+    /**
+     * La fila puede apuntar a un fichero que ya no está —la base se restaura de
+     * un volcado y los documentos no viajan con ella—. Eso es un 404, no un
+     * error de la aplicación.
+     */
+    public function testUnDocumentoQueNoEstaEnElArchivoDaUn404(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+
+        $crawler = $client->request('GET', '/gestion/vencimientos/nueva');
+        $client->submit($crawler->filter('form')->form([
+            'obligation[name]' => 'Ficha con documento perdido',
+            'obligation[kind]' => Obligation::KIND_OTHER,
+            'obligation[firstEndsOn]' => '2099-12-31',
+        ]));
+
+        $id = $this->findByName('Ficha con documento perdido')->getId();
+
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $em->getRepository(Obligation::class)->find($id)->setDocumentFile('convenio-fantasma-aabbccdd.pdf');
+        $em->flush();
+
+        $client->request('GET', sprintf('/gestion/vencimientos/%d/documento', $id));
+
+        $this->assertSame(404, $client->getResponse()->getStatusCode());
+    }
+
+    /**
+     * Un PDF de verdad en un fichero temporal: el formato se valida por
+     * contenido, así que un fichero de texto con extensión .pdf no colaría.
+     *
+     * @return string Ruta del fichero recién creado.
+     */
+    private function samplePdf(): string
+    {
+        $path = sys_get_temp_dir() . '/obligation-test-' . bin2hex(random_bytes(4)) . '.pdf';
+        file_put_contents($path, "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n");
+
+        return $path;
     }
 
     /**

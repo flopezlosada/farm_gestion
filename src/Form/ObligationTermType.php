@@ -6,7 +6,6 @@ use App\Entity\ObligationTerm;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
-use Symfony\Component\Form\Extension\Core\Type\UrlType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
@@ -34,11 +33,9 @@ class ObligationTermType extends AbstractType
                 'input' => 'datetime_immutable',
                 'help' => 'A partir de aquí se cuentan los avisos.',
             ])
-            ->add('documentUrl', UrlType::class, [
+            ->add('document', ObligationDocumentType::class, [
                 'label' => 'Documento firmado',
-                'required' => false,
-                'default_protocol' => 'https',
-                'help' => 'Enlace al papel concreto de este periodo, si lo hay.',
+                'help' => 'El papel de esta renovación. Si todavía no está escaneado, se puede subir después desde el historial.',
             ])
             ->add('notes', TextType::class, [
                 'label' => 'Apunte',

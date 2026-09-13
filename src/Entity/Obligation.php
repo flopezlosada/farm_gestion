@@ -141,13 +141,16 @@ class Obligation
     private ?string $notes = null;
 
     /**
-     * Enlace al documento donde vive de verdad (Dropbox, sede electrónica). No
-     * se sube el fichero: el archivo de la asociación ya existe y duplicarlo
-     * garantiza que una de las dos copias quede vieja.
+     * Nombre con el que está guardado el documento vigente en el archivo del
+     * servidor ({@see \App\Service\Obligation\ObligationDocumentStore}).
      *
-     * @ORM\Column(name="document_url", type="string", length=500, nullable=true)
+     * Antes esto era un enlace al Dropbox. Dejó de serlo cuando la asociación
+     * decidió irse de allí: mientras el archivo viviera fuera, apuntar bastaba;
+     * si el archivo es la web, lo que tiene que haber aquí es el papel.
+     *
+     * @ORM\Column(name="document_file", type="string", length=255, nullable=true)
      */
-    private ?string $documentUrl = null;
+    private ?string $documentFile = null;
 
     /**
      * Quién se ocupa de renovarla. Opcional a propósito: obligar a nombrar
@@ -393,17 +396,17 @@ class Obligation
         return $this;
     }
 
-    public function getDocumentUrl(): ?string
+    public function getDocumentFile(): ?string
     {
-        return $this->documentUrl;
+        return $this->documentFile;
     }
 
     /**
-     * @param string|null $documentUrl Enlace al documento en el archivo de la asociación.
+     * @param string|null $documentFile Nombre del documento en el archivo del servidor.
      */
-    public function setDocumentUrl(?string $documentUrl): self
+    public function setDocumentFile(?string $documentFile): self
     {
-        $this->documentUrl = $documentUrl;
+        $this->documentFile = $documentFile;
 
         return $this;
     }

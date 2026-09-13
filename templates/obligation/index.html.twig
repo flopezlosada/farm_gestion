@@ -140,8 +140,8 @@
                             </td>
                             <td class="actions">
                                 <div class="obl-actions">
-                                    {% if obligation.documentUrl %}
-                                        <a href="{{ obligation.documentUrl }}" target="_blank" rel="noopener" title="Ver el documento" aria-label="Ver el documento"><i class="fa fa-external-link"></i></a>
+                                    {% if obligation.documentFile %}
+                                        <a href="{{ path('obligation_document', { id: obligation.id }) }}" target="_blank" rel="noopener" title="Ver el documento" aria-label="Ver el documento"><i class="fa fa-file-text-o"></i></a>
                                     {% endif %}
                                     <a href="{{ path('obligation_show', { id: obligation.id }) }}" title="Abrir la ficha" aria-label="Abrir la ficha"><i class="fa fa-eye"></i></a>
                                 </div>
