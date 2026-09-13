@@ -41,20 +41,18 @@
 
     {# Ayuda breve: para quien no tiene soltura con apps, explicar de un vistazo
        cómo se lee y se usa el calendario. Los marcadores son los mismos que en la rejilla. #}
-    {# Mensaje de ayuda distinto según el dispositivo (se muestra uno u otro por CSS):
-       en escritorio se arrastra; en el móvil se toca. #}
-    <div class="rcal-dragonly">
+    {# UN SOLO AVISO, y no uno por dispositivo. Eran dos, casi idénticos, que se turnaban
+       por CSS —uno con la clase que se escondía en escritorio y otro con la que se escondía
+       en táctil—. En cuanto una de esas reglas dejó de existir se vieron los dos a la vez,
+       diciendo casi lo mismo. Un texto que sirve para los dos gestos no puede romperse así.
+       Y en una cesta compartida ni siquiera se pinta: el partial ya explica lo suyo, que
+       es más específico, y dos avisos seguidos no los lee nadie. #}
+    {% if partner.sharePartner is null %}
         {{ csa.callout(
-            'Los días en verde son los que recoges tu cesta (la hoja es verdura y el óvalo, huevos). Arrastra un día a otra fecha para cambiarlo, o a "No recoge" para saltar esa semana.',
+            'Los días en verde son los que recoges tu cesta (la hoja es verdura y el óvalo, huevos). Toca un día para ver el detalle y cambiarlo de fecha o no recogerlo; en el ordenador también puedes arrastrarlo.',
             'info', 'info-circle'
         ) }}
-    </div>
-    <div class="rcal-tapmove">
-        {{ csa.callout(
-            'Los días en verde son los que recoges tu cesta (la hoja es verdura y el óvalo, huevos). Toca un día para ver el detalle y, si quieres, no recogerlo esa semana o moverlo a otra fecha.',
-            'info', 'info-circle'
-        ) }}
-    </div>
+    {% endif %}
 
     {# dnd: true → arrastrar en escritorio (igual que el gestor): mover, no-recoger (a la
        papelera) y recuperar (sacar de la papelera a un día). El flujo por toque para móvil
