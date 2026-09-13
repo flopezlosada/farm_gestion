@@ -100,13 +100,13 @@ INSERT INTO budget_category (group_id, name, description, is_active, sort_order)
     ((SELECT id FROM budget_category_group WHERE name = 'ADMINISTRACIÓN'), 'Impuestos', 'Incluye el IVA liquidado.', 1, 60),
     ((SELECT id FROM budget_category_group WHERE name = 'ADMINISTRACIÓN'), 'Formación', 'Lo que se paga a quien da los cursos.', 1, 70),
     ((SELECT id FROM budget_category_group WHERE name = 'ADMINISTRACIÓN'), 'Prevención de riesgos', NULL, 1, 80),
+    ((SELECT id FROM budget_category_group WHERE name = 'ADMINISTRACIÓN'), 'Alquiler de la finca', 'Va en administración, no en huerta, porque así lo agrupa el presupuesto y el grupo es la unidad con la que se compara.', 1, 90),
 
     ((SELECT id FROM budget_category_group WHERE name = 'HUERTA'), 'Huerta', 'Consumibles, herramienta y ferretería del día a día.', 1, 10),
     ((SELECT id FROM budget_category_group WHERE name = 'HUERTA'), 'Semillas y plantel', NULL, 1, 20),
     ((SELECT id FROM budget_category_group WHERE name = 'HUERTA'), 'Gasolina', NULL, 1, 30),
     ((SELECT id FROM budget_category_group WHERE name = 'HUERTA'), 'Mantenimiento y reparaciones', 'Maquinaria y vehículos, ITV incluida.', 1, 40),
     ((SELECT id FROM budget_category_group WHERE name = 'HUERTA'), 'Estiércol y biopreparados', NULL, 1, 50),
-    ((SELECT id FROM budget_category_group WHERE name = 'HUERTA'), 'Tierra', 'Alquiler y acondicionamiento de las parcelas.', 1, 60),
 
     ((SELECT id FROM budget_category_group WHERE name = 'SUELDOS'), 'Nóminas', NULL, 1, 10),
     ((SELECT id FROM budget_category_group WHERE name = 'SUELDOS'), 'Seguridad Social', NULL, 1, 20),
@@ -119,6 +119,7 @@ INSERT INTO budget_category (group_id, name, description, is_active, sort_order)
     ((SELECT id FROM budget_category_group WHERE name = 'VARIOS'), 'Feria', 'Lo que cuesta montar la feria.', 1, 30),
     ((SELECT id FROM budget_category_group WHERE name = 'VARIOS'), 'Perros', 'Veterinario y comida de los perros de la finca.', 1, 40),
     ((SELECT id FROM budget_category_group WHERE name = 'VARIOS'), 'Voluntariado internacional', 'Gastos de quien viene de estancia (woofers).', 1, 50),
+    ((SELECT id FROM budget_category_group WHERE name = 'VARIOS'), 'Tierra', 'Acondicionamiento de las parcelas. El alquiler de la finca va en administración, como en el presupuesto.', 1, 55),
     ((SELECT id FROM budget_category_group WHERE name = 'VARIOS'), 'Varios', NULL, 1, 60),
 
     ((SELECT id FROM budget_category_group WHERE name = 'INVERSIÓN'), 'Inversión', 'Obra, maquinaria y animales: lo que dura más de un año.', 1, 10),

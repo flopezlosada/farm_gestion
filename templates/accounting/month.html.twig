@@ -1,0 +1,127 @@
+{# ============================================================
+ # Un mes — los apuntes agrupados por partida, con el saldo de cada cuenta al
+ # cierre. Es la hoja mensual del Excel (ENERO, FEBRERO…), pero calculada: los
+ # mismos apuntes del libro, agrupados, sin volver a teclearlos.
+ #
+ # El controller pasa: year, month, monthName, months, grouped, totals, kinds,
+ # balances.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Contabilidad · {{ monthName }} {{ year }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ monthName }} {{ year }}</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    <style>
+        .acc-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .acc-neg { color: #b3261e; }
+        .acc-muted { color: var(--csa-ink-soft, #6b6b6b); }
+        .acc-group-row > td { font-weight: 600; background: rgba(0, 0, 0, 0.05); }
+        .acc-cat-row > td { font-weight: 600; background: rgba(0, 0, 0, 0.02); }
+        .acc-entry-row > td:first-child { padding-left: 28px; }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Contabilidad · ' ~ year,
+        monthName ~ ' de ' ~ year,
+        'Todo lo que se movió en el mes, agrupado por partida.'
+    ) }}
+
+    {# ============ NAVEGACIÓN ENTRE MESES ============ #}
+    <div class="prl-tabs">
+        {% for n, name in months %}
+            <a class="{{ n == month ? 'is-active' : '' }}" href="{{ path('accounting_month', { year: year, month: n }) }}">
+                {{ name|slice(0, 3) }}
+            </a>
+        {% endfor %}
+    </div>
+
+    {# ============ SALDOS AL CIERRE ============ #}
+    <div class="prl-stats">
+        {% for row in balances %}
+            <div class="prl-stat {{ row.balance < 0 ? 'prl-stat--leave' : '' }}">
+                <div class="v">{{ row.balance|number_format(0, ',', '.') }} €</div>
+                <div class="l">{{ row.account.name }}</div>
+            </div>
+        {% endfor %}
+    </div>
+    <p class="acc-muted" style="margin: 0 2px 18px; font-size: 12px;">
+        Saldos a final de {{ monthName|lower }}, no de hoy.
+    </p>
+
+    {# ============ APUNTES AGRUPADOS ============ #}
+    <div class="prl-table-wrap">
+        {% if grouped is empty %}
+            <div class="prl-empty">No hay ningún apunte en {{ monthName|lower }} de {{ year }}.</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th>Concepto</th>
+                        <th class="tight">Fecha</th>
+                        <th class="tight">Cuenta</th>
+                        <th class="tight acc-num">Importe</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for block in grouped %}
+                        <tr class="acc-group-row">
+                            <td colspan="3">{{ block.group.name }}</td>
+                            <td class="acc-num {{ block.total < 0 ? 'acc-neg' : '' }}">
+                                {{ block.total|number_format(2, ',', '.') }} €
+                            </td>
+                        </tr>
+                        {% for cat in block.categories %}
+                            <tr class="acc-cat-row">
+                                <td colspan="3">{{ cat.category.name }}</td>
+                                <td class="acc-num {{ cat.total < 0 ? 'acc-neg' : '' }}">
+                                    {{ cat.total|number_format(2, ',', '.') }} €
+                                </td>
+                            </tr>
+                            {% for entry in cat.entries %}
+                                <tr class="acc-entry-row">
+                                    <td>
+                                        {{ entry.concept }}
+                                        {% if entry.providerName %}
+                                            <span class="acc-muted" style="font-size: 11px;">· {{ entry.providerName }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="tight">{{ entry.date ? entry.date|date('d/m') : '—' }}</td>
+                                    <td class="tight acc-muted">{{ entry.account.name }}</td>
+                                    <td class="acc-num {{ entry.incoming ? '' : 'acc-neg' }}">
+                                        {{ entry.amount|number_format(2, ',', '.') }} €
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% endfor %}
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    {% for kind, total in totals %}
+                        <tr>
+                            <td colspan="3"><b>{{ kinds[kind] }}</b></td>
+                            <td class="acc-num {{ total < 0 ? 'acc-neg' : '' }}"><b>{{ total|number_format(2, ',', '.') }} €</b></td>
+                        </tr>
+                    {% endfor %}
+                </tfoot>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,132 @@
+{# ============================================================
+ # El libro — todos los apuntes, filtrables y paginados.
+ #
+ # Es la pantalla de quien viene con el extracto delante. Sustituye las hojas por
+ # cuenta del Excel (FIARE, CAIXA, CAJA…), con la diferencia de que el saldo no se
+ # arrastra a mano en una columna: se calcula.
+ #
+ # El controller pasa: pagination, accounts, categories, filters, account, query,
+ # balance (sólo cuando hay una cuenta filtrada).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Contabilidad · Libro{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Libro</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    <style>
+        .acc-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .acc-neg { color: #b3261e; }
+        .acc-muted { color: var(--csa-ink-soft, #6b6b6b); }
+        .acc-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0; }
+        .acc-filters .csa-input { min-width: 120px; }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Contabilidad · Libro',
+        'Apuntes',
+        'Todo lo que entra y sale, de todas las cuentas. Cada movimiento se anota una sola vez.'
+    ) }}
+
+    {# ============ FILTROS ============ #}
+    <div class="prl-toolbar">
+        <form method="get" class="acc-filters">
+            <span class="prl-search">
+                <i class="fa fa-search"></i>
+                <input type="search" name="q" value="{{ filters.text }}" placeholder="Concepto, proveedor o nº de factura">
+            </span>
+            <select name="account" class="csa-input">
+                <option value="">Todas las cuentas</option>
+                {% for a in accounts %}
+                    <option value="{{ a.id }}" {{ account and a.id == account.id ? 'selected' : '' }}>{{ a.name }}</option>
+                {% endfor %}
+            </select>
+            <select name="category" class="csa-input">
+                <option value="">Todas las partidas</option>
+                {% for c in categories %}
+                    <option value="{{ c.id }}" {{ filters.category == c.id ? 'selected' : '' }}>{{ c.qualifiedName }}</option>
+                {% endfor %}
+            </select>
+            <input type="date" name="from" class="csa-input" value="{{ filters.from ? filters.from|date('Y-m-d') : '' }}" title="Desde">
+            <input type="date" name="to" class="csa-input" value="{{ filters.to ? filters.to|date('Y-m-d') : '' }}" title="Hasta">
+            <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-filter"></i> Filtrar</button>
+            <a href="{{ path('accounting_ledger') }}" class="prl-btn">Limpiar</a>
+        </form>
+    </div>
+
+    <div class="prl-toolbar">
+        <div class="counters">
+            <b>{{ pagination.getTotalItemCount }}</b> apunte{{ pagination.getTotalItemCount == 1 ? '' : 's' }}
+            {% if account and balance is not null %}
+                · saldo de {{ account.name }}: <b>{{ balance|number_format(2, ',', '.') }} €</b>
+            {% endif %}
+        </div>
+        <div class="spacer"></div>
+        <a href="{{ path('accounting_index') }}" class="prl-btn"><i class="fa fa-line-chart"></i> Cómo vamos</a>
+    </div>
+
+    {# ============ TABLA ============ #}
+    <div class="prl-table-wrap">
+        {% if pagination.getTotalItemCount == 0 %}
+            <div class="prl-empty">
+                No hay ningún apunte que encaje con lo que buscas.
+            </div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th class="tight">{{ knp_pagination_sortable(pagination, 'Fecha', 'e.date') }}</th>
+                        <th>Concepto</th>
+                        <th>Partida</th>
+                        <th class="tight">Cuenta</th>
+                        <th class="tight acc-num">Importe</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in pagination %}
+                        <tr>
+                            <td class="tight">{{ entry.date ? entry.date|date('d/m/Y') : '—' }}</td>
+                            <td>
+                                {{ entry.concept }}
+                                {% if entry.providerName or entry.invoiceNumber %}
+                                    <br><span class="acc-muted" style="font-size: 11px;">
+                                        {{ entry.providerName }}{% if entry.invoiceNumber %} · fra. {{ entry.invoiceNumber }}{% endif %}
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="acc-muted" style="font-size: 11px;">{{ entry.category.group.name }}</span><br>
+                                {{ entry.category.name }}
+                            </td>
+                            <td class="tight">{{ entry.account.name }}</td>
+                            <td class="acc-num {{ entry.incoming ? '' : 'acc-neg' }}">
+                                {{ entry.amount|number_format(2, ',', '.') }} €
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+    <div class="prl-pagination">
+        {{ knp_pagination_render(pagination) }}
+    </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,296 @@
+{# ============================================================
+ # Cómo vamos — la portada de contabilidad.
+ #
+ # Responde a la pregunta que trae aquí a alguien: ¿cuadra el año? Cruza lo
+ # presupuestado con lo realmente movido, proyecta el cierre y calcula cuánto
+ # tendría que costar la cesta para que salga.
+ #
+ # El controller pasa:
+ #   year, years              año mirado y los que tienen datos
+ #   budget, budgets          presupuesto contra el que se mide y los del año
+ #   tracked                  rejilla de BudgetTracker::track
+ #   cash                     flujo de caja de BudgetTracker::cashFlow
+ #   basketCost, baskets      coste por cesta y cestas equivalentes activas
+ #   committedMonthlyFees     lo que suman al mes los contratos activos
+ #   balances, totalCash      saldo de cada cuenta y el total
+ #   unpairedTransfers        traspasos a los que les falta la otra mitad
+ #
+ # SIGNO: todo va con el signo de su efecto sobre la caja (negativo = sale). Eso
+ # hace que la desviación se lea igual en ingresos y en gastos: positiva es buena
+ # para la caja (ingresaste de más o gastaste de menos) y negativa es mala.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{# Importe con su signo y su color. Se define fuera de los bloques (una macro
+ # dentro de un bloque no queda registrada) y se importa como `fmt`, no como `m`,
+ # porque `m` es la variable del bucle de meses y una la pisaría a la otra. #}
+{% macro money(value, withSign) %}
+    {%- set v = value|default(0) -%}
+    <span class="acc-num {{ v < 0 ? 'acc-neg' : (v > 0 and withSign ? 'acc-pos' : '') }}">
+        {{- (withSign and v > 0 ? '+' : '') ~ (v|number_format(2, ',', '.')) }} €
+    </span>
+{% endmacro %}
+{% import _self as fmt %}
+
+{% block title %}Contabilidad · Cómo vamos{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Contabilidad</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    <style>
+        .acc-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .acc-neg { color: #b3261e; }
+        .acc-pos { color: #1e6b3a; }
+        .acc-muted { color: var(--csa-ink-soft, #6b6b6b); }
+        .acc-group-row > td { font-weight: 600; background: rgba(0, 0, 0, 0.025); }
+        .acc-cat-row > td:first-child { padding-left: 28px; }
+        .acc-bar { display: block; height: 6px; border-radius: 3px; background: rgba(0, 0, 0, 0.08); overflow: hidden; min-width: 60px; }
+        .acc-bar > i { display: block; height: 100%; background: var(--csa-sage, #6a8f6b); }
+        .acc-bar > i.over { background: #b3261e; }
+        .acc-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 18px 0; }
+        .acc-months { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 4px; }
+        .acc-months .m { text-align: center; font-size: 11px; padding: 6px 2px; border-radius: 6px; background: rgba(0, 0, 0, 0.03); }
+        .acc-months .m.proj { border: 1px dashed rgba(0, 0, 0, 0.18); background: transparent; }
+        .acc-months .m .v { display: block; font-weight: 600; font-size: 12px; }
+        .acc-months .m.low { background: rgba(179, 38, 30, 0.1); }
+        @media (max-width: 900px) { .acc-months { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+
+<div class="prl">
+
+    {{ csa.page_header(
+        'Contabilidad · ' ~ year,
+        'Cómo vamos',
+        'Lo presupuestado frente a lo que de verdad ha pasado, con la proyección de cómo acabará el año.'
+    ) }}
+
+    {# ============ SELECTOR DE AÑO Y PRESUPUESTO ============ #}
+    <div class="prl-toolbar">
+        <div class="counters">
+            {% if budget %}
+                Midiendo contra <b>{{ budget.name }}</b>
+                {% if not budget.approved %}<span class="prl-chip prl-chip--pausado"><span class="dot"></span>no aprobado</span>{% endif %}
+            {% else %}
+                <span class="acc-muted">No hay presupuesto para {{ year }}</span>
+            {% endif %}
+        </div>
+        <div class="spacer"></div>
+        <form method="get" style="display: flex; gap: 8px; align-items: center; margin: 0;">
+            <select name="year" class="csa-input" onchange="this.form.submit()">
+                {% for y in years %}
+                    <option value="{{ y }}" {{ y == year ? 'selected' : '' }}>{{ y }}</option>
+                {% endfor %}
+            </select>
+            {% if budgets|length > 1 %}
+                <select name="budget" class="csa-input" onchange="this.form.submit()">
+                    {% for b in budgets %}
+                        <option value="{{ b.id }}" {{ budget and b.id == budget.id ? 'selected' : '' }}>{{ b.name }}</option>
+                    {% endfor %}
+                </select>
+            {% endif %}
+        </form>
+        <a href="{{ path('accounting_ledger') }}" class="prl-btn"><i class="fa fa-list"></i> Libro</a>
+        <a href="{{ path('accounting_year', { year: year }) }}" class="prl-btn"><i class="fa fa-table"></i> Resumen del año</a>
+    </div>
+
+    {# ============ STAT STRIP ============ #}
+    {% set incomeTotal = tracked.totals[1]|default(null) %}
+    {% set expenseTotal = tracked.totals[2]|default(null) %}
+    <div class="prl-stats">
+        <div class="prl-stat {{ totalCash < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}">
+            <div class="v">{{ totalCash|number_format(0, ',', '.') }} €</div>
+            <div class="l">hay hoy en las cuentas</div>
+        </div>
+        <div class="prl-stat {{ cash.endOfYear < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}">
+            <div class="v">{{ cash.endOfYear|number_format(0, ',', '.') }} €</div>
+            <div class="l">quedaría a fin de año</div>
+        </div>
+        {% if incomeTotal %}
+            <div class="prl-stat {{ incomeTotal.deviation < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}">
+                <div class="v">{{ incomeTotal.deviation|number_format(0, ',', '.') }} €</div>
+                <div class="l">de ingresos frente a lo previsto</div>
+            </div>
+        {% endif %}
+        {% if expenseTotal %}
+            <div class="prl-stat {{ expenseTotal.deviation < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}">
+                <div class="v">{{ expenseTotal.deviation|number_format(0, ',', '.') }} €</div>
+                <div class="l">de gastos frente a lo previsto</div>
+            </div>
+        {% endif %}
+    </div>
+
+    {% if not budget %}
+        <div class="prl-empty">
+            No hay ningún presupuesto cargado para {{ year }}, así que sólo se ve lo real.
+        </div>
+    {% endif %}
+
+    {# ============ SEGUIMIENTO POR GRUPO ============ #}
+    <div class="prl-table-wrap">
+        <table class="prl-table">
+            <thead>
+                <tr>
+                    <th>Partida</th>
+                    <th class="tight acc-num">Previsto a la fecha</th>
+                    <th class="tight acc-num">Real</th>
+                    <th class="tight acc-num">Diferencia</th>
+                    <th class="tight">Ejecutado</th>
+                    <th class="tight acc-num">Previsto al año</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for group in tracked.groups %}
+                    {% set pct = group.budgetTotal != 0 ? (group.actualTotal / group.budgetTotal * 100)|abs|round : null %}
+                    <tr class="acc-group-row">
+                        <td>{{ group.name }}</td>
+                        <td class="acc-num">{{ fmt.money(group.budgetToDate, false) }}</td>
+                        <td class="acc-num">{{ fmt.money(group.actualToDate, false) }}</td>
+                        <td class="acc-num">{{ fmt.money(group.deviation, true) }}</td>
+                        <td class="tight">
+                            {% if pct is not null %}
+                                <span class="acc-bar" title="{{ pct }}% de lo previsto para todo el año">
+                                    <i class="{{ pct > 100 ? 'over' : '' }}" style="width: {{ min(pct, 100) }}%"></i>
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="acc-num acc-muted">{{ fmt.money(group.budgetTotal, false) }}</td>
+                    </tr>
+                    {% for cat in group.categories %}
+                        <tr class="acc-cat-row">
+                            <td class="acc-muted">{{ cat.name }}</td>
+                            <td class="acc-num acc-muted">{{ fmt.money(cat.budgetToDate, false) }}</td>
+                            <td class="acc-num">{{ fmt.money(cat.actualToDate, false) }}</td>
+                            <td class="acc-num">{{ fmt.money(cat.deviation, true) }}</td>
+                            <td></td>
+                            <td class="acc-num acc-muted">{{ fmt.money(cat.budgetTotal, false) }}</td>
+                        </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr><td colspan="6"><div class="prl-empty">Todavía no hay ningún apunte de {{ year }}.</div></td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <p class="acc-muted" style="margin: 10px 2px 24px; font-size: 12px;">
+        «Previsto a la fecha» es la parte del presupuesto que correspondía a los meses ya
+        anotados (hasta {{ months[tracked.throughMonth] }}), no el año entero: comparar medio año de gasto
+        contra doce meses de presupuesto siempre daría la falsa impresión de que sobra dinero.
+        Una diferencia positiva es buena para la caja, tanto si es por ingresar de más como
+        por gastar de menos.
+    </p>
+
+    <div class="acc-cards">
+
+        {# ============ CAJA MES A MES ============ #}
+        {% embed '_components/csa_card.html.twig' with { title: 'La caja mes a mes', subtitle: 'A partir de ' ~ months[tracked.throughMonth] ~ ' es previsión', accent: 'sky' } %}
+            {% block body %}
+                <div class="acc-months">
+                    {% for m in cash.months %}
+                        <div class="m {{ m.projected ? 'proj' : '' }} {{ m.cumulative < 0 ? 'low' : '' }}"
+                             title="{{ m.month }}: neto {{ m.net|number_format(2, ',', '.') }} €">
+                            <span class="v">{{ (m.cumulative / 1000)|number_format(1, ',', '.') }}k</span>
+                            {{ m.month }}
+                        </div>
+                    {% endfor %}
+                </div>
+                <p style="margin: 12px 0 0; font-size: 13px;">
+                    El año cerraría con <b>{{ cash.endOfYear|number_format(2, ',', '.') }} €</b>.
+                    {% if cash.lowest.cumulative < 0 %}
+                        El punto más bajo es el mes {{ cash.lowest.month }}, con
+                        <b class="acc-neg">{{ cash.lowest.cumulative|number_format(2, ',', '.') }} €</b>.
+                    {% endif %}
+                </p>
+            {% endblock %}
+        {% endembed %}
+
+        {# ============ COSTE POR CESTA ============ #}
+        {% embed '_components/csa_card.html.twig' with { title: 'Cuánto tiene que costar la cesta', subtitle: 'Repartiendo el coste del año', accent: 'green' } %}
+            {% block body %}
+                <p style="margin: 0 0 10px; font-size: 13px;">
+                    Los gastos previstos del año suman
+                    <b>{{ basketCost.expenses|number_format(2, ',', '.') }} €</b>. Descontando los huevos,
+                    que se cobran aparte ({{ basketCost.eggExpenses|number_format(2, ',', '.') }} €),
+                    quedan <b>{{ basketCost.toCover|number_format(2, ',', '.') }} €</b> que tienen que salir
+                    de las cestas.
+                </p>
+                <p style="margin: 0 0 10px; font-size: 13px;">
+                    Hoy hay <b>{{ baskets|number_format(2, ',', '.') }}</b> cestas completas equivalentes
+                    activas, que comprometen <b>{{ committedMonthlyFees|number_format(2, ',', '.') }} €</b> al mes.
+                </p>
+                {% if basketCost.pricePerBasketNeeded %}
+                    <p style="margin: 0; font-size: 15px;">
+                        Con esas cestas, cada una tendría que aportar
+                        <b>{{ basketCost.pricePerBasketNeeded|number_format(2, ',', '.') }} €</b> al mes.
+                    </p>
+                {% endif %}
+                {% if basketCost.basketsNeeded %}
+                    <p style="margin: 6px 0 0; font-size: 13px;" class="acc-muted">
+                        Manteniendo los 100 € de la cesta semanal harían falta
+                        {{ basketCost.basketsNeeded|number_format(2, ',', '.') }} cestas.
+                    </p>
+                {% endif %}
+            {% endblock %}
+        {% endembed %}
+
+        {# ============ SALDOS ============ #}
+        {% embed '_components/csa_card.html.twig' with { title: 'Dónde está el dinero', subtitle: 'Saldo de cada cuenta hoy', accent: 'ochre' } %}
+            {% block body %}
+                <table class="prl-table" style="margin: 0;">
+                    <tbody>
+                        {% for row in balances %}
+                            <tr>
+                                <td>{{ row.account.name }}<br><span class="acc-muted" style="font-size: 11px;">{{ row.account.kindLabel }}</span></td>
+                                <td class="acc-num">{{ row.balance|number_format(2, ',', '.') }} €</td>
+                            </tr>
+                        {% endfor %}
+                        <tr>
+                            <td><b>Total</b></td>
+                            <td class="acc-num"><b>{{ totalCash|number_format(2, ',', '.') }} €</b></td>
+                        </tr>
+                    </tbody>
+                </table>
+            {% endblock %}
+        {% endembed %}
+
+    </div>
+
+    {# ============ AVISOS ============ #}
+    {% if unpairedTransfers|length > 0 %}
+        <div class="prl-table-wrap">
+            <table class="prl-table">
+                <thead>
+                    <tr><th colspan="4">Traspasos a los que les falta la otra mitad</th></tr>
+                </thead>
+                <tbody>
+                    {% for entry in unpairedTransfers %}
+                        <tr>
+                            <td class="tight">{{ entry.date ? entry.date|date('d/m/Y') : '—' }}</td>
+                            <td>{{ entry.account.name }}</td>
+                            <td>{{ entry.concept }}</td>
+                            <td class="acc-num">{{ fmt.money(entry.amount, false) }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="acc-muted" style="margin: 10px 2px; font-size: 12px;">
+            Un traspaso mueve dinero de una cuenta propia a otra, así que tiene dos apuntes
+            que se anulan. Los de esta lista sólo tienen uno: o falta anotar el otro lado, o
+            uno de los dos lleva un importe distinto.
+        </p>
+    {% endif %}
+
+</div>
+{% endblock %}

@@ -116,7 +116,7 @@ class LedgerCategoryMap
         ],
         'TIERRA' => [
             '+' => ['INGRESOS', 'Venta de tierra'],
-            '-' => ['HUERTA', 'Tierra'],
+            '-' => ['VARIOS', 'Tierra'],
         ],
         'PRESTAMO' => [
             '+' => ['FINANCIACIÓN', 'Préstamos recibidos'],
@@ -144,10 +144,14 @@ class LedgerCategoryMap
      * La clave lleva el bloque delante porque «Formación» y «Grupo de Consumo»
      * aparecen en ingresos y en gastos con el mismo nombre.
      *
-     * Dos simplificaciones conscientes: los tres conceptos salariales del
-     * presupuesto (salarios, temporeros y bonus) van todos a «Nóminas», y las dos
-     * líneas de suelo (alquiler de la finca y tierra) van las dos a «Tierra». En
-     * ambos casos el grupo —que es con lo que se compara— sigue cuadrando.
+     * Una simplificación consciente: los tres conceptos salariales del presupuesto
+     * (salarios, temporeros y bonus) van todos a «Nóminas». El grupo, que es con lo
+     * que se compara, sigue cuadrando.
+     *
+     * En cambio el suelo NO se simplifica: el alquiler de la finca va a
+     * administración y la tierra a varios, cada uno al grupo donde lo pone el
+     * presupuesto. Juntarlos movería 1.830 € de grupo y descuadraría la comparación
+     * con los subtotales que la asociación conoce.
      *
      * @var array<string, array{0: string, 1: string}>
      */
@@ -169,8 +173,8 @@ class LedgerCategoryMap
         'GASTOS|FORMACIÓN' => ['ADMINISTRACIÓN', 'Formación'],
         'GASTOS|IMPUESTOS' => ['ADMINISTRACIÓN', 'Impuestos'],
         'GASTOS|SEGUROS' => ['ADMINISTRACIÓN', 'Seguros'],
-        'GASTOS|ALQUILER FINCA' => ['HUERTA', 'Tierra'],
-        'GASTOS|TIERRA' => ['HUERTA', 'Tierra'],
+        'GASTOS|ALQUILER FINCA' => ['ADMINISTRACIÓN', 'Alquiler de la finca'],
+        'GASTOS|TIERRA' => ['VARIOS', 'Tierra'],
         'GASTOS|HUERTA' => ['HUERTA', 'Huerta'],
         'GASTOS|SEMILLAS Y PLANTEL' => ['HUERTA', 'Semillas y plantel'],
         'GASTOS|GASOLINA' => ['HUERTA', 'Gasolina'],
