@@ -77,6 +77,9 @@ class PanelSharedBasketController extends AbstractController
             // Lo contestado en las últimas semanas: es donde aterriza quien abre el aviso
             // de "no puedo con ese cambio". Sin esto llegaría a una pantalla vacía.
             'decided' => $requests->findDecidedBetween($partner, $other, new \DateTimeImmutable('-30 days')),
+            // Acuerdos de modalidad que administración aún no ha aplicado: siguen VIVOS, así
+            // que ni son historia ni dejan proponer otra cosa encima.
+            'agreed' => $requests->findAgreedModalityPending($partner, $other, $current),
             // Sólo modalidades COMPARTIDAS: una pareja que se pasa a cesta entera deja
             // de ser pareja, y eso no es un cambio de modalidad sino otra conversación.
             // Y sin la que YA tienen: proponer la de siempre no es un cambio, y quien la

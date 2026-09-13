@@ -71,6 +71,43 @@ class SharedBasketChangeRequestRepository extends ServiceEntityRepository
     }
 
     /**
+     * Cambios de MODALIDAD que los dos hogares acordaron y que aún no se han aplicado.
+     *
+     * Una de éstas está viva aunque su estado diga "aceptada": aceptar no la aplica —lleva
+     * cuota detrás y la aplica administración—, así que hasta entonces sigue en curso. Se
+     * sabe comparando lo acordado con la cesta que la pareja tiene hoy: si ya es esa, el
+     * acuerdo se cumplió y pasa a ser historia.
+     *
+     * @param Partner  $one        Un hogar.
+     * @param Partner  $other      El otro.
+     * @param int|null $currentId  Id de la modalidad que tienen hoy.
+     *
+     * @return SharedBasketChangeRequest[]
+     */
+    public function findAgreedModalityPending(Partner $one, Partner $other, ?int $currentId): array
+    {
+        $agreed = $this->createQueryBuilder('r')
+            ->innerJoin('r.requester', 'p')
+            ->innerJoin('r.counterpart', 'cp')
+            ->addSelect('p', 'cp')
+            ->where('r.kind = :modality')
+            ->andWhere('r.status = :accepted')
+            ->andWhere('(r.requester = :one AND r.counterpart = :other) OR (r.requester = :other AND r.counterpart = :one)')
+            ->setParameter('modality', SharedBasketChangeRequest::KIND_MODALITY)
+            ->setParameter('accepted', SharedBasketChangeRequest::STATUS_ACCEPTED)
+            ->setParameter('one', $one)
+            ->setParameter('other', $other)
+            ->orderBy('r.decidedAt', 'DESC')
+            ->getQuery()
+            ->getResult();
+
+        return array_values(array_filter(
+            $agreed,
+            static fn (SharedBasketChangeRequest $r): bool => ($r->getPayload()['basket_share_id'] ?? null) !== $currentId
+        ));
+    }
+
+    /**
      * Lo ya contestado hace poco entre los dos hogares, de lo más reciente a lo más viejo.
      *
      * Existe por el aviso de la respuesta: quien recibe "no puedo con ese cambio" abre la
