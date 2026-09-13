@@ -167,12 +167,13 @@ class PanelConsumerGroupController extends AbstractController
         }
 
         // Cantidades enviadas: quantity[<roundItemId>]. Se resuelven contra los
-        // items de la ronda (ignorando ids ajenos a ella).
+        // items de la ronda (ignorando ids ajenos a ella) y se pasan TAL CUAL:
+        // normalizarlas es cosa de OrderEditor, que es por donde pasan todas las
+        // líneas vengan de donde vengan.
         $raw = $request->request->all('quantity');
         $desired = [];
         foreach ($round->getItems() as $item) {
-            $value = $raw[$item->getId()] ?? '0';
-            $desired[] = ['item' => $item, 'quantity' => $this->normalizeQuantity($value)];
+            $desired[] = ['item' => $item, 'quantity' => $raw[$item->getId()] ?? '0'];
         }
 
         $order = $orders->findOneByRoundAndPartner($round, $partner) ?? new ConsumerGroupOrder($round, $partner);
@@ -192,17 +193,4 @@ class PanelConsumerGroupController extends AbstractController
         return $this->redirectToRoute('panel_consumer_group_show', ['id' => $round->getId()]);
     }
 
-    /**
-     * Normaliza una cantidad enviada (coma decimal → punto, vacío → "0", negativos
-     * a "0"). Devuelve un decimal como string apto para la línea.
-     */
-    private function normalizeQuantity(mixed $value): string
-    {
-        $normalized = str_replace(',', '.', (string) $value);
-        if (!is_numeric($normalized) || (float) $normalized < 0) {
-            return '0';
-        }
-
-        return $normalized;
-    }
 }
