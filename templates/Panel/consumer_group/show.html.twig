@@ -90,20 +90,24 @@
                                             <span class="cg-order-line__desc">{{ item.product.description }}</span>
                                         {% endif %}
                                     </label>
-                                    {# LO QUE SE PIDE SON BULTOS, NO FRACCIONES: una garrafa de 5 L,
-                                     # un saco, una caja. Con step="0.01" las flechas subían de
-                                     # céntimo en céntimo y se acababa pidiendo «0,03 garrafas de
-                                     # 5 L», que no quiere decir nada y además llegaba así al
-                                     # pedido del productor. El granel por peso está fuera de
-                                     # alcance por decisión de la comisión; si algún día entra,
-                                     # será un campo del producto y no el paso por defecto. #}
-                                    <input type="number" min="0" step="1" inputmode="numeric"
+                                    {# EL SALTO LO DICE EL PRODUCTO, no el formulario. Lo que viene
+                                     # en formato cerrado se pide entero —una garrafa de 5 L no se
+                                     # parte—, y lo que se vende por peso, de medio en medio. Con
+                                     # un paso decimal para todos, las flechas llevaban a pedir
+                                     # «0,03 garrafas», que no quiere decir nada y llegaba así al
+                                     # pedido del productor. #}
+                                    {% set medios = item.product and item.product.halfUnits %}
+                                    <input type="number" min="0"
+                                           step="{{ medios ? '0.5' : '1' }}"
+                                           inputmode="{{ medios ? 'decimal' : 'numeric' }}"
                                            id="cg-qty-{{ item.id }}"
                                            name="quantity[{{ item.id }}]"
-                                           {# Sin decimales: lo guardado es «2.00» y el campo pide
-                                            # unidades. Vacío sigue vacío, para que se vea el
-                                            # placeholder en vez de un 0. #}
-                                           value="{{ quantities[item.id] is defined ? quantities[item.id]|number_format(0) : '' }}"
+                                           {# `+ 0` y no number_format(0): lo guardado es «2.00» o
+                                            # «2.50», y number_format redondearía el medio kilo a
+                                            # 1 kg. Sumar cero lo pasa a número y se imprime «2» o
+                                            # «2.5», con el punto que espera un campo numérico.
+                                            # Vacío sigue vacío, para que se vea el placeholder. #}
+                                           value="{{ quantities[item.id] is defined ? quantities[item.id] + 0 : '' }}"
                                            class="csa-input cg-order-line__qty"
                                            placeholder="0"
                                            data-cg-price="{{ item.price }}">

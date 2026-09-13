@@ -28,8 +28,10 @@ class OrderEditorTest extends TestCase
         $round = new ConsumerGroupRound();
         $round->setProducer($producer);
 
-        $frutaProduct = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit('kg');
-        $aceiteProduct = (new ConsumerGroupProduct())->setName('Aceite')->setUnit('L');
+        // La fruta se vende al peso y admite medios kilos; el aceite viene en
+        // garrafa y no se parte. El salto lo dice el producto.
+        $frutaProduct = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit('kg')->setHalfUnits(true);
+        $aceiteProduct = (new ConsumerGroupProduct())->setName('Aceite')->setUnit('garrafa de 5 L');
         $producer->addProduct($frutaProduct);
         $producer->addProduct($aceiteProduct);
 
@@ -94,22 +96,47 @@ class OrderEditorTest extends TestCase
     }
 
     /**
-     * Lo que se pide son bultos: una garrafa, un saco, una caja.
+     * Lo que viene en formato cerrado se pide entero: una garrafa, un saco, una
+     * caja.
      *
      * El caso que motivó esto: el campo tenía paso de céntimo, así que las
      * flechas llevaban a pedir «0,03 garrafas de 5 L» — y eso llegaba tal cual
      * al pedido que se le pasa al productor.
      */
-    public function testLasCantidadesSeGuardanEnUnidadesEnteras(): void
+    public function testLoQueNoSePartaSeGuardaEnUnidadesEnteras(): void
     {
-        $this->apply([['item' => $this->fruta, 'quantity' => '2,6']]);
+        $this->apply([['item' => $this->aceite, 'quantity' => '2,6']]);
 
         self::assertSame('3', $this->order->getLines()->first()->getQuantity());
     }
 
+    /**
+     * Lo que se vende al peso sí admite medios, porque así se pide: medio kilo
+     * de queso, kilo y medio de naranjas.
+     */
+    public function testLoQueSeVendeAlPesoAdmiteMedios(): void
+    {
+        $this->apply([['item' => $this->fruta, 'quantity' => '1,5']]);
+
+        self::assertSame('1.5', $this->order->getLines()->first()->getQuantity());
+    }
+
+    /**
+     * Y sólo medios: con decimales libres vuelve a colarse el 0,03 de antes.
+     */
+    public function testAlPesoSeAjustaAlMedioMasCercano(): void
+    {
+        $this->apply([['item' => $this->fruta, 'quantity' => '1,3']]);
+
+        self::assertSame('1.5', $this->order->getLines()->first()->getQuantity());
+    }
+
     public function testUnaFraccionMinusculaEsNoPedirNada(): void
     {
-        $this->apply([['item' => $this->fruta, 'quantity' => '0,03']]);
+        $this->apply([
+            ['item' => $this->aceite, 'quantity' => '0,03'],
+            ['item' => $this->fruta, 'quantity' => '0,03'],
+        ]);
 
         self::assertCount(0, $this->order->getLines());
         self::assertTrue($this->order->isEmpty());

@@ -41,6 +41,11 @@ class ConsumerGroupProductType extends AbstractType
                 'label' => 'Unidad',
                 'attr'  => ['placeholder' => 'kg, L, docena, ud…'],
             ])
+            ->add('halfUnits', CheckboxType::class, [
+                'label'    => 'Se puede pedir en medias unidades',
+                'help'     => 'Márcalo en lo que se vende por peso (medio kilo de queso). Déjalo sin marcar en lo que viene en formato cerrado: una garrafa o una caja no se parten.',
+                'required' => false,
+            ])
             ->add('referencePrice', MoneyType::class, [
                 'label'    => 'Precio de referencia',
                 'currency' => 'EUR',
