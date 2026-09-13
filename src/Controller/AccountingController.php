@@ -2,13 +2,19 @@
 
 namespace App\Controller;
 
+use App\Entity\AccountEntry;
 use App\Entity\BudgetCategoryGroup;
+use App\Entity\User;
+use App\Form\AccountEntryType;
+use App\Form\AccountTransferType;
 use App\Repository\AccountEntryRepository;
 use App\Repository\BudgetCategoryRepository;
 use App\Repository\BudgetRepository;
 use App\Repository\FinancialAccountRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Service\Accounting\BudgetTracker;
+use App\Service\Accounting\TransferRecorder;
+use Doctrine\ORM\EntityManagerInterface;
 use Knp\Component\Pager\PaginatorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -199,6 +205,172 @@ class AccountingController extends AbstractController
             'months' => self::MONTHS,
             'kinds' => BudgetCategoryGroup::KIND_LABELS,
         ]);
+    }
+
+    /**
+     * Anotar un movimiento. Preselecciona cuenta y fecha si vienen en la URL, que es
+     * como llega quien acaba de guardar otro apunte del mismo extracto.
+     */
+    #[Route('/entry/new', name: 'accounting_entry_new', methods: ['GET', 'POST'])]
+    public function entryNew(
+        Request $request,
+        EntityManagerInterface $em,
+        FinancialAccountRepository $accounts,
+        BudgetCategoryRepository $categories,
+    ): Response {
+        $entry = new AccountEntry();
+        $entry->setDate($this->parseDate($request->query->get('date')) ?? new \DateTimeImmutable('today'));
+        $accountId = $request->query->getInt('account');
+        if ($accountId > 0) {
+            $entry->setAccount($accounts->find($accountId));
+        }
+
+        $form = $this->createForm(AccountEntryType::class, $entry);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $entry->setCreatedBy($this->currentUser());
+            $em->persist($entry);
+            $em->flush();
+            $this->addFlash('success', sprintf('Anotado: %s.', $entry->getConcept()));
+
+            if ($form->get('submitAndNew')->isClicked()) {
+                return $this->redirectToRoute('accounting_entry_new', [
+                    'account' => $entry->getAccount()?->getId(),
+                    'date' => $entry->getDate()?->format('Y-m-d'),
+                ]);
+            }
+
+            return $this->redirectToRoute('accounting_ledger', ['account' => $entry->getAccount()?->getId()]);
+        }
+
+        return $this->render('accounting/entry_form.html.twig', [
+            'form' => $form->createView(),
+            'entry' => null,
+            'heading' => 'Anotar un apunte',
+            'lead' => 'Un movimiento de una cuenta. El saldo se recalcula solo.',
+            'suggestions' => AccountEntryType::suggestedDirections($categories->findActive()),
+        ]);
+    }
+
+    /**
+     * Corregir un apunte ya anotado.
+     *
+     * Las mitades de un traspaso no pasan por aquí: cambiarle el importe a una sola
+     * dejaría el saldo de la otra cuenta mal. Se borran (las dos a la vez) y se
+     * vuelven a anotar.
+     */
+    #[Route('/entry/{id}/edit', name: 'accounting_entry_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
+    public function entryEdit(
+        Request $request,
+        AccountEntry $entry,
+        EntityManagerInterface $em,
+        BudgetCategoryRepository $categories,
+    ): Response {
+        if ($entry->isTransfer()) {
+            $this->addFlash('warning', 'Un traspaso no se edita por mitades: bórralo y vuelve a anotarlo.');
+
+            return $this->redirectToRoute('accounting_ledger');
+        }
+
+        $form = $this->createForm(AccountEntryType::class, $entry);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $em->flush();
+            $this->addFlash('success', 'Apunte corregido.');
+
+            return $this->redirectToRoute('accounting_ledger', ['account' => $entry->getAccount()?->getId()]);
+        }
+
+        return $this->render('accounting/entry_form.html.twig', [
+            'form' => $form->createView(),
+            'entry' => $entry,
+            'heading' => 'Corregir el apunte',
+            'lead' => 'Lo que cambies aquí cambia el saldo de la cuenta y el seguimiento del presupuesto.',
+            'suggestions' => AccountEntryType::suggestedDirections($categories->findActive()),
+        ]);
+    }
+
+    /**
+     * Borrar un apunte. Si es un traspaso, se van las dos mitades: dejar una sola
+     * descuadra la cuenta contraria.
+     */
+    #[Route('/entry/{id}/delete', name: 'accounting_entry_delete', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function entryDelete(
+        Request $request,
+        AccountEntry $entry,
+        EntityManagerInterface $em,
+        TransferRecorder $transfers,
+    ): Response {
+        $accountId = $entry->getAccount()?->getId();
+
+        if (!$this->isCsrfTokenValid('accounting_entry_delete_'.$entry->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('accounting_ledger', ['account' => $accountId]);
+        }
+
+        if ($entry->isTransfer()) {
+            $transfers->remove($entry);
+            $this->addFlash('success', 'Traspaso borrado, con sus dos mitades.');
+        } else {
+            $em->remove($entry);
+            $this->addFlash('success', 'Apunte borrado.');
+        }
+        $em->flush();
+
+        return $this->redirectToRoute('accounting_ledger', ['account' => $accountId]);
+    }
+
+    /**
+     * Mover dinero de una cuenta propia a otra. Son dos apuntes, pero se teclean como
+     * un solo hecho para que no puedan quedarse descuadrados.
+     */
+    #[Route('/transfer/new', name: 'accounting_transfer_new', methods: ['GET', 'POST'])]
+    public function transferNew(Request $request, EntityManagerInterface $em, TransferRecorder $transfers): Response
+    {
+        $form = $this->createForm(AccountTransferType::class, [
+            'date' => new \DateTimeImmutable('today'),
+            'from' => null,
+            'to' => null,
+            'amount' => null,
+            'concept' => null,
+        ]);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $data = $form->getData();
+            $transfers->record(
+                $data['from'],
+                $data['to'],
+                (string) $data['amount'],
+                $data['date'],
+                trim((string) $data['concept']),
+                $this->currentUser(),
+            );
+            $em->flush();
+            $this->addFlash('success', sprintf(
+                'Traspaso anotado: %s € de %s a %s.',
+                number_format((float) $data['amount'], 2, ',', '.'),
+                $data['from']->getName(),
+                $data['to']->getName(),
+            ));
+
+            return $this->redirectToRoute('accounting_ledger');
+        }
+
+        return $this->render('accounting/transfer_form.html.twig', [
+            'form' => $form->createView(),
+        ]);
+    }
+
+    /** Quien está anotando, para dejar rastro de quién metió cada apunte. */
+    private function currentUser(): ?User
+    {
+        $user = $this->getUser();
+
+        return $user instanceof User ? $user : null;
     }
 
     /**
