@@ -74,6 +74,7 @@ class UserType extends AbstractType
         // aviso de que algo caduca ({@see \App\Command\SendObligationNoticesCommand}).
         // Dársela a alguien es ponerle en la lista de quien se entera.
         'vencimientos' => ['label' => 'Vencimientos',    'read' => 'ROLE_GESTION_VENCIMIENTOS', 'edit' => 'ROLE_GESTION_VENCIMIENTOS_EDIT'],
+        'contabilidad' => ['label' => 'Contabilidad',     'read' => 'ROLE_GESTION_CONTABILIDAD', 'edit' => 'ROLE_GESTION_CONTABILIDAD_EDIT'],
     ];
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
