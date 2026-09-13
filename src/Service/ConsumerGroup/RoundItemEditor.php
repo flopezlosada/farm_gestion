@@ -13,6 +13,8 @@ use App\Entity\ConsumerGroupRoundItem;
  *     ACTIVOS del catálogo del productor, al precio de referencia.
  *   - {@see apply()}: reconcilia la selección que hace la comisión (qué productos
  *     entran en la ronda y a qué precio de ronda).
+ *   - {@see applyAssociationQuantities()}: lo que la asociación encarga para el
+ *     local, que se suma al pedido del productor sin pertenecer a ninguna socia.
  */
 class RoundItemEditor
 {
@@ -69,6 +71,26 @@ class RoundItemEditor
             } elseif ($item !== null) {
                 $round->removeItem($item);
             }
+        }
+    }
+
+    /**
+     * Guarda lo que la asociación pide para el local en cada producto del pedido.
+     *
+     * Las cantidades llegan TAL CUAL del formulario y se ajustan aquí al salto de
+     * cada producto ({@see OrderQuantity}), igual que las de las socias: el local
+     * pide los mismos bultos que ellas, y por el mismo motivo no puede encargar
+     * «0,03 garrafas». Lo que no venga vale cero, que es «no pido nada de esto»,
+     * como en el pedido de una socia.
+     *
+     * @param array<array{item: ConsumerGroupRoundItem, quantity: mixed}> $desired
+     *        cantidad para el local por item de ronda, sin normalizar
+     */
+    public function applyAssociationQuantities(array $desired): void
+    {
+        foreach ($desired as $entry) {
+            $item = $entry['item'];
+            $item->setAssociationQuantity(OrderQuantity::forItem($entry['quantity'], $item));
         }
     }
 }

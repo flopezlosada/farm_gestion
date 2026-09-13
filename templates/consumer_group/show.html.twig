@@ -1,7 +1,8 @@
 {# ============================================================
  # Ficha de un pedido del grupo de consumo (gestión).
  #   - round        ConsumerGroupRound
- #   - aggregate    { participantCount, total, byItem: [{item, quantity, subtotal}] }
+ #   - aggregate    { participantCount, total, byItem: [{item, quantity,
+ #                    associationQuantity, totalQuantity, subtotal}] }
  #   - transitions  int[] estados a los que se puede pasar ahora
  # ============================================================ #}
 
@@ -107,39 +108,79 @@
             </div>
         {% endif %}
 
+        {# LA TABLA ES EL PEDIDO QUE SE LE PASA AL PRODUCTOR, y eso no es sólo lo que
+         # piden las socias: la comisión encarga además para el local. Por eso el
+         # total de cada línea suma las dos cosas, y el desglose sólo se enseña
+         # cuando hay algo para el local —si no, sobra una columna de ceros—. #}
+        {% set can_order_local = can_edit and round.canManageOrders %}
         <section class="prt-card">
             <header class="prt-card__head">
-                <h2 class="prt-card__title"><span class="accent"></span>Apuntes · {{ aggregate.participantCount }} socia{{ aggregate.participantCount == 1 ? '' : 's' }}</h2>
+                <h2 class="prt-card__title"><span class="accent"></span>Pedido al productor · {{ aggregate.participantCount }} socia{{ aggregate.participantCount == 1 ? '' : 's' }}</h2>
                 <a href="{{ path('consumer_group_export', { id: round.id }) }}" class="prt-btn"><i class="fa fa-download"></i> Exportar pedido (CSV)</a>
             </header>
             <div class="prt-card__body">
             {% if round.items is empty %}
                 <p class="csa-muted">Este pedido no tiene productos.
-                    {% if can_edit and round.canManageOrders %}<a href="{{ path('consumer_group_items', { id: round.id }) }}">Añádelos</a>.{% endif %}
+                    {% if can_order_local %}<a href="{{ path('consumer_group_items', { id: round.id }) }}">Añádelos</a>.{% endif %}
                 </p>
             {% else %}
-                <div class="prl prl-table-wrap">
-                    <table class="prl-table">
-                        <thead>
-                            <tr><th>Producto</th><th class="tight">Precio</th><th class="tight">Cantidad total</th><th class="tight">Subtotal</th></tr>
-                        </thead>
-                        <tbody>
-                            {% for line in aggregate.byItem %}
+                <form method="post" action="{{ path('consumer_group_association_order', { id: round.id }) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_association_order_' ~ round.id) }}">
+                    <div class="prl prl-table-wrap">
+                        <table class="prl-table">
+                            <thead>
                                 <tr>
-                                    <td>{{ line.item.name }} <span class="csa-muted">/ {{ line.item.unit }}</span></td>
-                                    <td class="tight">{{ line.item.price|number_format(2, ',', '.') }} €</td>
-                                    <td class="tight">{{ line.quantity|number_format(2, ',', '.') }}</td>
-                                    <td class="tight">{{ line.subtotal|number_format(2, ',', '.') }} €</td>
+                                    <th>Producto</th>
+                                    <th class="tight">Precio</th>
+                                    <th class="tight">Socias</th>
+                                    <th class="tight">Para el local</th>
+                                    <th class="tight">Total</th>
+                                    <th class="tight">Subtotal</th>
                                 </tr>
-                            {% endfor %}
-                            <tr>
-                                <td colspan="3" style="text-align: right;"><b>Total</b></td>
-                                <td class="tight"><b>{{ aggregate.total|number_format(2, ',', '.') }} €</b></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                {% for line in aggregate.byItem %}
+                                    {% set medios = line.item.product and line.item.product.halfUnits %}
+                                    <tr>
+                                        <td>{{ line.item.name }} <span class="csa-muted">/ {{ line.item.unit }}</span></td>
+                                        <td class="tight">{{ line.item.price|number_format(2, ',', '.') }} €</td>
+                                        <td class="tight">{{ line.quantity|number_format(2, ',', '.') }}</td>
+                                        <td class="tight">
+                                            {% if can_order_local %}
+                                                {# El salto lo dice el producto, igual que en el panel de la
+                                                 # socia: el local pide los mismos bultos que ellas. #}
+                                                <input type="number" min="0"
+                                                       step="{{ medios ? '0.5' : '1' }}"
+                                                       inputmode="{{ medios ? 'decimal' : 'numeric' }}"
+                                                       name="association[{{ line.item.id }}]"
+                                                       value="{{ line.associationQuantity ? line.associationQuantity + 0 : '' }}"
+                                                       class="csa-input cg-local-qty"
+                                                       placeholder="0"
+                                                       aria-label="Para el local · {{ line.item.name }}">
+                                            {% else %}
+                                                {{ line.associationQuantity|number_format(2, ',', '.') }}
+                                            {% endif %}
+                                        </td>
+                                        <td class="tight"><b>{{ line.totalQuantity|number_format(2, ',', '.') }}</b></td>
+                                        <td class="tight">{{ line.subtotal|number_format(2, ',', '.') }} €</td>
+                                    </tr>
+                                {% endfor %}
+                                <tr>
+                                    <td colspan="5" style="text-align: right;"><b>Total</b></td>
+                                    <td class="tight"><b>{{ aggregate.total|number_format(2, ',', '.') }} €</b></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    {% if can_order_local %}
+                        <div class="csa-row" style="justify-content: flex-end; margin-top: var(--csa-sp-2);">
+                            <button type="submit" class="prt-btn prt-btn--primary"><i class="fa fa-save"></i> Guardar lo del local</button>
+                        </div>
+                    {% endif %}
+                </form>
                 <p class="csa-muted" style="margin-top: var(--csa-sp-2);">
+                    «Para el local» es lo que encarga la asociación además de lo que piden las socias: se suma
+                    al pedido del productor, no se le cobra a nadie y no sale en el reparto.
                     Importes informativos: la app no cobra. La comisión decide si se supera el mínimo del productor.
                 </p>
             {% endif %}
@@ -356,6 +397,9 @@
         .cg-order__lines { margin: 0; padding-left: var(--csa-sp-4); font-size: .9rem; }
         .cg-order__ref { margin-top: var(--csa-sp-1); font-size: .8rem; color: var(--csa-muted); white-space: nowrap; }
         .cg-pay-summary { display: flex; align-items: center; gap: var(--csa-sp-3); flex-wrap: wrap; }
+        /* Cabe una cantidad de tres cifras y media: no tiene que estirarse a lo
+           ancho de la columna, que en una tabla de seis descuadra el resto. */
+        .cg-local-qty { width: 5.5rem; text-align: right; }
         .cg-pago-filter { display: inline-flex; gap: var(--csa-sp-2); }
         .cg-pago-filter .prl-btn.is-active { background: var(--prt-ink, #1d1c17); color: #fff; border-color: var(--prt-ink, #1d1c17); }
         .cg-kebab { background: none; border: 0; cursor: pointer; color: var(--prt-ink-faint, #8d8773); padding: 4px 6px; border-radius: 6px; line-height: 0; }
