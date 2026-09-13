@@ -492,17 +492,20 @@ class ConsumerGroupController extends AbstractController
     }
 
     /**
-     * Construye las cantidades deseadas (item de pedido => cantidad normalizada) a
+     * Construye las cantidades deseadas (item de pedido => cantidad en crudo) a
      * partir del POST `quantity[<roundItemId>]`. Compartido por apuntar/editar.
      *
-     * @return array<array{item: \App\Entity\ConsumerGroupRoundItem, quantity: string}>
+     * @return array<array{item: \App\Entity\ConsumerGroupRoundItem, quantity: mixed}>
      */
     private function desiredFrom(Request $request, ConsumerGroupRound $round): array
     {
+        // TAL CUAL llegan: las cantidades las normaliza OrderEditor. Antes pasaban
+        // por normalizeDecimal, que es el normalizador de los PRECIOS —donde los
+        // decimales sí valen—, y por eso aquí se podían colar «0,03 garrafas».
         $raw = $request->request->all('quantity');
         $desired = [];
         foreach ($round->getItems() as $item) {
-            $desired[] = ['item' => $item, 'quantity' => $this->normalizeDecimal($raw[$item->getId()] ?? '0')];
+            $desired[] = ['item' => $item, 'quantity' => $raw[$item->getId()] ?? '0'];
         }
 
         return $desired;
@@ -565,7 +568,11 @@ class ConsumerGroupController extends AbstractController
     }
 
     /**
-     * Normaliza un decimal enviado (coma → punto, vacío/negativo/no numérico → "0").
+     * Normaliza un PRECIO enviado (coma → punto, vacío/negativo/no numérico → "0").
+     *
+     * Sólo precios: aquí los decimales son lo normal (42,50 € la garrafa). Las
+     * CANTIDADES no pasan por aquí —se piden en unidades enteras— y las normaliza
+     * {@see \App\Service\ConsumerGroup\OrderEditor}.
      */
     private function normalizeDecimal(mixed $value): string
     {

@@ -92,4 +92,44 @@ class OrderEditorTest extends TestCase
         self::assertCount(0, $this->order->getLines());
         self::assertTrue($this->order->isEmpty());
     }
+
+    /**
+     * Lo que se pide son bultos: una garrafa, un saco, una caja.
+     *
+     * El caso que motivó esto: el campo tenía paso de céntimo, así que las
+     * flechas llevaban a pedir «0,03 garrafas de 5 L» — y eso llegaba tal cual
+     * al pedido que se le pasa al productor.
+     */
+    public function testLasCantidadesSeGuardanEnUnidadesEnteras(): void
+    {
+        $this->apply([['item' => $this->fruta, 'quantity' => '2,6']]);
+
+        self::assertSame('3', $this->order->getLines()->first()->getQuantity());
+    }
+
+    public function testUnaFraccionMinusculaEsNoPedirNada(): void
+    {
+        $this->apply([['item' => $this->fruta, 'quantity' => '0,03']]);
+
+        self::assertCount(0, $this->order->getLines());
+        self::assertTrue($this->order->isEmpty());
+    }
+
+    public function testLoQueNoEsUnaCantidadValeCero(): void
+    {
+        $this->apply([
+            ['item' => $this->fruta, 'quantity' => 'dos garrafas'],
+            ['item' => $this->aceite, 'quantity' => '-4'],
+        ]);
+
+        self::assertCount(0, $this->order->getLines());
+    }
+
+    public function testUnValorQueNiSiquieraEsUnEscalarNoRompe(): void
+    {
+        // El formulario lo manda quien quiera: quantity[3][] llega como array.
+        $this->apply([['item' => $this->fruta, 'quantity' => ['3']]]);
+
+        self::assertCount(0, $this->order->getLines());
+    }
 }
