@@ -698,6 +698,14 @@
   resize: vertical;
   line-height: var(--csa-lh-snug);
 }
+/* Campo de fichero: el widget nativo (botón + nombre del archivo) trae su
+ * propia altura, así que la caja de 40px se lo come por arriba y por abajo.
+ * Mismo caso que el textarea. */
+.csa-input[type="file"] {
+  height: auto;
+  padding: 7px 10px;
+  line-height: var(--csa-lh-snug);
+}
 .csa-input::placeholder,
 .csa-textarea::placeholder { color: var(--csa-ink-muted); }
 
