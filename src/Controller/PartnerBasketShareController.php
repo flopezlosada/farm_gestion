@@ -11,6 +11,7 @@ use App\Entity\WeeklyBasketStatus;
 use App\Form\PartnerBasketShareType;
 use App\Repository\PartnerBasketShareRepository;
 use App\Service\Delivery\CohortChoiceBuilder;
+use App\Service\Delivery\SharedBasketChangeNotifier;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Partner\BasketModalityChanger;
 use App\Service\Partner\BasketPricing;
@@ -145,7 +146,19 @@ class PartnerBasketShareController extends AbstractController
      * WeeklyBasketGenerator::reconcilePartnerFrom (añade donde ahora reparte,
      * quita donde ya no); las semanas sin generar las siembra la generación normal.
      *
-     * @param PartnerBasketShare $partnerBasketShare PBS vigente que se cambia (la del enlace).
+     * Si la cesta es COMPARTIDA el cambio arrastra al otro hogar (lo hace el changer) y
+     * aquí se cierra el círculo: se reconcilian también sus semanas, se dice en pantalla
+     * y se avisa a los dos hogares de que ya está aplicado y desde cuándo.
+     *
+     * @param PartnerBasketShare        $partnerBasketShare PBS vigente que se cambia (la del enlace).
+     * @param Request                   $request            Petición HTTP con el formulario.
+     * @param BasketModalityChanger     $modalityChanger    Parte el histórico y arrastra a la pareja.
+     * @param WeeklyBasketGenerator     $generator          Reconcilia las semanas ya generadas.
+     * @param CohortChoiceBuilder       $cohortChoiceBuilder Turnos que caben en su punto.
+     * @param BasketPricing             $basketPricing      Precio según modalidad y huevos.
+     * @param SharedBasketChangeNotifier $notifier          Avisa a los dos hogares.
+     *
+     * @return Response El formulario, o la vuelta a la ficha del socix.
      */
     #[Route("/{id}/change-modality", name: "partner_basket_share_change_modality", methods: ["GET", "POST"])]
     public function changeModality(
@@ -155,7 +168,7 @@ class PartnerBasketShareController extends AbstractController
         WeeklyBasketGenerator $generator,
         CohortChoiceBuilder $cohortChoiceBuilder,
         BasketPricing $basketPricing,
-        SharedBasketCohortSync $cohortSync,
+        SharedBasketChangeNotifier $notifier,
     ): Response {
         $new = new PartnerBasketShare();
         $new->setPartner($partnerBasketShare->getPartner());
@@ -224,7 +237,7 @@ class PartnerBasketShareController extends AbstractController
             }
 
             try {
-                $modalityChanger->applyChange($new, $effective);
+                $outcome = $modalityChanger->applyChange($new, $effective);
             } catch (\DomainException $e) {
                 $this->addFlash('warning', $e->getMessage());
                 return $this->redirectToRoute('partner_show', ['id' => $partnerBasketShare->getPartner()->getId()]);
@@ -237,14 +250,34 @@ class PartnerBasketShareController extends AbstractController
                 count($reconciled),
             ));
 
-            // Cesta compartida: propaga turno/orden al par para que sigan
-            // recogiendo la misma cesta el mismo día.
-            $mate = $cohortSync->syncFrom($new, $effective);
+            // CESTA COMPARTIDA: el cambio ya ha arrastrado al otro hogar (lo hace el
+            // changer, que es quien sabe partir un histórico). Aquí queda lo que no es
+            // suyo: reconciliar TAMBIÉN sus entregas ya generadas —si no, su ficha dice
+            // una modalidad y su reparto sigue con la vieja—, decirlo en pantalla y
+            // avisar a los dos hogares.
+            //
+            // Ya no hace falta SharedBasketCohortSync: la cascada deja al otro hogar con
+            // la misma modalidad, turno y orden del mes, así que ese servicio se
+            // encontraba el trabajo hecho y se iba sin tocar nada —y sin reconciliar, que
+            // es lo que se perdió por el camino—. Sigue haciendo falta en edit(), donde
+            // no hay cascada.
+            $mate = $outcome->matePartner();
             if ($mate !== null) {
+                $mateReconciled = $generator->reconcilePartnerFrom($mate, $effective);
                 $this->addFlash('info', sprintf(
-                    'Comparte cesta con %s: se le ha aplicado el mismo turno de recogida.',
+                    'Comparte cesta con %s: su cesta cambia igual, porque es una sola. %d listado(s) suyo(s) reconciliado(s).',
                     $mate->getNameForDelivery(),
+                    count($mateReconciled),
                 ));
+
+                // El acta para quien lo vive: los dos hogares se enteran de que está
+                // aplicado y desde cuándo. Sin esto, el único aviso que reciben es el de
+                // "queda en manos de administración" y ahí se acaba.
+                $notifier->modalityApplied(
+                    [$new->getPartner(), $mate],
+                    $new->getBasketShare(),
+                    $effective,
+                );
             }
 
             return $this->redirectToRoute('partner_show', ['id' => $new->getPartner()->getId()]);

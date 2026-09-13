@@ -52,9 +52,10 @@ class BasketModalityChangerTest extends TestCase
             ->with($old, $new, $effective, null)
             ->willReturn(new PartnerEvent($partner, PartnerEvent::TYPE_BASKET_CHANGE, $effective));
 
-        $returnedOld = $this->changer->applyChange($new, $effective);
+        $outcome = $this->changer->applyChange($new, $effective);
 
-        $this->assertSame($old, $returnedOld);
+        $this->assertSame($old, $outcome->closed);
+        $this->assertNull($outcome->mate, 'Quien no comparte cesta no arrastra a nadie.');
         $this->assertSame('2026-05-31', $old->getEndDate()->format('Y-m-d'));
         $this->assertFalse($old->getIsActive());
         $this->assertSame('2026-06-01', $new->getStartDate()->format('Y-m-d'));
@@ -154,6 +155,95 @@ class BasketModalityChangerTest extends TestCase
         $this->changer->applyChange($new, new \DateTime('2026-06-01'));
     }
 
+    public function testApplyChangeEnCestaCompartidaArrastraAlOtroHogarYLoDevuelve(): void
+    {
+        // Caso real (13-sep-2026): una pareja quincenal compartida pasa a mensual
+        // compartida. Aplicarlo en la ficha de una debe cambiar las dos cestas —la ley
+        // L22 las obliga a ir iguales— y quien llama tiene que ENTERARSE de a quién
+        // arrastró: es lo que necesita para reconciliar sus entregas y avisarle.
+        [$one, $mate] = $this->sharingPair(30, 31);
+
+        $old = $this->share($one, BasketShare::ID_BIWEEKLY_SHARED);
+        $old->setStartDate(new \DateTime('2020-04-27'));
+        $old->setDeliveryGroup('B');
+
+        $mateOld = $this->share($mate, BasketShare::ID_BIWEEKLY_SHARED);
+        $mateOld->setStartDate(new \DateTime('2023-01-12'));
+        $mateOld->setDeliveryGroup('B');
+        $mateOld->setMonthPrice('42.00');
+        $mateOld->setEggMonthPrice('7.00');
+
+        $new = $this->share($one, BasketShare::ID_MONTHLY_SHARED);
+        $new->setDayMonthOrder(3);
+        $new->setMonthPrice('55.00');
+        $effective = new \DateTime('2026-10-01');
+
+        $this->shareRepository->method('findLatestActiveForPartner')
+            ->willReturnCallback(static fn (Partner $p): PartnerBasketShare => $p === $mate ? $mateOld : $old);
+        $this->eventRecorder->method('recordChange')
+            ->willReturn(new PartnerEvent($one, PartnerEvent::TYPE_BASKET_CHANGE, $effective));
+
+        $outcome = $this->changer->applyChange($new, $effective);
+
+        $this->assertNotNull($outcome->mate, 'El cambio arrastra al otro hogar y debe devolverlo.');
+        $this->assertSame($mate, $outcome->matePartner());
+
+        // De la pareja viaja lo que define a la pareja...
+        $this->assertSame(BasketShare::ID_MONTHLY_SHARED, $outcome->mate->getBasketShare()?->getId());
+        $this->assertSame(3, $outcome->mate->getDayMonthOrder());
+        $this->assertSame('2026-10-01', $outcome->mate->getStartDate()->format('Y-m-d'));
+
+        // ...y lo de su casa se queda en su casa: compartir cesta no es compartir cuota.
+        $this->assertSame('42.00', $outcome->mate->getMonthPrice());
+        $this->assertSame('7.00', $outcome->mate->getEggMonthPrice());
+
+        // Su histórico también se parte: la suya vieja se cierra en la víspera.
+        $this->assertSame('2026-09-30', $mateOld->getEndDate()->format('Y-m-d'));
+    }
+
+    public function testApplyChangeNoArrastraSiLaModalidadNuevaNoEsCompartida(): void
+    {
+        // Dejar de compartir es otra conversación —con quién sigue, o si ya no comparte—
+        // y nadie debería acabar en una cesta entera por la puerta de atrás.
+        [$one, $mate] = $this->sharingPair(30, 31);
+
+        $old = $this->share($one, BasketShare::ID_BIWEEKLY_SHARED);
+        $old->setStartDate(new \DateTime('2020-04-27'));
+        $mateOld = $this->share($mate, BasketShare::ID_BIWEEKLY_SHARED);
+        $mateOld->setStartDate(new \DateTime('2023-01-12'));
+
+        $new = $this->share($one, BasketShare::ID_WEEKLY);
+        $effective = new \DateTime('2026-10-01');
+
+        $this->shareRepository->method('findLatestActiveForPartner')
+            ->willReturnCallback(static fn (Partner $p): PartnerBasketShare => $p === $mate ? $mateOld : $old);
+        $this->eventRecorder->method('recordChange')
+            ->willReturn(new PartnerEvent($one, PartnerEvent::TYPE_BASKET_CHANGE, $effective));
+
+        $outcome = $this->changer->applyChange($new, $effective);
+
+        $this->assertNull($outcome->mate);
+        $this->assertNull($mateOld->getEndDate(), 'Al otro hogar no se le toca el histórico.');
+    }
+
+    /**
+     * Dos socixs que comparten cesta, emparejadxs en los dos sentidos como en BBDD.
+     *
+     * @param int $oneId  Id del primer hogar.
+     * @param int $mateId Id del segundo.
+     *
+     * @return array{0: Partner, 1: Partner} Los dos socixs.
+     */
+    private function sharingPair(int $oneId, int $mateId): array
+    {
+        $one = $this->partner($oneId);
+        $mate = $this->partner($mateId);
+        $one->setSharePartner($mate);
+        $mate->setSharePartner($one);
+
+        return [$one, $mate];
+    }
+
     private function partner(int $id): Partner
     {
         $partner = new Partner();
@@ -175,6 +265,10 @@ class BasketModalityChangerTest extends TestCase
         $share->setPartner($partner);
         $share->setBasketShare($basketShare);
         $share->setAmount(1);
+        // Columnas NOT NULL en BBDD, y sus setters no aceptan null: una cesta de mentira
+        // sin ellas revienta en cuanto algo la copia (la cascada al otro hogar lo hace).
+        $share->setVegetablesBasketAmount(1);
+        $share->setEggMonthPrice('0.00');
 
         return $share;
     }
