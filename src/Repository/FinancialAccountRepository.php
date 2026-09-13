@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\FinancialAccount;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
@@ -26,11 +27,18 @@ class FinancialAccountRepository extends ServiceEntityRepository
      */
     public function findActive(): array
     {
+        return $this->activeQueryBuilder()->getQuery()->getResult();
+    }
+
+    /**
+     * El mismo criterio, sin ejecutar, para los desplegables de los formularios: así
+     * una cuenta cerrada no se puede elegir al anotar aunque siga en el libro.
+     */
+    public function activeQueryBuilder(): QueryBuilder
+    {
         return $this->createQueryBuilder('a')
             ->andWhere('a.active = true')
             ->orderBy('a.sortOrder', 'ASC')
-            ->addOrderBy('a.name', 'ASC')
-            ->getQuery()
-            ->getResult();
+            ->addOrderBy('a.name', 'ASC');
     }
 }

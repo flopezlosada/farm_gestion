@@ -4,6 +4,7 @@ namespace App\Form;
 
 use App\Entity\AccountEntry;
 use App\Entity\BudgetCategory;
+use App\Entity\BudgetCategoryGroup;
 use App\Entity\FinancialAccount;
 use App\Repository\BudgetCategoryRepository;
 use App\Repository\FinancialAccountRepository;
@@ -52,9 +53,7 @@ class AccountEntryType extends AbstractType
             ->add('account', EntityType::class, [
                 'class' => FinancialAccount::class,
                 'choice_label' => 'name',
-                'query_builder' => static fn (FinancialAccountRepository $r) => $r->createQueryBuilder('a')
-                    ->andWhere('a.active = true')
-                    ->orderBy('a.sortOrder', 'ASC'),
+                'query_builder' => static fn (FinancialAccountRepository $r) => $r->activeQueryBuilder(),
                 'placeholder' => 'Elige la cuenta',
             ])
             ->add('category', EntityType::class, [
@@ -64,9 +63,15 @@ class AccountEntryType extends AbstractType
                 // se llaman igual («Formación» es de ingresos y de gastos), así que
                 // sin el grupo delante no se distinguen.
                 'group_by' => static fn (BudgetCategory $c): string => $c->getGroup()?->getName() ?? '',
+                // Los traspasos NO se ofrecen aquí. Elegirlos desde este formulario
+                // crearía media mitad de un traspaso, sin la otra, y el saldo de una
+                // cuenta quedaría mal: exactamente lo que TransferRecorder existe para
+                // impedir. Mover dinero entre cuentas propias tiene su propia acción.
                 'query_builder' => static fn (BudgetCategoryRepository $r) => $r->createQueryBuilder('c')
                     ->innerJoin('c.group', 'g')->addSelect('g')
                     ->andWhere('c.active = true')
+                    ->andWhere('g.kind != :transfer')
+                    ->setParameter('transfer', BudgetCategoryGroup::KIND_TRANSFER)
                     ->orderBy('g.sortOrder', 'ASC')
                     ->addOrderBy('c.sortOrder', 'ASC'),
                 'placeholder' => 'Elige la partida',
@@ -76,11 +81,11 @@ class AccountEntryType extends AbstractType
             ])
             ->add('direction', ChoiceType::class, [
                 'mapped' => false,
-                'expanded' => true,
                 'choices' => [
                     'Sale de la cuenta' => self::OUT,
                     'Entra en la cuenta' => self::IN,
                 ],
+                'placeholder' => false,
                 'data' => self::OUT,
             ])
             ->add('magnitude', NumberType::class, [
@@ -96,7 +101,11 @@ class AccountEntryType extends AbstractType
             ->add('providerName', TextType::class, ['required' => false])
             ->add('invoiceNumber', TextType::class, ['required' => false])
             ->add('notes', TextareaType::class, ['required' => false])
-            ->add('submit', SubmitType::class);
+            ->add('submit', SubmitType::class, ['label' => 'Guardar'])
+            // Quien anota viene con un extracto delante y mete veinte seguidos: este
+            // botón vuelve al formulario en blanco conservando fecha y cuenta, en vez
+            // de obligar a navegar al libro y volver por cada apunte.
+            ->add('submitAndNew', SubmitType::class, ['label' => 'Guardar y anotar otro']);
 
         // Al abrir un apunte ya guardado, deshace el signo para llenar las dos
         // casillas.

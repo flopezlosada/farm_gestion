@@ -102,6 +102,9 @@
         </form>
         <a href="{{ path('accounting_ledger') }}" class="prl-btn"><i class="fa fa-list"></i> Libro</a>
         <a href="{{ path('accounting_year', { year: year }) }}" class="prl-btn"><i class="fa fa-table"></i> Resumen del año</a>
+        {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+            <a href="{{ path('accounting_entry_new') }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Anotar apunte</a>
+        {% endif %}
     </div>
 
     {# ============ STAT STRIP ============ #}
