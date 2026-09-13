@@ -78,6 +78,14 @@ class AppSettings
      */
     public const EMAIL_COVERAGE_ALERT = 'email.coverage_alert';
 
+    /**
+     * Aviso de lo que está a punto de caducar: convenios de tierra, registros
+     * oficiales, pólizas, el mandato de la junta
+     * (app:send-obligation-notices). Nace ENCENDIDO: un registro de
+     * vencimientos que no avisa es el Dropbox que ya existe.
+     */
+    public const EMAIL_OBLIGATION_NOTICE = 'email.obligation_notice';
+
     /** Envío del recordatorio de llegadas/salidas del albergue al equipo (app:send-albergue-arrivals-reminder). */
     public const EMAIL_ALBERGUE_REMINDER = 'email.albergue_reminder';
 
@@ -242,6 +250,16 @@ class AppSettings
     public const CONSUMER_GROUP_PAYMENT_INFO = 'consumer_group.payment_info';
 
     /**
+     * Registro de vencimientos (convenios, registros oficiales, pólizas,
+     * cargos). Gatea la sección de gestión y, a través del `requires` de su
+     * tarea, también los avisos: con el módulo apagado nadie recibe correos de
+     * algo que no puede ni abrir. Se consulta como permiso mediante
+     * {@see \App\Security\FeatureVoter} vía {@see is_granted('FEATURE_VENCIMIENTOS')}.
+     * Arranca OFF (rodaje).
+     */
+    public const FEATURE_VENCIMIENTOS = 'feature.vencimientos';
+
+    /**
      * Interruptores de las tareas programadas (crons). Apagado, el comando
      * correspondiente sale sin hacer nada en cuanto arranca: como el hosting es
      * solo-FTP y no podemos tocar el crontab desde la app, el cron sigue
@@ -253,6 +271,9 @@ class AppSettings
     public const CRON_PICKUP_REMINDER = 'cron.pickup_reminder';
     public const CRON_ADMIN_DELIVERY_SUMMARY = 'cron.admin_delivery_summary';
     public const CRON_PURGE_USAGE_HITS = 'cron.purge_usage_hits';
+
+    /** Tarea que avisa de convenios, registros y seguros próximos a caducar (app:send-obligation-notices). */
+    public const CRON_OBLIGATION_NOTICE = 'cron.obligation_notice';
 
     /**
      * Aviso semanal de las fichas de socix a las que les faltan datos: a cada
@@ -503,6 +524,25 @@ class AppSettings
             'requires' => [self::EMAIL_ENABLED, self::EMAIL_ADMIN_DELIVERY_SUMMARY],
             'depends_on' => [],
         ],
+        // Temprano y a diario. A diario aunque los vencimientos se muevan en
+        // meses: los escalones se cruzan un día concreto, y con una cadencia
+        // semanal un aviso puede llegar seis días tarde — que en el de 7 días
+        // significa llegar cuando ya no da tiempo a nada.
+        self::CRON_OBLIGATION_NOTICE => [
+            'command' => 'app:send-obligation-notices',
+            'channels' => ['email'],
+            'needs_recipient' => false,
+            'confirm' => true,
+            'dry' => true,
+            'schedule' => ['freq' => 'daily', 'hour' => 7],
+            'max_delay_hours' => 36,
+            // El flag del módulo va aquí dentro: con la sección apagada, un
+            // correo avisando de algo que no se puede ni abrir no es un aviso,
+            // es un susto. Cabe en `requires` —que inhibe la tarea entera—
+            // porque el único canal es el correo.
+            'requires' => [self::FEATURE_VENCIMIENTOS, self::EMAIL_ENABLED, self::EMAIL_OBLIGATION_NOTICE],
+            'depends_on' => [],
+        ],
         self::CRON_PURGE_USAGE_HITS => [
             'command' => 'app:purge-usage-hits',
             'channels' => [],
@@ -688,6 +728,12 @@ class AppSettings
             'help' => 'Cuando el recordatorio de recogida termina y detecta que alguien que recogía, y que podía recibir el aviso, se ha quedado sin él, avisa por correo. Va a las cuentas que administran la web (las que pueden arreglarlo), no a un buzón configurado: así no depende de que nadie rellene un campo. Sólo escribe cuando hay un hueco: si no llega nada, es que no lo hay.',
             'default' => true,
         ],
+        self::EMAIL_OBLIGATION_NOTICE => [
+            'group' => 'Emails internos',
+            'label' => 'Avisar de lo que caduca',
+            'help' => 'Escribe cuando un convenio, un registro, una póliza o el mandato de la junta se acerca a su fecha: 90, 60, 30 y 7 días antes, y el día que vence. Va a quien tenga permiso de Vencimientos y a la persona responsable de cada uno, si está puesta. Apagado, los vencimientos siguen viéndose en su pantalla pero nadie recibe nada.',
+            'default' => true,
+        ],
         self::EMAIL_VOLUNTEERING => [
             'group' => 'Envío de emails',
             'label' => 'Avisos de voluntariado por email',
@@ -746,6 +792,12 @@ class AppSettings
             'group' => 'Funcionalidades en rodaje',
             'label' => 'Grupo de consumo',
             'help' => 'Abre el módulo del grupo de consumo: productores, rondas de pedido colectivo y los apuntes de lxs socixs. Apagado, se oculta del menú (gestión y panel) y no es accesible.',
+            'default' => false,
+        ],
+        self::FEATURE_VENCIMIENTOS => [
+            'group' => 'Funcionalidades en rodaje',
+            'label' => 'Vencimientos',
+            'help' => 'Abre el registro de lo que hay que mantener vigente: convenios de tierra, registros oficiales, pólizas, concesiones y cargos. Apagado, se oculta del menú, no es accesible y no sale ningún aviso de caducidad.',
             'default' => false,
         ],
         self::FEATURE_VOLUNTEERING => [
@@ -812,6 +864,12 @@ class AppSettings
             'group' => 'Tareas programadas',
             'label' => 'Purgar los rastros caducados',
             'help' => 'Borra periódicamente lo que ya no se va a consultar (app:purge-usage-hits): la telemetría de uso a los 90 días, por minimización de datos, y el registro de avisos y de ejecuciones al año, que es material de diagnóstico y conviene conservar más. Apagada, esas tablas crecen sin límite.',
+            'default' => true,
+        ],
+        self::CRON_OBLIGATION_NOTICE => [
+            'group' => 'Tareas programadas',
+            'label' => 'Vigilar lo que caduca',
+            'help' => 'Cada mañana comprueba qué convenios, registros, pólizas o cargos se acercan a su fecha y avisa por correo (app:send-obligation-notices). Independiente del email de vencimientos: apagada aquí, la tarea ni se ejecuta y nadie vigila nada.',
             'default' => true,
         ],
         self::CRON_INCOMPLETE_PROFILES => [
