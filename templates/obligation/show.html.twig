@@ -34,8 +34,8 @@
         .obl-field__value { font-weight: 600; }
         .obl-notes { white-space: pre-wrap; background: var(--csa-surface-2, #f7f7f5); padding: 14px 16px; border-radius: 8px; margin-bottom: 22px; }
         .obl-section-title { font-size: 15px; font-weight: 700; margin: 26px 0 10px; }
-        .obl-renew { background: var(--csa-surface-2, #f7f7f5); padding: 16px 18px; border-radius: 10px; }
-        .obl-renew form { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px 18px; align-items: end; }
+        .obl-renew { background: var(--csa-surface-2, #f7f7f5); padding: 18px 20px; border-radius: 10px; }
+        .obl-missing { color: var(--csa-text-muted, #6b7280); font-weight: 400; }
         .obl-actions-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
     </style>
 {% endblock %}
@@ -96,14 +96,20 @@
                 </div>
             </div>
         {% endif %}
-        {% if obligation.documentUrl %}
-            <div class="obl-field">
-                <div class="obl-field__label">Documento</div>
-                <div class="obl-field__value">
+        {# El documento se pinta SIEMPRE, tenga enlace o no. Ocultarlo cuando
+         # falta deja la ficha diciendo que no existe tal cosa, cuando lo que
+         # pasa es que nadie ha pegado el enlace todavía — y eso es justo lo que
+         # hay que ver para arreglarlo. #}
+        <div class="obl-field">
+            <div class="obl-field__label">Documento</div>
+            <div class="obl-field__value">
+                {% if obligation.documentUrl %}
                     <a href="{{ obligation.documentUrl }}" target="_blank" rel="noopener">Abrir <i class="fa fa-external-link"></i></a>
-                </div>
+                {% else %}
+                    <span class="obl-missing">— sin enlace —</span>
+                {% endif %}
             </div>
-        {% endif %}
+        </div>
     </div>
 
     {% if obligation.notes %}
@@ -138,13 +144,19 @@
             <p class="obl-head__date" style="margin-bottom:12px">
                 Cuando se renueve, anota aquí la fecha nueva. Con eso vuelve a vigilarse sola: no hay que tocar nada más.
             </p>
-            {{ form_start(renewal_form) }}
-                {{ form_row(renewal_form.startsOn) }}
-                {{ form_row(renewal_form.endsOn) }}
-                {{ form_row(renewal_form.documentUrl) }}
-                {{ form_row(renewal_form.notes) }}
-                <div>
-                    <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-check"></i> Anotar</button>
+            {# Mismo lenguaje de formulario que el resto de la aplicación
+             # (csa-form-grid + csa.field). Con `form_row` crudo sobre un grid
+             # propio, cada etiqueta y cada campo caen en celdas distintas y la
+             # rejilla se descuadra entera. #}
+            {{ form_start(renewal_form, { attr: { 'data-csa-dropdowns': '' } }) }}
+                <div class="csa-form-grid">
+                    {{ csa.field(renewal_form.startsOn, 'Vigente desde') }}
+                    {{ csa.field(renewal_form.endsOn, 'Caduca el') }}
+                    {{ csa.field(renewal_form.documentUrl, 'Documento firmado', { full: true }) }}
+                    {{ csa.field(renewal_form.notes, 'Apunte', { full: true }) }}
+                </div>
+                <div class="csa-row" style="justify-content: flex-end; margin-top: var(--csa-sp-4);">
+                    <button type="submit" class="csa-btn csa-btn--primary">Anotar la renovación</button>
                 </div>
             {{ form_end(renewal_form) }}
         </div>
@@ -161,6 +173,7 @@
                     <tr>
                         <th class="tight">Desde</th>
                         <th class="tight">Hasta</th>
+                        <th class="tight">Documento</th>
                         <th>Apunte</th>
                         <th class="actions"><span class="sr-only">Acciones</span></th>
                     </tr>
@@ -175,12 +188,14 @@
                                     <span class="prl-chip prl-chip--activo"><span class="dot"></span>Vigente</span>
                                 {% endif %}
                             </td>
-                            <td>
-                                {{ term.notes ?: '' }}
+                            <td class="tight">
                                 {% if term.documentUrl %}
-                                    <a href="{{ term.documentUrl }}" target="_blank" rel="noopener" title="Documento firmado"><i class="fa fa-external-link"></i></a>
+                                    <a href="{{ term.documentUrl }}" target="_blank" rel="noopener">Abrir <i class="fa fa-external-link"></i></a>
+                                {% else %}
+                                    <span class="obl-missing">—</span>
                                 {% endif %}
                             </td>
+                            <td>{{ term.notes ?: '' }}</td>
                             <td class="actions">
                                 {% if is_granted('ROLE_GESTION_VENCIMIENTOS_EDIT') %}
                                     <button type="button" class="prl-btn prl-btn--danger prl-btn--sm" title="Borrar periodo" aria-label="Borrar periodo"
