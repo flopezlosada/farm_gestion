@@ -23,16 +23,7 @@
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
-{# Importe con su signo y su color. Se define fuera de los bloques (una macro
- # dentro de un bloque no queda registrada) y se importa como `fmt`, no como `m`,
- # porque `m` es la variable del bucle de meses y una la pisaría a la otra. #}
-{% macro money(value, withSign) %}
-    {%- set v = value|default(0) -%}
-    <span class="acc-num {{ v < 0 ? 'acc-neg' : (v > 0 and withSign ? 'acc-pos' : '') }}">
-        {{- (withSign and v > 0 ? '+' : '') ~ (v|number_format(2, ',', '.')) }} €
-    </span>
-{% endmacro %}
-{% import _self as fmt %}
+{% import 'accounting/_money.html.twig' as fmt %}
 
 {% block title %}Contabilidad · Cómo vamos{% endblock %}
 
@@ -45,13 +36,8 @@
 {% block more_css %}
     {{ parent() }}
     {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
     <style>
-        .acc-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-        .acc-neg { color: #b3261e; }
-        .acc-pos { color: #1e6b3a; }
-        .acc-muted { color: var(--csa-ink-soft, #6b6b6b); }
-        .acc-group-row > td { font-weight: 600; background: rgba(0, 0, 0, 0.025); }
-        .acc-cat-row > td:first-child { padding-left: 28px; }
         .acc-bar { display: block; height: 6px; border-radius: 3px; background: rgba(0, 0, 0, 0.08); overflow: hidden; min-width: 60px; }
         .acc-bar > i { display: block; height: 100%; background: var(--csa-sage, #6a8f6b); }
         .acc-bar > i.over { background: #b3261e; }
@@ -79,10 +65,13 @@
     <div class="prl-toolbar">
         <div class="counters">
             {% if budget %}
-                Midiendo contra <b>{{ budget.name }}</b>
+                Midiendo contra <a href="{{ path('accounting_budget_lines', { id: budget.id }) }}"><b>{{ budget.name }}</b></a>
                 {% if not budget.approved %}<span class="prl-chip prl-chip--pausado"><span class="dot"></span>no aprobado</span>{% endif %}
             {% else %}
                 <span class="acc-muted">No hay presupuesto para {{ year }}</span>
+                {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+                    · <a href="{{ path('accounting_budget_new') }}">hacer uno</a>
+                {% endif %}
             {% endif %}
         </div>
         <div class="spacer"></div>
@@ -102,6 +91,7 @@
         </form>
         <a href="{{ path('accounting_ledger') }}" class="prl-btn"><i class="fa fa-list"></i> Libro</a>
         <a href="{{ path('accounting_year', { year: year }) }}" class="prl-btn"><i class="fa fa-table"></i> Resumen del año</a>
+        <a href="{{ path('accounting_budgets') }}" class="prl-btn"><i class="fa fa-calculator"></i> Presupuestos</a>
         {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
             <a href="{{ path('accounting_entry_new') }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Anotar apunte</a>
         {% endif %}
@@ -254,7 +244,7 @@
                     <tbody>
                         {% for row in balances %}
                             <tr>
-                                <td>{{ row.account.name }}<br><span class="acc-muted" style="font-size: 11px;">{{ row.account.kindLabel }}</span></td>
+                                <td>{{ row.account.name }}<br><span class="acc-muted acc-small">{{ row.account.kindLabel }}</span></td>
                                 <td class="acc-num">{{ row.balance|number_format(2, ',', '.') }} €</td>
                             </tr>
                         {% endfor %}

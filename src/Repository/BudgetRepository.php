@@ -67,4 +67,34 @@ class BudgetRepository extends ServiceEntityRepository
 
         return array_map(static fn (array $row): int => (int) $row['year'], $rows);
     }
+
+    /**
+     * Lo que suma cada presupuesto, en UNA consulta: ingresos, gastos y cuántas líneas
+     * tiene. Recorrer `$budget->getLines()` en el listado traería a memoria varios
+     * miles de líneas —unas 240 por año— para acabar sumando cuatro números.
+     *
+     * @return array<int, array{income: float, expense: float, lines: int}>
+     */
+    public function totals(): array
+    {
+        $rows = $this->getEntityManager()->createQuery(
+            'SELECT IDENTITY(l.budget) AS budgetId,
+                    SUM(CASE WHEN l.amount > 0 THEN l.amount ELSE 0 END) AS income,
+                    SUM(CASE WHEN l.amount < 0 THEN l.amount ELSE 0 END) AS expense,
+                    COUNT(l.id) AS lines
+             FROM App\Entity\BudgetLine l
+             GROUP BY l.budget'
+        )->getScalarResult();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row['budgetId']] = [
+                'income' => (float) $row['income'],
+                'expense' => (float) $row['expense'],
+                'lines' => (int) $row['lines'],
+            ];
+        }
+
+        return $out;
+    }
 }

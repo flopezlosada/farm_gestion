@@ -13,6 +13,7 @@ use App\Repository\BudgetRepository;
 use App\Repository\FinancialAccountRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Service\Accounting\BudgetTracker;
+use App\Service\Accounting\MonthNames;
 use App\Service\Accounting\TransferRecorder;
 use Doctrine\ORM\EntityManagerInterface;
 use Knp\Component\Pager\PaginatorInterface;
@@ -37,12 +38,6 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_GESTION_CONTABILIDAD')]
 class AccountingController extends AbstractController
 {
-    /** Nombres de los meses, para cabeceras de tabla y títulos. */
-    private const MONTHS = [
-        1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril', 5 => 'Mayo', 6 => 'Junio',
-        7 => 'Julio', 8 => 'Agosto', 9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre',
-    ];
-
     /**
      * Cómo va el año: lo previsto contra lo real por grupo, la caja mes a mes con su
      * proyección a cierre, y cuánto tendría que costar la cesta para que cuadre.
@@ -82,7 +77,7 @@ class AccountingController extends AbstractController
             'balances' => $balances,
             'totalCash' => $totalCash,
             'unpairedTransfers' => $entries->findUnpairedTransfers(),
-            'months' => self::MONTHS,
+            'months' => MonthNames::LONG,
             'kinds' => BudgetCategoryGroup::KIND_LABELS,
         ]);
     }
@@ -176,8 +171,8 @@ class AccountingController extends AbstractController
         return $this->render('accounting/month.html.twig', [
             'year' => $year,
             'month' => $month,
-            'monthName' => self::MONTHS[$month],
-            'months' => self::MONTHS,
+            'monthName' => MonthNames::long($month),
+            'months' => MonthNames::LONG,
             'grouped' => $grouped,
             'totals' => $totals,
             'kinds' => BudgetCategoryGroup::KIND_LABELS,
@@ -202,7 +197,7 @@ class AccountingController extends AbstractController
             'year' => $year,
             'years' => $this->yearsWithData($budgets, $entries),
             'tracked' => $tracker->track($year, $budget, 12),
-            'months' => self::MONTHS,
+            'months' => MonthNames::LONG,
             'kinds' => BudgetCategoryGroup::KIND_LABELS,
         ]);
     }

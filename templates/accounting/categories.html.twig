@@ -1,0 +1,106 @@
+{# ============================================================
+ # El catálogo de partidas: en qué se clasifica cada apunte.
+ #
+ # Se enseña agrupado porque el GRUPO es lo que se compara contra el presupuesto: el
+ # grupo cuadra siempre, aunque de un año a otro se parta o se junte alguna partida.
+ #
+ # El controller pasa: groups (con sus categorías) y counts (apuntes por partida).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Contabilidad · Partidas{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Partidas</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Contabilidad',
+        'Partidas',
+        'El vocabulario del libro y del presupuesto: uno solo, para que se puedan comparar.'
+    ) }}
+
+    {% set totalCategories = 0 %}
+    {% for group in groups %}{% set totalCategories = totalCategories + group.categories|length %}{% endfor %}
+
+    <div class="prl-stats">
+        <div class="prl-stat">
+            <b>{{ totalCategories }}</b>
+            <span>partidas</span>
+        </div>
+        <div class="prl-stat">
+            <b>{{ groups|length }}</b>
+            <span>grupos</span>
+        </div>
+    </div>
+
+    <div class="prl-toolbar">
+        <div class="counters">Los grupos son fijos: son la unidad con la que se compara el año.</div>
+        <div class="spacer"></div>
+        <a href="{{ path('accounting_accounts') }}" class="prl-btn"><i class="fa fa-university"></i> Cuentas</a>
+        {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+            <a href="{{ path('accounting_category_new') }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Nueva partida</a>
+        {% endif %}
+    </div>
+
+    <div class="prl-table-wrap">
+        <table class="prl-table">
+            <thead>
+                <tr>
+                    <th>Partida</th>
+                    <th>Para qué es</th>
+                    <th class="tight acc-num">Apuntes</th>
+                    <th class="tight"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for group in groups %}
+                    <tr class="acc-group-row">
+                        <td>{{ group.name }}</td>
+                        <td class="acc-muted acc-small">{{ group.kindLabel }}</td>
+                        <td class="acc-num">{{ group.categories|length }}</td>
+                        <td></td>
+                    </tr>
+                    {% for category in group.categories %}
+                        <tr class="acc-cat-row">
+                            <td>
+                                {{ category.name }}
+                                {% if not category.active %}
+                                    <span class="prl-chip prl-chip--pausado"><span class="dot"></span>retirada</span>
+                                {% endif %}
+                            </td>
+                            <td class="acc-muted acc-small">{{ category.description ?: '' }}</td>
+                            <td class="acc-num">{{ counts[category.id]|default(0) }}</td>
+                            <td class="tight">
+                                {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') and not category.transfer %}
+                                    <a href="{{ path('accounting_category_edit', { id: category.id }) }}" class="prl-btn" title="Cambiar"><i class="fa fa-pencil"></i></a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr class="acc-cat-row">
+                            <td colspan="4" class="acc-muted">Este grupo no tiene ninguna partida todavía.</td>
+                        </tr>
+                    {% endfor %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</div>
+{% endblock %}

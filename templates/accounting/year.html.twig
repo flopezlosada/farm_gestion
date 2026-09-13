@@ -25,17 +25,7 @@
 {% block more_css %}
     {{ parent() }}
     {% include 'partner/_listing_styles.html.twig' %}
-    <style>
-        .acc-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-        .acc-neg { color: #b3261e; }
-        .acc-muted { color: var(--csa-ink-soft, #6b6b6b); }
-        .acc-group-row > td { font-weight: 600; background: rgba(0, 0, 0, 0.05); }
-        .acc-cat-row > td:first-child { padding-left: 24px; }
-        .acc-grid { font-size: 12px; }
-        .acc-grid td, .acc-grid th { padding: 6px 8px; }
-        .acc-grid .zero { color: rgba(0, 0, 0, 0.2); }
-        .acc-total-col { background: rgba(0, 0, 0, 0.03); font-weight: 600; }
-    </style>
+    {% include 'accounting/_styles.html.twig' %}
 {% endblock %}
 
 {% block csa_main %}

@@ -25,13 +25,7 @@
 {% block more_css %}
     {{ parent() }}
     {% include 'partner/_listing_styles.html.twig' %}
-    <style>
-        .acc-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-        .acc-neg { color: #b3261e; }
-        .acc-muted { color: var(--csa-ink-soft, #6b6b6b); }
-        .acc-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0; }
-        .acc-filters .csa-input { min-width: 120px; }
-    </style>
+    {% include 'accounting/_styles.html.twig' %}
 {% endblock %}
 
 {% block csa_main %}
@@ -109,13 +103,13 @@
                             <td>
                                 {{ entry.concept }}
                                 {% if entry.providerName or entry.invoiceNumber %}
-                                    <br><span class="acc-muted" style="font-size: 11px;">
+                                    <br><span class="acc-muted acc-small">
                                         {{ entry.providerName }}{% if entry.invoiceNumber %} · fra. {{ entry.invoiceNumber }}{% endif %}
                                     </span>
                                 {% endif %}
                             </td>
                             <td>
-                                <span class="acc-muted" style="font-size: 11px;">{{ entry.category.group.name }}</span><br>
+                                <span class="acc-muted acc-small">{{ entry.category.group.name }}</span><br>
                                 {{ entry.category.name }}
                             </td>
                             <td class="tight">{{ entry.account.name }}</td>

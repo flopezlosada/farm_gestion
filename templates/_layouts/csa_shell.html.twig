@@ -493,6 +493,12 @@
                                    route starts with 'accounting_ledger' or route starts with 'accounting_month') }}
                                 {{ _self.nav_link('Resumen del año', path('accounting_year', { year: 'now'|date('Y') }), 'fa-table',
                                    route starts with 'accounting_year') }}
+                                {{ _self.nav_link('Presupuestos', path('accounting_budgets'), 'fa-calculator',
+                                   route starts with 'accounting_budget') }}
+                                {{ _self.nav_link('Cuentas', path('accounting_accounts'), 'fa-university',
+                                   route starts with 'accounting_account') }}
+                                {{ _self.nav_link('Partidas', path('accounting_categories'), 'fa-tags',
+                                   route starts with 'accounting_categor') }}
                             </div>
                         </div>
                     {% endif %}
