@@ -1,0 +1,165 @@
+{% extends '_layouts/csa_panel.html.twig' %}
+
+{# ============================================================
+ # "Mi cesta": lo que antes vivía enterrado en la sección 3 de la home
+ # (`Panel/index.html.twig`), ahora con enlace propio en el menú lateral para
+ # TODO el mundo. Antes sólo quien comparte cesta tenía un enlace fijo
+ # («Cesta compartida»); esta pantalla lo generaliza: la descripción de la
+ # cesta para cualquiera, y para quien comparte, un paso más hacia
+ # `panel_shared_basket` (que sigue siendo su propia pantalla — la enlazan
+ # avisos y correos, no se puede mover su URL).
+ # ============================================================ #}
+
+{% block title %}Mi cesta{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('panel') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Mi cesta</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/partner_card_styles.html.twig' %}
+    {% include '_components/panel_home_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+
+    {% set bs_id = active_share ? active_share.basketShare.id : null %}
+    {% set bs_label = active_share ? active_share.basketShare.name : null %}
+
+    <div class="prt">
+
+        {% if active_share %}
+            {# En una familia la cesta cuelga del principal: si no es la suya
+             # propia, se dice de quién es en vez de negársela. #}
+            {% set owner = basket_owner|default(partner) %}
+            {% set is_family_basket = owner.id != partner.id %}
+            <section class="prt-card prt-card--terra">
+                <header class="prt-card__head">
+                    <h2 class="prt-card__title"><span class="accent"></span>{{ is_family_basket ? 'La cesta de casa' : 'Mi cesta' }}</h2>
+                    {% if active_share.startDate %}
+                        <span class="prt-card__head-meta">desde {{ active_share.startDate|date('d/m/Y') }}</span>
+                    {% endif %}
+                </header>
+                <div class="prt-card__body">
+
+                    <dl class="pnl-rows">
+                        <div class="pnl-rows__row">
+                            <dt class="pnl-rows__label">Modalidad</dt>
+                            <dd class="pnl-rows__value">
+                                {{ bs_label }}
+                                {% if bs_id == 3 and active_share.dayMonthOrder %}
+                                    <span class="pnl-rows__sub">{% if active_share.dayMonthOrder == -1 %}la última semana del mes{% else %}el {{ active_share.dayMonthOrder }}º viernes del mes{% endif %}</span>
+                                {% elseif active_share.vegetablesBasketAmount and active_share.vegetablesBasketAmount > 1 %}
+                                    <span class="pnl-rows__sub">{{ active_share.vegetablesBasketAmount }} cestas cada vez</span>
+                                {% endif %}
+                            </dd>
+                        </div>
+                        <div class="pnl-rows__row">
+                            <dt class="pnl-rows__label">Huevos</dt>
+                            <dd class="pnl-rows__value{% if not active_share.eggAmount %} pnl-rows__value--muted{% endif %}">
+                                {% if active_share.eggAmount %}
+                                    {{ active_share.eggAmount.amount|default(active_share.eggAmount) }}
+                                    {% if active_share.eggPeriod %}<span class="pnl-rows__sub">{{ active_share.eggPeriod.name|default(active_share.eggPeriod) }}</span>{% endif %}
+                                {% else %}
+                                    No llevas
+                                {% endif %}
+                            </dd>
+                        </div>
+                        <div class="pnl-rows__row">
+                            <dt class="pnl-rows__label">Cuota mensual</dt>
+                            <dd class="pnl-rows__value">
+                                {% if active_share.eggAmount and active_share.eggMonthPrice %}
+                                    {{ (active_share.monthPrice + active_share.eggMonthPrice)|number_format(2, ',', '.') }} €
+                                    <span class="pnl-rows__sub">cesta y huevos</span>
+                                {% elseif active_share.monthPrice %}
+                                    {{ active_share.monthPrice|number_format(2, ',', '.') }} €
+                                {% else %}
+                                    <span class="pnl-rows__value--muted">—</span>
+                                {% endif %}
+                            </dd>
+                        </div>
+                        {% if active_share.endDate %}
+                            <div class="pnl-rows__row">
+                                <dt class="pnl-rows__label">Hasta</dt>
+                                <dd class="pnl-rows__value">{{ active_share.endDate|date('d/m/Y') }}</dd>
+                            </div>
+                        {% endif %}
+                    </dl>
+
+                    {% if is_family_basket %}
+                        <div class="prt-share">
+                            <i class="fa fa-home"></i>
+                            <span>Es la cesta de {{ (owner.name ~ ' ' ~ owner.surname)|lower|title }}, de tu familia. La recogéis juntxs.</span>
+                        </div>
+                    {% endif %}
+
+                    {% if owner.sharePartner and bs_id in [4, 6, 7] %}
+                        <div class="prt-share">
+                            <i class="fa fa-handshake-o"></i>
+                            <span>Compartes cesta con {{ (owner.sharePartner.name ~ ' ' ~ owner.sharePartner.surname)|lower|title }}</span>
+                        </div>
+                        {# El enlace a la negociación con el otro hogar sólo si el
+                         # autoservicio está encendido: sin él, `panel_shared_basket`
+                         # redirige de vuelta con un aviso y sería una puerta que no
+                         # lleva a ningún sitio. #}
+                        {% if is_granted('FEATURE_PARTNER_SELFSERVICE') %}
+                            <a href="{{ path('panel_shared_basket') }}" class="prt-btn" style="margin-top: 8px;">
+                                <i class="fa fa-exchange" aria-hidden="true"></i> Gestionar cambios con {{ (owner.sharePartner.name)|lower|title }}
+                            </a>
+                        {% endif %}
+                    {% endif %}
+
+                </div>
+            </section>
+        {% else %}
+            <section class="prt-card prt-card--terra">
+                <header class="prt-card__head">
+                    <h2 class="prt-card__title"><span class="accent"></span>Mi cesta</h2>
+                </header>
+                <div class="prt-card__body">
+                    <p class="prt-family__intro">No tienes una cesta activa registrada. Si crees que es un error, escribe a <a href="mailto:info@csavegadejarama.org">info@csavegadejarama.org</a>.</p>
+                </div>
+            </section>
+        {% endif %}
+
+        {# ============ TRASLADO PUNTUAL DE NODO ============
+         # Mismo atajo que antes vivía en la home junto a "tu próxima cesta": no se
+         # muestra ahí y aquí, se muestra sólo aquí, que es la pantalla de la cesta.
+         # El calendario de recogida ofrece el mismo cambio por si se entra por ahí. #}
+        {% if active_share and relocate_weeks is not empty and relocate_groups is not empty %}
+            <section class="prt-card">
+                <header class="prt-card__head">
+                    <h2 class="prt-card__title"><span class="accent"></span>Recoger en otro sitio, una semana</h2>
+                </header>
+                <div class="prt-card__body">
+                    <p class="prt-family__intro">Si una semana concreta te viene mejor recogerla en otro punto, elígelo aquí. Solo cambia esa semana.</p>
+                    <form method="post" action="{{ path('panel_basket_change_group') }}" class="csa-stack" data-csa-dropdowns="1">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_basket_change_group') }}">
+                        <label class="csa-field">
+                            <span class="csa-field__label">¿Qué semana?</span>
+                            <select name="basket_id" required>
+                                {% for w in relocate_weeks %}
+                                    <option value="{{ w.basketId }}">{{ w.date|format_date('full', locale='es')|capitalize }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label class="csa-field">
+                            <span class="csa-field__label">¿Dónde la recoges?</span>
+                            <select name="group_id" required>
+                                {% for g in relocate_groups %}
+                                    <option value="{{ g.id }}">{{ g.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <p><button type="submit" class="csa-btn csa-btn--primary csa-btn--sm">Trasladar</button></p>
+                    </form>
+                </div>
+            </section>
+        {% endif %}
+
+    </div>
+
+{% endblock %}

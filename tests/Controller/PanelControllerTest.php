@@ -25,15 +25,14 @@ class PanelControllerTest extends AbstractPartnerAuthenticatedTest
         $this->assertSame(200, $client->getResponse()->getStatusCode());
     }
 
-    public function testPanelBasketRedirectsToCalendar(): void
+    public function testPanelBasketReturnsOk(): void
     {
-        // El "Mi cesta" antiguo se retiró: su gestión vive en el calendario de recogida.
-        // La ruta se mantiene como redirección para enlaces/marcadores viejos.
+        // "Mi cesta" (descripción de la cesta activa) tiene pantalla propia con
+        // enlace fijo en el menú, en vez del redirect al calendario de antes.
         $client = $this->createPartnerAuthenticatedClient();
         $client->request('GET', '/panel/cesta');
 
-        $this->assertSame(302, $client->getResponse()->getStatusCode());
-        $this->assertStringEndsWith('/panel/calendar', (string) $client->getResponse()->headers->get('Location'));
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
     }
 
     public function testPanelProfileReturnsOk(): void
