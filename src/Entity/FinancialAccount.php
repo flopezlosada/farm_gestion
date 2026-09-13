@@ -3,6 +3,7 @@
 namespace App\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
@@ -17,6 +18,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * @ORM\Table(name="financial_account")
  * @ORM\Entity(repositoryClass="App\Repository\FinancialAccountRepository")
  */
+#[UniqueEntity(fields: ['name'], message: 'Ya hay una cuenta con ese nombre.')]
 class FinancialAccount
 {
     /** Cuenta bancaria: los apuntes salen del extracto. */

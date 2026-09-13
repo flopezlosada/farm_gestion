@@ -44,6 +44,51 @@ class AccountEntryRepository extends ServiceEntityRepository
     }
 
     /**
+     * Cuántos apuntes tiene cada cuenta: `[accountId => nº]`. Sirve para saber si una
+     * cuenta ya está en uso, y por tanto si su saldo de apertura todavía se puede
+     * corregir o hay que dejarlo quieto.
+     *
+     * @return array<int, int>
+     */
+    public function countByAccount(): array
+    {
+        $rows = $this->createQueryBuilder('e')
+            ->select('IDENTITY(e.account) AS accountId', 'COUNT(e.id) AS total')
+            ->groupBy('e.account')
+            ->getQuery()
+            ->getScalarResult();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row['accountId']] = (int) $row['total'];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Cuántos apuntes hay en cada partida: `[categoryId => nº]`. Igual que el de
+     * cuentas, dice qué partidas están en uso y cuáles se pueden retirar sin ruido.
+     *
+     * @return array<int, int>
+     */
+    public function countByCategory(): array
+    {
+        $rows = $this->createQueryBuilder('e')
+            ->select('IDENTITY(e.category) AS categoryId', 'COUNT(e.id) AS total')
+            ->groupBy('e.category')
+            ->getQuery()
+            ->getScalarResult();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row['categoryId']] = (int) $row['total'];
+        }
+
+        return $out;
+    }
+
+    /**
      * Lo movido en cada partida y mes de un año: `[categoryId][month] => importe`.
      * Es la mitad «real» de la rejilla de seguimiento, y también el resumen anual.
      * Una consulta para los doce meses y todas las partidas.

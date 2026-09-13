@@ -3,6 +3,7 @@
 namespace App\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
@@ -20,6 +21,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * })
  * @ORM\Entity(repositoryClass="App\Repository\BudgetCategoryRepository")
  */
+#[UniqueEntity(fields: ['group', 'name'], message: 'Ese grupo ya tiene una partida con ese nombre.', errorPath: 'name')]
 class BudgetCategory
 {
     /**

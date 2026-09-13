@@ -1,0 +1,18 @@
+{# ============================================================
+ # Un importe, como se pinta en todo el módulo: alineado a la derecha, en rojo si es
+ # negativo y con un «+» delante cuando lo que interesa es la dirección del cambio
+ # (una desviación, un superávit) y no la cantidad.
+ #
+ #   {% import 'accounting/_money.html.twig' as fmt %}
+ #   {{ fmt.money(1234.5) }}        →  1.234,50 €
+ #   {{ fmt.money(-20, true) }}     →  -20,00 €  en rojo
+ #
+ # ⚠️ Impórtalo como `fmt`, nunca como `m`: las rejillas usan `m` para el mes del
+ # bucle y una variable pisaría a la otra.
+ # ============================================================ #}
+{% macro money(value, withSign) %}
+    {%- set v = value|default(0) -%}
+    <span class="acc-num {{ v < 0 ? 'acc-neg' : (v > 0 and withSign ? 'acc-pos' : '') }}">
+        {{- (withSign and v > 0 ? '+' : '') ~ (v|number_format(2, ',', '.')) }} €
+    </span>
+{% endmacro %}

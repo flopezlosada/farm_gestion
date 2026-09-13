@@ -23,11 +23,8 @@
 {% block more_css %}
     {{ parent() }}
     {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
     <style>
-        .acc-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-        .acc-neg { color: #b3261e; }
-        .acc-muted { color: var(--csa-ink-soft, #6b6b6b); }
-        .acc-group-row > td { font-weight: 600; background: rgba(0, 0, 0, 0.05); }
         .acc-cat-row > td { font-weight: 600; background: rgba(0, 0, 0, 0.02); }
         .acc-entry-row > td:first-child { padding-left: 28px; }
     </style>
@@ -98,7 +95,7 @@
                                     <td>
                                         {{ entry.concept }}
                                         {% if entry.providerName %}
-                                            <span class="acc-muted" style="font-size: 11px;">· {{ entry.providerName }}</span>
+                                            <span class="acc-muted acc-small">· {{ entry.providerName }}</span>
                                         {% endif %}
                                     </td>
                                     <td class="tight">{{ entry.date ? entry.date|date('d/m') : '—' }}</td>

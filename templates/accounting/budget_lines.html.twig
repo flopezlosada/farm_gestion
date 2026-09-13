@@ -1,0 +1,249 @@
+{# ============================================================
+ # Las cifras de un presupuesto: cada partida y sus doce meses.
+ #
+ # Se teclea EN POSITIVO. El signo lo pone el grupo —lo de gastos e inversión sale— y
+ # por eso lo previsto y lo real se pueden restar sin acordarse de invertir nada.
+ # FINANCIACIÓN es la excepción: ahí un préstamo entra y sus cuotas salen, así que el
+ # signo se escribe a mano.
+ #
+ # Los totales (de fila, de grupo, de mes y el general) se calculan en el navegador
+ # mientras se teclea. No se calculan también en Twig a propósito: dos implementaciones
+ # de la misma suma acabarían diciendo cosas distintas.
+ #
+ # El controller pasa: budget, groups (group + categories), grid ([partida][mes]),
+ # lastYearTotals ([partida] => real del año anterior) y months (abreviaturas).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}{{ budget.year }} · {{ budget.name }} · Presupuesto{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_budgets') }}">Presupuestos</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ budget.year }} · {{ budget.name }}</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+    <style>
+        .acc-cell {
+            width: 74px; text-align: right; font-size: 12px; padding: 3px 5px;
+            border: 1px solid var(--prl-line, #ddd); border-radius: 4px; background: #fff;
+            font-variant-numeric: tabular-nums;
+        }
+        .acc-cell:focus { outline: 2px solid var(--csa-sage, #6a8f6b); outline-offset: -1px; }
+        .acc-cell.filled { background: #fbfaf6; font-weight: 600; }
+        .acc-grid th.acc-month { text-align: right; }
+        .acc-spread { padding: 2px 6px; font-size: 11px; }
+        .acc-grid tfoot td { font-weight: 600; background: rgba(0, 0, 0, 0.04); }
+        .acc-cat-name { min-width: 190px; }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Presupuesto ' ~ budget.year,
+        budget.name,
+        'Lo previsto para cada partida, mes a mes. Se escribe en positivo: el signo lo pone el grupo.'
+    ) }}
+
+    {% if budget.approved %}
+        {{ csa.callout('Éste es el presupuesto aprobado en asamblea. Si lo que quieres es rehacer las cuentas a mitad de año, cópialo y trabaja sobre la copia: lo aprobado es contra lo que hay que rendir cuentas.', 'warning', 'gavel') }}
+    {% endif %}
+
+    <form method="post" action="{{ path('accounting_budget_lines_save', { id: budget.id }) }}" id="budget-grid">
+        <input type="hidden" name="_token" value="{{ csrf_token('accounting_budget_lines_' ~ budget.id) }}">
+
+        <div class="prl-toolbar">
+            <div class="counters">
+                Resultado previsto: <b class="acc-grand" data-grand>—</b>
+                · tesorería al empezar: <b>{{ budget.openingCash|number_format(2, ',', '.') }} €</b>
+            </div>
+            <div class="spacer"></div>
+            <a href="{{ path('accounting_budgets') }}" class="prl-btn">Volver</a>
+            <a href="{{ path('accounting_budget_edit', { id: budget.id }) }}" class="prl-btn"><i class="fa fa-pencil"></i> Nombre y notas</a>
+            {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+                <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-save"></i> Guardar</button>
+            {% endif %}
+        </div>
+
+        <div class="prl-table-wrap">
+            <table class="prl-table acc-grid">
+                <thead>
+                    <tr>
+                        <th class="acc-cat-name">Partida</th>
+                        {% for m, label in months %}
+                            <th class="acc-month">{{ label }}</th>
+                        {% endfor %}
+                        <th class="acc-month acc-total-col">Año</th>
+                        <th class="acc-month">Real {{ budget.year - 1 }}</th>
+                        <th class="tight"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for group in groups %}
+                        {% set sign = group.group.expectedSign %}
+                        <tr class="acc-group-row" data-group-row="{{ group.group.id }}">
+                            <td>{{ group.group.name }}{% if sign == 0 %} <span class="acc-muted acc-small">(con signo)</span>{% endif %}</td>
+                            {% for m in 1..12 %}
+                                <td class="acc-num acc-group-month" data-month="{{ m }}"></td>
+                            {% endfor %}
+                            <td class="acc-num acc-total-col" data-group-total></td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                        {% for category in group.categories %}
+                            <tr class="acc-cat-row" data-row data-group="{{ group.group.id }}" data-sign="{{ sign }}">
+                                <td class="acc-cat-name">
+                                    {{ category.name }}
+                                    {% if not category.active %}
+                                        <span class="prl-chip prl-chip--pausado"><span class="dot"></span>retirada</span>
+                                    {% endif %}
+                                </td>
+                                {% for m in 1..12 %}
+                                    {% set raw = grid[category.id][m]|default(0) %}
+                                    {% set shown = sign != 0 ? (raw < 0 ? -raw : raw) : raw %}
+                                    <td>
+                                        <input type="text" inputmode="decimal"
+                                               class="acc-cell{{ shown != 0 ? ' filled' : '' }}"
+                                               name="line[{{ category.id }}][{{ m }}]"
+                                               value="{{ shown != 0 ? shown|number_format(2, ',', '') : '' }}"
+                                               aria-label="{{ category.name }}, {{ months[m] }}">
+                                    </td>
+                                {% endfor %}
+                                <td class="acc-num acc-total-col" data-row-total></td>
+                                <td class="acc-num acc-muted">
+                                    {% set real = lastYearTotals[category.id]|default(0) %}
+                                    {{ real != 0 ? (real < 0 ? -real : real)|number_format(2, ',', '.') : '—' }}
+                                </td>
+                                <td class="tight">
+                                    <button type="button" class="prl-btn acc-spread" title="Repetir enero en todos los meses">=</button>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td>Resultado del mes</td>
+                        {% for m in 1..12 %}
+                            <td class="acc-num acc-month-total" data-month="{{ m }}"></td>
+                        {% endfor %}
+                        <td class="acc-num acc-total-col" data-grand></td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5);">
+                <div class="acc-muted acc-small">Una casilla vacía o a cero no guarda nada.</div>
+                <button type="submit" class="csa-btn csa-btn--primary">Guardar el presupuesto</button>
+            </div>
+        {% endif %}
+    </form>
+
+</div>
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    <script>
+        // Suma viva de la rejilla. Cada fila lleva su signo en data-sign: lo tecleado
+        // es siempre positivo salvo en financiación, así que un gasto de 100 suma -100
+        // al mes y al grupo. Así el pie dice el resultado del mes, no una mezcla sin
+        // sentido de ingresos y gastos.
+        (function () {
+            var form = document.getElementById('budget-grid');
+            if (!form) { return; }
+
+            function parse(text) {
+                var clean = (text || '').trim().replace(/[.\s€]/g, '').replace(',', '.');
+                var value = parseFloat(clean);
+                return isNaN(value) ? 0 : value;
+            }
+
+            function format(value) {
+                return value.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+            }
+
+            function paint(cell, value) {
+                if (!cell) { return; }
+                cell.textContent = value === 0 ? '—' : format(value);
+                cell.classList.toggle('acc-neg', value < 0);
+            }
+
+            function recalc() {
+                var months = {};
+                var groups = {};
+                var grand = 0;
+
+                form.querySelectorAll('tr[data-row]').forEach(function (row) {
+                    var sign = parseInt(row.getAttribute('data-sign'), 10);
+                    var groupId = row.getAttribute('data-group');
+                    var rowTotal = 0;
+
+                    row.querySelectorAll('input.acc-cell').forEach(function (input, index) {
+                        var month = index + 1;
+                        var value = parse(input.value);
+                        input.classList.toggle('filled', value !== 0);
+                        if (sign !== 0) { value = sign * Math.abs(value); }
+                        rowTotal += value;
+                        months[month] = (months[month] || 0) + value;
+                        if (!groups[groupId]) { groups[groupId] = { total: 0, months: {} }; }
+                        groups[groupId].months[month] = (groups[groupId].months[month] || 0) + value;
+                    });
+
+                    groups[groupId].total = (groups[groupId].total || 0) + rowTotal;
+                    grand += rowTotal;
+                    paint(row.querySelector('[data-row-total]'), rowTotal);
+                });
+
+                Object.keys(groups).forEach(function (groupId) {
+                    var header = form.querySelector('tr[data-group-row="' + groupId + '"]');
+                    if (!header) { return; }
+                    paint(header.querySelector('[data-group-total]'), groups[groupId].total);
+                    header.querySelectorAll('.acc-group-month').forEach(function (cell) {
+                        paint(cell, groups[groupId].months[cell.getAttribute('data-month')] || 0);
+                    });
+                });
+
+                form.querySelectorAll('.acc-month-total').forEach(function (cell) {
+                    paint(cell, months[cell.getAttribute('data-month')] || 0);
+                });
+                form.querySelectorAll('[data-grand]').forEach(function (cell) {
+                    paint(cell, grand);
+                });
+            }
+
+            form.addEventListener('input', function (event) {
+                if (event.target.classList.contains('acc-cell')) { recalc(); }
+            });
+
+            // «=» copia enero al resto del año: la mitad de las partidas son la misma
+            // cifra doce veces (el alquiler, las nóminas, la cuota del préstamo).
+            form.addEventListener('click', function (event) {
+                var button = event.target.closest('.acc-spread');
+                if (!button) { return; }
+                var cells = button.closest('tr').querySelectorAll('input.acc-cell');
+                var first = cells[0].value;
+                cells.forEach(function (cell) { cell.value = first; });
+                recalc();
+            });
+
+            recalc();
+        })();
+    </script>
+{% endblock %}
