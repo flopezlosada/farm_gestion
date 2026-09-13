@@ -1,0 +1,36 @@
+-- ============================================================================
+-- El documento deja de ser un enlace y pasa a ser un fichero (DDL, paso 1 de 2).
+--
+-- Columnas nuevas `obligation.document_file` y `obligation_term.document_file`:
+-- el nombre con el que está guardado el papel en el archivo del servidor.
+--
+-- POR QUÉ CAMBIA: el enlace apuntaba al Dropbox, y la asociación se va del
+-- Dropbox. Mientras el archivo viviera fuera, una URL bastaba; si el archivo
+-- pasa a ser la web, lo que tiene que haber es el fichero. Ninguna ficha había
+-- llegado a usar el enlace (0 de 18), así que no hay nada que migrar.
+--
+-- DÓNDE VIVEN LOS FICHEROS: en `var/documentos/vencimientos/`, FUERA de
+-- `public/`. En el docroot los serviría Apache directamente, sin pasar por
+-- Symfony y sin comprobar ningún permiso, y estos documentos llevan DNIs, IBAN,
+-- firmas escaneadas y referencias catastrales. Se sirven por un controlador que
+-- exige el permiso de Vencimientos.
+--
+-- ANTES de aplicarlo, contrástalo con lo que Doctrine espera:
+--   ddev exec bin/console doctrine:schema:update --dump-sql | grep obligation
+--
+-- Aplicar a las TRES BBDD de trabajo: db (sandbox), db_prod_snapshot (golden)
+-- y db_test.
+--   ddev mysql db               < dev-docs/schema/obligation-documents.sql
+--   ddev mysql db_prod_snapshot < dev-docs/schema/obligation-documents.sql   # tras esto, bin/db-backup
+--   ddev mysql db_test          < dev-docs/schema/obligation-documents.sql
+--
+-- ORDEN RESPECTO AL CÓDIGO: 🔴 LAS COLUMNAS VAN ANTES. Doctrine lista las
+-- columnas explícitamente, así que el código nuevo contra una tabla sin ellas
+-- revienta la sección entera.
+--
+-- El paso 2 (`obligation-document-url-drop.sql`) retira la columna vieja y va
+-- DESPUÉS de que este código esté desplegado.
+-- ============================================================================
+
+ALTER TABLE obligation ADD document_file VARCHAR(255) DEFAULT NULL;
+ALTER TABLE obligation_term ADD document_file VARCHAR(255) DEFAULT NULL;

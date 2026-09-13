@@ -22,7 +22,14 @@
                     {{ csa.field(form.reference, 'Número de póliza o expediente') }}
                     {{ csa.field(form.responsible, 'Quién se ocupa') }}
                     {{ csa.field(form.leadDays, 'Hay que avisar con antelación de') }}
-                    {{ csa.field(form.documentUrl, 'Dónde está el documento', { full: true }) }}
+                    {# Si ya hay papel guardado se avisa de que subir otro lo
+                     # sustituye: el campo de fichero siempre sale vacío y sin
+                     # el aviso parece que no hay ninguno. #}
+                    {% set document_opts = { full: true } %}
+                    {% if form.vars.data.documentFile is defined and form.vars.data.documentFile %}
+                        {% set document_opts = document_opts|merge({ hint: 'Ya hay uno guardado: si subes otro, lo sustituye' }) %}
+                    {% endif %}
+                    {{ csa.field(form.document, 'El documento', document_opts) }}
                     {{ csa.field(form.notes, 'Qué hay que saber para renovarlo', { full: true, widget_class: 'csa-textarea' }) }}
                 </div>
             {% endblock %}

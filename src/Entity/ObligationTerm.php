@@ -54,13 +54,14 @@ class ObligationTerm
     private \DateTimeImmutable $endsOn;
 
     /**
-     * Enlace al documento sellado de ESTE periodo (el convenio firmado, la
-     * póliza de este año). El de la obligación apunta a la carpeta; éste, al
-     * papel concreto que prueba que en estas fechas estaba en regla.
+     * Nombre con el que está guardado el documento sellado de ESTE periodo (el
+     * convenio firmado, la póliza de este año). El de la obligación es el papel
+     * vigente; éste, el que prueba que en estas fechas se estaba en regla, y es
+     * lo que convierte el historial en un archivo y no en una lista de fechas.
      *
-     * @ORM\Column(name="document_url", type="string", length=500, nullable=true)
+     * @ORM\Column(name="document_file", type="string", length=255, nullable=true)
      */
-    private ?string $documentUrl = null;
+    private ?string $documentFile = null;
 
     /**
      * @ORM\Column(name="notes", type="string", length=255, nullable=true)
@@ -147,17 +148,17 @@ class ObligationTerm
         return $this;
     }
 
-    public function getDocumentUrl(): ?string
+    public function getDocumentFile(): ?string
     {
-        return $this->documentUrl;
+        return $this->documentFile;
     }
 
     /**
-     * @param string|null $documentUrl Enlace al documento sellado de este periodo.
+     * @param string|null $documentFile Nombre del documento sellado de este periodo.
      */
-    public function setDocumentUrl(?string $documentUrl): self
+    public function setDocumentFile(?string $documentFile): self
     {
-        $this->documentUrl = $documentUrl;
+        $this->documentFile = $documentFile;
 
         return $this;
     }

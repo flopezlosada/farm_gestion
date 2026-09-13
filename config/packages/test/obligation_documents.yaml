@@ -1,0 +1,7 @@
+# Los documentos que suben los tests no van al archivo de verdad.
+#
+# Colgando del cache_dir se los lleva por delante el primer `cache:clear`, así
+# que la suite no deja basura acumulándose en `var/documentos/` ni puede
+# confundirse con un documento real subido desde la aplicación.
+parameters:
+    app.obligation_documents_dir: '%kernel.cache_dir%/documentos-vencimientos'
