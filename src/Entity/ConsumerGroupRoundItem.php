@@ -52,6 +52,22 @@ class ConsumerGroupRoundItem
     private string $price = '0';
 
     /**
+     * Lo que la ASOCIACIÓN pide de este producto para el local, además de lo que
+     * piden las socias. Decimal como string, al mismo precio de ronda.
+     *
+     * No tiene socia detrás a propósito: se suma al pedido que se le pasa al
+     * productor, pero no es de nadie —no se cobra, no se reparte y no cuenta como
+     * participante—. La alternativa era apuntar a «la asociación» como si fuera
+     * una socia más, y entonces habría que acordarse de excluirla en el recuento,
+     * en los avisos, en los pagos, en las estadísticas y en la hoja de reparto.
+     *
+     * @ORM\Column(name="association_quantity", type="decimal", precision=8, scale=2, options={"default": "0"})
+     */
+    #[Assert\NotNull]
+    #[Assert\PositiveOrZero]
+    private string $associationQuantity = '0';
+
+    /**
      * Orden de presentación dentro de la ronda.
      * @ORM\Column(type="smallint")
      */
@@ -99,6 +115,20 @@ class ConsumerGroupRoundItem
     public function setPrice(string $price): self
     {
         $this->price = $price;
+        return $this;
+    }
+
+    /**
+     * Cantidad que pide la asociación para el local ({@see $associationQuantity}).
+     */
+    public function getAssociationQuantity(): string
+    {
+        return $this->associationQuantity;
+    }
+
+    public function setAssociationQuantity(string $associationQuantity): self
+    {
+        $this->associationQuantity = $associationQuantity;
         return $this;
     }
 
