@@ -372,6 +372,21 @@ a.prl-person__name:hover { color: var(--prl-sage-d); text-decoration: none; bord
 .prl-chip--mod-5   { background: #fff2d6; color: var(--prl-ochre-d); }
 .prl-chip--mod-5 .dot { background: var(--prl-ochre); }
 
+/* Chips por RESULTADO, no por estado de socix. Los de arriba
+   (activo/pausado/baja, mod-N) son vocabulario del listado de socixs y no
+   significan nada en otro módulo: usar `mod-3` para pintar un error de rojo
+   funciona hasta que alguien cambia el color de la modalidad mensual. Estos
+   cuatro dicen salió bien / atención / falló / sin más, que es lo que necesita
+   cualquier listado que enseñe el resultado de algo. */
+.prl-chip--ok      { background: var(--prl-sage-l);  color: var(--prl-sage-d); }
+.prl-chip--ok .dot { background: var(--prl-sage); }
+.prl-chip--warn      { background: var(--prl-ochre-l); color: var(--prl-ochre-d); }
+.prl-chip--warn .dot { background: var(--prl-ochre); }
+.prl-chip--danger      { background: var(--prl-terra-l); color: var(--prl-terra-d); }
+.prl-chip--danger .dot { background: var(--prl-terra); }
+.prl-chip--neutral      { background: #f0eee7; color: var(--prl-ink-soft); }
+.prl-chip--neutral .dot { background: var(--prl-ink-faint); }
+
 /* checkbox tight */
 .prl-table .check { width: 32px; padding-right: 0; }
 .prl-table .check input[type="checkbox"] { accent-color: var(--prl-sage-d); cursor: pointer; }
