@@ -140,7 +140,7 @@
                         <select name="basket_share_id" class="csa-select" required>
                             <option value="">— elige —</option>
                             {% for modality in modalities %}
-                                <option value="{{ modality.id }}">{{ modality.title }}</option>
+                                <option value="{{ modality.id }}">{{ modality.name }}</option>
                             {% endfor %}
                         </select>
                     </label>

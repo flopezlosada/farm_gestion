@@ -97,7 +97,7 @@
        saltarse la semana: con media cesta sin dueño en el punto no está decidido qué se
        hace, y eso lo decide la asociación, no el software. #}
     {% if cal.shared_needs_consent|default(false) %}
-        {{ csa.callout('Esta cesta es compartida con ' ~ (cal.shared_other_name|default('otro hogar')) ~ ': para cambiarla de día se lo pides y lo acepta. Los huevos son tuyos y los mueves sin preguntar. Para no recoger una semana, escribe a administración.', 'info', 'info-circle') }}
+        {{ csa.callout('Los días en verde son los que recoges tu cesta (la hoja es verdura y el óvalo, huevos). La compartes con ' ~ (cal.shared_other_name|default('otro hogar')) ~ ': para cambiarla de día se lo pides y ella lo acepta. Los huevos son tuyos y los mueves sin preguntar.', 'info', 'info-circle') }}
     {% else %}
         {{ csa.callout('Cesta compartida: al cambiarla de día se mueven las dos mitades y se avisa a los dos hogares. Los huevos van por separado (cada hogar los suyos).', 'info', 'info-circle') }}
     {% endif %}
