@@ -525,8 +525,22 @@
                         {% set shared_action = cal.shared_move_in_path|default(false)
                             ? path(cal.route_shared_move, cal.idp|merge({ basketId: bid }))
                             : path(cal.route_shared_move) %}
+                        {% set ya_pedido = pending_shared|default({})[bid]|default(null) %}
                         <div class="rcal-eggmove" style="margin-top: var(--csa-sp-4);">
                             <div class="rcal-sect"><i class="fa fa-arrows"></i> Cambiar el día de la cesta</div>
+                            {% if ya_pedido %}
+                                {# YA HAY UNA PETICIÓN VIVA para esta semana. Volver a ofrecer los
+                                   botones sería invitar a pedir lo mismo dos veces —y el servidor lo
+                                   rechaza, porque sólo cabe un acuerdo esperando entre los dos
+                                   hogares—. Lo que falta aquí no es una acción, es saber en qué
+                                   punto está: sin esto el día se ve idéntico antes y después de
+                                   pedirlo. #}
+                                {{ csa.callout(
+                                    'Ya has pedido cambiarla al ' ~ (ya_pedido.toBasket and ya_pedido.toBasket.date ? ya_pedido.toBasket.date|format_date(pattern='EEEE d MMM', locale='es') : 'otro día')
+                                    ~ '. Esperando a que ' ~ (cal.shared_other_name|default('el otro hogar')) ~ ' conteste.',
+                                    'info', 'clock-o'
+                                ) }}
+                            {% else %}
                             <p class="csa-muted">
                                 La cesta la compartes con {{ cal.shared_other_name|default('el otro hogar') }}: elige el día que te vendría bien y se lo pedimos. No cambia nada hasta que conteste.
                             </p>
@@ -543,6 +557,7 @@
                                     </button>
                                 {% endfor %}
                             </form>
+                            {% endif %}
                         </div>
                     {% endif %}
 

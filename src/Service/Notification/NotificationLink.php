@@ -63,7 +63,8 @@ class NotificationLink
             // La petición del otro hogar lleva a donde se contesta, y va ANTES que la
             // familia 'pickup.' porque si no la absorbe: un aviso que pide algo tiene
             // que abrir el sitio donde se hace, no el panel donde no hay botón.
-            Notification::KIND_SHARED_REQUEST === $kind => $this->urlGenerator->generate('panel_shared_basket'),
+            Notification::KIND_SHARED_REQUEST === $kind,
+            Notification::KIND_SHARED_ANSWERED === $kind => $this->urlGenerator->generate('panel_shared_basket'),
             // El aviso de la cesta lleva al panel y no al calendario: dice "te
             // toca el miércoles", y el panel es la pantalla del "qué me toca",
             // con la próxima entrega, el nodo y la hora arriba del todo. Quien

@@ -179,6 +179,7 @@ final class SharedBasketChangeNotifier
                 'other_name' => $counterpart->getNameForDelivery(),
                 'summary' => $request->summary(),
             ],
+            Notification::KIND_SHARED_ANSWERED,
         );
     }
 
