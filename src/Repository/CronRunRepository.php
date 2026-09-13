@@ -64,6 +64,54 @@ class CronRunRepository extends ServiceEntityRepository
             ->orderBy('r.startedAt', 'DESC')
             ->addOrderBy('r.id', 'DESC');
 
+        $this->applyFilters($qb, $filters);
+
+        return $qb;
+    }
+
+    /**
+     * Cuántas ejecuciones hubo de cada resultado en el rango, en una consulta.
+     *
+     * Contesta de un vistazo la pregunta con la que se abre esta pestaña: ¿ha
+     * fallado algo? Sin esto hay que recorrer el listado a ojo, y las que fallan
+     * son justo las raras: una fila roja entre cincuenta verdes se pasa por alto.
+     *
+     * @param array<string, mixed> $filters Los mismos que {@see findFilteredQb()}.
+     * @return array{total: int, done: int, nothing_to_do: int, disabled: int, failed: int}
+     */
+    public function summary(array $filters): array
+    {
+        $qb = $this->createQueryBuilder('r')
+            ->select('r.status AS status, COUNT(r.id) AS n')
+            ->groupBy('r.status');
+
+        // Sin el filtro de estado, por lo mismo que en la bitácora de avisos: la
+        // fila de tarjetas es el mando para saltar de un resultado a otro, y
+        // heredando el filtro dejaría a cero todas menos la elegida.
+        $sinEstado = $filters;
+        $sinEstado['status'] = null;
+        $this->applyFilters($qb, $sinEstado);
+
+        $counts = ['total' => 0, 'done' => 0, 'nothing_to_do' => 0, 'disabled' => 0, 'failed' => 0];
+        foreach ($qb->getQuery()->getScalarResult() as $row) {
+            $n = (int) $row['n'];
+            $counts['total'] += $n;
+            if (array_key_exists($row['status'], $counts)) {
+                $counts[$row['status']] = $n;
+            }
+        }
+
+        return $counts;
+    }
+
+    /**
+     * Pone los filtros de la pantalla sobre una consulta. Lo comparten el
+     * listado y el resumen para que no puedan contar cosas distintas.
+     *
+     * @param array<string, mixed> $filters
+     */
+    private function applyFilters(QueryBuilder $qb, array $filters): void
+    {
         if (!empty($filters['from'])) {
             $qb->andWhere('r.startedAt >= :from')->setParameter('from', $filters['from']);
         }
@@ -76,8 +124,6 @@ class CronRunRepository extends ServiceEntityRepository
         if (!empty($filters['status'])) {
             $qb->andWhere('r.status = :status')->setParameter('status', $filters['status']);
         }
-
-        return $qb;
     }
 
     /**

@@ -70,6 +70,19 @@ class SharedBasketCohortSync
             return null;
         }
 
+        // MISMA MODALIDAD O NO SE TOCA NADA. El turno y el orden del mes sólo significan
+        // lo mismo entre cestas iguales: el turno A/B es de las quincenales y el orden del
+        // mes es de las mensuales. Alinear a ciegas es lo que dejó a una socia como
+        // "quincenal sin turno" al pasar la otra a mensual — sin turno, el motor no sabe
+        // qué viernes le toca y esa persona se queda SIN ENTREGAS.
+        //
+        // Que las dos acaben con la misma modalidad es cosa de quien aplica el cambio (la
+        // ley L22 lo exige), no de este servicio: aquí se sale sin tocar, que es lo único
+        // seguro, y la batería de invariantes canta el descuadre.
+        if ($mateShare->getBasketShare()?->getId() !== $source->getBasketShare()?->getId()) {
+            return null;
+        }
+
         $sameGroup = $mateShare->getDeliveryGroup() === $source->getDeliveryGroup();
         $sameOrder = $mateShare->getDayMonthOrder() === $source->getDayMonthOrder();
         if ($sameGroup && $sameOrder) {

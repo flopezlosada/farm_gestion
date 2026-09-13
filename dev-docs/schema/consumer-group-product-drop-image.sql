@@ -1,0 +1,21 @@
+-- Retira la columna `image` de `consumer_group_product`.
+--
+-- Se declaró en julio «lista para cuando se cablee el widget de subida» y nunca
+-- se cableó: ninguna pantalla la escribía y ninguna la leía. La foto del
+-- producto pasa a guardarse como `Image` polimórfica (object_class
+-- 'consumergroupproduct' + el id), que es el mecanismo que ya usan el LAR y el
+-- blog, con su carpeta, su borrado y su webPath. Mantener las dos habría dejado
+-- una columna que parece la buena y siempre está vacía.
+--
+-- ORDEN DE DESPLIEGUE: al revés que una columna nueva. El DROP va DESPUÉS de que
+-- el código que ya no la mapea esté arriba; con la columna fuera y el código
+-- viejo todavía sirviéndose, Doctrine pediría una columna que no existe y el
+-- módulo entero daría 500.
+--
+-- No hay datos que migrar: la columna está a NULL en todas las filas (el módulo
+-- nunca ha estado encendido en producción). Comprobarlo antes, por si acaso:
+--   SELECT COUNT(*) FROM consumer_group_product WHERE image IS NOT NULL;
+--
+-- Aplicar a las TRES bases de trabajo: db, db_prod_snapshot (golden) y db_test.
+
+ALTER TABLE consumer_group_product DROP COLUMN image;

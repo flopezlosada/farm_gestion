@@ -256,11 +256,31 @@ class ConsumerGroupRound
     }
 
     /**
-     * ¿Admite apuntes de socias ahora mismo? Solo mientras está OPEN.
+     * ¿Admite apuntes de socias ahora mismo? Exige estar OPEN y que el plazo no
+     * haya vencido.
+     *
+     * LA FECHA DE CIERRE ERA DECORATIVA. La comisión escribía «cierre: viernes»,
+     * la pantalla lo enseñaba, y el domingo se seguía pudiendo apuntar gente
+     * hasta que alguien entraba a cerrar el pedido a mano. Quien llegaba tarde
+     * entraba, y quien se fiaba de la fecha para pasarle el pedido al productor
+     * se encontraba cantidades nuevas después.
+     *
+     * Sin fecha se sigue admitiendo: es un pedido al que no le han puesto plazo
+     * todavía, no uno vencido.
+     *
+     * NO ES EL CIERRE DEL PLAZO: el estado lo cambia la comisión cuando pasa el
+     * pedido al productor ({@see \App\Service\ConsumerGroup\RoundStateMachine}).
+     * Esto sólo impide apuntarse, que es lo que la fecha prometía. Por eso la
+     * comisión sigue pudiendo tocar el pedido con el plazo vencido: para eso
+     * está {@see canManageOrders()}.
      */
     public function canReceiveOrders(): bool
     {
-        return $this->status === self::STATUS_OPEN;
+        if ($this->status !== self::STATUS_OPEN) {
+            return false;
+        }
+
+        return $this->ordersCloseAt === null || $this->ordersCloseAt >= new \DateTime();
     }
 
     /**

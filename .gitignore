@@ -58,7 +58,12 @@ yarn-error.log
 /.ddev/commands/.gitattributes
 
 # User-uploaded data (binarios fuera de git, se sincronizan aparte)
-/public/uploads/
+#
+# SIN BARRA FINAL a propósito: con ella, git sólo ignora el DIRECTORIO. En un
+# worktree, `public/uploads` es un SYMLINK al del árbol principal —así se ven
+# las fotos al probar una rama— y el patrón con barra no lo tapaba: aparecía
+# como fichero nuevo y ya se coló una vez en un commit.
+/public/uploads
 
 # Documentación interna / volcados con PII (LOPD/GDPR), nunca a git
 /docs/

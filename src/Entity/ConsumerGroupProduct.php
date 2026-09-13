@@ -11,11 +11,25 @@ use Symfony\Component\Validator\Constraints as Assert;
  * ronda al añadirlo, pero el precio efectivo de cada ronda vive en
  * {@see ConsumerGroupRoundItem} porque varía de una ronda a otra.
  *
+ * LA FOTO NO ES UNA COLUMNA DE AQUÍ. Se guarda como {@see Image} polimórfica
+ * ({@see self::OBJECT_CLASS} + id), que es el mecanismo de subida que ya usa el
+ * resto del proyecto —el LAR, el blog— con su carpeta, su borrado y su
+ * `webPath`. Hubo una columna `image` de tipo string, declarada en julio «lista
+ * para cuando se cablee el widget»: nunca se cableó, nadie la escribió, y montar
+ * un segundo mecanismo de subida sólo para este módulo habría sido duplicar lo
+ * que ya funciona.
+ *
  * @ORM\Table(name="consumer_group_product")
  * @ORM\Entity(repositoryClass="App\Repository\ConsumerGroupProductRepository")
  */
 class ConsumerGroupProduct
 {
+    /**
+     * Discriminante de la media polimórfica ({@see Image::getObjectClass()}).
+     * Mismo patrón que {@see LarProject::OBJECT_CLASS}.
+     */
+    public const OBJECT_CLASS = 'consumergroupproduct';
+
     /**
      * @ORM\Id
      * @ORM\GeneratedValue
@@ -46,13 +60,6 @@ class ConsumerGroupProduct
     private string $name = '';
 
     /**
-     * Ruta de la imagen del producto (opcional). El widget de subida se cablea
-     * aparte; el campo queda listo.
-     * @ORM\Column(type="string", length=255, nullable=true)
-     */
-    private ?string $image = null;
-
-    /**
      * Unidad de venta (p. ej. "kg", "L", "docena", "caja", "ud"). Texto libre: los
      * productores no comparten catálogo de unidades.
      * @ORM\Column(type="string", length=30)
@@ -60,6 +67,20 @@ class ConsumerGroupProduct
     #[Assert\NotBlank]
     #[Assert\Length(max: 30)]
     private string $unit = '';
+
+    /**
+     * ¿Se puede pedir en MEDIAS unidades (medio kilo, media caja)?
+     *
+     * Lo decide cada producto y no el formulario, que es lo que estaba mal: con
+     * un paso decimal para todos, las flechas del campo llevaban a pedir «0,03
+     * garrafas de 5 L». Una garrafa no se parte; medio kilo de queso sí se pide.
+     *
+     * Medias y no decimales libres: lo que se vende por peso en un grupo de
+     * consumo se pide de medio en medio. Con decimales libres vuelve a colarse
+     * el 0,03, y quien lo teclee no lo verá raro hasta que llegue al productor.
+     * @ORM\Column(name="half_units", type="boolean", options={"default": false})
+     */
+    private bool $halfUnits = false;
 
     /**
      * Descripción del producto (variedad, formato, origen…), opcional.
@@ -115,17 +136,6 @@ class ConsumerGroupProduct
         return $this;
     }
 
-    public function getImage(): ?string
-    {
-        return $this->image;
-    }
-
-    public function setImage(?string $image): self
-    {
-        $this->image = $image;
-        return $this;
-    }
-
     public function getName(): string
     {
         return $this->name;
@@ -146,6 +156,29 @@ class ConsumerGroupProduct
     {
         $this->unit = $unit;
         return $this;
+    }
+
+    /**
+     * ¿Admite medias unidades? {@see $halfUnits}.
+     */
+    public function isHalfUnits(): bool
+    {
+        return $this->halfUnits;
+    }
+
+    public function setHalfUnits(bool $halfUnits): self
+    {
+        $this->halfUnits = $halfUnits;
+        return $this;
+    }
+
+    /**
+     * El salto con el que se pide este producto, para el campo del formulario y
+     * para la normalización: media unidad o unidad entera.
+     */
+    public function orderStep(): float
+    {
+        return $this->halfUnits ? 0.5 : 1.0;
     }
 
     public function getDescription(): ?string

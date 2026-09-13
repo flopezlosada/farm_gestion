@@ -75,4 +75,37 @@ class RoundItemEditorTest extends TestCase
         self::assertArrayHasKey('Descatalogado', $productos);
         self::assertSame('5.00', $productos['Descatalogado']);
     }
+
+    public function testLoDelLocalSeAjustaAlSaltoDelProducto(): void
+    {
+        $this->aceite->setHalfUnits(false);   // garrafa: entera o nada
+        $this->fruta->setHalfUnits(true);     // al peso: de medio en medio
+        $round = $this->round();
+        $this->editor->seedFromCatalog($round);
+        [$naranjas, $aceite] = array_values($round->getItems()->toArray());
+
+        $this->editor->applyAssociationQuantities([
+            ['item' => $naranjas, 'quantity' => '1,3'],
+            ['item' => $aceite, 'quantity' => '2,4'],
+        ]);
+
+        self::assertSame('1.5', $naranjas->getAssociationQuantity(), 'Al peso se redondea al medio');
+        self::assertSame('2', $aceite->getAssociationQuantity(), 'Una garrafa no se parte');
+    }
+
+    public function testLoDelLocalSeVaciaConCero(): void
+    {
+        $round = $this->round();
+        $this->editor->seedFromCatalog($round);
+        [$naranjas] = array_values($round->getItems()->toArray());
+        $naranjas->setAssociationQuantity('4');
+
+        // El campo en blanco es «ya no pido nada de esto», no «déjalo como estaba»:
+        // si no, no habría forma de quitar lo que se encargó de más.
+        $this->editor->applyAssociationQuantities([
+            ['item' => $naranjas, 'quantity' => ''],
+        ]);
+
+        self::assertSame('0', $naranjas->getAssociationQuantity());
+    }
 }

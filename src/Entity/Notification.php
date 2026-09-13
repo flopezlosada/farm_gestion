@@ -78,6 +78,16 @@ class Notification
     public const KIND_SHARED_REQUEST = 'pickup.shared_request';
 
     /**
+     * El otro hogar ha contestado a un cambio que pediste.
+     *
+     * Kind propio, y no el genérico de la cesta, por el destino: éste tiene que abrir la
+     * pantalla de la cesta compartida, donde está la respuesta y desde donde se puede
+     * volver a intentar. Con el de la cesta caía en la portada del panel, que no dice
+     * nada de esto.
+     */
+    public const KIND_SHARED_ANSWERED = 'pickup.shared_answered';
+
+    /**
      * Dos hogares han acordado un cambio de modalidad y falta aplicarlo (va a quien
      * coordina socixs).
      *

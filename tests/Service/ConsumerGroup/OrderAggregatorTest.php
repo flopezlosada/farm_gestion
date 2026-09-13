@@ -84,6 +84,49 @@ class OrderAggregatorTest extends TestCase
         self::assertEqualsWithDelta(16.0, $aceiteAgg['subtotal'], 0.001);
     }
 
+    public function testLoQueSePideParaElLocalSumaAlPedidoDelProductor(): void
+    {
+        $round = new ConsumerGroupRound();
+        $round->setProducer($this->producer);
+        $aceite = $this->item($round, $this->product('Aceite', 'garrafa de 5 L'), '40.00');
+
+        // Una socia pide 2 garrafas = 80,00
+        $a = $this->order($round);
+        $a->addLine(new ConsumerGroupOrderLine($a, $aceite, '2'));
+
+        // La comisión encarga 3 más para el local = 120,00
+        $aceite->setAssociationQuantity('3');
+
+        $result = (new OrderAggregator())->aggregate($round);
+
+        [$linea] = $result['byItem'];
+        self::assertEqualsWithDelta(2.0, $linea['quantity'], 0.001, 'Lo de las socias se ve aparte');
+        self::assertEqualsWithDelta(3.0, $linea['associationQuantity'], 0.001);
+        self::assertEqualsWithDelta(5.0, $linea['totalQuantity'], 0.001, 'Al productor se le piden las cinco');
+        self::assertEqualsWithDelta(200.0, $linea['subtotal'], 0.001);
+        self::assertEqualsWithDelta(200.0, $result['total'], 0.001);
+
+        // Lo del local no es de nadie: no añade participantes.
+        self::assertSame(1, $result['participantCount']);
+    }
+
+    public function testUnPedidoSoloParaElLocalNoTieneParticipantes(): void
+    {
+        // El caso de completar el mínimo del productor cuando no se ha apuntado
+        // nadie: hay pedido que hacer, pero no hay ninguna socia detrás.
+        $round = new ConsumerGroupRound();
+        $round->setProducer($this->producer);
+        $this->item($round, $this->product('Naranjas', 'caja de 10 kg'), '12.00')
+            ->setAssociationQuantity('2');
+
+        $result = (new OrderAggregator())->aggregate($round);
+
+        self::assertSame(0, $result['participantCount']);
+        self::assertEqualsWithDelta(24.0, $result['total'], 0.001);
+        self::assertEqualsWithDelta(0.0, $result['byItem'][0]['quantity'], 0.001);
+        self::assertEqualsWithDelta(2.0, $result['byItem'][0]['totalQuantity'], 0.001);
+    }
+
     public function testItemSinPedidosApareceConCero(): void
     {
         $round = new ConsumerGroupRound();

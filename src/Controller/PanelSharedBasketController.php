@@ -7,6 +7,7 @@ use App\Entity\Partner;
 use App\Entity\SharedBasketChangeRequest;
 use App\Repository\BasketRepository;
 use App\Repository\BasketShareRepository;
+use App\Repository\PartnerBasketShareRepository;
 use App\Repository\SharedBasketChangeRequestRepository;
 use App\Repository\WeeklyBasketGroupRepository;
 use App\Service\Delivery\SharedBasketChangeMediator;
@@ -50,6 +51,7 @@ class PanelSharedBasketController extends AbstractController
         SharedBasketChangeRequestRepository $requests,
         SharedPairDeliveryEditor $editor,
         BasketShareRepository $modalities,
+        PartnerBasketShareRepository $shares,
     ): Response {
         $partner = $this->partner();
         if (null === $partner) {
@@ -66,13 +68,42 @@ class PanelSharedBasketController extends AbstractController
             return $this->redirectToRoute('panel');
         }
 
+        // LA ÚLTIMA CESTA CONTRATADA, NO LA QUE SE RECOGE HOY. Un cambio de modalidad
+        // entra en vigor a principio de mes, así que entre que administración lo aplica y
+        // que empieza pasan semanas. Preguntando por la de hoy, el acuerdo seguía
+        // saliendo como "en manos de administración" todo ese tiempo —con el cambio ya
+        // hecho— y de paso les impedía pedir ninguna otra cosa. Es el mismo finder que
+        // usa el cambio de modalidad para saber qué cesta sustituye.
+        $latest = $shares->findLatestActiveForPartner($partner);
+        $current = $latest?->getBasketShare()?->getId();
+
+        // Cesta ya contratada que aún no ha empezado: es lo que hay que poder leer cuando
+        // el cartel de "falta aplicarlo" desaparece. Sin esto, quien entra a ver en qué
+        // quedó aquello no encuentra nada.
+        $startsOn = $latest?->getStartDate();
+        $upcoming = $startsOn instanceof \DateTimeInterface && $startsOn > new \DateTime('today')
+            ? $latest
+            : null;
+
         return $this->render('Panel/shared_basket.html.twig', [
             'other' => $other,
+            'upcoming' => $upcoming,
             'incoming' => $requests->findPendingFor($partner),
             'outgoing' => $requests->findPendingFrom($partner),
+            // Lo contestado en las últimas semanas: es donde aterriza quien abre el aviso
+            // de "no puedo con ese cambio". Sin esto llegaría a una pantalla vacía.
+            'decided' => $requests->findDecidedBetween($partner, $other, new \DateTimeImmutable('-30 days')),
+            // Acuerdos de modalidad que administración aún no ha aplicado: siguen VIVOS, así
+            // que ni son historia ni dejan proponer otra cosa encima.
+            'agreed' => $requests->findAgreedModalityPending($partner, $other, $current),
             // Sólo modalidades COMPARTIDAS: una pareja que se pasa a cesta entera deja
             // de ser pareja, y eso no es un cambio de modalidad sino otra conversación.
-            'modalities' => $modalities->findBy(['id' => BasketShare::IDS_SHARED], ['id' => 'ASC']),
+            // Y sin la que YA tienen: proponer la de siempre no es un cambio, y quien la
+            // eligiera se llevaría un "acuerdo" que no mueve nada.
+            'modalities' => array_values(array_filter(
+                $modalities->findBy(['id' => BasketShare::IDS_SHARED], ['id' => 'ASC']),
+                static fn (BasketShare $modality): bool => $modality->getId() !== $current,
+            )),
         ]);
     }
 

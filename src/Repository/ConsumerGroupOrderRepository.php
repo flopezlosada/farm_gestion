@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupRound;
+use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\Producer;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -53,6 +54,48 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
             ->setParameter('cancelled', \App\Entity\ConsumerGroupRound::STATUS_CANCELLED)
             ->setParameter('from', $from->format('Y-m-d'))
             ->orderBy('r.deliveryDate', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Pedidos que hay que entregar en un NODO dentro de un rango de fechas, para
+     * que quien reparte sepa qué bultos saca además de las cestas.
+     *
+     * Mismo filtro de entregabilidad que {@see findDeliverableUpcomingForPartner()}
+     * —confirmado, no cancelado y PAGADO—, y por el mismo motivo: la hoja tiene
+     * que llevar exactamente lo que se le ha prometido a la socia en su
+     * calendario. Dos reglas distintas serían un pedido que aparece en un sitio y
+     * no en el otro.
+     *
+     * EL NODO SALE DEL GRUPO DE RECOGIDA HABITUAL de la socia. Un traslado
+     * puntual de esa semana mueve la cesta pero no esto: el pedido lo lleva la
+     * comisión al punto de siempre.
+     *
+     * @param Node               $node el punto de recogida
+     * @param \DateTimeInterface $from principio del rango (incluido)
+     * @param \DateTimeInterface $to   final del rango (incluido)
+     *
+     * @return ConsumerGroupOrder[] ordenados por socia
+     */
+    public function findDeliverableForNodeBetween(Node $node, \DateTimeInterface $from, \DateTimeInterface $to): array
+    {
+        return $this->createQueryBuilder('o')
+            ->addSelect('r', 'p')
+            ->innerJoin('o.round', 'r')
+            ->innerJoin('o.partner', 'p')
+            ->innerJoin('p.weekly_basket_group', 'g')
+            ->where('g.node = :node')
+            ->andWhere('r.confirmed = true')
+            ->andWhere('r.status != :cancelled')
+            ->andWhere('o.paid = true')
+            ->andWhere('r.deliveryDate BETWEEN :from AND :to')
+            ->setParameter('node', $node)
+            ->setParameter('cancelled', ConsumerGroupRound::STATUS_CANCELLED)
+            ->setParameter('from', $from->format('Y-m-d'))
+            ->setParameter('to', $to->format('Y-m-d'))
+            ->orderBy('p.name', 'ASC')
+            ->addOrderBy('p.surname', 'ASC')
             ->getQuery()
             ->getResult();
     }

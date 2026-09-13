@@ -1,0 +1,33 @@
+{# Administración ha aplicado el cambio de modalidad de una cesta compartida. Va a
+ # los DOS hogares: la cesta es una y la modalidad cambia para los dos a la vez.
+ # Contexto: name, modality_name, effective_date. #}
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Vuestra cesta compartida cambia de modalidad · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 580px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Hola {{ name }},</h2>
+
+    <p>Ya está hecho: administración ha aplicado el cambio de modalidad que acordasteis.</p>
+
+    <p style="background: #eef5e8; border-left: 3px solid #5a8f3d; padding: 10px 14px;">
+        Vuestra cesta pasa a <strong>{{ modality_name }}</strong>
+        a partir del <strong>{{ effective_date|format_date('full', locale='es') }}</strong>.
+    </p>
+
+    <p>Hasta esa fecha la recogéis como siempre. Después cambia para los dos hogares
+       a la vez, porque la cesta es una.</p>
+
+    <p>No tienes que hacer nada más. Si esto no es lo que esperabas, avisa a administración.</p>
+
+    <p style="margin-top: 32px; color: #777; font-size: 13px;">
+        Un abrazo,<br>
+        CSA Vega de Jarama<br>
+        <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+</body>
+</html>

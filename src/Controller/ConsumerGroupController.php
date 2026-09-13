@@ -137,13 +137,17 @@ class ConsumerGroupController extends AbstractController
 
     /**
      * Editar la cabecera del pedido (no el productor: sus productos cuelgan de ese
-     * catálogo). Solo mientras está abierto.
+     * catálogo).
+     *
+     * Mientras la comisión pueda gestionarlo, y no sólo mientras admita apuntes:
+     * pasado el plazo, ajustar la fecha de entrega o la nota al productor sigue
+     * haciendo falta —de hecho es justo entonces cuando se habla con él—.
      */
     #[Route('/{id}/edit', name: 'consumer_group_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     public function edit(Request $request, ConsumerGroupRound $round, EntityManagerInterface $em): Response
     {
-        if (!$round->canReceiveOrders()) {
-            $this->addFlash('warning', 'Sólo se pueden editar pedidos abiertos.');
+        if (!$round->canManageOrders()) {
+            $this->addFlash('warning', 'Este pedido ya no se puede editar.');
 
             return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
         }
@@ -166,13 +170,13 @@ class ConsumerGroupController extends AbstractController
 
     /**
      * Productos del pedido: elegir qué productos del catálogo del productor entran
-     * y a qué precio de pedido. Solo mientras está abierto.
+     * y a qué precio de pedido. Mientras la comisión pueda gestionarlo.
      */
     #[Route('/{id}/items', name: 'consumer_group_items', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     public function items(Request $request, ConsumerGroupRound $round, RoundItemEditor $itemEditor, EntityManagerInterface $em): Response
     {
-        if (!$round->canReceiveOrders()) {
-            $this->addFlash('warning', 'Sólo se pueden cambiar los productos de un pedido abierto.');
+        if (!$round->canManageOrders()) {
+            $this->addFlash('warning', 'Este pedido ya no admite cambios en sus productos.');
 
             return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
         }
@@ -230,6 +234,39 @@ class ConsumerGroupController extends AbstractController
             'current_price' => $currentPrice,
             'included'      => $included,
         ]);
+    }
+
+    /**
+     * Guarda lo que la asociación encarga para el local, que se suma al pedido del
+     * productor sin pertenecer a ninguna socia.
+     *
+     * Se edita desde la propia pantalla del pedido, junto al agregado: es ahí donde
+     * la comisión ve lo que llevan pedido las socias y decide si completa. Mientras
+     * pueda gestionar el pedido, y no sólo mientras admita apuntes: lo del local
+     * suele decidirse con el plazo ya vencido, al hablar con el productor.
+     */
+    #[Route('/{id}/association-order', name: 'consumer_group_association_order', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function associationOrder(Request $request, ConsumerGroupRound $round, RoundItemEditor $itemEditor, EntityManagerInterface $em): Response
+    {
+        if (!$this->isCsrfTokenValid('consumer_group_association_order_'.$round->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
+        }
+
+        if (!$round->canManageOrders()) {
+            $this->addFlash('warning', 'Este pedido ya no admite cambios.');
+
+            return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
+        }
+
+        // TAL CUAL llegan: las cantidades las normaliza RoundItemEditor, igual que
+        // las de las socias, para que el local pida los mismos bultos que ellas.
+        $itemEditor->applyAssociationQuantities($this->desiredFrom($request, $round, 'association'));
+        $em->flush();
+        $this->addFlash('success', 'Guardado lo que se pide para el local.');
+
+        return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
     }
 
     /**
@@ -488,17 +525,22 @@ class ConsumerGroupController extends AbstractController
     }
 
     /**
-     * Construye las cantidades deseadas (item de pedido => cantidad normalizada) a
-     * partir del POST `quantity[<roundItemId>]`. Compartido por apuntar/editar.
+     * Construye las cantidades deseadas (item de pedido => cantidad en crudo) a
+     * partir de un POST `<campo>[<roundItemId>]`. Compartido por apuntar y editar
+     * el pedido de una socia (`quantity`) y por lo que se pide para el local
+     * (`association`): el casado con los productos del pedido es el mismo.
      *
-     * @return array<array{item: \App\Entity\ConsumerGroupRoundItem, quantity: string}>
+     * @return array<array{item: \App\Entity\ConsumerGroupRoundItem, quantity: mixed}>
      */
-    private function desiredFrom(Request $request, ConsumerGroupRound $round): array
+    private function desiredFrom(Request $request, ConsumerGroupRound $round, string $field = 'quantity'): array
     {
-        $raw = $request->request->all('quantity');
+        // TAL CUAL llegan: las cantidades las normaliza el servicio que las guarda.
+        // Antes pasaban por normalizeDecimal, que es el normalizador de los PRECIOS
+        // —donde los decimales sí valen—, y por eso se podían colar «0,03 garrafas».
+        $raw = $request->request->all($field);
         $desired = [];
         foreach ($round->getItems() as $item) {
-            $desired[] = ['item' => $item, 'quantity' => $this->normalizeDecimal($raw[$item->getId()] ?? '0')];
+            $desired[] = ['item' => $item, 'quantity' => $raw[$item->getId()] ?? '0'];
         }
 
         return $desired;
@@ -529,6 +571,10 @@ class ConsumerGroupController extends AbstractController
     /**
      * Export CSV del pedido AGREGADO al productor: una fila por producto con la
      * cantidad total pedida y el subtotal.
+     *
+     * La cantidad es la TOTAL —lo de las socias más lo que la asociación encarga
+     * para el local—, sin desglosar: al productor le da igual de quién es cada
+     * caja, y el reparto interno no es asunto suyo.
      */
     #[Route('/{id}/export', name: 'consumer_group_export', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function export(ConsumerGroupRound $round, OrderAggregator $aggregator): StreamedResponse
@@ -544,7 +590,7 @@ class ConsumerGroupController extends AbstractController
                 fputcsv($out, [
                     $item->getName(),
                     $item->getUnit(),
-                    number_format($line['quantity'], 2, ',', ''),
+                    number_format($line['totalQuantity'], 2, ',', ''),
                     number_format((float) $item->getPrice(), 2, ',', ''),
                     number_format($line['subtotal'], 2, ',', ''),
                 ]);
@@ -561,7 +607,11 @@ class ConsumerGroupController extends AbstractController
     }
 
     /**
-     * Normaliza un decimal enviado (coma → punto, vacío/negativo/no numérico → "0").
+     * Normaliza un PRECIO enviado (coma → punto, vacío/negativo/no numérico → "0").
+     *
+     * Sólo precios: aquí los decimales son lo normal (42,50 € la garrafa). Las
+     * CANTIDADES no pasan por aquí —se piden en unidades enteras— y las normaliza
+     * {@see \App\Service\ConsumerGroup\OrderEditor}.
      */
     private function normalizeDecimal(mixed $value): string
     {

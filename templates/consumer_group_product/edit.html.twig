@@ -19,4 +19,42 @@
         submit_label: 'Guardar cambios',
         cancel_url: path('consumer_group_producer_show', { id: product.producer.id })
     } %}
+
+    {# La foto va en su propio formulario y no dentro del de arriba: es una subida
+     # de fichero que se guarda sola, y mezclarla obligaría a volver a enviar toda
+     # la ficha para cambiar una imagen. #}
+    <div class="csa-card csa-form-narrow cg-photo">
+        <h2 class="cg-photo__title">Foto</h2>
+        <p class="csa-muted cg-photo__help">
+            La ve la socia al apuntarse. Una sola por producto: si subes otra, sustituye a la anterior.
+        </p>
+
+        {% if photo %}
+            <figure class="cg-photo__figure">
+                <img src="{{ asset(photo.webPath) }}" alt="{{ photo.title }}">
+            </figure>
+            <form method="post" action="{{ path('consumer_group_product_photo_delete', { id: product.id }) }}"
+                  onsubmit="return confirm('¿Quitar la foto de este producto?');" style="margin-bottom: var(--csa-sp-3);">
+                <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_product_photo_' ~ product.id) }}">
+                <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm">Quitar la foto</button>
+            </form>
+        {% endif %}
+
+        {{ form_start(photo_form) }}
+            {{ form_row(photo_form.file) }}
+            {{ form_row(photo_form.title) }}
+            <button type="submit" class="csa-btn csa-btn--primary">{{ photo ? 'Cambiar la foto' : 'Subir la foto' }}</button>
+        {{ form_end(photo_form) }}
+    </div>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    <style>
+        .cg-photo { margin-top: var(--csa-sp-5); }
+        .cg-photo__title { font-size: 1.05rem; margin: 0 0 var(--csa-sp-1); }
+        .cg-photo__help { margin-top: 0; }
+        .cg-photo__figure { margin: 0 0 var(--csa-sp-3); }
+        .cg-photo__figure img { max-width: 260px; width: 100%; height: auto; border-radius: 10px; display: block; }
+    </style>
 {% endblock %}

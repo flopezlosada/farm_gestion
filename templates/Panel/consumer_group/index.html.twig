@@ -50,14 +50,24 @@
                                 </div>
                             </div>
                             <div class="cg-round-card__cta">
-                                {% if mine and not mine.empty %}
+                                {# El plazo vencido NO saca el pedido de la lista: quien se
+                                 # apuntó tiene que poder seguir viendo lo que pidió. Lo que
+                                 # desaparece es la invitación a apuntarse, que ya no lleva a
+                                 # ninguna parte. #}
+                                {% if not round.canReceiveOrders %}
+                                    <span class="prl-chip prl-chip--pausado"><span class="dot"></span>Plazo cerrado</span>
+                                {% elseif mine and not mine.empty %}
                                     <span class="prl-chip prl-chip--activo"><span class="dot"></span>Ya apuntada</span>
-                                    {# Lo que lleva pedido, en la propia tarjeta: es el dato por
-                                     # el que se entra a mirar, y así no hay que abrir la ficha
-                                     # para recordarlo. #}
-                                    <div class="cg-round-card__amount">{{ mine.total|number_format(2, ',', '.') }} €</div>
                                 {% else %}
                                     <span class="csa-btn csa-btn--primary csa-btn--sm">Apuntarme</span>
+                                {% endif %}
+
+                                {# Lo que lleva pedido, en la propia tarjeta: es el dato por el
+                                 # que se entra a mirar, y así no hay que abrir la ficha para
+                                 # recordarlo. Va fuera del if para que no se pierda cuando el
+                                 # plazo se cierra, que es justo cuando se comprueba. #}
+                                {% if mine and not mine.empty %}
+                                    <div class="cg-round-card__amount">{{ mine.total|number_format(2, ',', '.') }} €</div>
                                 {% endif %}
                             </div>
                         </a>

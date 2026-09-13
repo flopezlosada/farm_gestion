@@ -144,9 +144,15 @@ final class DeliveryCalendarViewBuilder
                     ->getQuery()
                     ->getResult();
 
-                // Ocupado = día con entrega real (un hueco por día).
+                // Ocupado = día con entrega real (un hueco por día). Se mira en $gridSlots
+                // (mes actual + vecinos) y NO sólo en $slots, por lo mismo que ya hacían los
+                // huevos aquí abajo: la rejilla dibuja días del mes siguiente y los destinos
+                // llegan hasta ahí, así que un día de ese mes en el que YA se recoge tiene que
+                // quedar fuera. Con $slots se ofrecía —el 2 de octubre desde septiembre, por
+                // ejemplo— y el endpoint lo rechazaba con "ya tiene una entrega ese día": un
+                // botón que sólo servía para llevarse un error.
                 $occupied = [];
-                foreach ($slots as $s) {
+                foreach ($gridSlots as $s) {
                     if (!empty($s['items'])) {
                         $occupied[$s['basket']->getId()] = true;
                     }

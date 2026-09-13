@@ -9,6 +9,7 @@
  #   - quantities    array item_id => cantidad ya pedida
  #   - can_order     bool (¿el pedido admite pedidos?)
  #   - repeatable    array item_id => cantidad del último pedido a este productor
+ #   - photos        array product_id => Image (la foto del producto, si tiene)
  #   - payment_info  texto de configuración: dónde transferir ('' = no hay)
  # ============================================================ #}
 
@@ -74,19 +75,51 @@
 
                         <div class="cg-order-form">
                             {% for item in round.items %}
+                                {% set foto = item.product ? photos[item.product.id]|default(null) : null %}
                                 <div class="cg-order-line">
+                                    {# La foto, cuando la hay, delante del nombre: una lista de
+                                     # texto se lee como un albarán; con la imagen del bote se
+                                     # reconoce lo que se está pidiendo. #}
+                                    {% if foto %}
+                                        <img class="cg-order-line__photo" src="{{ asset(foto.webPath) }}" alt="">
+                                    {% endif %}
                                     <label class="cg-order-line__label" for="cg-qty-{{ item.id }}">
                                         {{ item.name }}
                                         <span class="csa-muted">· {{ item.price|number_format(2, ',', '.') }} € / {{ item.unit }}</span>
+                                        {% if item.product and item.product.description %}
+                                            <span class="cg-order-line__desc">{{ item.product.description }}</span>
+                                        {% endif %}
                                     </label>
-                                    <input type="number" min="0" step="0.01" inputmode="decimal"
+                                    {# EL SALTO LO DICE EL PRODUCTO, no el formulario. Lo que viene
+                                     # en formato cerrado se pide entero —una garrafa de 5 L no se
+                                     # parte—, y lo que se vende por peso, de medio en medio. Con
+                                     # un paso decimal para todos, las flechas llevaban a pedir
+                                     # «0,03 garrafas», que no quiere decir nada y llegaba así al
+                                     # pedido del productor. #}
+                                    {% set medios = item.product and item.product.halfUnits %}
+                                    <input type="number" min="0"
+                                           step="{{ medios ? '0.5' : '1' }}"
+                                           inputmode="{{ medios ? 'decimal' : 'numeric' }}"
                                            id="cg-qty-{{ item.id }}"
                                            name="quantity[{{ item.id }}]"
-                                           value="{{ quantities[item.id]|default('') }}"
+                                           {# `+ 0` y no number_format(0): lo guardado es «2.00» o
+                                            # «2.50», y number_format redondearía el medio kilo a
+                                            # 1 kg. Sumar cero lo pasa a número y se imprime «2» o
+                                            # «2.5», con el punto que espera un campo numérico.
+                                            # Vacío sigue vacío, para que se vea el placeholder. #}
+                                           value="{{ quantities[item.id] is defined ? quantities[item.id] + 0 : '' }}"
                                            class="csa-input cg-order-line__qty"
                                            placeholder="0"
                                            data-cg-price="{{ item.price }}">
-                                    <span class="cg-order-line__unit">{{ item.unit }}</span>
+                                    {# Aquí iba la unidad OTRA VEZ —ya está en la etiqueta, al lado
+                                     # del precio, que es donde se entiende—. En su lugar, lo que
+                                     # no se sabía: cuánto suma esta línea. #}
+                                    {# Ya calculado desde el servidor, como el total: el JavaScript
+                                     # sólo lo va actualizando. #}
+                                    <span class="cg-order-line__sub" data-cg-sub>
+                                        {%- set pedido = quantities[item.id]|default(0) -%}
+                                        {%- if pedido > 0 %}{{ (pedido * item.price)|number_format(2, ',', '.') }} €{% endif -%}
+                                    </span>
                                 </div>
                             {% endfor %}
                         </div>
@@ -112,11 +145,24 @@
                 {% endif %}
             </div>
         {% else %}
-            {# Pedido no abierto: resumen del pedido y estado. #}
+            {# Pedido que ya no admite apuntes: resumen del pedido y estado.
+             #
+             # Con el plazo vencido el ESTADO sigue siendo «Abierto» —lo cierra la
+             # comisión cuando pasa el pedido al productor—, así que pintar aquí la
+             # etiqueta del estado diría «Abierto» justo encima de «ya no admite
+             # cambios». Lo que le ha pasado a la socia es que se le pasó el plazo, y
+             # eso es lo que se le cuenta. #}
+            {% set plazo_vencido = round.status == 0 %}
             <div class="csa-card">
-                <span class="prl-chip prl-chip--pausado"><span class="dot"></span>{{ round.statusLabel }}</span>
+                <span class="prl-chip prl-chip--pausado"><span class="dot"></span>{{ plazo_vencido ? 'Plazo cerrado' : round.statusLabel }}</span>
                 <p class="csa-muted">
-                    Este pedido ya no admite cambios. Entrega prevista el
+                    {% if plazo_vencido %}
+                        El plazo para apuntarse terminó
+                        {% if round.ordersCloseAt %}el <b>{{ round.ordersCloseAt|date('d/m/Y H:i') }}</b>{% endif %}.
+                    {% else %}
+                        Este pedido ya no admite cambios.
+                    {% endif %}
+                    Entrega prevista el
                     <b>{{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}</b>.
                 </p>
 
@@ -155,8 +201,10 @@
         .cg-order-form { display: flex; flex-direction: column; gap: var(--csa-sp-3); }
         .cg-order-line { display: flex; align-items: center; gap: var(--csa-sp-3); }
         .cg-order-line__label { flex: 1; }
-        .cg-order-line__qty { flex: 0 0 7rem; }
-        .cg-order-line__unit { flex: 0 0 4rem; color: var(--csa-muted); }
+        .cg-order-line__photo { flex: 0 0 56px; width: 56px; height: 56px; object-fit: cover; border-radius: 8px; }
+        .cg-order-line__desc { display: block; font-size: .85rem; color: var(--csa-muted); }
+        .cg-order-line__qty { flex: 0 0 6rem; }
+        .cg-order-line__sub { flex: 0 0 5.5rem; text-align: right; font-weight: 600; }
         .cg-order-summary { margin: 0; padding-left: var(--csa-sp-4); }
         .cg-order-total { display: flex; justify-content: space-between; align-items: baseline;
             gap: var(--csa-sp-3); margin-top: var(--csa-sp-4); padding-top: var(--csa-sp-3);
@@ -175,19 +223,35 @@
             var out = form.querySelector('[data-cg-total]');
             var inputs = form.querySelectorAll('[data-cg-price]');
 
-            /* Suma lo apuntado. Acepta la coma decimal, que es como se escribe aquí
-               (el input numérico del móvil ofrece coma en español). */
+            /* Formatea un importe en euros. */
+            function euros(n) {
+                return n.toLocaleString('es-ES', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                }) + ' €';
+            }
+
+            /* Suma lo apuntado y, de paso, escribe lo que suma cada línea. Acepta
+               la coma decimal por si alguien la teclea, aunque el campo pida
+               unidades enteras. */
             function render() {
                 var total = 0;
                 inputs.forEach(function (input) {
                     var qty = parseFloat(String(input.value).replace(',', '.'));
                     var price = parseFloat(input.getAttribute('data-cg-price'));
-                    if (!isNaN(qty) && qty > 0 && !isNaN(price)) { total += qty * price; }
+                    var sub = input.parentElement.querySelector('[data-cg-sub]');
+                    var line = 0;
+
+                    if (!isNaN(qty) && qty > 0 && !isNaN(price)) {
+                        line = qty * price;
+                        total += line;
+                    }
+
+                    /* Vacío cuando no se ha pedido nada: una columna de «0,00 €»
+                       repetidos es ruido, y lo que importa es lo que sí llevas. */
+                    if (sub) { sub.textContent = line > 0 ? euros(line) : ''; }
                 });
-                out.textContent = total.toLocaleString('es-ES', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2
-                }) + ' €';
+                out.textContent = euros(total);
             }
 
             form.addEventListener('input', render);
