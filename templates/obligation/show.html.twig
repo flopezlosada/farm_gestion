@@ -41,6 +41,19 @@
         .obl-renew { background: var(--csa-surface-2, #f7f7f5); padding: 18px 20px; border-radius: 10px; }
         .obl-missing { color: var(--csa-text-muted, #6b7280); font-weight: 400; }
         .obl-actions-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+        /* Acción secundaria dentro de un dato: un botón con aspecto de botón
+           pesaría más que el propio dato. */
+        .obl-linkish { background: none; border: 0; padding: 0 0 0 10px; font: inherit;
+                       font-weight: 400; color: var(--csa-text-muted, #6b7280);
+                       text-decoration: underline; cursor: pointer; }
+        .obl-linkish:hover { color: #b42318; }
+        /* Subida por fila del historial. Va dentro de un <details> para que la
+           tabla no se llene de campos de fichero abiertos: se despliega sólo
+           la fila en la que se está trabajando, y sin una línea de JavaScript. */
+        .obl-upload { display: inline-block; margin-left: 10px; font-weight: 400; }
+        .obl-upload > summary { cursor: pointer; color: var(--csa-text-muted, #6b7280); font-size: 13px; }
+        .obl-upload > form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+        .obl-upload input[type="file"] { max-width: 230px; font-size: 12px; }
     </style>
 {% endblock %}
 
@@ -100,17 +113,30 @@
                 </div>
             </div>
         {% endif %}
-        {# El documento se pinta SIEMPRE, tenga enlace o no. Ocultarlo cuando
+        {# El documento se pinta SIEMPRE, esté subido o no. Ocultarlo cuando
          # falta deja la ficha diciendo que no existe tal cosa, cuando lo que
-         # pasa es que nadie ha pegado el enlace todavía — y eso es justo lo que
-         # hay que ver para arreglarlo. #}
+         # pasa es que nadie lo ha subido todavía — y eso es justo lo que hay
+         # que ver para arreglarlo. #}
         <div class="obl-field">
             <div class="obl-field__label">Documento</div>
             <div class="obl-field__value">
-                {% if obligation.documentUrl %}
-                    <a href="{{ obligation.documentUrl }}" target="_blank" rel="noopener">Abrir <i class="fa fa-external-link"></i></a>
+                {% if obligation.documentFile %}
+                    <a href="{{ path('obligation_document', { id: obligation.id }) }}" target="_blank" rel="noopener">Abrir <i class="fa fa-file-text-o"></i></a>
+                    {% if is_granted('ROLE_GESTION_VENCIMIENTOS_EDIT') %}
+                        <button type="button" class="obl-linkish" onclick="document.getElementById('dlg-obl-doc').showModal()">Quitar</button>
+                        {{ csa.confirm_dialog('dlg-obl-doc', {
+                            variant: 'danger',
+                            eyebrow: 'Acción permanente',
+                            title: 'Quitar el documento de «' ~ obligation.name ~ '»',
+                            body: 'Se borra del archivo de la web y no se puede recuperar desde aquí. Los documentos de cada periodo del historial no se tocan.',
+                            confirm_label: 'Quitar',
+                            action: path('obligation_document_delete', { id: obligation.id }),
+                            csrf_token: csrf_token('obligation_document_delete' ~ obligation.id),
+                            csrf_name: '_token',
+                        }) }}
+                    {% endif %}
                 {% else %}
-                    <span class="obl-missing">— sin enlace —</span>
+                    <span class="obl-missing">— sin subir —</span>
                 {% endif %}
             </div>
         </div>
@@ -156,7 +182,7 @@
                 <div class="csa-form-grid">
                     {{ csa.field(renewal_form.startsOn, 'Vigente desde') }}
                     {{ csa.field(renewal_form.endsOn, 'Caduca el') }}
-                    {{ csa.field(renewal_form.documentUrl, 'Documento firmado', { full: true }) }}
+                    {{ csa.field(renewal_form.document, 'Documento firmado', { full: true, hint: 'Si aún no lo tienes escaneado, se puede subir luego desde el historial' }) }}
                     {{ csa.field(renewal_form.notes, 'Apunte', { full: true }) }}
                 </div>
                 <div class="csa-row" style="justify-content: flex-end; margin-top: var(--csa-sp-4);">
@@ -193,10 +219,25 @@
                                 {% endif %}
                             </td>
                             <td class="tight">
-                                {% if term.documentUrl %}
-                                    <a href="{{ term.documentUrl }}" target="_blank" rel="noopener">Abrir <i class="fa fa-external-link"></i></a>
+                                {% if term.documentFile %}
+                                    <a href="{{ path('obligation_term_document', { id: obligation.id, termId: term.id }) }}" target="_blank" rel="noopener">Abrir <i class="fa fa-file-text-o"></i></a>
                                 {% else %}
                                     <span class="obl-missing">—</span>
+                                {% endif %}
+                                {# El papel casi nunca está a mano el día que se anota la fecha:
+                                 # se anota lo que se sabe y el escaneado llega después. Sin esto,
+                                 # archivarlo obligaría a borrar el periodo y rehacerlo. #}
+                                {% if is_granted('ROLE_GESTION_VENCIMIENTOS_EDIT') %}
+                                    <details class="obl-upload">
+                                        <summary>{{ term.documentFile ? 'Sustituir' : 'Subir' }}</summary>
+                                        <form method="post" enctype="multipart/form-data" action="{{ path('obligation_term_document_upload', { id: obligation.id, termId: term.id }) }}">
+                                            <input type="hidden" name="_token" value="{{ csrf_token('obligation_term_document' ~ term.id) }}">
+                                            {# accept sale de la misma lista que valida el servidor. #}
+                                            <input type="file" name="document" required
+                                                   accept="{{ constant('App\\Service\\Obligation\\ObligationDocumentStore::MIME_TYPES')|join(',') }}">
+                                            <button type="submit" class="prl-btn prl-btn--sm">Guardar</button>
+                                        </form>
+                                    </details>
                                 {% endif %}
                             </td>
                             <td>{{ term.notes ?: '' }}</td>

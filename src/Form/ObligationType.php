@@ -11,7 +11,6 @@ use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
-use Symfony\Component\Form\Extension\Core\Type\UrlType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints\NotNull;
@@ -71,11 +70,9 @@ class ObligationType extends AbstractType
                 'attr' => ['min' => 1, 'max' => 1095],
                 'help' => 'Sólo si el documento lo exige. Los dos arrendamientos de fincas obligan a comunicar la no renovación con un año (365); la cesión de La Cerrada, con un mes (30). Déjalo vacío si no hay ninguna cláusula así: los avisos normales salen igual.',
             ])
-            ->add('documentUrl', UrlType::class, [
-                'label' => 'Dónde está el documento',
-                'required' => false,
-                'default_protocol' => 'https',
-                'help' => 'Enlace a la carpeta del Dropbox o a la sede electrónica. No se sube el fichero: el archivo ya existe y dos copias significan que una está vieja.',
+            ->add('document', ObligationDocumentType::class, [
+                'label' => 'El documento',
+                'help' => 'El papel vigente: el convenio firmado, la póliza, el justificante de la inscripción. Se guarda en la web, no en el Dropbox, y sólo lo puede abrir quien tenga permiso de Vencimientos.',
             ])
             ->add('notes', TextareaType::class, [
                 'label' => 'Qué hay que saber para renovarlo',

@@ -23,6 +23,7 @@ desplegar, hacer una copia, o algo se rompe y hay que arreglarlo rápido.
 | Código en el servidor | Carpeta `gestion_csa_4/` del FTP |
 | Acceso al servidor | **Solo FTP** (no hay SSH) |
 | Base de datos de producción | MySQL del hosting · se administra por **phpMyAdmin** |
+| Documentos de vencimientos | `gestion_csa_4/var/documentos/` del FTP · **NO son cache: son el archivo** |
 | Despliegue | GitHub Actions → workflow **"Deploy a producción"** (`deploy.yml`), **manual** |
 | Credenciales FTP del deploy | GitHub → *Settings → Secrets*: `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD` |
 
@@ -138,6 +139,14 @@ exporta la base completa a `.sql` antes de cualquier cambio de riesgo.
 **TODO (Paco):** documentar aquí los pasos exactos del panel y si hay copias
 automáticas.
 
+### Documentos subidos (convenios, pólizas) — HOY NO HAY COPIA
+Los documentos de vencimientos se guardan en `var/documentos/` del servidor, y
+**no los cubre nada**: no viajan en el deploy (que sólo sube lo que está en el
+repo) ni salen en el volcado de la base, que únicamente guarda el nombre del
+fichero. Mientras el archivo de verdad siga siendo el Dropbox, esto es una copia
+y no pasa nada. **Antes de retirar un documento del Dropbox hay que resolver el
+respaldo del servidor**, o esa copia pasa a ser la única.
+
 ### Local (golden) — NO es backup de producción
 `bin/db-backup` vuelca el **golden local** (`db_prod_snapshot`, la fuente de
 verdad de trabajo) a `~/csa-backups/` fuera del repo. Llévalo SIEMPRE tras tocar
@@ -153,6 +162,9 @@ repo ni a sitios externos.
   `~/csa-backups/`.
 - **Backup de BBDD de producción antes de cualquier deploy con cambios de datos/esquema.**
 - **Nunca `doctrine:schema:update --force` contra producción** (§4).
+- **`var/documentos/` no se borra nunca.** Está dentro de `var/`, pero no es
+  cache: son los convenios y las pólizas. Al limpiar caché, borra
+  `var/cache/prod`, nada más.
 - **Tras tocar el golden local, `bin/db-backup`.**
 - **Credenciales:** en el servidor, `config`/`.env` con credenciales de BBDD
   viven en archivo plano legible (deuda #17). Mitigación pendiente: `chmod 600`
