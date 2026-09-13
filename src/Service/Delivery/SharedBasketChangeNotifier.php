@@ -3,6 +3,7 @@
 namespace App\Service\Delivery;
 
 use App\Entity\Basket;
+use App\Entity\BasketShare;
 use App\Entity\Notification;
 use App\Entity\Partner;
 use App\Entity\SharedBasketChangeRequest;
@@ -228,6 +229,41 @@ final class SharedBasketChangeNotifier
                 'summary' => $request->summary(),
                 'requester_name' => $requester->getNameForDelivery(),
                 'other_name' => $counterpart->getNameForDelivery(),
+            ],
+        );
+    }
+
+    /**
+     * Avisa a los dos hogares de que administración YA ha aplicado el cambio de
+     * modalidad, y desde cuándo.
+     *
+     * CIERRA EL CÍRCULO QUE ABRE {@see modalityAgreed}. Ese aviso dice "queda en manos
+     * de administración" y, sin éste, ahí se acaba todo: la cesta cambia semanas
+     * después sin que nadie se lo diga a nadie. Y como la fecha efectiva casi siempre
+     * es futura —un cambio de modalidad entra a principio de mes—, el aviso no es
+     * "vuestra cesta ha cambiado" sino desde cuándo cambia.
+     *
+     * Lo manda quien APLICA el cambio y no {@see \App\Service\Partner\BasketModalityChanger},
+     * que es dominio puro: la batería de invariantes lo ejercita a cientos de cambios
+     * por pasada y mandaría correos de verdad a socixs de verdad.
+     *
+     * @param list<Partner>      $households Los dos hogares de la cesta.
+     * @param BasketShare        $modality   Modalidad a la que pasan.
+     * @param \DateTimeInterface $effective  Desde cuándo.
+     *
+     * @return int Cuántos correos salieron.
+     */
+    public function modalityApplied(array $households, BasketShare $modality, \DateTimeInterface $effective): int
+    {
+        return $this->notify(
+            $households,
+            'Vuestra cesta compartida cambia de modalidad · CSA Vega de Jarama',
+            'Vuestra cesta compartida cambia de modalidad',
+            sprintf('Pasáis a %s a partir del %s.', $modality->getName(), $effective->format('j/n/Y')),
+            'email/shared_basket_modality_applied.html.twig',
+            [
+                'modality_name' => $modality->getName(),
+                'effective_date' => $effective,
             ],
         );
     }

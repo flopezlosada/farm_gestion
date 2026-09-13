@@ -48,10 +48,11 @@ class BasketModalityChanger
      * @param PartnerBasketShare $new PBS destino ya poblada.
      * @param \DateTimeInterface $effective Fecha efectiva del cambio.
      * @param string|null $actor Origen del evento (null = se resuelve vía Security).
-     * @return PartnerBasketShare La PBS antigua, ya cerrada.
+     * @param bool $cascadeToMate Si el cambio arrastra al otro hogar de una compartida.
+     * @return ModalityChangeOutcome La cesta cerrada y, si la hubo, la del otro hogar.
      * @throws \DomainException Si el socio no tiene cesta vigente en la víspera.
      */
-    public function applyChange(PartnerBasketShare $new, \DateTimeInterface $effective, ?string $actor = null, bool $cascadeToMate = true): PartnerBasketShare
+    public function applyChange(PartnerBasketShare $new, \DateTimeInterface $effective, ?string $actor = null, bool $cascadeToMate = true): ModalityChangeOutcome
     {
         $partner = $new->getPartner();
         $dayBefore = \DateTime::createFromInterface($effective)->modify('-1 day');
@@ -117,11 +118,10 @@ class BasketModalityChanger
         // parten, y la ley L22 exige que las dos suscripciones tengan la misma modalidad y
         // la misma cohorte u orden del mes. Cambiar sólo una deja a la pareja imposible de
         // repartir: ya pasó —una socia se quedó sin entregas al pasar la otra a mensual—.
-        if ($cascadeToMate) {
-            $this->cascadeToMate($new, $effective, $actor);
-        }
-
-        return $old;
+        return new ModalityChangeOutcome(
+            $old,
+            $cascadeToMate ? $this->cascadeToMate($new, $effective, $actor) : null,
+        );
     }
 
     /**
@@ -134,12 +134,17 @@ class BasketModalityChanger
      * @param PartnerBasketShare $new       Cesta nueva del hogar que originó el cambio.
      * @param \DateTimeInterface $effective Desde cuándo.
      * @param string|null        $actor     Quién lo hizo.
+     *
+     * @return PartnerBasketShare|null La cesta nueva del otro hogar, o null si no hubo
+     *                                 a quién arrastrar o ya estaba como debía. Quien
+     *                                 llama la necesita para reconciliar sus entregas
+     *                                 ya generadas y para avisarle.
      */
-    private function cascadeToMate(PartnerBasketShare $new, \DateTimeInterface $effective, ?string $actor): void
+    private function cascadeToMate(PartnerBasketShare $new, \DateTimeInterface $effective, ?string $actor): ?PartnerBasketShare
     {
         $mate = $new->getPartner()?->getSharePartner();
         if (null === $mate) {
-            return;
+            return null;
         }
 
         // Si la modalidad nueva NO es compartida, la pareja deja de tener sentido y eso es
@@ -147,12 +152,12 @@ class BasketModalityChanger
         // arrastra a nadie a una cesta entera por la puerta de atrás.
         $modalityId = $new->getBasketShare()?->getId();
         if (!in_array($modalityId, BasketShare::IDS_SHARED, true)) {
-            return;
+            return null;
         }
 
         $mateOld = $this->shareRepository->findLatestActiveForPartner($mate);
         if (null === $mateOld) {
-            return;
+            return null;
         }
 
         // Ya está como debe: no se parte su histórico por gusto.
@@ -160,7 +165,7 @@ class BasketModalityChanger
             && $mateOld->getDayMonthOrder() === $new->getDayMonthOrder()
             && $mateOld->getDeliveryGroup() === $new->getDeliveryGroup()
         ) {
-            return;
+            return null;
         }
 
         $mateNew = new PartnerBasketShare();
@@ -182,5 +187,7 @@ class BasketModalityChanger
 
         // Sin volver a cascadear: si no, los dos hogares se arrastrarían el uno al otro.
         $this->applyChange($mateNew, $effective, $actor, cascadeToMate: false);
+
+        return $mateNew;
     }
 }
