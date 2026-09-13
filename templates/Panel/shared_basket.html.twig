@@ -139,15 +139,32 @@
         {% endembed %}
         {% endif %}
 
+        {# ============ 2b. APLICADO, CON FECHA ============
+         # Un cambio de modalidad se aplica semanas antes de entrar en vigor (entra a
+         # principio de mes). En ese hueco la cesta que se recoge es todavía la de siempre,
+         # así que lo único que responde a "¿en qué quedó aquello?" es esta tarjeta: está
+         # hecho, y empieza tal día. #}
+        {% if upcoming %}
+        {% embed '_components/csa_card.html.twig' with {
+            title: 'Vuestra cesta cambia el ' ~ upcoming.startDate|format_date(pattern="d 'de' MMMM", locale='es'),
+            icon: 'fa-check-circle-o'
+        } %}
+            {% block body %}
+                <p>Administración ya lo ha aplicado: pasáis a <strong>{{ upcoming.basketShare.name }}</strong>. Hasta esa fecha la recogéis como siempre.</p>
+            {% endblock %}
+        {% endembed %}
+        {% endif %}
+
         {# ============ 3. CAMBIO DE MODALIDAD ============
          # No se ofrece si ya hay uno acordado esperando a administración: el servidor lo
          # rechazaría igual, y un formulario que sólo sirve para llevarse un error no es un
-         # formulario. #}
-        {% if agreed is empty %}
+         # formulario.
+         #
          # Aquí no se aplica nada: se acuerda. La cuota la lleva administración y la
          # ley que empareja a los dos hogares obliga a cambiar las dos cestas a la
          # vez, así que lo que esta pantalla aporta es que los dos hayan dicho que sí
          # antes de que nadie toque nada. #}
+        {% if agreed is empty %}
         {% embed '_components/csa_card.html.twig' with {
             title: 'Cambiar la modalidad de la cesta',
             icon: 'fa-exchange'
