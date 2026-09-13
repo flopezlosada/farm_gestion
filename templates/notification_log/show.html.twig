@@ -1,0 +1,148 @@
+{# ============================================================
+ # La ficha de un aviso: todo lo que se guardó de él.
+ #
+ # Existe por el MOTIVO del fallo. Son mensajes técnicos de párrafo entero
+ # —rutas, plantillas, números de línea— y en una tabla sólo caben recortados,
+ # que es no decir nada. Aquí caben enteros y se leen.
+ #
+ # No extiende el layout de las pestañas: aquí no hay periodo que filtrar ni
+ # listado por el que navegar, y arrastrar esa barra sería enseñar mandos que
+ # no gobiernan nada de lo que se ve.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set chip_by_status = {
+    'sent': 'ok',
+    'failed': 'danger',
+    'discarded': 'warn'
+} %}
+{% set es_push = log.channel == 'push' %}
+
+{# El rótulo de cada fila. La tabla es clave-valor y no tiene cabecera, así que
+ # `.prl-table thead th` no la alcanza: el aspecto se copia aquí una vez. #}
+{% set rotulo = 'width: 200px; text-align: left; padding: 11px 14px; font-size: 10.5px;
+                 letter-spacing: 0.12em; text-transform: uppercase; color: var(--prl-ink-faint);
+                 font-weight: 600; background: var(--prl-bg); vertical-align: middle;' %}
+
+{% block title %}Aviso #{{ log.id }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('notification_log_index') }}">Registro de avisos</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Aviso #{{ log.id }}</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Registro de avisos · Envío',
+        log.kind|notification_kind,
+        (es_push ? 'Aviso al móvil' : 'Correo') ~ ' del ' ~ log.sentAt|format_datetime('long', 'short', locale='es') ~ '.'
+    ) }}
+
+    {# El resultado, primero y grande: es lo que se viene a saber. #}
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap;">
+        <span class="prl-chip prl-chip--{{ chip_by_status[log.status]|default('neutral') }}" style="font-size: 12px; padding: 6px 14px 7px;">
+            <span class="dot"></span>{{ statuses[log.status]|default(log.status) }}
+        </span>
+        <a class="prl-btn prl-btn--sm" href="{{ path('notification_log_index') }}">
+            <i class="fa fa-arrow-left" aria-hidden="true"></i> Volver al registro
+        </a>
+    </div>
+
+    {% if log.error %}
+        {# Monoespaciado y a todo el ancho: son rutas y nombres de fichero, y con
+           la tipografía del texto corrido se leen mal justo donde importa (un
+           guión bajo, un punto, una barra). El apunte guarda como mucho 255
+           caracteres, así que un mensaje muy largo puede llegar cortado de
+           origen — lo que se ve aquí es todo lo que hay. #}
+        <div style="background: var(--prl-terra-l); border: 1px solid var(--prl-terra);
+                    border-radius: 8px; padding: 14px 16px; margin-bottom: 18px;">
+            <div style="font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+                        font-weight: 600; color: var(--prl-terra-d); margin-bottom: 7px;">
+                Por qué no salió
+            </div>
+            <div style="font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+                        font-size: 12px; line-height: 1.6; color: var(--prl-ink);
+                        word-break: break-word; white-space: pre-wrap;">{{ log.error }}</div>
+        </div>
+    {% endif %}
+
+    {% if log.status == 'discarded' %}
+        {{ csa.callout(
+            'Este aviso se preparó pero no llegó a salir: el interruptor general de envíos estaba apagado en ese momento.',
+            'warning'
+        ) }}
+    {% endif %}
+
+    <div class="prl-table-wrap">
+        <table class="prl-table">
+            <tbody>
+                <tr>
+                    <th style="{{ rotulo }}">Cuándo</th>
+                    <td>{{ log.sentAt|format_datetime('full', 'medium', locale='es') }}</td>
+                </tr>
+                <tr>
+                    <th style="{{ rotulo }}">Destinatarix</th>
+                    <td>
+                        {% if quien %}
+                            <a class="prl-person__name" href="{{ path('partner_show', { id: quien.id }) }}">{{ quien.name }} {{ quien.surname }}</a>
+                            <span class="prl-person__meta" style="max-width: none;">{{ log.target }}</span>
+                        {% else %}
+                            {{ log.target }}
+                            <span class="prl-person__meta" style="max-width: none;">No corresponde a ninguna ficha de socix</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th style="{{ rotulo }}">Canal</th>
+                    <td>
+                        <i class="fa fa-{{ es_push ? 'mobile' : 'envelope-o' }}" aria-hidden="true"></i>
+                        {{ channels[log.channel]|default(log.channel) }}
+                    </td>
+                </tr>
+                <tr>
+                    <th style="{{ rotulo }}">Tipo de aviso</th>
+                    <td>
+                        <a href="{{ path('notification_log_index', { kind: log.kind }) }}">{{ log.kind|notification_kind }}</a>
+                        <span class="prl-person__meta" style="max-width: none;">{{ log.kind }}</span>
+                    </td>
+                </tr>
+                <tr>
+                    <th style="{{ rotulo }}">{{ es_push ? 'Título' : 'Asunto' }}</th>
+                    <td>{{ log.subject ?: '—' }}</td>
+                </tr>
+                <tr>
+                    <th style="{{ rotulo }}">Salió de</th>
+                    <td>
+                        {% if log.cronRun %}
+                            {{ tasks[log.cronRun.taskKey]|default(log.cronRun.taskKey) }}
+                            <span class="prl-person__meta" style="max-width: none;">
+                                {{ log.cronRun.command }} · ejecución #{{ log.cronRun.id }} ·
+                                <a href="{{ path('notification_log_index', { run: log.cronRun.id }) }}">ver los avisos de esa ejecución</a>
+                            </span>
+                        {% elseif log.taskKey %}
+                            {{ tasks[log.taskKey]|default(log.taskKey) }}
+                        {% else %}
+                            {# Sin ejecución detrás: lo disparó alguien desde la web, no una
+                               tarea del reloj. Saberlo cambia dónde se busca el fallo. #}
+                            <span class="prl-cell-muted">a mano, desde la web</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+</div>
+{% endblock %}

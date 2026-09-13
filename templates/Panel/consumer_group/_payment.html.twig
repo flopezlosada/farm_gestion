@@ -15,8 +15,11 @@
 {% set round = order.round %}
 
 <div class="cg-money">
+    {# «Importe» y no «Tu pedido»: en la ficha este bloque va justo debajo del
+     # resumen, que ya se titula así, y quedaba el mismo rótulo dos veces
+     # seguidas. #}
     <div class="cg-money__row">
-        <span>Tu pedido</span>
+        <span>Importe</span>
         <strong>{{ order.total|number_format(2, ',', '.') }} €</strong>
     </div>
 

@@ -1,0 +1,19 @@
+{{ obligation.name }} {{ urgency }}
+
+{% if days_left < 0 %}YA ESTÁ CADUCADO. La fecha era el {{ expires_on|format_date('full', locale='es') }}.{% else %}Vence el {{ expires_on|format_date('full', locale='es') }}.{% endif %}
+
+Tipo: {{ obligation.kindLabel }}
+{% if obligation.counterparty %}Con: {{ obligation.counterparty }}
+{% endif %}{% if obligation.reference %}Nº: {{ obligation.reference }}
+{% endif %}{% if obligation.responsible %}Se ocupa: {{ obligation.responsible.displayName|lower }}
+{% endif %}
+{% if obligation.notes %}
+{{ obligation.notes }}
+{% endif %}
+{% if obligation.documentUrl %}Documento: {{ obligation.documentUrl }}
+{% endif %}
+Ver la ficha: {{ obligation_url }}
+
+Cuando se renueve, anótalo en la ficha. Es lo único que hay que hacer para que el aviso del año que viene salga solo: sin ese apunte, este correo deja de llegar y nadie vuelve a acordarse.
+
+Recibes esto porque tienes permiso de Vencimientos{% if obligation.responsible %} o porque llevas este asunto{% endif %}. Se puede apagar en Configuración → «Avisar de lo que caduca».
