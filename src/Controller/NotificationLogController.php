@@ -87,6 +87,10 @@ class NotificationLogController extends AbstractController
             'kinds' => $this->logs->distinctKinds(),
             'filters' => $filters,
             'presets' => $this->presets(),
+            // Para poner NOMBRE a la ejecución de la que salió cada aviso. Un
+            // "#39" no dice nada; "Recordatorio de recogida" sí, y es lo que
+            // permite leer la columna sin abrir la otra pestaña.
+            'tasks' => $this->taskLabels(),
             'channels' => [
                 NotificationLog::CHANNEL_EMAIL => 'Correo',
                 NotificationLog::CHANNEL_PUSH => 'Móvil',
@@ -129,6 +133,7 @@ class NotificationLogController extends AbstractController
         return $this->render('notification_log/runs.html.twig', [
             'pagination' => $pagination,
             'sent_by_run' => $this->logs->countByRun($runIds),
+            'summary' => $this->runs->summary($filters),
             'filters' => $filters,
             'presets' => $this->presets(),
             'tasks' => $this->taskLabels(),
@@ -189,6 +194,52 @@ class NotificationLogController extends AbstractController
             // volver a Envíos conserve el periodo que traías.
             'filters' => $this->resolveFilters($request, []),
             'presets' => $this->presets(),
+        ]);
+    }
+
+    /**
+     * La ficha de UN aviso: todo lo que se guardó de él, y el motivo entero
+     * cuando no salió.
+     *
+     * Existe porque el motivo de un fallo no cabe en una tabla. Son mensajes
+     * técnicos de párrafo entero —rutas, nombres de plantilla, números de
+     * línea— y meterlos en una fila obliga a elegir entre recortarlos, que es
+     * no decir nada, o reventar el listado con un volcado que nadie va a leer
+     * de todas formas.
+     *
+     * Va la última de la clase y sólo acepta números: `/gestion/avisos/tareas`
+     * y `/gestion/avisos/cobertura` son rutas hermanas, y sin el requisito
+     * "tareas" entraría por aquí como si fuera el id de un aviso.
+     */
+    #[Route('/{id}', name: 'notification_log_show', requirements: ['id' => '\d+'], methods: ['GET'])]
+    public function show(int $id): Response
+    {
+        $log = $this->logs->find($id);
+
+        if ($log === null) {
+            throw $this->createNotFoundException('Ese aviso no está en el registro.');
+        }
+
+        return $this->render('notification_log/show.html.twig', [
+            'log' => $log,
+            // Si el correo no lleva ficha enganchada, se busca por la dirección:
+            // es el mismo cruce que hace el listado, y sin él la ficha de un
+            // aviso por correo no sabría a quién se le mandó. En el push no se
+            // intenta: ahí la ficha siempre viene puesta y el destinatario
+            // guardado es "N navegador(es)", que no es la dirección de nadie.
+            'quien' => $log->getPartner() ?? ($log->getChannel() === NotificationLog::CHANNEL_EMAIL
+                ? $this->partners->findOneBy(['email' => $log->getTarget()])
+                : null),
+            'tasks' => $this->taskLabels(),
+            'channels' => [
+                NotificationLog::CHANNEL_EMAIL => 'Correo',
+                NotificationLog::CHANNEL_PUSH => 'Móvil',
+            ],
+            'statuses' => [
+                NotificationLog::STATUS_SENT => 'Entregado',
+                NotificationLog::STATUS_FAILED => 'Falló',
+                NotificationLog::STATUS_DISCARDED => 'Descartado',
+            ],
         ]);
     }
 

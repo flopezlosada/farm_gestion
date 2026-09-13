@@ -137,13 +137,17 @@ class ConsumerGroupController extends AbstractController
 
     /**
      * Editar la cabecera del pedido (no el productor: sus productos cuelgan de ese
-     * catálogo). Solo mientras está abierto.
+     * catálogo).
+     *
+     * Mientras la comisión pueda gestionarlo, y no sólo mientras admita apuntes:
+     * pasado el plazo, ajustar la fecha de entrega o la nota al productor sigue
+     * haciendo falta —de hecho es justo entonces cuando se habla con él—.
      */
     #[Route('/{id}/edit', name: 'consumer_group_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     public function edit(Request $request, ConsumerGroupRound $round, EntityManagerInterface $em): Response
     {
-        if (!$round->canReceiveOrders()) {
-            $this->addFlash('warning', 'Sólo se pueden editar pedidos abiertos.');
+        if (!$round->canManageOrders()) {
+            $this->addFlash('warning', 'Este pedido ya no se puede editar.');
 
             return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
         }
@@ -166,13 +170,13 @@ class ConsumerGroupController extends AbstractController
 
     /**
      * Productos del pedido: elegir qué productos del catálogo del productor entran
-     * y a qué precio de pedido. Solo mientras está abierto.
+     * y a qué precio de pedido. Mientras la comisión pueda gestionarlo.
      */
     #[Route('/{id}/items', name: 'consumer_group_items', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     public function items(Request $request, ConsumerGroupRound $round, RoundItemEditor $itemEditor, EntityManagerInterface $em): Response
     {
-        if (!$round->canReceiveOrders()) {
-            $this->addFlash('warning', 'Sólo se pueden cambiar los productos de un pedido abierto.');
+        if (!$round->canManageOrders()) {
+            $this->addFlash('warning', 'Este pedido ya no admite cambios en sus productos.');
 
             return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
         }

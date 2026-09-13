@@ -1,0 +1,50 @@
+{# ============================================================
+ # El control de fechas: UNO solo.
+ #
+ # Antes había dos a la vez —los atajos de periodo y un rango a medida, uno al
+ # lado del otro— ocupando media barra y sin decir cuál mandaba. Ahora es un
+ # botón que dice qué estás viendo ("30 días", "14/08 – 12/09") y se abre para
+ # cambiarlo.
+ #
+ # Los atajos son ENLACES y no campos del formulario: cada uno lleva las fechas
+ # ya resueltas más los filtros que traías, así que se aplican de un clic sin
+ # pasar por el botón de la caja de abajo. El rango a medida sí es formulario
+ # —dos fechas escritas a mano no se envían solas— y por eso tiene su botón.
+ # ============================================================ #}
+
+<div class="prl-filt-wrap">
+    <button type="button" class="prl-filt has" data-pop-trigger="pop-periodo">
+        <i class="fa fa-calendar" aria-hidden="true"></i>
+        {{ periodo_label }}
+        <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+
+    <div class="prl-pop" id="pop-periodo" hidden style="min-width: 232px;">
+        {% for p in presets %}
+            {% set es_actual = range.from == p.from and range.to == p.to %}
+            <a href="{{ path(current, qs|merge({ from: p.from, to: p.to })) }}"
+               style="display: block; padding: 7px 9px; border-radius: 4px; font-size: 12.5px;
+                      text-decoration: none; {{ es_actual
+                          ? 'background: var(--prl-sage-l); color: var(--prl-sage-d); font-weight: 600;'
+                          : 'color: var(--prl-ink);' }}">
+                {{ p.label }}
+            </a>
+        {% endfor %}
+
+        <hr>
+
+        <div class="prl-pop__scope">Fechas a medida</div>
+        <div style="display: flex; align-items: center; gap: 6px; padding: 4px 9px 8px;">
+            <input type="date" name="from" value="{{ range.from }}" aria-label="Desde"
+                   style="flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--prl-line);
+                          border-radius: 5px; font-size: 12px; font-family: inherit; color: var(--prl-ink);">
+            <span style="color: var(--prl-ink-faint);">–</span>
+            <input type="date" name="to" value="{{ range.to }}" aria-label="Hasta"
+                   style="flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--prl-line);
+                          border-radius: 5px; font-size: 12px; font-family: inherit; color: var(--prl-ink);">
+        </div>
+        <button type="submit" class="prl-btn prl-btn--sm" style="margin: 0 9px 5px; justify-content: center;">
+            Ver este rango
+        </button>
+    </div>
+</div>

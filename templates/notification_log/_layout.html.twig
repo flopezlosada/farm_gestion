@@ -1,13 +1,16 @@
 {# ============================================================
- # Base del registro de avisos: cabecera, pestañas y filtro de periodo.
+ # Base del registro de avisos: cabecera, pestañas y periodo.
  #
- # Las dos sub-pantallas (envíos y ejecuciones) extienden esta y rellenan
- # `log_filters` (sus filtros propios) y `log_body` (la tabla).
+ # Las tres sub-pantallas extienden esta y rellenan `log_toolbar` (sus filtros)
+ # y `log_body` (el contenido).
  #
  # El PERIODO es lo único que viaja de una pestaña a otra, y a propósito: el
  # canal o el tipo de aviso no significan nada en el listado de ejecuciones,
  # pero el rango de fechas que estás mirando sí, y perderlo al cambiar de
  # pestaña obliga a volver a escribirlo justo cuando estás siguiendo un rastro.
+ #
+ # Usa el lenguaje de listado compartido (`partner/_listing_styles`), el mismo
+ # del listado de socixs y del resto de listados.
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -16,9 +19,23 @@
 {% set current = app.request.attributes.get('_route') %}
 {% set range = { from: filters.from|date('Y-m-d'), to: filters.to|date('Y-m-d') } %}
 
-{# A nivel de plantilla y no dentro de un bloque: los rótulos los usan también
- # los filtros propios de cada sub-pantalla, que viven en un bloque distinto. #}
-{% set filter_label = 'font-size: 0.7em; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--csa-ink-soft); margin-bottom: var(--csa-sp-1);' %}
+{# Los filtros que NO son el periodo, listos para colgar de un enlace. Cambiar
+ # de fechas no debe tirar por la borda el canal o la búsqueda que ya tenías
+ # puestos: en un diagnóstico se fija a quién buscas y se mueve el tiempo. #}
+{% set qs = {
+    channel: filters.channel,
+    kind: filters.kind,
+    status: filters.status,
+    task: filters.task,
+    q: filters.q,
+    run: filters.run
+}|filter(v => v is not null and v != '') %}
+
+{# Cómo se llama el periodo que estás viendo. Si coincide con un atajo, su
+ # nombre; si no, las dos fechas. El botón tiene que decir qué estás mirando
+ # sin abrirlo. #}
+{% set preset_actual = presets|filter(p => p.from == range.from and p.to == range.to)|first %}
+{% set periodo_label = preset_actual ? preset_actual.label : range.from|date('d/m/y') ~ ' – ' ~ range.to|date('d/m/y') %}
 
 {% block title %}Registro de avisos{% endblock %}
 
@@ -28,12 +45,23 @@
     <span class="csa-topbar__crumb-active">Registro de avisos</span>
 {% endblock %}
 
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {% include '_components/listing_filters_js.html.twig' %}
+{% endblock %}
+
 {% block csa_main %}
+<div class="prl">
 
     {{ csa.page_header(
         'Administración',
         'Registro de avisos',
-        'Qué ha enviado el sistema, a quién y con qué resultado, y qué tareas lo han enviado. Se guarda todo, salga bien o mal.'
+        'Qué ha enviado el sistema, a quién y con qué resultado. Se guarda todo, salga bien o mal.'
     ) }}
 
     {% set tabs = {
@@ -41,33 +69,15 @@
         'notification_log_runs':     'Ejecuciones',
         'notification_log_coverage': 'Cobertura'
     } %}
-    <ul class="csa-tabs">
+    <nav class="prl-tabs" role="tablist">
         {% for route, label in tabs %}
-            <li class="csa-tabs__item {{ current == route ? 'active' : '' }}">
-                <a class="csa-tabs__link" href="{{ path(route, range) }}">{{ label }}</a>
-            </li>
+            <a href="{{ path(route, range) }}" class="{{ current == route ? 'active' : '' }}">{{ label }}</a>
         {% endfor %}
-    </ul>
+    </nav>
 
-    <div style="display: flex; flex-wrap: wrap; gap: var(--csa-sp-6) var(--csa-sp-8); align-items: flex-start; margin-bottom: var(--csa-sp-4);">
-        {# El periodo lo comparten Envíos y Ejecuciones, que van por días. La
-           cobertura va por REPARTOS, así que allí este filtro no significa nada
-           y la pestaña lo deja vacío en vez de enseñar botones que no hacen. #}
-        {% block log_range %}
-            <div style="display: flex; flex-direction: column;">
-                <span style="{{ filter_label }}">Periodo</span>
-                <div style="display: flex; gap: var(--csa-sp-1); flex-wrap: wrap; align-items: center;">
-                    {% for p in presets %}
-                        <a href="{{ path(current, { from: p.from, to: p.to }) }}"
-                           class="csa-btn csa-btn--sm {{ (range.from == p.from and range.to == p.to) ? 'csa-btn--primary' : 'csa-btn--ghost' }}">{{ p.label }}</a>
-                    {% endfor %}
-                </div>
-            </div>
-        {% endblock %}
-
-        {% block log_filters %}{% endblock %}
-    </div>
+    {% block log_toolbar %}{% endblock %}
 
     {% block log_body %}{% endblock %}
 
+</div>
 {% endblock %}
