@@ -71,6 +71,39 @@ class SharedBasketChangeRequestRepository extends ServiceEntityRepository
     }
 
     /**
+     * Lo ya contestado hace poco entre los dos hogares, de lo más reciente a lo más viejo.
+     *
+     * Existe por el aviso de la respuesta: quien recibe "no puedo con ese cambio" abre la
+     * pantalla y, si sólo se pintara lo pendiente, se encontraría la nada. Un desenlace es
+     * justo lo que hay que poder leer ahí.
+     *
+     * @param Partner            $one   Un hogar.
+     * @param Partner            $other El otro.
+     * @param \DateTimeImmutable $since Desde cuándo se considera reciente.
+     *
+     * @return SharedBasketChangeRequest[]
+     */
+    public function findDecidedBetween(Partner $one, Partner $other, \DateTimeImmutable $since): array
+    {
+        return $this->createQueryBuilder('r')
+            ->innerJoin('r.requester', 'p')
+            ->innerJoin('r.counterpart', 'cp')
+            ->leftJoin('r.basket', 'b')
+            ->leftJoin('r.toBasket', 'tb')
+            ->addSelect('p', 'cp', 'b', 'tb')
+            ->where('r.status <> :pending')
+            ->andWhere('r.decidedAt >= :since')
+            ->andWhere('(r.requester = :one AND r.counterpart = :other) OR (r.requester = :other AND r.counterpart = :one)')
+            ->setParameter('pending', SharedBasketChangeRequest::STATUS_PENDING)
+            ->setParameter('since', $since)
+            ->setParameter('one', $one)
+            ->setParameter('other', $other)
+            ->orderBy('r.decidedAt', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Todo lo que está pendiente entre los dos hogares, lo pidiera quien lo pidiera.
      *
      * Es lo que mira la pantalla antes de dejar pedir otra cosa: dos peticiones vivas

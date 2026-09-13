@@ -31,7 +31,11 @@
 
     <div class="csa-stack-lg csa-form-narrow">
 
-        {# ============ 1. LO QUE ME TOCA CONTESTAR ============ #}
+        {# ============ 1. LO QUE ME TOCA CONTESTAR ============
+         # La tarjeta SÓLO SI HAY ALGO. Esta pantalla se abre desde un aviso —"tienes que
+         # contestar a un cambio"— y lo primero que debe verse es eso, no dos cajas
+         # anunciando que no hay nada. Lo que no existe no ocupa sitio. #}
+        {% if incoming is not empty %}
         {% embed '_components/csa_card.html.twig' with {
             title: 'Esperando tu respuesta',
             icon: 'fa-hand-paper-o'
@@ -39,9 +43,6 @@
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
 
-                {% if incoming is empty %}
-                    <p class="csa-muted">No hay nada que contestar ahora mismo.</p>
-                {% else %}
                     {% for req in incoming %}
                         <div class="csa-stack" style="padding-block: var(--csa-sp-3); border-bottom: 1px solid var(--csa-border);">
                             <p>
@@ -80,11 +81,12 @@
                             {% endif %}
                         </div>
                     {% endfor %}
-                {% endif %}
             {% endblock %}
         {% endembed %}
+        {% endif %}
 
         {# ============ 2. LO QUE HE PEDIDO YO ============ #}
+        {% if outgoing is not empty %}
         {% embed '_components/csa_card.html.twig' with {
             title: 'Lo que has pedido',
             icon: 'fa-paper-plane-o'
@@ -92,9 +94,6 @@
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
 
-                {% if outgoing is empty %}
-                    <p class="csa-muted">No tienes ninguna petición esperando respuesta.</p>
-                {% else %}
                     {% for req in outgoing %}
                         <div class="csa-stack" style="padding-block: var(--csa-sp-3); border-bottom: 1px solid var(--csa-border);">
                             <p>
@@ -114,11 +113,37 @@
                             {% endif %}
                         </div>
                     {% endfor %}
-                {% endif %}
 
-                {{ csa.hint('Para pedir un cambio de día, entra en tu calendario y elige el día al que quieres llevar la cesta.') }}
             {% endblock %}
         {% endembed %}
+        {% endif %}
+
+        {# ============ 2b. LO ÚLTIMO QUE HA PASADO ============
+         # Sólo si hay algo, como las de arriba. Aquí aterriza quien abre el aviso de que el
+         # otro hogar ha contestado: sin esta sección, ese aviso llevaba a una pantalla que no
+         # decía nada de lo que el propio aviso contaba. #}
+        {% if decided is not empty %}
+        {% embed '_components/csa_card.html.twig' with {
+            title: 'Lo último',
+            icon: 'fa-history'
+        } %}
+            {% block body %}
+                {% for req in decided %}
+                    <p style="padding-block: var(--csa-sp-2); border-bottom: 1px solid var(--csa-border);">
+                        {{ req.requester.nameForDelivery }} pidió {{ req.summary }}.
+                        {% if req.status == 'accepted' %}
+                            <strong>{{ req.counterpart.nameForDelivery }} dijo que sí</strong>{% if req.kind == 'modality' %}, y lo aplicará administración{% endif %}.
+                        {% elseif req.status == 'rejected' %}
+                            <strong>{{ req.counterpart.nameForDelivery }} dijo que no</strong>, así que la cesta se quedó como estaba.
+                        {% else %}
+                            Se retiró antes de contestarla.
+                        {% endif %}
+                        <span class="csa-muted">{{ req.decidedAt|format_date(pattern='d MMM', locale='es') }}</span>
+                    </p>
+                {% endfor %}
+            {% endblock %}
+        {% endembed %}
+        {% endif %}
 
         {# ============ 3. CAMBIO DE MODALIDAD ============
          # Aquí no se aplica nada: se acuerda. La cuota la lleva administración y la
@@ -132,7 +157,10 @@
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
 
-                <form method="post" action="{{ path('panel_shared_basket_request_modality') }}" class="csa-stack">
+                {# `data-csa-dropdowns`: el desplegable del sistema operativo no se puede estilar
+                   y aquí salía en gris del SO, roto respecto al resto. El componente es OPT-IN,
+                   hay que pedirlo. #}
+                <form method="post" action="{{ path('panel_shared_basket_request_modality') }}" class="csa-stack" data-csa-dropdowns>
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token('panel_shared_basket_request') }}">
 
                     <label>
