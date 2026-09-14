@@ -802,6 +802,12 @@ class AppSettings
             'help' => 'Abre el módulo del grupo de consumo: productores, rondas de pedido colectivo y los apuntes de lxs socixs. Apagado, se oculta del menú (gestión y panel) y no es accesible.',
             'default' => false,
         ],
+        self::FEATURE_CONTABILIDAD => [
+            'group' => 'Funcionalidades en rodaje',
+            'label' => 'Contabilidad y presupuestos',
+            'help' => 'Abre el libro de caja de la asociación (cuentas, apuntes y partidas) y el presupuesto del año con su seguimiento. Apagado, se oculta del menú y no es accesible.',
+            'default' => false,
+        ],
         self::FEATURE_VENCIMIENTOS => [
             'group' => 'Funcionalidades en rodaje',
             'label' => 'Vencimientos',

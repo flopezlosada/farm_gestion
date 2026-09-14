@@ -187,7 +187,8 @@ class ImportBudgetCommand extends Command
 
             $sign = $this->signFor($target[0]);
             $key = $target[0].'|'.$target[1];
-            $totals[$key][(int) $month] = ($totals[$key][(int) $month] ?? 0.0) + $sign * abs($amount);
+            $signedAmount = $sign === 0 ? $amount : $sign * abs($amount);
+            $totals[$key][(int) $month] = ($totals[$key][(int) $month] ?? 0.0) + $signedAmount;
         }
         fclose($handle);
 
@@ -198,7 +199,7 @@ class ImportBudgetCommand extends Command
      * Signo que le corresponde a una partida por su grupo. El Excel trae los
      * importes sin signo porque los separa en bloques; aquí el signo es parte del
      * dato. La financiación es la excepción: un préstamo entra y sus cuotas salen,
-     * así que se respeta el signo que traiga el fichero.
+     * así que se respeta el signo que traiga el fichero (0 = no forzar signo).
      */
     private function signFor(string $groupName): int
     {
@@ -207,6 +208,7 @@ class ImportBudgetCommand extends Command
         return match ($group?->getKind()) {
             BudgetCategoryGroup::KIND_INCOME => 1,
             BudgetCategoryGroup::KIND_EXPENSE, BudgetCategoryGroup::KIND_INVESTMENT => -1,
+            BudgetCategoryGroup::KIND_FINANCING => 0,
             default => -1,
         };
     }
