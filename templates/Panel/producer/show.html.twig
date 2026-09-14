@@ -1,0 +1,93 @@
+{# ============================================================
+ # Panel del productor · Ficha de un pedido propio.
+ #   - round        ConsumerGroupRound (del productor logueado)
+ #   - aggregate    array de OrderAggregator::aggregate() — SIN nombres de socias
+ #   - transitions  int[] estados a los que se puede pasar ahora
+ # ============================================================ #}
+
+{% extends '_layouts/csa_producer.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}{{ round.title }} · Mis pedidos{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('panel_producer_index') }}">Mis pedidos</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ round.title }}</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Mi catálogo', round.title, round.statusLabel ~ (round.confirmed ? ' · Confirmado por la comisión' : '')) }}
+
+    <div class="csa-stack-lg">
+
+        <div class="prt-actionbar">
+            <a href="{{ path('panel_producer_round_items', { id: round.id }) }}" class="prt-btn"><i class="fa fa-list"></i> Productos del pedido</a>
+            <a href="{{ path('panel_producer_round_export', { id: round.id }) }}" class="prt-btn"><i class="fa fa-download"></i> Descargar CSV</a>
+
+            {% if 1 in transitions %}
+                <form method="post" action="{{ path('panel_producer_round_transition', { id: round.id }) }}" style="display:inline;">
+                    <input type="hidden" name="_token" value="{{ csrf_token('panel_producer_transition_' ~ round.id) }}">
+                    <input type="hidden" name="to" value="1">
+                    <button type="submit" class="prt-btn">Cerrar pedido</button>
+                </form>
+            {% endif %}
+            {% if 0 in transitions %}
+                <form method="post" action="{{ path('panel_producer_round_transition', { id: round.id }) }}" style="display:inline;">
+                    <input type="hidden" name="_token" value="{{ csrf_token('panel_producer_transition_' ~ round.id) }}">
+                    <input type="hidden" name="to" value="0">
+                    <button type="submit" class="prt-btn">Reabrir pedido</button>
+                </form>
+            {% endif %}
+            {% if 4 in transitions %}
+                <form method="post" action="{{ path('panel_producer_round_transition', { id: round.id }) }}" style="display:inline;">
+                    <input type="hidden" name="_token" value="{{ csrf_token('panel_producer_transition_' ~ round.id) }}">
+                    <input type="hidden" name="to" value="4">
+                    <button type="submit" class="prt-btn">Marcar entregado</button>
+                </form>
+            {% endif %}
+            {% if 3 in transitions %}
+                <form method="post" action="{{ path('panel_producer_round_transition', { id: round.id }) }}" style="display:inline;"
+                      onsubmit="var r=prompt('Motivo de cancelación (opcional):'); if(r===null){return false;} this.reason.value=r; return true;">
+                    <input type="hidden" name="_token" value="{{ csrf_token('panel_producer_transition_' ~ round.id) }}">
+                    <input type="hidden" name="to" value="3">
+                    <input type="hidden" name="reason" value="">
+                    <button type="submit" class="prt-btn prt-btn--danger">Cancelar pedido</button>
+                </form>
+            {% endif %}
+        </div>
+
+        <section class="prt-card">
+            <header class="prt-card__head">
+                <h2 class="prt-card__title"><span class="accent"></span>Lo que te van a pedir · {{ aggregate.participantCount }} socia{{ aggregate.participantCount == 1 ? '' : 's' }}</h2>
+            </header>
+            <div class="prt-card__body">
+                {% if aggregate.byItem is empty %}
+                    <p class="csa-muted">Sin productos en este pedido todavía.</p>
+                {% else %}
+                    <div class="prl-table-wrap">
+                        <table class="prl-table">
+                            <thead>
+                                <tr><th>Producto</th><th class="tight">Cantidad</th><th class="tight">Precio</th><th class="tight">Subtotal</th></tr>
+                            </thead>
+                            <tbody>
+                                {% for line in aggregate.byItem %}
+                                    <tr>
+                                        <td>{{ line.item.name }}</td>
+                                        <td class="tight">{{ line.totalQuantity|number_format(2, ',', '.') }} {{ line.item.unit }}</td>
+                                        <td class="tight">{{ line.item.price|number_format(2, ',', '.') }} €</td>
+                                        <td class="tight">{{ line.subtotal|number_format(2, ',', '.') }} €</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr><td colspan="3"><b>Total</b></td><td class="tight"><b>{{ aggregate.total|number_format(2, ',', '.') }} €</b></td></tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                {% endif %}
+            </div>
+        </section>
+
+    </div>
+{% endblock %}
