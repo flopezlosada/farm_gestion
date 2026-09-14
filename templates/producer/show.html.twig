@@ -43,6 +43,43 @@
             {% if producer.notes %}<p class="cg-desc">{{ producer.notes|nl2br }}</p>{% endif %}
         </div>
 
+        {% if producer.selfManaged and can_edit %}
+            <div class="csa-card">
+                <h2 class="csa-card__title" style="margin: 0 0 var(--csa-sp-3);">Acceso al panel del productor</h2>
+                {% if access_user %}
+                    <p class="csa-muted" style="margin: 0 0 var(--csa-sp-3);">
+                        <i class="fa fa-check-circle" style="color: #2f8f4e;"></i>
+                        Tiene acceso con <strong>{{ access_user.email }}</strong>.
+                    </p>
+                    <div class="csa-row" style="gap: var(--csa-sp-2);">
+                        <form method="post" action="{{ path('consumer_group_producer_access_resend', { id: producer.id }) }}">
+                            <input type="hidden" name="_token" value="{{ csrf_token('producer_access' ~ producer.id) }}">
+                            <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm"><i class="fa fa-paper-plane"></i><span>Reenviar enlace</span></button>
+                        </form>
+                        <form method="post" action="{{ path('consumer_group_producer_access_revoke', { id: producer.id }) }}"
+                              onsubmit="return confirm('¿Retirar el acceso de {{ producer.name|e('js') }}? No podrá entrar a su panel hasta que se lo vuelvas a dar.');">
+                            <input type="hidden" name="_token" value="{{ csrf_token('producer_access' ~ producer.id) }}">
+                            <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm">Retirar acceso</button>
+                        </form>
+                    </div>
+                {% else %}
+                    <p class="csa-muted" style="margin: 0 0 var(--csa-sp-3);">
+                        {% if producer.email %}
+                            Aún no puede entrar a su panel. Dale acceso: se le crea (o reutiliza) una cuenta con <strong>{{ producer.email }}</strong> y se le envía un enlace para entrar.
+                        {% else %}
+                            Este productor no tiene email en su ficha. Añádelo primero para poder darle acceso.
+                        {% endif %}
+                    </p>
+                    {% if producer.email %}
+                        <form method="post" action="{{ path('consumer_group_producer_access_grant', { id: producer.id }) }}">
+                            <input type="hidden" name="_token" value="{{ csrf_token('producer_access' ~ producer.id) }}">
+                            <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm"><i class="fa fa-key"></i><span>Dar acceso y enviar enlace</span></button>
+                        </form>
+                    {% endif %}
+                {% endif %}
+            </div>
+        {% endif %}
+
         <div class="csa-card">
             <div class="csa-row-between" style="margin-bottom: var(--csa-sp-3);">
                 <h2 class="csa-card__title" style="margin: 0;">Catálogo</h2>

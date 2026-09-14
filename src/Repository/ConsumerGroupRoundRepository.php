@@ -3,6 +3,7 @@
 namespace App\Repository;
 
 use App\Entity\ConsumerGroupRound;
+use App\Entity\Producer;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -45,6 +46,23 @@ class ConsumerGroupRoundRepository extends ServiceEntityRepository
             ->where('r.status = :open')
             ->setParameter('open', ConsumerGroupRound::STATUS_OPEN)
             ->orderBy('r.ordersCloseAt', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Las rondas de ESTE productor, más recientes por fecha de entrega arriba.
+     * Para su panel de autogestión: sólo ve lo suyo.
+     *
+     * @return ConsumerGroupRound[]
+     */
+    public function findAllForProducer(Producer $producer): array
+    {
+        return $this->createQueryBuilder('r')
+            ->where('r.producer = :producer')
+            ->setParameter('producer', $producer)
+            ->orderBy('r.deliveryDate', 'DESC')
+            ->addOrderBy('r.id', 'DESC')
             ->getQuery()
             ->getResult();
     }

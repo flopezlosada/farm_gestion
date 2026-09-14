@@ -319,6 +319,10 @@ security:
         # su sección.
         - { path: ^/gestion,
             roles: [ROLE_ADMIN, ROLE_GESTION_GRANJA, ROLE_GESTION_SOCIXS, ROLE_GESTION_REPARTO, ROLE_BLOG, ROLE_GESTION_ENCUESTAS, ROLE_GESTION_ALBERGUE, ROLE_GESTION_LABORAL, ROLE_GESTION_LAR, ROLE_GESTION_VOLUNTARIADO, ROLE_GESTION_GRUPO_CONSUMO, ROLE_GESTION_CONTABILIDAD, ROLE_GESTION_VENCIMIENTOS] }
+        # Panel del productor autogestionado del grupo de consumo: abrir/cerrar
+        # sus rondas y llevar su catálogo. ANTES de la regla genérica ^/panel,
+        # porque esa exige ROLE_PARTNER y un productor sin cesta no lo tiene.
+        - { path: ^/panel/producer, roles: [ROLE_PRODUCER, ROLE_ADMIN] }
         # Panel del socix (lo construiremos en breve).
         - { path: ^/panel, roles: [ROLE_PARTNER, ROLE_ADMIN] }
         # Panel propio del trabajador: fichar, ver/corregir lo suyo, vacaciones.

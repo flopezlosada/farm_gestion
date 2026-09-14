@@ -1,0 +1,18 @@
+{% extends '_layouts/csa_producer.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Nuevo producto{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('panel_producer_product_index') }}">Mi catálogo</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Nuevo producto</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Mi catálogo', 'Nuevo producto', '') }}
+    {% include 'consumer_group_product/_form.html.twig' with {
+        submit_label: 'Añadir al catálogo',
+        cancel_url: path('panel_producer_product_index')
+    } %}
+{% endblock %}
