@@ -2,13 +2,16 @@
 
 namespace App\Controller;
 
+use App\Entity\ConsumerGroupEventLog;
 use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\Partner;
 use App\Form\ConsumerGroupRoundType;
+use App\Repository\ConsumerGroupEventLogRepository;
 use App\Repository\ConsumerGroupOrderRepository;
 use App\Repository\ConsumerGroupRoundRepository;
 use App\Service\ConsumerGroup\ConsumerGroupAnnouncer;
+use App\Service\ConsumerGroup\ConsumerGroupEventRecorder;
 use App\Service\ConsumerGroup\ConsumerGroupNotifier;
 use App\Service\ConsumerGroup\InvalidRoundTransition;
 use App\Service\ConsumerGroup\ConsumerGroupStats;
@@ -70,7 +73,7 @@ class ConsumerGroupController extends AbstractController
      * pantalla de productos del pedido.
      */
     #[Route('/new', name: 'consumer_group_new', methods: ['GET', 'POST'])]
-    public function new(Request $request, RoundItemEditor $itemEditor, EntityManagerInterface $em): Response
+    public function new(Request $request, RoundItemEditor $itemEditor, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
         $round = new ConsumerGroupRound();
         $form = $this->createForm(ConsumerGroupRoundType::class, $round);
@@ -80,6 +83,7 @@ class ConsumerGroupController extends AbstractController
             $itemEditor->seedFromCatalog($round);
             $round->setCreatedBy($this->getUser());
             $em->persist($round);
+            $recorder->record(ConsumerGroupEventLog::KIND_ROUND_CREATED, $round, $this->getUser(), 'Pedido creado.');
             $em->flush();
             $this->addFlash('success', 'Pedido creado. Revisa los productos y precios de este pedido.');
 
@@ -95,7 +99,7 @@ class ConsumerGroupController extends AbstractController
      * Ficha del pedido: productos, apuntes agregados y transiciones disponibles.
      */
     #[Route('/{id}', name: 'consumer_group_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(ConsumerGroupRound $round, OrderAggregator $aggregator, RoundStateMachine $machine, ConsumerGroupAnnouncer $announcer): Response
+    public function show(ConsumerGroupRound $round, OrderAggregator $aggregator, RoundStateMachine $machine, ConsumerGroupAnnouncer $announcer, ConsumerGroupEventLogRepository $events): Response
     {
         // Pedidos no vacíos del pedido, ordenados por socia, con su total y estado
         // de pago, más un resumen de cobro para la comisión.
@@ -126,6 +130,7 @@ class ConsumerGroupController extends AbstractController
             // repetida en la plantilla: si cambia, cambia en un sitio.
             'can_announce' => $announcer->canAnnounce($round),
             'socias'      => $socias,
+            'activity'    => $events->findByRound($round),
             'payment'     => [
                 'count'        => count($socias),
                 'paidCount'    => $paidCount,
@@ -173,7 +178,7 @@ class ConsumerGroupController extends AbstractController
      * y a qué precio de pedido. Mientras la comisión pueda gestionarlo.
      */
     #[Route('/{id}/items', name: 'consumer_group_items', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function items(Request $request, ConsumerGroupRound $round, RoundItemEditor $itemEditor, EntityManagerInterface $em): Response
+    public function items(Request $request, ConsumerGroupRound $round, RoundItemEditor $itemEditor, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
         if (!$round->canManageOrders()) {
             $this->addFlash('warning', 'Este pedido ya no admite cambios en sus productos.');
@@ -212,6 +217,7 @@ class ConsumerGroupController extends AbstractController
                 ];
             }
             $itemEditor->apply($round, $desired);
+            $recorder->record(ConsumerGroupEventLog::KIND_ITEMS_UPDATED, $round, $this->getUser(), 'Productos y precios del pedido actualizados.');
             $em->flush();
             $this->addFlash('success', 'Productos del pedido actualizados.');
 
@@ -246,7 +252,7 @@ class ConsumerGroupController extends AbstractController
      * suele decidirse con el plazo ya vencido, al hablar con el productor.
      */
     #[Route('/{id}/association-order', name: 'consumer_group_association_order', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function associationOrder(Request $request, ConsumerGroupRound $round, RoundItemEditor $itemEditor, EntityManagerInterface $em): Response
+    public function associationOrder(Request $request, ConsumerGroupRound $round, RoundItemEditor $itemEditor, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
         if (!$this->isCsrfTokenValid('consumer_group_association_order_'.$round->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
@@ -263,6 +269,7 @@ class ConsumerGroupController extends AbstractController
         // TAL CUAL llegan: las cantidades las normaliza RoundItemEditor, igual que
         // las de las socias, para que el local pida los mismos bultos que ellas.
         $itemEditor->applyAssociationQuantities($this->desiredFrom($request, $round, 'association'));
+        $recorder->record(ConsumerGroupEventLog::KIND_ASSOCIATION_ORDER_UPDATED, $round, $this->getUser(), 'Pedido para el local actualizado.');
         $em->flush();
         $this->addFlash('success', 'Guardado lo que se pide para el local.');
 
@@ -274,7 +281,7 @@ class ConsumerGroupController extends AbstractController
      * propia pantalla ({@see self::confirm}).
      */
     #[Route('/{id}/transition', name: 'consumer_group_transition', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function transition(Request $request, ConsumerGroupRound $round, RoundStateMachine $machine, EntityManagerInterface $em): Response
+    public function transition(Request $request, ConsumerGroupRound $round, RoundStateMachine $machine, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
         if (!$this->isCsrfTokenValid('consumer_group_transition_'.$round->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
@@ -299,6 +306,7 @@ class ConsumerGroupController extends AbstractController
             }
         }
 
+        $recorder->record(ConsumerGroupEventLog::KIND_ROUND_TRANSITIONED, $round, $this->getUser(), sprintf('Pedido marcado como "%s".', $round->getStatusLabel()));
         $em->flush();
         $this->addFlash('success', sprintf('Pedido marcado como "%s".', $round->getStatusLabel()));
 
@@ -310,7 +318,7 @@ class ConsumerGroupController extends AbstractController
      * interruptor de email. El email es opcional y respeta el interruptor general.
      */
     #[Route('/{id}/confirm', name: 'consumer_group_confirm', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function confirm(Request $request, ConsumerGroupRound $round, RoundStateMachine $machine, ConsumerGroupNotifier $notifier, EntityManagerInterface $em): Response
+    public function confirm(Request $request, ConsumerGroupRound $round, RoundStateMachine $machine, ConsumerGroupNotifier $notifier, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
         if (!$machine->canConfirm($round)) {
             $this->addFlash('warning', 'Este pedido no se puede confirmar en su estado actual.');
@@ -326,6 +334,7 @@ class ConsumerGroupController extends AbstractController
             }
 
             $machine->confirm($round);
+            $recorder->record(ConsumerGroupEventLog::KIND_ROUND_CONFIRMED, $round, $this->getUser(), 'Pedido confirmado.');
             $em->flush();
 
             if ($request->request->getBoolean('send_email')) {
@@ -431,7 +440,7 @@ class ConsumerGroupController extends AbstractController
      * Selecciona la socia y las cantidades por producto.
      */
     #[Route('/{id}/orders/new', name: 'consumer_group_order_new', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function orderNew(Request $request, ConsumerGroupRound $round, OrderEditor $editor, EntityManagerInterface $em): Response
+    public function orderNew(Request $request, ConsumerGroupRound $round, OrderEditor $editor, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
         if (!$round->canManageOrders()) {
             $this->addFlash('warning', 'No se pueden añadir pedidos en el estado actual del pedido.');
@@ -469,6 +478,12 @@ class ConsumerGroupController extends AbstractController
                 return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
             }
             $em->persist($order);
+            $recorder->record(
+                $existing === null ? ConsumerGroupEventLog::KIND_ORDER_CREATED : ConsumerGroupEventLog::KIND_ORDER_UPDATED,
+                $round,
+                $this->getUser(),
+                sprintf('Pedido de %s %s desde gestión.', $partner, $existing === null ? 'apuntado' : 'actualizado'),
+            );
             $em->flush();
             $this->addFlash('success', 'Pedido apuntado.');
 
@@ -485,7 +500,7 @@ class ConsumerGroupController extends AbstractController
      * Editar el pedido de una socia desde gestión (corregir cantidades).
      */
     #[Route('/orders/{id}/edit', name: 'consumer_group_order_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function orderEdit(Request $request, ConsumerGroupOrder $order, OrderEditor $editor, EntityManagerInterface $em): Response
+    public function orderEdit(Request $request, ConsumerGroupOrder $order, OrderEditor $editor, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
         $round = $order->getRound();
 
@@ -503,6 +518,12 @@ class ConsumerGroupController extends AbstractController
             }
 
             $editor->apply($order, $this->desiredFrom($request, $round));
+            $recorder->record(
+                $order->isEmpty() ? ConsumerGroupEventLog::KIND_ORDER_EMPTIED : ConsumerGroupEventLog::KIND_ORDER_UPDATED,
+                $round,
+                $this->getUser(),
+                sprintf('Pedido de %s %s desde gestión.', $order->getPartner(), $order->isEmpty() ? 'vaciado' : 'actualizado'),
+            );
             $em->flush();
             $this->addFlash('success', 'Pedido actualizado.');
 
