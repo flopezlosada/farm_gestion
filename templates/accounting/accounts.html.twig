@@ -1,0 +1,108 @@
+{# ============================================================
+ # Las cuentas donde vive el dinero: bancos y cajas de efectivo.
+ #
+ # El saldo de cada una NO está guardado: es su saldo de apertura más todos sus
+ # apuntes. Por eso la columna de saldo siempre cuadra con el libro.
+ #
+ # El controller pasa: rows (account, balance, entries) y total (sólo las abiertas).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
+
+{% block title %}Contabilidad · Cuentas{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Cuentas</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Contabilidad',
+        'Cuentas',
+        'Dónde está el dinero. Cada apunte del libro pertenece a una de éstas.'
+    ) }}
+
+    <div class="prl-stats">
+        <div class="prl-stat">
+            <b>{{ total|number_format(2, ',', '.') }} €</b>
+            <span>en total, hoy</span>
+        </div>
+        <div class="prl-stat">
+            <b>{{ rows|filter(r => r.account.active)|length }}</b>
+            <span>cuentas abiertas</span>
+        </div>
+    </div>
+
+    <div class="prl-toolbar">
+        <div class="counters">El saldo sale de sumar los apuntes; no se teclea.</div>
+        <div class="spacer"></div>
+        <a href="{{ path('accounting_ledger') }}" class="prl-btn"><i class="fa fa-list"></i> Libro</a>
+        <a href="{{ path('accounting_categories') }}" class="prl-btn"><i class="fa fa-tags"></i> Partidas</a>
+        {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+            <a href="{{ path('accounting_account_new') }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Nueva cuenta</a>
+        {% endif %}
+    </div>
+
+    <div class="prl-table-wrap">
+        {% if rows is empty %}
+            <div class="prl-empty">
+                Todavía no hay ninguna cuenta. Crea una con el saldo que tenga hoy y empieza a anotar.
+            </div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th>Cuenta</th>
+                        <th class="tight">Tipo</th>
+                        <th class="tight">Desde</th>
+                        <th class="tight acc-num">Saldo inicial</th>
+                        <th class="tight acc-num">Apuntes</th>
+                        <th class="tight acc-num">Saldo hoy</th>
+                        {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}<th class="tight"></th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                        <tr>
+                            <td>
+                                {{ row.account.name }}
+                                {% if not row.account.active %}
+                                    <span class="prl-chip prl-chip--pausado"><span class="dot"></span>cerrada</span>
+                                {% endif %}
+                                {% if row.account.iban %}
+                                    <br><span class="acc-muted acc-small">{{ row.account.iban }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="tight">{{ row.account.kindLabel }}</td>
+                            <td class="tight">{{ row.account.openingDate ? row.account.openingDate|date('d/m/Y') : '—' }}</td>
+                            <td class="acc-num">{{ fmt.money(row.account.openingBalance) }}</td>
+                            <td class="acc-num">{{ row.entries }}</td>
+                            <td class="acc-num"><b>{{ fmt.money(row.balance) }}</b></td>
+                            {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+                                <td class="tight">
+                                    <a href="{{ path('accounting_account_edit', { id: row.account.id }) }}" class="prl-btn" title="Cambiar"><i class="fa fa-pencil"></i></a>
+                                </td>
+                            {% endif %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

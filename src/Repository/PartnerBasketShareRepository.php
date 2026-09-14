@@ -576,6 +576,38 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
             ->setParameter('date', $basket->getDate())
             ->getResult();
     }
+
+    /**
+     * Cuántas cestas COMPLETAS equivalen los contratos activos. Una quincenal no es
+     * una cesta entera de coste, y una compartida es media: la equivalencia la
+     * declara cada modalidad en el catálogo.
+     *
+     * Lo usa la contabilidad para repartir el coste del año entre las cestas, que es
+     * el cálculo del que sale cuánto tiene que costar una cesta.
+     */
+    public function countActiveBasketEquivalents(): float
+    {
+        $dql = 'SELECT COALESCE(SUM(bs.complete_basket_equivalence * pbs.amount), 0)
+                FROM App\Entity\PartnerBasketShare pbs
+                INNER JOIN pbs.basket_share bs
+                WHERE pbs.is_active = 1';
+
+        return (float) $this->getEntityManager()->createQuery($dql)->getSingleScalarResult();
+    }
+
+    /**
+     * Lo que suman al mes todos los contratos activos: cesta más huevos más
+     * transporte. Es el ingreso por cuotas que la asociación tiene comprometido, y
+     * sirve para contrastar contra lo que el presupuesto da por supuesto.
+     */
+    public function sumActiveMonthlyFees(): float
+    {
+        $dql = 'SELECT COALESCE(SUM(pbs.month_price + pbs.egg_month_price + COALESCE(pbs.transport_price, 0)), 0)
+                FROM App\Entity\PartnerBasketShare pbs
+                WHERE pbs.is_active = 1';
+
+        return (float) $this->getEntityManager()->createQuery($dql)->getSingleScalarResult();
+    }
 }
 
 

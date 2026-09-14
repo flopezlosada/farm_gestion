@@ -1,0 +1,111 @@
+{# ============================================================
+ # Anotar o corregir un apunte del libro.
+ #
+ # El importe NO se teclea con signo: se elige si el dinero entra o sale y se escribe
+ # la cantidad en positivo. La conversión la hace AccountEntryType.
+ #
+ # El controller pasa: form, entry (null al crear), heading, lead, suggestions
+ # (id de partida => 'in'|'out', para preseleccionar el sentido).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}{{ heading }} · Contabilidad{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_ledger') }}">Libro</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ entry ? 'Corregir' : 'Nuevo apunte' }}</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Contabilidad', heading, lead) }}
+
+    {{ form_start(form, { attr: { class: 'csa-form-narrow', 'data-csa-dropdowns': '1' } }) }}
+
+        {{ form_errors(form) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'El movimiento', subtitle: 'Lo que dice el extracto.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.date, 'Fecha', { hint: 'la del extracto' }) }}
+                        {{ csa.field(form.account, 'Cuenta', { widget_class: 'csa-select' }) }}
+                        {{ csa.field(form.concept, 'Concepto', { full: true, hint: 'a qué corresponde' }) }}
+                        {{ csa.field(form.category, 'Partida', { full: true, widget_class: 'csa-select' }) }}
+                        {{ csa.field(form.direction, '¿Entra o sale?', { widget_class: 'csa-select' }) }}
+                        {{ csa.field(form.magnitude, 'Importe', { hint: 'en euros, sin signo' }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Papeles', subtitle: 'Opcional, para encontrarlo luego.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.providerName, 'Proveedor') }}
+                        {{ csa.field(form.invoiceNumber, 'Nº de factura') }}
+                        {{ csa.field(form.notes, 'Notas', { full: true, widget_class: 'csa-textarea' }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('accounting_ledger') }) }}
+                    {% if not entry %}
+                        {{ form_widget(form.submitAndNew, { attr: { class: 'csa-btn csa-btn--secondary' } }) }}
+                    {% endif %}
+                    {{ form_widget(form.submit, { attr: { class: 'csa-btn csa-btn--primary' } }) }}
+                </div>
+            </div>
+
+        </div>
+
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
+
+    {# El borrado va FUERA del formulario de edición: un <form> dentro de otro no es
+     # HTML válido y el navegador se come el de dentro. #}
+    {% if entry %}
+        <div class="csa-form-narrow" style="margin-top: var(--csa-sp-6);">
+            <form method="post" action="{{ path('accounting_entry_delete', { id: entry.id }) }}"
+                  onsubmit="return confirm('¿Borrar este apunte? El saldo de la cuenta cambiará.');">
+                <input type="hidden" name="_token" value="{{ csrf_token('accounting_entry_delete_' ~ entry.id) }}">
+                <button type="submit" class="csa-btn csa-btn--danger"><i class="fa fa-trash"></i> <span>Borrar el apunte</span></button>
+            </form>
+        </div>
+    {% endif %}
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    <script>
+        // Al elegir partida, propone el sentido del dinero: una partida de gastos sale
+        // y una de ingresos entra. Es una propuesta, no una imposición — una devolución
+        // es un gasto que entra —, así que sólo toca el desplegable, no lo bloquea.
+        (function () {
+            var suggestions = {{ suggestions|json_encode|raw }};
+            var category = document.getElementById('{{ form.category.vars.id }}');
+            var direction = document.getElementById('{{ form.direction.vars.id }}');
+            if (!category || !direction) { return; }
+
+            category.addEventListener('change', function () {
+                var proposed = suggestions[category.value];
+                if (!proposed || direction.value === proposed) { return; }
+                direction.value = proposed;
+                // El dropdown con estética csa envuelve el select nativo: sin este
+                // evento se queda enseñando la etiqueta vieja.
+                direction.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        })();
+    </script>
+{% endblock %}

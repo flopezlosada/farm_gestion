@@ -240,6 +240,14 @@ class AppSettings
     public const FEATURE_GRUPO_CONSUMO = 'feature.grupo_consumo';
 
     /**
+     * ¿Está abierto el módulo de contabilidad y presupuestos (libro de caja,
+     * partidas, presupuesto anual y su seguimiento)? Apagado, se oculta del menú y
+     * sus rutas responden 403. Lo resuelve {@see \App\Security\FeatureVoter} vía
+     * {@see is_granted('FEATURE_CONTABILIDAD')}. Arranca OFF (rodaje).
+     */
+    public const FEATURE_CONTABILIDAD = 'feature.contabilidad';
+
+    /**
      * Cómo se paga un pedido del grupo de consumo: el texto que ve la socia
      * cuando su pedido se confirma (número de cuenta y a nombre de quién).
      *
@@ -792,6 +800,12 @@ class AppSettings
             'group' => 'Funcionalidades en rodaje',
             'label' => 'Grupo de consumo',
             'help' => 'Abre el módulo del grupo de consumo: productores, rondas de pedido colectivo y los apuntes de lxs socixs. Apagado, se oculta del menú (gestión y panel) y no es accesible.',
+            'default' => false,
+        ],
+        self::FEATURE_CONTABILIDAD => [
+            'group' => 'Funcionalidades en rodaje',
+            'label' => 'Contabilidad y presupuestos',
+            'help' => 'Abre el libro de caja de la asociación (cuentas, apuntes y partidas) y el presupuesto del año con su seguimiento. Apagado, se oculta del menú y no es accesible.',
             'default' => false,
         ],
         self::FEATURE_VENCIMIENTOS => [

@@ -1,0 +1,38 @@
+{# ============================================================
+ # Los pocos rasgos visuales que necesitan las pantallas de contabilidad y que el
+ # lenguaje de listados no trae: cifras alineadas a la derecha con tipografía tabular
+ # (si no, las columnas de euros bailan), el rojo del número negativo, y las filas de
+ # grupo y de partida de las rejillas.
+ #
+ # Se incluye DESPUÉS de 'partner/_listing_styles.html.twig' en el bloque more_css.
+ # Lo específico de cada pantalla se queda en su plantilla.
+ # ============================================================ #}
+<style>
+    .acc-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .acc-neg { color: #b3261e; }
+    .acc-pos { color: #1e6b3a; }
+    .acc-muted { color: var(--csa-ink-soft, #6b6b6b); }
+    .acc-small { font-size: 11px; }
+    .acc-group-row > td { font-weight: 600; background: rgba(0, 0, 0, 0.05); }
+    .acc-cat-row > td:first-child { padding-left: 24px; }
+    .acc-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0; }
+    .acc-filters .csa-input { min-width: 120px; }
+
+    /* Rejillas de doce meses (el resumen del año y el presupuesto). */
+    .acc-grid { font-size: 12px; }
+    .acc-grid td, .acc-grid th { padding: 6px 8px; }
+    .acc-grid .zero { color: rgba(0, 0, 0, 0.2); }
+    .acc-total-col { background: rgba(0, 0, 0, 0.03); font-weight: 600; }
+
+    /* En móvil, el listado normal convierte cada fila en una tarjeta. Para una
+       rejilla eso da una tarjeta con doce líneas «Ene 0,00» que no dice nada: estas
+       tablas se quedan como tabla y se deslizan en horizontal. */
+    @media (max-width: 768px) {
+        .prl-table-wrap { overflow-x: auto; }
+        .acc-grid.prl-table { table-layout: auto; }
+        .acc-grid.prl-table thead { display: table-header-group; }
+        .acc-grid.prl-table tbody tr { display: table-row; padding: 0; }
+        .acc-grid.prl-table tbody td { display: table-cell; padding: 6px 8px; border-bottom: 0; }
+        .acc-grid.prl-table tbody td::before { content: none; }
+    }
+</style>

@@ -1,0 +1,121 @@
+{# ============================================================
+ # El año entero — cada partida por cada mes, con su total.
+ #
+ # Es la hoja «Resumen» del Excel, con una diferencia que importa: allí los
+ # números se copian a mano desde las otras hojas y se descuadran (en 2026 el
+ # resumen y el libro no coinciden en dos de los ocho meses cerrados). Aquí es la
+ # misma suma de siempre, sólo que presentada de otra forma.
+ #
+ # El controller pasa: year, years, tracked (con throughMonth = 12), months, kinds.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Contabilidad · Resumen {{ year }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Resumen {{ year }}</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Contabilidad · Resumen',
+        'El año ' ~ year,
+        'Cada partida mes a mes. Los mismos apuntes del libro, sumados.'
+    ) }}
+
+    <div class="prl-toolbar">
+        <div class="counters">
+            {% for y in years %}
+                <a href="{{ path('accounting_year', { year: y }) }}" class="prl-chip {{ y == year ? 'prl-chip--activo' : '' }}">{{ y }}</a>
+            {% endfor %}
+        </div>
+        <div class="spacer"></div>
+        <a href="{{ path('accounting_index') }}" class="prl-btn"><i class="fa fa-line-chart"></i> Cómo vamos</a>
+        <a href="{{ path('accounting_ledger') }}" class="prl-btn"><i class="fa fa-list"></i> Libro</a>
+    </div>
+
+    <div class="prl-table-wrap">
+        {% if tracked.groups is empty %}
+            <div class="prl-empty">No hay ningún apunte de {{ year }}.</div>
+        {% else %}
+            <table class="prl-table acc-grid">
+                <thead>
+                    <tr>
+                        <th>Partida</th>
+                        {% for n, name in months %}
+                            <th class="acc-num"><a href="{{ path('accounting_month', { year: year, month: n }) }}">{{ name|slice(0, 3) }}</a></th>
+                        {% endfor %}
+                        <th class="acc-num acc-total-col">Año</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for group in tracked.groups %}
+                        <tr class="acc-group-row">
+                            <td>{{ group.name }}</td>
+                            {% for n in 1..12 %}
+                                {% set v = group.actual[n] %}
+                                <td class="acc-num {{ v < 0 ? 'acc-neg' : '' }} {{ v == 0 ? 'zero' : '' }}">
+                                    {{ v == 0 ? '·' : v|number_format(0, ',', '.') }}
+                                </td>
+                            {% endfor %}
+                            <td class="acc-num acc-total-col {{ group.actualTotal < 0 ? 'acc-neg' : '' }}">
+                                {{ group.actualTotal|number_format(0, ',', '.') }}
+                            </td>
+                        </tr>
+                        {% for cat in group.categories %}
+                            <tr class="acc-cat-row">
+                                <td class="acc-muted">{{ cat.name }}</td>
+                                {% for n in 1..12 %}
+                                    {% set v = cat.actual[n] %}
+                                    <td class="acc-num {{ v < 0 ? 'acc-neg' : '' }} {{ v == 0 ? 'zero' : '' }}">
+                                        {{ v == 0 ? '·' : v|number_format(0, ',', '.') }}
+                                    </td>
+                                {% endfor %}
+                                <td class="acc-num acc-total-col {{ cat.actualTotal < 0 ? 'acc-neg' : '' }}">
+                                    {{ cat.actualTotal|number_format(0, ',', '.') }}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    {% for total in tracked.totals %}
+                        <tr>
+                            <td><b>{{ total.name }}</b></td>
+                            {% for n in 1..12 %}
+                                {% set v = total.actual[n] %}
+                                <td class="acc-num {{ v < 0 ? 'acc-neg' : '' }} {{ v == 0 ? 'zero' : '' }}">
+                                    <b>{{ v == 0 ? '·' : v|number_format(0, ',', '.') }}</b>
+                                </td>
+                            {% endfor %}
+                            <td class="acc-num acc-total-col {{ total.actualTotal < 0 ? 'acc-neg' : '' }}">
+                                <b>{{ total.actualTotal|number_format(0, ',', '.') }}</b>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tfoot>
+            </table>
+        {% endif %}
+    </div>
+
+    <p class="acc-muted" style="margin: 10px 2px; font-size: 12px;">
+        Importes redondeados a euros para que quepa la rejilla. El detalle está en el libro
+        y en la pantalla de cada mes.
+    </p>
+
+</div>
+{% endblock %}

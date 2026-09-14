@@ -483,6 +483,26 @@
                         </div>
                     {% endif %}
 
+                    {% if is_granted('FEATURE_CONTABILIDAD') and is_granted('ROLE_GESTION_CONTABILIDAD') %}
+                        <div class="csa-navgroup{{ sec_collapsed }}">
+                            <button type="button" class="csa-navgroup__head">Contabilidad <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Cómo vamos', path('accounting_index'), 'fa-line-chart',
+                                   route == 'accounting_index') }}
+                                {{ _self.nav_link('Libro', path('accounting_ledger'), 'fa-list',
+                                   route starts with 'accounting_ledger' or route starts with 'accounting_month') }}
+                                {{ _self.nav_link('Resumen del año', path('accounting_year', { year: 'now'|date('Y') }), 'fa-table',
+                                   route starts with 'accounting_year') }}
+                                {{ _self.nav_link('Presupuestos', path('accounting_budgets'), 'fa-calculator',
+                                   route starts with 'accounting_budget') }}
+                                {{ _self.nav_link('Cuentas', path('accounting_accounts'), 'fa-university',
+                                   route starts with 'accounting_account') }}
+                                {{ _self.nav_link('Partidas', path('accounting_categories'), 'fa-tags',
+                                   route starts with 'accounting_categor') }}
+                            </div>
+                        </div>
+                    {% endif %}
+
                 {% endblock %}
             </nav>
         </aside>

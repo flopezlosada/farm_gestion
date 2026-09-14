@@ -70,6 +70,7 @@ class UserType extends AbstractType
         // socixs, y por eso tiene sección propia: lectura para ver rondas,
         // catálogo y apuntes; escritura para llevarlas.
         'grupo_consumo' => ['label' => 'Grupo de consumo', 'read' => 'ROLE_GESTION_GRUPO_CONSUMO', 'edit' => 'ROLE_GESTION_GRUPO_CONSUMO_EDIT'],
+        'contabilidad' => ['label' => 'Contabilidad',     'read' => 'ROLE_GESTION_CONTABILIDAD', 'edit' => 'ROLE_GESTION_CONTABILIDAD_EDIT'],
         // La lectura no es sólo para mirar: es la que decide a quién le llega el
         // aviso de que algo caduca ({@see \App\Command\SendObligationNoticesCommand}).
         // Dársela a alguien es ponerle en la lista de quien se entera.
