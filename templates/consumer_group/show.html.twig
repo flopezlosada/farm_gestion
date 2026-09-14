@@ -352,6 +352,28 @@
             </div>
         </section>
 
+        <section class="prt-card">
+            <header class="prt-card__head">
+                <h2 class="prt-card__title"><span class="accent"></span>Actividad</h2>
+            </header>
+            <div class="prt-card__body">
+            {% if activity is empty %}
+                <p class="csa-muted">Sin actividad registrada todavía.</p>
+            {% else %}
+                <ul class="cg-activity">
+                    {% for event in activity %}
+                        <li>
+                            <span class="csa-muted">{{ event.occurredAt|date('d/m/Y H:i') }}</span>
+                            <b>{{ event.kindLabel }}</b>
+                            — {{ event.summary }}
+                            <span class="csa-muted">({{ event.actorLabel }})</span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+            </div>
+        </section>
+
         {% if can_edit and round.orders is empty %}
             <div class="csa-row" style="justify-content: flex-end;">
                 <form method="post" action="{{ path('consumer_group_delete', { id: round.id }) }}"
