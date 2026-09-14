@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Entity\ConsumerGroupEventLog;
 use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupProduct;
 use App\Entity\ConsumerGroupRound;
@@ -9,6 +10,7 @@ use App\Entity\Image;
 use App\Repository\ConsumerGroupOrderRepository;
 use App\Repository\ConsumerGroupRoundRepository;
 use App\Service\AppSettings;
+use App\Service\ConsumerGroup\ConsumerGroupEventRecorder;
 use App\Service\ConsumerGroup\OrderEditor;
 use App\Service\ConsumerGroup\RepeatLastOrder;
 use Doctrine\ORM\EntityManagerInterface;
@@ -147,7 +149,7 @@ class PanelConsumerGroupController extends AbstractController
      * no existía y sincroniza las líneas con las cantidades enviadas.
      */
     #[Route('/{id}/order', name: 'panel_consumer_group_order', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function order(Request $request, ConsumerGroupRound $round, ConsumerGroupOrderRepository $orders, OrderEditor $editor, EntityManagerInterface $em): Response
+    public function order(Request $request, ConsumerGroupRound $round, ConsumerGroupOrderRepository $orders, OrderEditor $editor, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
         $partner = $this->getUser()?->getPartner();
         if ($partner === null) {
@@ -176,7 +178,8 @@ class PanelConsumerGroupController extends AbstractController
             $desired[] = ['item' => $item, 'quantity' => $raw[$item->getId()] ?? '0'];
         }
 
-        $order = $orders->findOneByRoundAndPartner($round, $partner) ?? new ConsumerGroupOrder($round, $partner);
+        $existing = $orders->findOneByRoundAndPartner($round, $partner);
+        $order = $existing ?? new ConsumerGroupOrder($round, $partner);
         $editor->apply($order, $desired);
 
         // No persistir un pedido nuevo que queda vacío (no se ha pedido nada).
@@ -187,6 +190,10 @@ class PanelConsumerGroupController extends AbstractController
         }
 
         $em->persist($order);
+        $kind = $existing === null
+            ? ConsumerGroupEventLog::KIND_ORDER_CREATED
+            : ($order->isEmpty() ? ConsumerGroupEventLog::KIND_ORDER_EMPTIED : ConsumerGroupEventLog::KIND_ORDER_UPDATED);
+        $recorder->record($kind, $round, $this->getUser(), sprintf('%s %s su pedido.', $partner, $existing === null ? 'apuntó' : ($order->isEmpty() ? 'vació' : 'actualizó')));
         $em->flush();
         $this->addFlash('success', 'Pedido guardado. Podrás cambiarlo hasta que se cierre la ronda.');
 
