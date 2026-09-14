@@ -34,7 +34,7 @@ class ImportBudgetCommandTest extends TestCase
             ['FINANCIACION', 'Cuotas préstamo', '1', '-200'],
         ]);
 
-        $tester = $this->run($csv);
+        $tester = $this->runImport($csv);
 
         $this->assertSame(Command::SUCCESS, $tester->getStatusCode());
         $display = $tester->getDisplay();
@@ -53,7 +53,7 @@ class ImportBudgetCommandTest extends TestCase
             ['GASTOS', 'Semillas y plantel', '1', '50'],
         ]);
 
-        $tester = $this->run($csv);
+        $tester = $this->runImport($csv);
 
         $display = $tester->getDisplay();
         $this->assertStringContainsString('100,00', $display);
@@ -74,7 +74,7 @@ class ImportBudgetCommandTest extends TestCase
         return $path;
     }
 
-    private function run(string $csvPath): CommandTester
+    private function runImport(string $csvPath): CommandTester
     {
         $groups = [
             'INGRESOS' => $this->group(1, 'INGRESOS', BudgetCategoryGroup::KIND_INCOME),
