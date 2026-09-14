@@ -1,0 +1,91 @@
+{# ============================================================
+ # Layout del panel del productor autogestionado (faceta ROLE_PRODUCER).
+ # Hermano de csa_work (trabajador) y csa_panel (socix): misma estructura,
+ # pero su área es "Mi catálogo" — abrir/cerrar sus rondas y llevar su
+ # catálogo. Separado a propósito: un productor no es socix ni trabajador.
+ # ============================================================ #}
+
+{% extends 'base.html.twig' %}
+
+{% block more_css %}
+    {{ parent() }}
+    {{ encore_entry_link_tags('app') }}
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {{ encore_entry_script_tags('app') }}
+{% endblock %}
+
+{% block body %}
+<div class="csa-app">
+    <div class="csa-shell">
+
+        {% set route = app.request.attributes.get('_route') %}
+
+        {# ---------- SIDEBAR ---------- #}
+        <aside class="csa-sidebar" id="csa-sidebar">
+            <div class="csa-sidebar__brand">
+                <div class="csa-sidebar__brand-name">CSA Vega de Jarama</div>
+                <div class="csa-sidebar__brand-sub">Mi catálogo</div>
+            </div>
+
+            <nav class="csa-sidebar__nav">
+                <div class="csa-sidebar__group">Mi área</div>
+                {{ _self.nav_link('Mis pedidos', path('panel_producer_index'), 'fa-shopping-basket', route starts with 'panel_producer_round') }}
+                {{ _self.nav_link('Mi catálogo', path('panel_producer_product_index'), 'fa-list', route starts with 'panel_producer_product') }}
+            </nav>
+        </aside>
+
+        {# ---------- MAIN ---------- #}
+        <div class="csa-main">
+            <header class="csa-topbar">
+                <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm csa-sidebar-toggle"
+                        aria-label="Abrir navegación" aria-controls="csa-sidebar" aria-expanded="false">
+                    <i class="fa fa-bars"></i>
+                </button>
+
+                <nav class="csa-topbar__crumbs" aria-label="Migas de pan">
+                    {% block csa_crumbs %}
+                        <a href="{{ path('panel_producer_index') }}">Mi catálogo</a>
+                    {% endblock %}
+                </nav>
+
+                <div class="csa-topbar__user">
+                    {% if app.user %}
+                        {% set me_producer = app.user.producer %}
+                        {% set me_name = me_producer ? me_producer.name : app.user.userIdentifier %}
+                        <div class="csa-me">
+                            <span class="csa-me__id">
+                                <span class="csa-avatar">{{- me_name|first|upper -}}</span>
+                                <span class="csa-me__name">{{ me_name }}</span>
+                            </span>
+                            <a href="{{ path('app_logout') }}" class="csa-me__logout" title="Cerrar sesión" aria-label="Cerrar sesión">
+                                <i class="fa fa-sign-out" aria-hidden="true"></i>
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </header>
+
+            <main class="csa-content">
+                {% include '_components/csa_flashes.html.twig' %}
+
+                {% block csa_main %}{% endblock %}
+            </main>
+        </div>
+
+    </div>
+
+    {% include '_components/sidebar_drawer.html.twig' %}
+</div>
+{% endblock %}
+
+
+{# Helper idéntico al de los otros layouts. Se duplica porque cada layout es self-contained. #}
+{% macro nav_link(label, href, icon, active) %}
+    <a href="{{ href }}" class="csa-sidebar__link{% if active %} csa-sidebar__link--active{% endif %}">
+        {% if icon %}<i class="csa-sidebar__icon fa {{ icon }}"></i>{% endif %}
+        <span>{{ label }}</span>
+    </a>
+{% endmacro %}

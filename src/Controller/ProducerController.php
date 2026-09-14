@@ -7,6 +7,8 @@ use App\Entity\Image;
 use App\Entity\Producer;
 use App\Form\ProducerType;
 use App\Repository\ProducerRepository;
+use App\Security\MagicLinkMailer;
+use App\Security\ProducerUserProvisioner;
 use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -66,7 +68,7 @@ class ProducerController extends AbstractController
      * Ficha del productor con su catálogo.
      */
     #[Route('/{id}', name: 'consumer_group_producer_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(Producer $producer, EntityManagerInterface $em): Response
+    public function show(Producer $producer, ProducerUserProvisioner $provisioner, EntityManagerInterface $em): Response
     {
         // Las fotos del catálogo, en una consulta: la tabla las pinta por fila y
         // preguntar una vez por producto sería un N+1 con veinte referencias.
@@ -79,7 +81,87 @@ class ProducerController extends AbstractController
             'producer' => $producer,
             'photos' => $em->getRepository(Image::class)
                 ->findOneForObjects(ConsumerGroupProduct::OBJECT_CLASS, array_filter($productIds)),
+            // Sólo tiene sentido ofrecer acceso a un productor autogestionado: el
+            // que va vía comisión no lleva panel propio.
+            'access_user' => $producer->isSelfManaged() ? $provisioner->userFor($producer) : null,
         ]);
+    }
+
+    /**
+     * Da acceso de login al productor con el email de su ficha (reusa cuenta
+     * existente o crea una) y le envía el enlace de acceso.
+     */
+    #[Route('/{id}/access/grant', name: 'consumer_group_producer_access_grant', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function grantAccess(Request $request, Producer $producer, ProducerUserProvisioner $provisioner, MagicLinkMailer $magicLinkMailer): Response
+    {
+        if (!$this->isCsrfTokenValid('producer_access'.$producer->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('consumer_group_producer_show', ['id' => $producer->getId()]);
+        }
+
+        try {
+            $user = $provisioner->grantAccess($producer);
+        } catch (\LogicException $e) {
+            $this->addFlash('error', $e->getMessage());
+
+            return $this->redirectToRoute('consumer_group_producer_show', ['id' => $producer->getId()]);
+        }
+
+        if ($magicLinkMailer->send($user)) {
+            $this->addFlash('success', sprintf('Acceso concedido a %s. Le hemos enviado un enlace para entrar.', $user->getEmail()));
+        } else {
+            $this->addFlash('warning', sprintf('Acceso concedido a %s, pero no se pudo enviar el enlace. Reenvíalo desde su ficha.', $user->getEmail()));
+        }
+
+        return $this->redirectToRoute('consumer_group_producer_show', ['id' => $producer->getId()]);
+    }
+
+    /**
+     * Reenvía el enlace de acceso a la cuenta del productor.
+     */
+    #[Route('/{id}/access/resend', name: 'consumer_group_producer_access_resend', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function resendAccess(Request $request, Producer $producer, ProducerUserProvisioner $provisioner, MagicLinkMailer $magicLinkMailer): Response
+    {
+        if (!$this->isCsrfTokenValid('producer_access'.$producer->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('consumer_group_producer_show', ['id' => $producer->getId()]);
+        }
+
+        $user = $provisioner->userFor($producer);
+        if ($user === null) {
+            $this->addFlash('warning', 'Este productor aún no tiene cuenta de acceso. Dale acceso primero.');
+
+            return $this->redirectToRoute('consumer_group_producer_show', ['id' => $producer->getId()]);
+        }
+
+        if ($magicLinkMailer->send($user)) {
+            $this->addFlash('success', sprintf('Enlace de acceso reenviado a %s.', $user->getEmail()));
+        } else {
+            $this->addFlash('error', 'No se pudo enviar el enlace. Revisa la configuración de correo.');
+        }
+
+        return $this->redirectToRoute('consumer_group_producer_show', ['id' => $producer->getId()]);
+    }
+
+    /**
+     * Retira el acceso de login del productor (desvincula su cuenta; si era sólo
+     * de productor, la deshabilita).
+     */
+    #[Route('/{id}/access/revoke', name: 'consumer_group_producer_access_revoke', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function revokeAccess(Request $request, Producer $producer, ProducerUserProvisioner $provisioner): Response
+    {
+        if (!$this->isCsrfTokenValid('producer_access'.$producer->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('consumer_group_producer_show', ['id' => $producer->getId()]);
+        }
+
+        $provisioner->revokeAccess($producer);
+        $this->addFlash('success', sprintf('Acceso retirado a «%s».', $producer->getName()));
+
+        return $this->redirectToRoute('consumer_group_producer_show', ['id' => $producer->getId()]);
     }
 
     /**

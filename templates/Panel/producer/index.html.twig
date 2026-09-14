@@ -1,0 +1,82 @@
+{# ============================================================
+ # Panel del productor · Mis pedidos.
+ #   - rounds  ConsumerGroupRound[] de este productor
+ # ============================================================ #}
+
+{% extends '_layouts/csa_producer.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set status_chip = {
+    0: { label: 'Abierto',    cls: 'activo'   },
+    1: { label: 'Cerrado',    cls: 'pausado'  },
+    3: { label: 'Cancelado',  cls: 'baja'     },
+    4: { label: 'Entregado',  cls: 'pausado'  }
+} %}
+
+{% block title %}Mis pedidos{% endblock %}
+
+{% block csa_crumbs %}
+    <span class="csa-topbar__crumb-active">Mis pedidos</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Mi catálogo',
+        'Mis pedidos',
+        'Abre un pedido cuando quieras vender por el grupo de consumo. Al cerrarlo, la comisión habla contigo y lo confirma con las socias.'
+    ) }}
+
+    <div class="prl-toolbar">
+        <div class="counters">
+            <b>{{ rounds|length }}</b> pedido{{ rounds|length == 1 ? '' : 's' }}
+        </div>
+        <div class="spacer"></div>
+        <a href="{{ path('panel_producer_round_new') }}" class="prl-btn prl-btn--primary">
+            <i class="fa fa-plus"></i> Abrir pedido
+        </a>
+    </div>
+
+    <div class="prl-table-wrap">
+        {% if rounds is empty %}
+            <div class="prl-empty">Todavía no has abierto ningún pedido.</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th>Pedido</th>
+                        <th class="tight">Estado</th>
+                        <th class="tight">Entrega</th>
+                        <th class="actions"><span class="sr-only">Acciones</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for round in rounds %}
+                        {% set sc = status_chip[round.status]|default({ label: round.statusLabel, cls: 'baja' }) %}
+                        <tr>
+                            <td>
+                                <a class="prl-person__name" href="{{ path('panel_producer_round_show', { id: round.id }) }}">{{ round.title }}</a>
+                            </td>
+                            <td class="tight">
+                                <span class="prl-chip prl-chip--{{ sc.cls }}"><span class="dot"></span>{{ sc.label }}</span>
+                                {% if round.confirmed %}<span class="prl-chip prl-chip--activo"><span class="dot"></span>Confirmado</span>{% endif %}
+                            </td>
+                            <td class="tight">{{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}</td>
+                            <td class="actions">
+                                <a href="{{ path('panel_producer_round_show', { id: round.id }) }}" title="Ver" aria-label="Ver"><i class="fa fa-eye"></i></a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

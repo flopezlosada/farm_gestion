@@ -1,0 +1,66 @@
+{# ============================================================
+ # Panel del productor · Mi catálogo.
+ #   - producer  Producer (el logueado)
+ #   - photos    map product_id => Image
+ # ============================================================ #}
+
+{% extends '_layouts/csa_producer.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Mi catálogo{% endblock %}
+
+{% block csa_crumbs %}
+    <span class="csa-topbar__crumb-active">Mi catálogo</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Mi catálogo', 'Productos', 'Lo que ofreces al grupo de consumo. Solo los productos ACTIVOS se ofrecen al abrir un pedido nuevo.') }}
+
+    <div class="csa-card">
+        <div class="csa-row-between" style="margin-bottom: var(--csa-sp-3);">
+            <h2 class="csa-card__title" style="margin: 0;">Productos</h2>
+            <a href="{{ path('panel_producer_product_new') }}" class="csa-btn csa-btn--primary csa-btn--sm">
+                <i class="fa fa-plus"></i> Añadir producto
+            </a>
+        </div>
+        {% if producer.products is empty %}
+            <p class="csa-muted">Sin productos en el catálogo. Añade el primero con el botón de arriba.</p>
+        {% else %}
+            <div class="prl prl-table-wrap">
+            <table class="prl-table">
+                <thead>
+                    <tr><th>Producto</th><th class="tight">Categoría</th><th class="tight">Unidad</th><th class="tight">Precio ref.</th><th class="tight">Estado</th><th class="actions"></th></tr>
+                </thead>
+                <tbody>
+                    {% for product in producer.products %}
+                        <tr>
+                            <td>
+                                <div class="cg-cat-row">
+                                    {% set foto = photos[product.id]|default(null) %}
+                                    {% if foto %}
+                                        <img class="cg-cat-row__photo" src="{{ asset(foto.webPath) }}" alt="">
+                                    {% else %}
+                                        <span class="cg-cat-row__photo cg-cat-row__photo--empty" aria-hidden="true"><i class="fa fa-camera"></i></span>
+                                    {% endif %}
+                                    <span>{{ product.name }}{% if product.description %} <span class="csa-muted">— {{ product.description }}</span>{% endif %}</span>
+                                </div>
+                            </td>
+                            <td class="tight">{{ product.category ? product.category.name : '—' }}</td>
+                            <td class="tight">{{ product.unit }}</td>
+                            <td class="tight">{{ product.referencePrice is not null ? product.referencePrice|number_format(2, ',', '.') ~ ' €' : '—' }}</td>
+                            <td class="tight">{{ product.active ? 'Activo' : 'Inactivo' }}</td>
+                            <td class="actions">
+                                <a href="{{ path('panel_producer_product_edit', { id: product.id }) }}" title="Editar"><i class="fa fa-pencil"></i></a>
+                                <form method="post" action="{{ path('panel_producer_product_delete', { id: product.id }) }}" style="display:inline;" onsubmit="return confirm('¿Borrar “{{ product.name }}” del catálogo?')">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('panel_producer_product_delete_' ~ product.id) }}">
+                                    <button type="submit" class="prl-btn prl-btn--sm" title="Borrar"><i class="fa fa-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}
