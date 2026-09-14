@@ -2,9 +2,11 @@
 
 namespace App\Controller;
 
+use App\Entity\ConsumerGroupEventLog;
 use App\Entity\ConsumerGroupRound;
 use App\Form\ConsumerGroupRoundType;
 use App\Repository\ConsumerGroupRoundRepository;
+use App\Service\ConsumerGroup\ConsumerGroupEventRecorder;
 use App\Service\ConsumerGroup\InvalidRoundTransition;
 use App\Service\ConsumerGroup\OrderAggregator;
 use App\Service\ConsumerGroup\RoundItemEditor;
@@ -52,7 +54,7 @@ class PanelProducerController extends AbstractController
      * queda bloqueado en el form, igual que en la edición desde gestión.
      */
     #[Route('/rounds/new', name: 'panel_producer_round_new', methods: ['GET', 'POST'])]
-    public function new(Request $request, RoundItemEditor $itemEditor, EntityManagerInterface $em): Response
+    public function new(Request $request, RoundItemEditor $itemEditor, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
         $producer = $this->getUser()->getProducer();
 
@@ -65,6 +67,7 @@ class PanelProducerController extends AbstractController
             $itemEditor->seedFromCatalog($round);
             $round->setCreatedBy($this->getUser());
             $em->persist($round);
+            $recorder->record(ConsumerGroupEventLog::KIND_ROUND_CREATED, $round, $this->getUser(), 'Pedido creado por el productor.');
             $em->flush();
             $this->addFlash('success', 'Pedido creado. Revisa los productos y precios.');
 
@@ -97,7 +100,7 @@ class PanelProducerController extends AbstractController
      * Mismo servicio y misma lógica que la pantalla equivalente de gestión.
      */
     #[Route('/rounds/{id}/items', name: 'panel_producer_round_items', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function items(Request $request, ConsumerGroupRound $round, RoundItemEditor $itemEditor, EntityManagerInterface $em): Response
+    public function items(Request $request, ConsumerGroupRound $round, RoundItemEditor $itemEditor, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
         $this->assertOwnRound($round);
 
@@ -136,6 +139,7 @@ class PanelProducerController extends AbstractController
                 ];
             }
             $itemEditor->apply($round, $desired);
+            $recorder->record(ConsumerGroupEventLog::KIND_ITEMS_UPDATED, $round, $this->getUser(), 'Productos y precios actualizados por el productor.');
             $em->flush();
             $this->addFlash('success', 'Productos y precios actualizados.');
 
@@ -164,7 +168,7 @@ class PanelProducerController extends AbstractController
      * Confirmar NO está aquí: lo decide la comisión (implica cobro a socias).
      */
     #[Route('/rounds/{id}/transition', name: 'panel_producer_round_transition', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function transition(Request $request, ConsumerGroupRound $round, RoundStateMachine $machine, EntityManagerInterface $em): Response
+    public function transition(Request $request, ConsumerGroupRound $round, RoundStateMachine $machine, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
         $this->assertOwnRound($round);
 
@@ -190,6 +194,7 @@ class PanelProducerController extends AbstractController
             }
         }
 
+        $recorder->record(ConsumerGroupEventLog::KIND_ROUND_TRANSITIONED, $round, $this->getUser(), sprintf('Pedido marcado como "%s" por el productor.', $round->getStatusLabel()));
         $em->flush();
         $this->addFlash('success', sprintf('Pedido marcado como "%s".', $round->getStatusLabel()));
 
