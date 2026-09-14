@@ -2,10 +2,12 @@
 
 namespace App\Controller;
 
+use App\Entity\ConsumerGroupEventLog;
 use App\Entity\ConsumerGroupProduct;
 use App\Entity\Image;
 use App\Form\ConsumerGroupProductType;
 use App\Form\ImageType;
+use App\Service\ConsumerGroup\ConsumerGroupEventRecorder;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\FormInterface;
@@ -43,7 +45,7 @@ class PanelProducerProductController extends AbstractController
     }
 
     #[Route('/new', name: 'panel_producer_product_new', methods: ['GET', 'POST'])]
-    public function new(Request $request, EntityManagerInterface $em): Response
+    public function new(Request $request, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
         $producer = $this->getUser()->getProducer();
 
@@ -56,6 +58,7 @@ class PanelProducerProductController extends AbstractController
 
         if ($form->isSubmitted() && $form->isValid()) {
             $em->persist($product);
+            $recorder->record(ConsumerGroupEventLog::KIND_PRODUCT_CREATED, null, $this->getUser(), sprintf('Producto "%s" añadido por el productor.', $product->getName()));
             $em->flush();
             $this->addFlash('success', 'Producto añadido a tu catálogo.');
 
@@ -68,7 +71,7 @@ class PanelProducerProductController extends AbstractController
     }
 
     #[Route('/{id}/edit', name: 'panel_producer_product_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function edit(Request $request, ConsumerGroupProduct $product, EntityManagerInterface $em): Response
+    public function edit(Request $request, ConsumerGroupProduct $product, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
         $this->assertOwnProduct($product);
 
@@ -76,6 +79,7 @@ class PanelProducerProductController extends AbstractController
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
+            $recorder->record(ConsumerGroupEventLog::KIND_PRODUCT_UPDATED, null, $this->getUser(), sprintf('Producto "%s" actualizado por el productor.', $product->getName()));
             $em->flush();
             $this->addFlash('success', 'Producto actualizado.');
 
@@ -145,9 +149,10 @@ class PanelProducerProductController extends AbstractController
     }
 
     #[Route('/{id}/delete', name: 'panel_producer_product_delete', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function delete(Request $request, ConsumerGroupProduct $product, EntityManagerInterface $em): Response
+    public function delete(Request $request, ConsumerGroupProduct $product, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
         $this->assertOwnProduct($product);
+        $productName = $product->getName();
 
         if (!$this->isCsrfTokenValid('panel_producer_product_delete_'.$product->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
@@ -162,6 +167,7 @@ class PanelProducerProductController extends AbstractController
             }
 
             $em->remove($product);
+            $recorder->record(ConsumerGroupEventLog::KIND_PRODUCT_DELETED, null, $this->getUser(), sprintf('Producto "%s" borrado por el productor.', $productName));
             $em->flush();
             $this->addFlash('success', 'Producto borrado del catálogo.');
         } catch (\Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException) {
