@@ -2,11 +2,13 @@
 
 namespace App\Controller;
 
+use App\Entity\ConsumerGroupEventLog;
 use App\Entity\ConsumerGroupProduct;
 use App\Entity\Image;
 use App\Entity\Producer;
 use App\Form\ConsumerGroupProductType;
 use App\Form\ImageType;
+use App\Service\ConsumerGroup\ConsumerGroupEventRecorder;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\FormInterface;
@@ -30,7 +32,7 @@ class ConsumerGroupProductController extends AbstractController
      * Añadir un producto al catálogo del productor.
      */
     #[Route('/gestion/consumer-group/producers/{id}/products/new', name: 'consumer_group_product_new', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function new(Request $request, Producer $producer, EntityManagerInterface $em): Response
+    public function new(Request $request, Producer $producer, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
         $product = new ConsumerGroupProduct();
         $product->setProducer($producer);
@@ -41,6 +43,7 @@ class ConsumerGroupProductController extends AbstractController
 
         if ($form->isSubmitted() && $form->isValid()) {
             $em->persist($product);
+            $recorder->record(ConsumerGroupEventLog::KIND_PRODUCT_CREATED, null, $this->getUser(), sprintf('Producto "%s" añadido al catálogo de %s.', $product->getName(), $producer));
             $em->flush();
             $this->addFlash('success', 'Producto añadido al catálogo.');
 
@@ -57,12 +60,13 @@ class ConsumerGroupProductController extends AbstractController
      * Editar un producto del catálogo.
      */
     #[Route('/gestion/consumer-group/products/{id}/edit', name: 'consumer_group_product_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function edit(Request $request, ConsumerGroupProduct $product, EntityManagerInterface $em): Response
+    public function edit(Request $request, ConsumerGroupProduct $product, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
         $form = $this->createForm(ConsumerGroupProductType::class, $product);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
+            $recorder->record(ConsumerGroupEventLog::KIND_PRODUCT_UPDATED, null, $this->getUser(), sprintf('Producto "%s" actualizado.', $product->getName()));
             $em->flush();
             $this->addFlash('success', 'Producto actualizado.');
 
@@ -169,9 +173,10 @@ class ConsumerGroupProductController extends AbstractController
      * la ficha ofrece desactivarlo en su lugar; aquí el guard lo captura.
      */
     #[Route('/gestion/consumer-group/products/{id}/delete', name: 'consumer_group_product_delete', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function delete(Request $request, ConsumerGroupProduct $product, EntityManagerInterface $em): Response
+    public function delete(Request $request, ConsumerGroupProduct $product, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
         $producerId = $product->getProducer()->getId();
+        $productName = $product->getName();
 
         if (!$this->isCsrfTokenValid('consumer_group_product_delete_'.$product->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
@@ -189,6 +194,7 @@ class ConsumerGroupProductController extends AbstractController
             }
 
             $em->remove($product);
+            $recorder->record(ConsumerGroupEventLog::KIND_PRODUCT_DELETED, null, $this->getUser(), sprintf('Producto "%s" borrado del catálogo.', $productName));
             $em->flush();
             $this->addFlash('success', 'Producto borrado del catálogo.');
         } catch (\Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException) {
