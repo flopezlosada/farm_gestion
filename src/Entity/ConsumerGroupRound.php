@@ -154,18 +154,20 @@ class ConsumerGroupRound
     private ?\DateTime $announcedAt = null;
 
     /**
-     * Fecha y hora de cierre de apuntes. Pasada esta fecha, la ronda ya no
+     * Día de cierre de apuntes (sin hora: la comisión sólo decide el día, no una
+     * hora concreta). Admite apuntes durante todo ese día; pasado, la ronda ya no
      * debería recibir pedidos (el cierre efectivo lo hace la transición a CLOSED).
-     * @ORM\Column(type="datetime")
+     * @ORM\Column(type="date")
      */
     #[Assert\NotNull]
     private ?\DateTime $ordersCloseAt = null;
 
     /**
-     * Día de entrega del producto (se reparte con la cesta de esa semana).
-     * @ORM\Column(type="date")
+     * Día de entrega del producto (se reparte con la cesta de esa semana). Puede
+     * no conocerse todavía al abrir la ronda (depende del productor): se añade
+     * después, antes de la entrega.
+     * @ORM\Column(type="date", nullable=true)
      */
-    #[Assert\NotNull]
     private ?\DateTime $deliveryDate = null;
 
     /**
@@ -280,7 +282,7 @@ class ConsumerGroupRound
             return false;
         }
 
-        return $this->ordersCloseAt === null || $this->ordersCloseAt >= new \DateTime();
+        return $this->ordersCloseAt === null || $this->ordersCloseAt >= new \DateTime('today');
     }
 
     /**
@@ -414,9 +416,15 @@ class ConsumerGroupRound
         return $this->ordersCloseAt;
     }
 
+    /**
+     * Trunca a medianoche: es un día, no un instante. Así {@see canReceiveOrders()}
+     * compara días contra días aunque aún no se haya pasado por BBDD (la columna
+     * `date` lo haría igualmente al persistir, pero el objeto en memoria debe
+     * comportarse igual antes del flush).
+     */
     public function setOrdersCloseAt(?\DateTime $ordersCloseAt): self
     {
-        $this->ordersCloseAt = $ordersCloseAt;
+        $this->ordersCloseAt = $ordersCloseAt !== null ? (clone $ordersCloseAt)->setTime(0, 0, 0) : null;
         return $this;
     }
 

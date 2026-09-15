@@ -39,7 +39,7 @@
         {% if can_order %}
             <div class="csa-card">
                 <p class="csa-muted" style="margin-top: 0;">
-                    Cierre de apuntes: <b>{{ round.ordersCloseAt ? round.ordersCloseAt|date('d/m/Y H:i') : '—' }}</b>.
+                    Cierre de apuntes: <b>{{ round.ordersCloseAt ? round.ordersCloseAt|date('d/m/Y') : '—' }}</b>.
                     Entrega el <b>{{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}</b> con tu cesta.
                     Puedes cambiar tu pedido hasta el cierre.
                     {# Un pedido confirmado sigue admitiendo cambios, pero ya NO es cierto
@@ -158,7 +158,7 @@
                 <p class="csa-muted">
                     {% if plazo_vencido %}
                         El plazo para apuntarse terminó
-                        {% if round.ordersCloseAt %}el <b>{{ round.ordersCloseAt|date('d/m/Y H:i') }}</b>{% endif %}.
+                        {% if round.ordersCloseAt %}el <b>{{ round.ordersCloseAt|date('d/m/Y') }}</b>{% endif %}.
                     {% else %}
                         Este pedido ya no admite cambios.
                     {% endif %}

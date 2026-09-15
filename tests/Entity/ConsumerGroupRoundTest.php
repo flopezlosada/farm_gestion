@@ -28,8 +28,16 @@ class ConsumerGroupRoundTest extends TestCase
     public function testConElPlazoVencidoYaNoSeApuntaNadie(): void
     {
         self::assertFalse(
-            $this->round(new \DateTime('-1 minute'))->canReceiveOrders(),
+            $this->round(new \DateTime('-1 day'))->canReceiveOrders(),
             'La fecha de cierre tiene que cerrar de verdad, no sólo pintarse.'
+        );
+    }
+
+    public function testElDiaDeCierreTodaviaAdmiteApuntes(): void
+    {
+        self::assertTrue(
+            $this->round(new \DateTime('today'))->canReceiveOrders(),
+            'El cierre es un día (sin hora): admite apuntes durante todo ese día.'
         );
     }
 

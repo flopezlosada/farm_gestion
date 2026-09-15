@@ -7,7 +7,6 @@ use App\Entity\Producer;
 use App\Repository\ProducerRepository;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
-use Symfony\Component\Form\Extension\Core\Type\DateTimeType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
@@ -42,15 +41,17 @@ class ConsumerGroupRoundType extends AbstractType
                     ->where('p.active = true')
                     ->orderBy('p.name', 'ASC'),
             ])
-            ->add('ordersCloseAt', DateTimeType::class, [
+            ->add('ordersCloseAt', DateType::class, [
                 'label'  => 'Cierre de apuntes',
                 'widget' => 'single_text',
                 'html5'  => true,
             ])
             ->add('deliveryDate', DateType::class, [
-                'label'  => 'Fecha de entrega (se reparte con la cesta)',
-                'widget' => 'single_text',
-                'html5'  => true,
+                'label'    => 'Fecha de entrega (se reparte con la cesta)',
+                'widget'   => 'single_text',
+                'html5'    => true,
+                'required' => false,
+                'help'     => 'Si todavía no se sabe, se puede añadir más adelante.',
             ])
             ->add('minimumCondition', TextType::class, [
                 'label'    => 'Condición de mínimo (informativa)',
@@ -61,12 +62,12 @@ class ConsumerGroupRoundType extends AbstractType
             ->add('description', TextareaType::class, [
                 'label'    => 'Descripción para las socias',
                 'required' => false,
-                'attr'     => ['rows' => 3],
+                'attr'     => ['rows' => 6],
             ])
             ->add('providerNote', TextareaType::class, [
                 'label'    => 'Nota para el productor (interna)',
                 'required' => false,
-                'attr'     => ['rows' => 2],
+                'attr'     => ['rows' => 3],
             ]);
     }
 

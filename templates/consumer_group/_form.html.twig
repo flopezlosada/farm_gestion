@@ -19,6 +19,7 @@
                     {{ csa.field(form.deliveryDate, 'Fecha de entrega') }}
                     {{ csa.field(form.minimumCondition, 'Condición de mínimo (informativa)') }}
                     {{ csa.field(form.description, 'Descripción para las socias', { full: true }) }}
+                    {{ csa.field(form.providerNote, 'Nota para el productor (interna)', { full: true }) }}
                 </div>
                 {% if create_hint|default(false) %}
                     <p class="csa-muted" style="margin-top: var(--csa-sp-3);">
