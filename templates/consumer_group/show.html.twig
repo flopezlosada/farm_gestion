@@ -233,7 +233,7 @@
                                 {% for order in socias %}
                                     {% set partner = order.partner %}
                                     <tr data-name="{{ (partner.name ~ ' ' ~ partner.surname)|lower }}" data-paid="{{ order.paid ? '1' : '0' }}">
-                                        <td>
+                                        <td class="prl-cell-person">
                                             <div class="prl-person">
                                                 <span class="prl-person__avatar prl-person__avatar--sage" aria-hidden="true"><i class="fa fa-user"></i></span>
                                                 <div class="prl-person__body">
@@ -247,7 +247,7 @@
                                                 </div>
                                             </div>
                                         </td>
-                                        <td>
+                                        <td data-label="Pedido">
                                             <ul class="cg-order__lines">
                                                 {% for oline in order.lines %}
                                                     {% if oline.quantity > 0 %}
@@ -256,25 +256,27 @@
                                                 {% endfor %}
                                             </ul>
                                         </td>
-                                        <td class="tight"><b>{{ order.total|number_format(2, ',', '.') }} €</b></td>
-                                        <td class="tight">
+                                        <td class="tight" data-label="Total"><b>{{ order.total|number_format(2, ',', '.') }} €</b></td>
+                                        <td class="tight cg-cell-pago" data-label="Pago">
                                             {% if order.paid %}
                                                 <span class="prl-chip prl-chip--activo"><span class="dot"></span>Pagado</span>
                                             {% else %}
                                                 <span class="prl-chip prl-chip--pausado"><span class="dot"></span>Pendiente</span>
                                                 {# El mismo concepto que se le pide a la socia, para poder
                                                  # buscarlo en el extracto: en el banco aparece el titular de
-                                                 # la cuenta, que no siempre es quien figura aquí. #}
-                                                <div class="cg-order__ref">{{ order.paymentReference }}</div>
+                                                 # la cuenta, que no siempre es quien figura aquí. Rotulado a
+                                                 # propósito: sin "Concepto:" delante, en la vista apilada de
+                                                 # móvil parece un segundo nombre suelto, no una referencia. #}
+                                                <div class="cg-order__ref"><span class="cg-order__ref-label">Concepto:</span> {{ order.paymentReference }}</div>
                                             {% endif %}
                                             {% if can_edit %}
-                                                <form method="post" action="{{ path('consumer_group_order_toggle_paid', { id: order.id }) }}" style="display:inline; margin-left: var(--csa-sp-2);">
+                                                <form method="post" action="{{ path('consumer_group_order_toggle_paid', { id: order.id }) }}" class="cg-order__pay-form">
                                                     <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_toggle_paid_' ~ order.id) }}">
                                                     <button type="submit" class="prl-btn prl-btn--sm">{{ order.paid ? 'Marcar pendiente' : 'Marcar pagado' }}</button>
                                                 </form>
                                             {% endif %}
                                         </td>
-                                        <td class="tight" style="text-align: right;">
+                                        <td class="tight" data-label="Acciones" style="text-align: right;">
                                             {% if can_socixs or can_reparto %}
                                                 <button type="button" class="cg-kebab" aria-label="Acciones de la socia">
                                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
@@ -417,7 +419,10 @@
         .prt-actionbar .prt-btn--danger .fa { color: var(--prt-terra, #b45d3a); }
         .prt-actionbar .prt-btn--danger:hover { background: var(--prt-terra-l, #fae6dc); border-color: var(--prt-terra-d, #7d3a1f); }
         .cg-order__lines { margin: 0; padding-left: var(--csa-sp-4); font-size: .9rem; }
-        .cg-order__ref { margin-top: var(--csa-sp-1); font-size: .8rem; color: var(--csa-muted); white-space: nowrap; }
+        .cg-cell-pago { display: flex; flex-direction: column; align-items: flex-start; gap: var(--csa-sp-1); }
+        .cg-order__ref { font-size: .8rem; color: var(--csa-muted); white-space: nowrap; }
+        .cg-order__ref-label { font-weight: 600; }
+        .cg-order__pay-form { margin: 0; }
         .cg-pay-summary { display: flex; align-items: center; gap: var(--csa-sp-3); flex-wrap: wrap; }
         /* Cabe una cantidad de tres cifras y media: no tiene que estirarse a lo
            ancho de la columna, que en una tabla de seis descuadra el resto. */
