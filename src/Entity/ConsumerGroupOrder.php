@@ -65,6 +65,22 @@ class ConsumerGroupOrder
     private ?\DateTime $paidAt = null;
 
     /**
+     * ¿Ha recogido la socia este pedido? Lo puede marcar ella misma desde su
+     * panel o la comisión desde gestión: no hay un único punto de control físico
+     * (el producto sale con la cesta, pero puede recogerlo otra persona de la
+     * familia, o llegar tarde al nodo), así que es una marca manual, igual que
+     * el pago.
+     * @ORM\Column(type="boolean")
+     */
+    private bool $pickedUp = false;
+
+    /**
+     * Cuándo se marcó como recogido.
+     * @ORM\Column(type="datetime", nullable=true)
+     */
+    private ?\DateTime $pickedUpAt = null;
+
+    /**
      * @Gedmo\Timestampable(on="create")
      * @ORM\Column(type="datetime")
      */
@@ -199,6 +215,28 @@ class ConsumerGroupOrder
     public function setPaidAt(?\DateTime $paidAt): self
     {
         $this->paidAt = $paidAt;
+        return $this;
+    }
+
+    public function isPickedUp(): bool
+    {
+        return $this->pickedUp;
+    }
+
+    public function setPickedUp(bool $pickedUp): self
+    {
+        $this->pickedUp = $pickedUp;
+        return $this;
+    }
+
+    public function getPickedUpAt(): ?\DateTime
+    {
+        return $this->pickedUpAt;
+    }
+
+    public function setPickedUpAt(?\DateTime $pickedUpAt): self
+    {
+        $this->pickedUpAt = $pickedUpAt;
         return $this;
     }
 

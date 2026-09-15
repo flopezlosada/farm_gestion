@@ -200,4 +200,42 @@ class PanelConsumerGroupController extends AbstractController
         return $this->redirectToRoute('panel_consumer_group_show', ['id' => $round->getId()]);
     }
 
+    /**
+     * La propia socia marca que ha recogido su pedido. Sólo tiene sentido con
+     * el producto ya entregado (antes no hay nada físico que recoger), y sólo
+     * sobre SU PROPIO pedido: la ruta lleva el id de la ronda, no del pedido,
+     * para no dar a nadie un id de pedido ajeno con el que jugar.
+     */
+    #[Route('/{id}/pickup', name: 'panel_consumer_group_pickup', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function pickup(Request $request, ConsumerGroupRound $round, ConsumerGroupOrderRepository $orders, EntityManagerInterface $em): Response
+    {
+        $partner = $this->getUser()?->getPartner();
+        if ($partner === null) {
+            return $this->redirectToRoute('dashboard');
+        }
+
+        if (!$this->isCsrfTokenValid('panel_consumer_group_pickup_'.$round->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('panel_consumer_group_show', ['id' => $round->getId()]);
+        }
+
+        if ($round->getStatus() !== ConsumerGroupRound::STATUS_DELIVERED) {
+            $this->addFlash('warning', 'Todavía no se ha entregado este pedido.');
+
+            return $this->redirectToRoute('panel_consumer_group_show', ['id' => $round->getId()]);
+        }
+
+        $order = $orders->findOneByRoundAndPartner($round, $partner);
+        if ($order === null || $order->isEmpty()) {
+            return $this->redirectToRoute('panel_consumer_group_show', ['id' => $round->getId()]);
+        }
+
+        $order->setPickedUp(!$order->isPickedUp());
+        $order->setPickedUpAt($order->isPickedUp() ? new \DateTime() : null);
+        $em->flush();
+
+        return $this->redirectToRoute('panel_consumer_group_show', ['id' => $round->getId()]);
+    }
+
 }

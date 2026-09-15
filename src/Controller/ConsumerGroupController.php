@@ -618,6 +618,29 @@ class ConsumerGroupController extends AbstractController
     }
 
     /**
+     * Marca el pedido de una socia como recogido / pendiente de recoger. Lo
+     * puede tocar la comisión desde gestión (esta acción) o la propia socia
+     * desde su panel ({@see PanelConsumerGroupController::pickup()}).
+     */
+    #[Route('/orders/{id}/toggle-picked-up', name: 'consumer_group_order_toggle_picked_up', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function togglePickedUp(Request $request, ConsumerGroupOrder $order, EntityManagerInterface $em): Response
+    {
+        $roundId = $order->getRound()->getId();
+
+        if (!$this->isCsrfTokenValid('consumer_group_toggle_picked_up_'.$order->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('consumer_group_show', ['id' => $roundId]);
+        }
+
+        $order->setPickedUp(!$order->isPickedUp());
+        $order->setPickedUpAt($order->isPickedUp() ? new \DateTime() : null);
+        $em->flush();
+
+        return $this->redirectToRoute('consumer_group_show', ['id' => $roundId]);
+    }
+
+    /**
      * Export CSV del pedido AGREGADO al productor: una fila por producto con la
      * cantidad total pedida y el subtotal.
      *

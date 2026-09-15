@@ -226,6 +226,9 @@
                                     <th>Pedido</th>
                                     <th class="tight">Total</th>
                                     <th class="tight">Pago</th>
+                                    {% if round.status == constant('App\\Entity\\ConsumerGroupRound::STATUS_DELIVERED') %}
+                                        <th class="tight">Recogida</th>
+                                    {% endif %}
                                     <th class="tight" style="width: 44px;"><span class="sr-only">Acciones</span></th>
                                 </tr>
                             </thead>
@@ -276,6 +279,21 @@
                                                 </form>
                                             {% endif %}
                                         </td>
+                                        {% if round.status == constant('App\\Entity\\ConsumerGroupRound::STATUS_DELIVERED') %}
+                                            <td class="tight cg-cell-pago" data-label="Recogida">
+                                                {% if order.pickedUp %}
+                                                    <span class="prl-chip prl-chip--activo"><span class="dot"></span>Recogido</span>
+                                                {% else %}
+                                                    <span class="prl-chip prl-chip--pausado"><span class="dot"></span>Sin recoger</span>
+                                                {% endif %}
+                                                {% if can_edit %}
+                                                    <form method="post" action="{{ path('consumer_group_order_toggle_picked_up', { id: order.id }) }}" class="cg-order__pay-form">
+                                                        <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_toggle_picked_up_' ~ order.id) }}">
+                                                        <button type="submit" class="prl-btn prl-btn--sm">{{ order.pickedUp ? 'Marcar sin recoger' : 'Marcar recogido' }}</button>
+                                                    </form>
+                                                {% endif %}
+                                            </td>
+                                        {% endif %}
                                         <td class="tight" data-label="Acciones" style="text-align: right;">
                                             {% if can_socixs or can_reparto %}
                                                 <button type="button" class="cg-kebab" aria-label="Acciones de la socia">
