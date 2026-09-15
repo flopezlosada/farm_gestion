@@ -83,6 +83,36 @@ class NotificationPreferences
     }
 
     /**
+     * Como {@see filter()}, pero por CUALQUIER canal disponible del tema: quien
+     * ha apagado el correo pero no el móvil sigue queriendo el tema.
+     *
+     * Es la señal de «le interesa esto» que hay disponible hoy (no hay un campo
+     * separado de «participo en X»): quien no ha silenciado ningún canal del
+     * tema, sin fila = lo quiere, cuenta como interesadx.
+     *
+     * @param list<Partner> $partners lxs candidatxs
+     * @param string        $topic    clave del tema
+     *
+     * @return list<Partner> lxs que quieren ese tema por al menos un canal
+     */
+    public function filterAny(array $partners, string $topic): array
+    {
+        $meta = NotificationTopic::TOPICS[$topic] ?? null;
+        if (null === $meta || [] === $partners) {
+            return [];
+        }
+
+        $wanted = [];
+        foreach ($meta['channels'] as $channel) {
+            foreach ($this->filter($partners, $topic, $channel) as $partner) {
+                $wanted[(int) $partner->getId()] = $partner;
+            }
+        }
+
+        return array_values($wanted);
+    }
+
+    /**
      * Guarda de golpe lo que el socix ha marcado en la pantalla de avisos.
      *
      * Recibe lo que SÍ quiere y deduce lo apagado, en vez de recibir lo apagado:

@@ -10,6 +10,7 @@ use App\Form\ConsumerGroupRoundType;
 use App\Repository\ConsumerGroupEventLogRepository;
 use App\Repository\ConsumerGroupOrderRepository;
 use App\Repository\ConsumerGroupRoundRepository;
+use App\Repository\PartnerRepository;
 use App\Service\ConsumerGroup\ConsumerGroupAnnouncer;
 use App\Service\ConsumerGroup\ConsumerGroupEventRecorder;
 use App\Service\ConsumerGroup\ConsumerGroupNotifier;
@@ -19,6 +20,8 @@ use App\Service\ConsumerGroup\OrderAggregator;
 use App\Service\ConsumerGroup\OrderEditor;
 use App\Service\ConsumerGroup\RoundItemEditor;
 use App\Service\ConsumerGroup\RoundStateMachine;
+use App\Service\Notification\NotificationPreferences;
+use App\Service\Notification\NotificationTopic;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -447,7 +450,7 @@ class ConsumerGroupController extends AbstractController
      * Selecciona la socia y las cantidades por producto.
      */
     #[Route('/{id}/orders/new', name: 'consumer_group_order_new', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function orderNew(Request $request, ConsumerGroupRound $round, OrderEditor $editor, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
+    public function orderNew(Request $request, ConsumerGroupRound $round, OrderEditor $editor, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em, PartnerRepository $partnerRepository, NotificationPreferences $preferences): Response
     {
         if (!$round->canManageOrders()) {
             $this->addFlash('warning', 'No se pueden añadir pedidos en el estado actual del pedido.');
@@ -455,10 +458,15 @@ class ConsumerGroupController extends AbstractController
             return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
         }
 
-        $partners = $em->getRepository(Partner::class)->createQueryBuilder('p')
-            ->where("p.status = 'ACTIVO'")
-            ->orderBy('p.name', 'ASC')->addOrderBy('p.surname', 'ASC')
-            ->getQuery()->getResult();
+        // Sólo socias interesadas en el grupo de consumo (no lo han silenciado
+        // en su pantalla de avisos): sin fila = lo quiere, así que hoy esto casi
+        // no filtra nada, y va estrechando la lista según la gente vaya apagando
+        // el tema.
+        $partners = $preferences->filterAny($partnerRepository->findActive(), NotificationTopic::CONSUMER_GROUP);
+        usort(
+            $partners,
+            static fn (Partner $a, Partner $b): int => [$a->getName(), $a->getSurname()] <=> [$b->getName(), $b->getSurname()]
+        );
 
         if ($request->isMethod('POST')) {
             if (!$this->isCsrfTokenValid('consumer_group_order_new_'.$round->getId(), (string) $request->request->get('_token'))) {
