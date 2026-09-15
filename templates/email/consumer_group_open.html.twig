@@ -43,7 +43,7 @@
 
     <p>
         {% if round.ordersCloseAt %}
-            Puedes apuntarte hasta el <strong>{{ round.ordersCloseAt|format_datetime('full', 'short', locale='es') }}</strong>.
+            Puedes apuntarte hasta el <strong>{{ round.ordersCloseAt|format_date('full', locale='es') }}</strong>.
         {% else %}
             Ya puedes apuntarte.
         {% endif %}

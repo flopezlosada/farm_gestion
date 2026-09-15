@@ -54,7 +54,7 @@
             <div class="cg-fact">
                 <span class="cg-fact__l">Cierre de apuntes</span>
                 <span class="cg-fact__v">
-                    {{ round.ordersCloseAt ? round.ordersCloseAt|date('d/m/Y H:i') : '—' }}
+                    {{ round.ordersCloseAt ? round.ordersCloseAt|date('d/m/Y') : '—' }}
                     {# El pedido sigue ABIERTO como estado, pero ya no entra nadie: es la
                      # señal de que se puede pasar al productor sin que aparezcan
                      # cantidades nuevas después. #}

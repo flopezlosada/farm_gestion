@@ -216,6 +216,13 @@ class ConsumerGroupController extends AbstractController
                     'price'    => $this->normalizeDecimal($prices[$id] ?? $product->getReferencePrice() ?? '0'),
                 ];
             }
+
+            if (!array_filter($desired, static fn (array $entry): bool => $entry['included'])) {
+                $this->addFlash('warning', 'El pedido necesita al menos un producto: no se ha guardado.');
+
+                return $this->redirectToRoute('consumer_group_items', ['id' => $round->getId()]);
+            }
+
             $itemEditor->apply($round, $desired);
             $recorder->record(ConsumerGroupEventLog::KIND_ITEMS_UPDATED, $round, $this->getUser(), 'Productos y precios del pedido actualizados.');
             $em->flush();

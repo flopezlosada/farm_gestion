@@ -45,7 +45,7 @@
                                 <div class="cg-round-card__title">{{ round.title }}</div>
                                 <div class="cg-round-card__meta">{{ round.producer ? round.producer.name : '' }}</div>
                                 <div class="cg-round-card__meta">
-                                    Cierre: {{ round.ordersCloseAt ? round.ordersCloseAt|date('d/m/Y H:i') : '—' }}
+                                    Cierre: {{ round.ordersCloseAt ? round.ordersCloseAt|date('d/m/Y') : '—' }}
                                     · Entrega: {{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}
                                 </div>
                             </div>
