@@ -73,5 +73,10 @@
         .cg-item-row__inc input { width: auto; height: auto; }
         .cg-item-row__price { display: inline-flex; align-items: center; gap: var(--csa-sp-2); }
         .cg-item-row__price .csa-input { width: 7rem; }
+        {# Las flechas nativas de type=number solo sirven para sumar/restar de
+           céntimo en céntimo: para un precio se escribe, no se "sube". #}
+        .cg-item-row__price .csa-input::-webkit-outer-spin-button,
+        .cg-item-row__price .csa-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .cg-item-row__price .csa-input[type=number] { -moz-appearance: textfield; }
     </style>
 {% endblock %}
