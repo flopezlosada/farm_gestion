@@ -354,10 +354,14 @@
             </div>
         </section>
 
-        <section class="prt-card">
-            <header class="prt-card__head">
-                <h2 class="prt-card__title"><span class="accent"></span>Actividad</h2>
-            </header>
+        {# Plegada por defecto: es el histórico de trazabilidad, no algo que se
+         # consulte al entrar a la ficha, y una lista que crece con cada apunte
+         # y cada cambio de estado saturaba la pantalla por debajo de lo que sí
+         # se mira siempre (socias, agregado, acciones). #}
+        <details class="prt-card cg-activity-card">
+            <summary class="prt-card__head cg-activity-summary">
+                <h2 class="prt-card__title"><span class="accent"></span>Actividad{% if activity is not empty %} <span class="csa-muted">({{ activity|length }})</span>{% endif %}</h2>
+            </summary>
             <div class="prt-card__body">
             {% if activity is empty %}
                 <p class="csa-muted">Sin actividad registrada todavía.</p>
@@ -374,7 +378,7 @@
                 </ul>
             {% endif %}
             </div>
-        </section>
+        </details>
 
         {% if can_edit and round.orders is empty %}
             <div class="csa-row" style="justify-content: flex-end;">
@@ -423,6 +427,12 @@
         .cg-order__ref { font-size: .8rem; color: var(--csa-muted); white-space: nowrap; }
         .cg-order__ref-label { font-weight: 600; }
         .cg-order__pay-form { margin: 0; }
+        .cg-activity-summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+        .cg-activity-summary::-webkit-details-marker { display: none; }
+        .cg-activity-summary::after {
+            content: '▸'; color: var(--prt-ink-faint, #8d8773); transition: transform .15s ease;
+        }
+        .cg-activity-card[open] .cg-activity-summary::after { transform: rotate(90deg); }
         .cg-pay-summary { display: flex; align-items: center; gap: var(--csa-sp-3); flex-wrap: wrap; }
         /* Cabe una cantidad de tres cifras y media: no tiene que estirarse a lo
            ancho de la columna, que en una tabla de seis descuadra el resto. */
