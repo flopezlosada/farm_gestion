@@ -46,11 +46,24 @@ class ConsumerGroupController extends AbstractController
      * Listado de pedidos con el nº de pedidos de cada uno (sin N+1).
      */
     #[Route('/', name: 'consumer_group_index', methods: ['GET'])]
-    public function index(ConsumerGroupRoundRepository $rounds, ConsumerGroupOrderRepository $orders): Response
+    public function index(Request $request, ConsumerGroupRoundRepository $rounds, ConsumerGroupOrderRepository $orders): Response
     {
+        $filters = [
+            'producer' => ((int) $request->query->get('producer', '')) ?: null,
+            'status'   => '' !== (string) $request->query->get('status', '') ? (int) $request->query->get('status') : null,
+            'from'     => trim((string) $request->query->get('from', '')) ?: null,
+            'to'       => trim((string) $request->query->get('to', '')) ?: null,
+        ];
+
         return $this->render('consumer_group/index.html.twig', [
-            'rounds'       => $rounds->findAllForManagement(),
+            // La tira de cifras de arriba cuenta SIEMPRE sobre el total, no
+            // sobre lo filtrado: es el resumen global, el filtro es para la tabla.
+            'all_rounds'   => $rounds->findAllForManagement(),
+            'rounds'       => $rounds->findFilteredForManagement($filters),
             'order_counts' => $orders->countByRound(),
+            'producers'    => $rounds->findProducersWithRounds(),
+            'statuses'     => ConsumerGroupRound::STATUS_LABELS,
+            'filters'      => $filters,
         ]);
     }
 
