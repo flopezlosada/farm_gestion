@@ -814,6 +814,12 @@ class AppSettings
             'help' => 'Abre el registro de lo que hay que mantener vigente: convenios de tierra, registros oficiales, pólizas, concesiones y cargos. Apagado, se oculta del menú, no es accesible y no sale ningún aviso de caducidad.',
             'default' => false,
         ],
+        self::FEATURE_CONTABILIDAD => [
+            'group' => 'Funcionalidades en rodaje',
+            'label' => 'Contabilidad y presupuestos',
+            'help' => 'Abre el libro de caja de la asociación (cuentas, apuntes y partidas) y el presupuesto del año con su seguimiento. Apagado, se oculta del menú y no es accesible.',
+            'default' => false,
+        ],
         self::FEATURE_VOLUNTEERING => [
             'group' => 'Funcionalidades en rodaje',
             'label' => 'Voluntariado',

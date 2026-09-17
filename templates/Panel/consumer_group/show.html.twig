@@ -39,7 +39,7 @@
         {% if can_order %}
             <div class="csa-card">
                 <p class="csa-muted" style="margin-top: 0;">
-                    Cierre de apuntes: <b>{{ round.ordersCloseAt ? round.ordersCloseAt|date('d/m/Y H:i') : '—' }}</b>.
+                    Cierre de apuntes: <b>{{ round.ordersCloseAt ? round.ordersCloseAt|date('d/m/Y') : '—' }}</b>.
                     Entrega el <b>{{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}</b> con tu cesta.
                     Puedes cambiar tu pedido hasta el cierre.
                     {# Un pedido confirmado sigue admitiendo cambios, pero ya NO es cierto
@@ -158,7 +158,7 @@
                 <p class="csa-muted">
                     {% if plazo_vencido %}
                         El plazo para apuntarse terminó
-                        {% if round.ordersCloseAt %}el <b>{{ round.ordersCloseAt|date('d/m/Y H:i') }}</b>{% endif %}.
+                        {% if round.ordersCloseAt %}el <b>{{ round.ordersCloseAt|date('d/m/Y') }}</b>{% endif %}.
                     {% else %}
                         Este pedido ya no admite cambios.
                     {% endif %}
@@ -180,6 +180,25 @@
                     </ul>
 
                     {% include 'Panel/consumer_group/_payment.html.twig' with { order: order, payment_info: payment_info } only %}
+
+                    {% if round.status == constant('App\\Entity\\ConsumerGroupRound::STATUS_DELIVERED') %}
+                        <div class="cg-money" style="margin-top: var(--csa-sp-2);">
+                            <div class="cg-money__row">
+                                <span>Recogida</span>
+                                {% if order.pickedUp %}
+                                    <span class="prl-chip prl-chip--activo"><span class="dot"></span>Recogido{% if order.pickedUpAt %} el {{ order.pickedUpAt|date('d/m/Y') }}{% endif %}</span>
+                                {% else %}
+                                    <span class="prl-chip prl-chip--pausado"><span class="dot"></span>Sin recoger</span>
+                                {% endif %}
+                            </div>
+                            <form method="post" action="{{ path('panel_consumer_group_pickup', { id: round.id }) }}">
+                                <input type="hidden" name="_token" value="{{ csrf_token('panel_consumer_group_pickup_' ~ round.id) }}">
+                                <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm">
+                                    {{ order.pickedUp ? 'No, todavía no lo he recogido' : 'Ya he recogido mi pedido' }}
+                                </button>
+                            </form>
+                        </div>
+                    {% endif %}
                 {% else %}
                     <p class="csa-muted">No te apuntaste a este pedido.</p>
                 {% endif %}

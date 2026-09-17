@@ -8,17 +8,22 @@ use App\Entity\ConsumerGroupRound;
 use App\Entity\Partner;
 use App\Form\ConsumerGroupRoundType;
 use App\Repository\ConsumerGroupEventLogRepository;
+use App\Repository\ConsumerGroupOrderLineRepository;
 use App\Repository\ConsumerGroupOrderRepository;
 use App\Repository\ConsumerGroupRoundRepository;
+use App\Repository\PartnerRepository;
 use App\Service\ConsumerGroup\ConsumerGroupAnnouncer;
 use App\Service\ConsumerGroup\ConsumerGroupEventRecorder;
 use App\Service\ConsumerGroup\ConsumerGroupNotifier;
 use App\Service\ConsumerGroup\InvalidRoundTransition;
 use App\Service\ConsumerGroup\ConsumerGroupStats;
+use App\Service\ConsumerGroup\ItemsChangeNotifier;
 use App\Service\ConsumerGroup\OrderAggregator;
 use App\Service\ConsumerGroup\OrderEditor;
 use App\Service\ConsumerGroup\RoundItemEditor;
 use App\Service\ConsumerGroup\RoundStateMachine;
+use App\Service\Notification\NotificationPreferences;
+use App\Service\Notification\NotificationTopic;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -43,11 +48,24 @@ class ConsumerGroupController extends AbstractController
      * Listado de pedidos con el nº de pedidos de cada uno (sin N+1).
      */
     #[Route('/', name: 'consumer_group_index', methods: ['GET'])]
-    public function index(ConsumerGroupRoundRepository $rounds, ConsumerGroupOrderRepository $orders): Response
+    public function index(Request $request, ConsumerGroupRoundRepository $rounds, ConsumerGroupOrderRepository $orders): Response
     {
+        $filters = [
+            'producer' => ((int) $request->query->get('producer', '')) ?: null,
+            'status'   => '' !== (string) $request->query->get('status', '') ? (int) $request->query->get('status') : null,
+            'from'     => trim((string) $request->query->get('from', '')) ?: null,
+            'to'       => trim((string) $request->query->get('to', '')) ?: null,
+        ];
+
         return $this->render('consumer_group/index.html.twig', [
-            'rounds'       => $rounds->findAllForManagement(),
+            // La tira de cifras de arriba cuenta SIEMPRE sobre el total, no
+            // sobre lo filtrado: es el resumen global, el filtro es para la tabla.
+            'all_rounds'   => $rounds->findAllForManagement(),
+            'rounds'       => $rounds->findFilteredForManagement($filters),
             'order_counts' => $orders->countByRound(),
+            'producers'    => $rounds->findProducersWithRounds(),
+            'statuses'     => ConsumerGroupRound::STATUS_LABELS,
+            'filters'      => $filters,
         ]);
     }
 
@@ -178,8 +196,16 @@ class ConsumerGroupController extends AbstractController
      * y a qué precio de pedido. Mientras la comisión pueda gestionarlo.
      */
     #[Route('/{id}/items', name: 'consumer_group_items', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function items(Request $request, ConsumerGroupRound $round, RoundItemEditor $itemEditor, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
-    {
+    public function items(
+        Request $request,
+        ConsumerGroupRound $round,
+        RoundItemEditor $itemEditor,
+        ConsumerGroupEventRecorder $recorder,
+        EntityManagerInterface $em,
+        ConsumerGroupOrderLineRepository $orderLines,
+        ConsumerGroupOrderRepository $orders,
+        ItemsChangeNotifier $itemsChangeNotifier,
+    ): Response {
         if (!$round->canManageOrders()) {
             $this->addFlash('warning', 'Este pedido ya no admite cambios en sus productos.');
 
@@ -192,9 +218,11 @@ class ConsumerGroupController extends AbstractController
         foreach ($round->getProducer()?->getActiveProducts() ?? [] as $product) {
             $catalog[$product->getId()] = $product;
         }
+        $existingItemByProductId = [];
         foreach ($round->getItems() as $item) {
             if ($item->getProduct() !== null) {
                 $catalog[$item->getProduct()->getId()] = $item->getProduct();
+                $existingItemByProductId[$item->getProduct()->getId()] = $item;
             }
         }
 
@@ -216,9 +244,99 @@ class ConsumerGroupController extends AbstractController
                     'price'    => $this->normalizeDecimal($prices[$id] ?? $product->getReferencePrice() ?? '0'),
                 ];
             }
+
+            if (!array_filter($desired, static fn (array $entry): bool => $entry['included'])) {
+                $this->addFlash('warning', 'El pedido necesita al menos un producto: no se ha guardado.');
+
+                return $this->redirectToRoute('consumer_group_items', ['id' => $round->getId()]);
+            }
+
+            // Productos que se están QUITANDO y que alguna socia ya tenía pedidos de
+            // verdad (cantidad > 0): quitarlos borra esas líneas en cascada sin dejar
+            // rastro. Se pide confirmación explícita antes de aplicar nada.
+            $removalsWithOrders = [];
+            foreach ($desired as $entry) {
+                if ($entry['included']) {
+                    continue;
+                }
+                $item = $existingItemByProductId[$entry['product']->getId()] ?? null;
+                if ($item === null) {
+                    continue;
+                }
+                $affectedLines = $orderLines->findWithQuantityForItem($item);
+                if ($affectedLines !== []) {
+                    $removalsWithOrders[] = ['product' => $entry['product'], 'item' => $item, 'lines' => $affectedLines];
+                }
+            }
+
+            if ($removalsWithOrders !== [] && '1' !== $request->request->get('confirm_removal')) {
+                // El estado que se enseña es el RECIÉN ENVIADO, no el de BBDD: si
+                // se vuelve a guardar tras confirmar, tiene que salir exactamente
+                // lo que la comisión acaba de marcar, no lo de antes.
+                $submittedPrice = [];
+                foreach ($desired as $entry) {
+                    $submittedPrice[$entry['product']->getId()] = $entry['price'];
+                }
+
+                return $this->render('consumer_group/items.html.twig', [
+                    'round'                => $round,
+                    'catalog'              => array_values($catalog),
+                    'current_price'        => $submittedPrice,
+                    'included'             => $included,
+                    'removals_with_orders' => $removalsWithOrders,
+                ]);
+            }
+
+            // Antes de aplicar: quién se queda sin un producto que ya tenía pedido
+            // (para avisar después de guardar), y si esto es una ronda con apuntes
+            // reales a la que se le está AÑADIENDO un producto nuevo.
+            $removedAffectedPartners = [];
+            $removedProductNames = [];
+            foreach ($removalsWithOrders as $removal) {
+                $removedProductNames[] = $removal['product']->getName();
+                foreach ($removal['lines'] as $line) {
+                    $partner = $line->getOrder()?->getPartner();
+                    if ($partner !== null) {
+                        $removedAffectedPartners[$partner->getId()] = $partner;
+                    }
+                }
+            }
+
+            $addedProductNames = [];
+            foreach ($desired as $entry) {
+                if ($entry['included'] && !isset($existingItemByProductId[$entry['product']->getId()])) {
+                    $addedProductNames[] = $entry['product']->getName();
+                }
+            }
+
             $itemEditor->apply($round, $desired);
             $recorder->record(ConsumerGroupEventLog::KIND_ITEMS_UPDATED, $round, $this->getUser(), 'Productos y precios del pedido actualizados.');
             $em->flush();
+
+            // Avisar a quien ya tenía pedido en esta ronda: a quien pierde un
+            // producto que había pedido, siempre; a todo el que ya tenía algo
+            // pedido, si se ha añadido un producto nuevo (puede interesarle).
+            if ($removedProductNames !== [] || $addedProductNames !== []) {
+                $affected = $removedAffectedPartners;
+                if ($addedProductNames !== []) {
+                    foreach ($orders->findWithLinesForRound($round) as $order) {
+                        $partner = $order->getPartner();
+                        if ($partner !== null && !$order->isEmpty()) {
+                            $affected[$partner->getId()] = $partner;
+                        }
+                    }
+                }
+
+                $parts = [];
+                if ($removedProductNames !== []) {
+                    $parts[] = sprintf('se ha quitado: %s', implode(', ', $removedProductNames));
+                }
+                if ($addedProductNames !== []) {
+                    $parts[] = sprintf('se ha añadido: %s', implode(', ', $addedProductNames));
+                }
+                $itemsChangeNotifier->notify($round, array_values($affected), ucfirst(implode('; ', $parts)).'. Revisa tu pedido.');
+            }
+
             $this->addFlash('success', 'Productos del pedido actualizados.');
 
             return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
@@ -440,7 +558,7 @@ class ConsumerGroupController extends AbstractController
      * Selecciona la socia y las cantidades por producto.
      */
     #[Route('/{id}/orders/new', name: 'consumer_group_order_new', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function orderNew(Request $request, ConsumerGroupRound $round, OrderEditor $editor, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
+    public function orderNew(Request $request, ConsumerGroupRound $round, OrderEditor $editor, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em, PartnerRepository $partnerRepository, NotificationPreferences $preferences): Response
     {
         if (!$round->canManageOrders()) {
             $this->addFlash('warning', 'No se pueden añadir pedidos en el estado actual del pedido.');
@@ -448,10 +566,15 @@ class ConsumerGroupController extends AbstractController
             return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
         }
 
-        $partners = $em->getRepository(Partner::class)->createQueryBuilder('p')
-            ->where("p.status = 'ACTIVO'")
-            ->orderBy('p.name', 'ASC')->addOrderBy('p.surname', 'ASC')
-            ->getQuery()->getResult();
+        // Sólo socias interesadas en el grupo de consumo (no lo han silenciado
+        // en su pantalla de avisos): sin fila = lo quiere, así que hoy esto casi
+        // no filtra nada, y va estrechando la lista según la gente vaya apagando
+        // el tema.
+        $partners = $preferences->filterAny($partnerRepository->findActive(), NotificationTopic::CONSUMER_GROUP);
+        usort(
+            $partners,
+            static fn (Partner $a, Partner $b): int => [$a->getName(), $a->getSurname()] <=> [$b->getName(), $b->getSurname()]
+        );
 
         if ($request->isMethod('POST')) {
             if (!$this->isCsrfTokenValid('consumer_group_order_new_'.$round->getId(), (string) $request->request->get('_token'))) {
@@ -584,6 +707,29 @@ class ConsumerGroupController extends AbstractController
 
         $order->setPaid(!$order->isPaid());
         $order->setPaidAt($order->isPaid() ? new \DateTime() : null);
+        $em->flush();
+
+        return $this->redirectToRoute('consumer_group_show', ['id' => $roundId]);
+    }
+
+    /**
+     * Marca el pedido de una socia como recogido / pendiente de recoger. Lo
+     * puede tocar la comisión desde gestión (esta acción) o la propia socia
+     * desde su panel ({@see PanelConsumerGroupController::pickup()}).
+     */
+    #[Route('/orders/{id}/toggle-picked-up', name: 'consumer_group_order_toggle_picked_up', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function togglePickedUp(Request $request, ConsumerGroupOrder $order, EntityManagerInterface $em): Response
+    {
+        $roundId = $order->getRound()->getId();
+
+        if (!$this->isCsrfTokenValid('consumer_group_toggle_picked_up_'.$order->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('consumer_group_show', ['id' => $roundId]);
+        }
+
+        $order->setPickedUp(!$order->isPickedUp());
+        $order->setPickedUpAt($order->isPickedUp() ? new \DateTime() : null);
         $em->flush();
 
         return $this->redirectToRoute('consumer_group_show', ['id' => $roundId]);

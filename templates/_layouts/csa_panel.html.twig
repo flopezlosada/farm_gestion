@@ -38,12 +38,16 @@
          # entrada y aparece en los dos sitios. Con `soon: true` se enseña atenuada
          # y sin enlace, para anunciar lo que viene sin prometer una fecha.
          #
-         # «Cesta compartida» sólo la ve quien comparte: para el resto sería una
-         # pantalla que no le corresponde. Va con `tab: false` —no ocupa hueco en la
-         # barra de abajo del móvil— porque se entra cuando llega un aviso, no a
-         # diario. (Los comentarios de cada entrada van AQUÍ y no entre los `merge`:
-         # dentro de un `{% set %}` de varias líneas, un comentario Twig rompe el
-         # lexer y se lleva por delante toda la plantilla.) #}
+         # «Mi cesta» va para TODO el mundo, `tab: false`: con Inicio + calendario +
+         # voluntariado ya llenando la barra de abajo, entra en «Más». Antes sólo
+         # quien compartía cesta tenía un enlace fijo («Cesta compartida»); ahora la
+         # descripción de la cesta la ve cualquiera, y quien comparte encuentra ahí
+         # mismo el paso a `panel_shared_basket` (que sigue siendo su propia
+         # pantalla — la enlazan avisos y correos, no se puede quitar del menú del
+         # todo ni mover su URL). (Los comentarios de cada entrada van AQUÍ y no
+         # entre los `merge`: dentro de un `{% set %}` de varias líneas, un
+         # comentario Twig rompe el lexer y se lleva por delante toda la
+         # plantilla.) #}
         {# El rótulo corto de voluntariado es el MISMO que el largo: «Echar mano»
          # obligaba a traducir entre el nombre del módulo y el de la pestaña, y
          # en la barra de abajo cabe «Voluntariado» de sobra. #}
@@ -53,16 +57,14 @@
             { label: 'Mi calendario', short: 'Calendario', icon: 'fa-calendar',
               url: path('panel_calendar'), active: route starts with 'panel_calendar', tab: true,
               hint: 'Cuándo y dónde recoges' },
+            { label: 'Mi cesta', short: 'Cesta', icon: 'fa-shopping-basket',
+              url: path('panel_basket'), active: route starts with 'panel_basket' or route starts with 'panel_shared_basket', tab: false,
+              hint: 'Modalidad, huevos y cuota' },
         ]
         |merge(is_granted('FEATURE_VOLUNTEERING') ? [
             { label: 'Voluntariado', short: 'Voluntariado', icon: 'fa-hand-paper-o',
               url: path('panel_volunteering'), active: route starts with 'panel_volunteering', tab: true,
               hint: 'Lo que hace falta y lo que llevas hecho' },
-        ] : [])
-        |merge(app.user.partner is defined and app.user.partner and app.user.partner.sharePartner and is_granted('FEATURE_PARTNER_SELFSERVICE') ? [
-            { label: 'Cesta compartida', short: 'Compartida', icon: 'fa-handshake-o',
-              url: path('panel_shared_basket'), active: route starts with 'panel_shared_basket', tab: false,
-              hint: 'Lo que decidís entre los dos hogares' },
         ] : [])
         |merge(is_granted('FEATURE_SURVEYS') ? [
             { label: 'Encuestas', short: 'Encuestas', icon: 'fa-check-square-o',
@@ -70,7 +72,7 @@
               hint: 'Lo que la asociación te pregunta' },
         ] : [])
         |merge(is_granted('FEATURE_GRUPO_CONSUMO') ? [
-            { label: 'Grupo de consumo', short: 'Pedidos', icon: 'fa-shopping-basket',
+            { label: 'Grupo de consumo', short: 'Pedidos', icon: 'fa-shopping-cart',
               url: path('panel_consumer_group_index'), active: route starts with 'panel_consumer_group', tab: false,
               hint: 'Pedidos de despensa y productoras aliadas' },
         ] : [])

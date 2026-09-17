@@ -3,8 +3,12 @@
  # productor entran y su precio de pedido.
  #   - round          ConsumerGroupRound
  #   - catalog        ConsumerGroupProduct[] (activos + los ya en el pedido)
- #   - current_price  map product_id => precio de pedido actual
- #   - included       map product_id => true (si está en el pedido)
+ #   - current_price        map product_id => precio de pedido actual
+ #   - included             map product_id => true (si está en el pedido)
+ #   - removals_with_orders opcional: [{product, item, lines}] — productos que
+ #                          se están quitando y que alguna socia ya tenía
+ #                          pedidos de verdad. Si viene, hace falta confirmar
+ #                          antes de que el controlador aplique el cambio.
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -35,6 +39,25 @@
             <p class="csa-muted" style="margin-top: 0;">
                 Marca los productos que entran en este pedido y ajusta su precio. El precio es de este pedido; el del catálogo es solo de referencia.
             </p>
+
+            {% if removals_with_orders is defined and removals_with_orders is not empty %}
+                <div class="csa-alert csa-alert--warning cg-removal-warning">
+                    <p><strong>Ojo: estás quitando productos con pedidos ya hechos.</strong> Si confirmas, esos pedidos se pierden y se avisará a las socias afectadas.</p>
+                    <ul class="cg-removal-warning__list">
+                        {% for removal in removals_with_orders %}
+                            <li>
+                                <strong>{{ removal.product.name }}</strong>
+                                <ul>
+                                    {% for line in removal.lines %}
+                                        <li>{{ line.order.partner.name }} {{ line.order.partner.surname }} — {{ line.quantity }} {{ removal.product.unit }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
             <form method="post" action="{{ path('consumer_group_items', { id: round.id }) }}">
                 <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_items_' ~ round.id) }}">
                 <div class="cg-items">
@@ -55,6 +78,13 @@
                     {% endfor %}
                 </div>
 
+                {% if removals_with_orders is defined and removals_with_orders is not empty %}
+                    <label class="cg-removal-confirm">
+                        <input type="checkbox" name="confirm_removal" value="1" required>
+                        <span>Confirmo que quiero quitar estos productos aunque ya tengan pedidos, y avisar a las socias afectadas.</span>
+                    </label>
+                {% endif %}
+
                 <div class="csa-row" style="justify-content: flex-end; margin-top: var(--csa-sp-4);">
                     {{ csa.btn('Volver', { variant: 'ghost', href: path('consumer_group_show', { id: round.id }) }) }}
                     <button type="submit" class="csa-btn csa-btn--primary">Guardar productos</button>
@@ -67,11 +97,21 @@
 {% block more_css %}
     {{ parent() }}
     <style>
+        .cg-removal-warning { margin-bottom: var(--csa-sp-4); }
+        .cg-removal-warning__list { margin: var(--csa-sp-2) 0 0; padding-left: var(--csa-sp-4); }
+        .cg-removal-warning__list ul { margin: var(--csa-sp-1) 0 var(--csa-sp-2); }
+        .cg-removal-confirm { display: flex; align-items: flex-start; gap: var(--csa-sp-2); margin-top: var(--csa-sp-4); font-weight: 400; }
+        .cg-removal-confirm input { width: auto; height: auto; margin-top: 3px; }
         .cg-items { display: flex; flex-direction: column; gap: var(--csa-sp-2); }
         .cg-item-row { display: flex; align-items: center; justify-content: space-between; gap: var(--csa-sp-3); padding: var(--csa-sp-2) 0; border-bottom: 1px solid var(--csa-rule); }
         .cg-item-row__inc { display: inline-flex; align-items: center; gap: var(--csa-sp-2); font-weight: 400; }
         .cg-item-row__inc input { width: auto; height: auto; }
         .cg-item-row__price { display: inline-flex; align-items: center; gap: var(--csa-sp-2); }
         .cg-item-row__price .csa-input { width: 7rem; }
+        {# Las flechas nativas de type=number solo sirven para sumar/restar de
+           céntimo en céntimo: para un precio se escribe, no se "sube". #}
+        .cg-item-row__price .csa-input::-webkit-outer-spin-button,
+        .cg-item-row__price .csa-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .cg-item-row__price .csa-input[type=number] { -moz-appearance: textfield; }
     </style>
 {% endblock %}

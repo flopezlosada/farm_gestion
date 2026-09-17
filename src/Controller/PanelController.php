@@ -355,18 +355,38 @@ class PanelController extends AbstractController
     }
 
     /**
-     * "Mi cesta" antiguo (próxima cesta + cambios de reparto en formato viejo) RETIRADO:
-     * toda la gestión vive ahora en el calendario de recogida (no recoger / mover, con
-     * sus reglas). La ruta se mantiene como redirección para enlaces o marcadores viejos.
+     * "Mi cesta": la descripción de la cesta activa (modalidad, huevos, cuota),
+     * antes enterrada dentro de la home. Con menú propio para que quien comparte
+     * cesta (bs 4/6/7) llegue desde aquí a `panel_shared_basket` sin que ese enlace
+     * necesite hueco fijo en el lateral: pasa de mostrarse solo a quien comparte a
+     * ser un paso más dentro de la pantalla de todo el mundo.
+     *
+     * Saltar/mover cesta sigue viviendo en el calendario de recogida; aquí sólo hay
+     * lectura de la cesta contratada y, para quien no comparte, el traslado puntual
+     * de nodo (mismo atajo que ya vivía en la home).
      */
     #[Route('/cesta', name: 'panel_basket', methods: ['GET'])]
-    public function basket(): Response
+    public function basket(PickupRelocationOptions $relocationOptions): Response
     {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
         }
 
-        return $this->redirectToRoute('panel_calendar');
+        $partner = $this->getUser()->getPartner();
+        $owner = $this->basketOwner($partner);
+
+        // Igual que en la home: las cestas compartidas no se trasladan de nodo, y el
+        // traslado es autoservicio tras el feature-flag.
+        $canRelocate = $owner->getSharePartner() === null
+            && $this->isGranted('FEATURE_PARTNER_SELFSERVICE');
+
+        return $this->render('Panel/basket.html.twig', [
+            'partner' => $partner,
+            'active_share' => $this->activeShare($owner),
+            'basket_owner' => $owner,
+            'relocate_weeks' => $canRelocate ? $relocationOptions->weeksForPartner($owner) : [],
+            'relocate_groups' => $canRelocate ? $relocationOptions->groupsForPartner($owner) : [],
+        ]);
     }
 
     /**
@@ -465,7 +485,7 @@ class PanelController extends AbstractController
 
         if (!$this->isCsrfTokenValid('panel_basket_change_group', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('error', 'Token de seguridad inválido. Recarga la página e inténtalo de nuevo.');
-            return $this->redirectToRoute('panel');
+            return $this->redirectToRoute('panel_basket');
         }
 
         $partner = $this->basketOwner($this->getUser()->getPartner());
@@ -474,19 +494,19 @@ class PanelController extends AbstractController
         $basket = $basketId > 0 ? $basketRepository->find($basketId) : null;
         if ($basket === null) {
             $this->addFlash('error', 'Selecciona una semana válida.');
-            return $this->redirectToRoute('panel');
+            return $this->redirectToRoute('panel_basket');
         }
 
         if (!$this->isWithinPickupDeadlineForBasket($basket, $partner)) {
             $this->addFlash('error', 'Ya no se puede cambiar de nodo para esa semana — el plazo terminó. Contacta con la administración si necesitas avisar.');
-            return $this->redirectToRoute('panel');
+            return $this->redirectToRoute('panel_basket');
         }
 
         $groupId = (int) $request->request->get('group_id', 0);
         $group = $groupId > 0 ? $weeklyBasketGroupRepository->find($groupId) : null;
         if ($group === null) {
             $this->addFlash('error', 'Selecciona un nodo de recogida válido.');
-            return $this->redirectToRoute('panel');
+            return $this->redirectToRoute('panel_basket');
         }
 
         // COMPARTIDA: la cesta física es una y va a UN punto, así que trasladarla no es
@@ -498,7 +518,7 @@ class PanelController extends AbstractController
             } catch (SharedPairException $e) {
                 $this->addFlash('warning', $e->getMessage());
 
-                return $this->redirectToRoute('panel');
+                return $this->redirectToRoute('panel_basket');
             }
 
             $this->addFlash('notice', sprintf(
@@ -517,7 +537,7 @@ class PanelController extends AbstractController
             $relocator->relocate($partner, $basket, $group, 'partner:' . $partner->getId());
         } catch (\LogicException $e) {
             $this->addFlash('warning', $e->getMessage());
-            return $this->redirectToRoute('panel');
+            return $this->redirectToRoute('panel_basket');
         }
 
         $this->addFlash('notice', sprintf(
@@ -525,7 +545,7 @@ class PanelController extends AbstractController
             $basket->getDate()->format('d/m/Y'),
             $group->getName(),
         ));
-        return $this->redirectToRoute('panel');
+        return $this->redirectToRoute('panel_basket');
     }
 
     /**

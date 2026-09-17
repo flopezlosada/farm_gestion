@@ -54,7 +54,7 @@
             <div class="cg-fact">
                 <span class="cg-fact__l">Cierre de apuntes</span>
                 <span class="cg-fact__v">
-                    {{ round.ordersCloseAt ? round.ordersCloseAt|date('d/m/Y H:i') : '—' }}
+                    {{ round.ordersCloseAt ? round.ordersCloseAt|date('d/m/Y') : '—' }}
                     {# El pedido sigue ABIERTO como estado, pero ya no entra nadie: es la
                      # señal de que se puede pasar al productor sin que aparezcan
                      # cantidades nuevas después. #}
@@ -226,6 +226,9 @@
                                     <th>Pedido</th>
                                     <th class="tight">Total</th>
                                     <th class="tight">Pago</th>
+                                    {% if round.status == constant('App\\Entity\\ConsumerGroupRound::STATUS_DELIVERED') %}
+                                        <th class="tight">Recogida</th>
+                                    {% endif %}
                                     <th class="tight" style="width: 44px;"><span class="sr-only">Acciones</span></th>
                                 </tr>
                             </thead>
@@ -233,7 +236,7 @@
                                 {% for order in socias %}
                                     {% set partner = order.partner %}
                                     <tr data-name="{{ (partner.name ~ ' ' ~ partner.surname)|lower }}" data-paid="{{ order.paid ? '1' : '0' }}">
-                                        <td>
+                                        <td class="prl-cell-person">
                                             <div class="prl-person">
                                                 <span class="prl-person__avatar prl-person__avatar--sage" aria-hidden="true"><i class="fa fa-user"></i></span>
                                                 <div class="prl-person__body">
@@ -247,7 +250,7 @@
                                                 </div>
                                             </div>
                                         </td>
-                                        <td>
+                                        <td data-label="Pedido">
                                             <ul class="cg-order__lines">
                                                 {% for oline in order.lines %}
                                                     {% if oline.quantity > 0 %}
@@ -256,25 +259,42 @@
                                                 {% endfor %}
                                             </ul>
                                         </td>
-                                        <td class="tight"><b>{{ order.total|number_format(2, ',', '.') }} €</b></td>
-                                        <td class="tight">
+                                        <td class="tight" data-label="Total"><b>{{ order.total|number_format(2, ',', '.') }} €</b></td>
+                                        <td class="tight cg-cell-pago" data-label="Pago">
                                             {% if order.paid %}
                                                 <span class="prl-chip prl-chip--activo"><span class="dot"></span>Pagado</span>
                                             {% else %}
                                                 <span class="prl-chip prl-chip--pausado"><span class="dot"></span>Pendiente</span>
                                                 {# El mismo concepto que se le pide a la socia, para poder
                                                  # buscarlo en el extracto: en el banco aparece el titular de
-                                                 # la cuenta, que no siempre es quien figura aquí. #}
-                                                <div class="cg-order__ref">{{ order.paymentReference }}</div>
+                                                 # la cuenta, que no siempre es quien figura aquí. Rotulado a
+                                                 # propósito: sin "Concepto:" delante, en la vista apilada de
+                                                 # móvil parece un segundo nombre suelto, no una referencia. #}
+                                                <div class="cg-order__ref"><span class="cg-order__ref-label">Concepto:</span> {{ order.paymentReference }}</div>
                                             {% endif %}
                                             {% if can_edit %}
-                                                <form method="post" action="{{ path('consumer_group_order_toggle_paid', { id: order.id }) }}" style="display:inline; margin-left: var(--csa-sp-2);">
+                                                <form method="post" action="{{ path('consumer_group_order_toggle_paid', { id: order.id }) }}" class="cg-order__pay-form">
                                                     <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_toggle_paid_' ~ order.id) }}">
                                                     <button type="submit" class="prl-btn prl-btn--sm">{{ order.paid ? 'Marcar pendiente' : 'Marcar pagado' }}</button>
                                                 </form>
                                             {% endif %}
                                         </td>
-                                        <td class="tight" style="text-align: right;">
+                                        {% if round.status == constant('App\\Entity\\ConsumerGroupRound::STATUS_DELIVERED') %}
+                                            <td class="tight cg-cell-pago" data-label="Recogida">
+                                                {% if order.pickedUp %}
+                                                    <span class="prl-chip prl-chip--activo"><span class="dot"></span>Recogido</span>
+                                                {% else %}
+                                                    <span class="prl-chip prl-chip--pausado"><span class="dot"></span>Sin recoger</span>
+                                                {% endif %}
+                                                {% if can_edit %}
+                                                    <form method="post" action="{{ path('consumer_group_order_toggle_picked_up', { id: order.id }) }}" class="cg-order__pay-form">
+                                                        <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_toggle_picked_up_' ~ order.id) }}">
+                                                        <button type="submit" class="prl-btn prl-btn--sm">{{ order.pickedUp ? 'Marcar sin recoger' : 'Marcar recogido' }}</button>
+                                                    </form>
+                                                {% endif %}
+                                            </td>
+                                        {% endif %}
+                                        <td class="tight" data-label="Acciones" style="text-align: right;">
                                             {% if can_socixs or can_reparto %}
                                                 <button type="button" class="cg-kebab" aria-label="Acciones de la socia">
                                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
@@ -352,10 +372,14 @@
             </div>
         </section>
 
-        <section class="prt-card">
-            <header class="prt-card__head">
-                <h2 class="prt-card__title"><span class="accent"></span>Actividad</h2>
-            </header>
+        {# Plegada por defecto: es el histórico de trazabilidad, no algo que se
+         # consulte al entrar a la ficha, y una lista que crece con cada apunte
+         # y cada cambio de estado saturaba la pantalla por debajo de lo que sí
+         # se mira siempre (socias, agregado, acciones). #}
+        <details class="prt-card cg-activity-card">
+            <summary class="prt-card__head cg-activity-summary">
+                <h2 class="prt-card__title"><span class="accent"></span>Actividad{% if activity is not empty %} <span class="csa-muted">({{ activity|length }})</span>{% endif %}</h2>
+            </summary>
             <div class="prt-card__body">
             {% if activity is empty %}
                 <p class="csa-muted">Sin actividad registrada todavía.</p>
@@ -372,7 +396,7 @@
                 </ul>
             {% endif %}
             </div>
-        </section>
+        </details>
 
         {% if can_edit and round.orders is empty %}
             <div class="csa-row" style="justify-content: flex-end;">
@@ -417,7 +441,16 @@
         .prt-actionbar .prt-btn--danger .fa { color: var(--prt-terra, #b45d3a); }
         .prt-actionbar .prt-btn--danger:hover { background: var(--prt-terra-l, #fae6dc); border-color: var(--prt-terra-d, #7d3a1f); }
         .cg-order__lines { margin: 0; padding-left: var(--csa-sp-4); font-size: .9rem; }
-        .cg-order__ref { margin-top: var(--csa-sp-1); font-size: .8rem; color: var(--csa-muted); white-space: nowrap; }
+        .cg-cell-pago { display: flex; flex-direction: column; align-items: flex-start; gap: var(--csa-sp-1); }
+        .cg-order__ref { font-size: .8rem; color: var(--csa-muted); white-space: nowrap; }
+        .cg-order__ref-label { font-weight: 600; }
+        .cg-order__pay-form { margin: 0; }
+        .cg-activity-summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+        .cg-activity-summary::-webkit-details-marker { display: none; }
+        .cg-activity-summary::after {
+            content: '▸'; color: var(--prt-ink-faint, #8d8773); transition: transform .15s ease;
+        }
+        .cg-activity-card[open] .cg-activity-summary::after { transform: rotate(90deg); }
         .cg-pay-summary { display: flex; align-items: center; gap: var(--csa-sp-3); flex-wrap: wrap; }
         /* Cabe una cantidad de tres cifras y media: no tiene que estirarse a lo
            ancho de la columna, que en una tabla de seis descuadra el resto. */

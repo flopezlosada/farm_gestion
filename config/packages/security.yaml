@@ -314,6 +314,12 @@ security:
         # escritura (dar de alta una obligación, anotar una renovación,
         # archivarla) exige _EDIT. Antes de la regla genérica ^/gestion.
         - { path: ^/gestion/vencimientos, methods: [POST, PUT, PATCH, DELETE], roles: ROLE_GESTION_VENCIMIENTOS_EDIT }
+        # Contabilidad (mismo modelo): lectura = ver el libro, los saldos y el
+        # seguimiento del presupuesto; la escritura (anotar, corregir o borrar
+        # apuntes, tocar el catálogo de partidas y el presupuesto, todo
+        # POST/PUT/PATCH/DELETE) exige _EDIT. Antes de la regla genérica ^/gestion.
+        # Path en inglés (convención del proyecto).
+        - { path: ^/gestion/accounting, methods: [POST, PUT, PATCH, DELETE], roles: ROLE_GESTION_CONTABILIDAD_EDIT }
         # Cualquier rol de gestión permite entrar a /gestion. Dentro,
         # cada controller filtra con #[IsGranted('ROLE_GESTION_X')] según
         # su sección.

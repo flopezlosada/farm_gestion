@@ -30,6 +30,11 @@
     {% include 'partner/_listing_styles.html.twig' %}
 {% endblock %}
 
+{% block more_js %}
+    {{ parent() }}
+    {% include '_components/listing_filters_js.html.twig' %}
+{% endblock %}
+
 {% block csa_main %}
 
 <div class="prl">
@@ -40,38 +45,80 @@
         'Pedidos colectivos de productos de terceros que se reparten con la cesta. Abre un pedido, las socias se apuntan y, al superar el mínimo del productor, se confirma.'
     ) }}
 
-    {# ============ STAT STRIP ============ #}
+    {# ============ STAT STRIP (siempre sobre el total, no lo filtrado) ============ #}
     <div class="prl-stats">
         <div class="prl-stat prl-stat--active">
-            <div class="v">{{ rounds|filter(r => r.status == 0)|length }}</div>
+            <div class="v">{{ all_rounds|filter(r => r.status == 0)|length }}</div>
             <div class="l">abiertos</div>
         </div>
         <div class="prl-stat prl-stat--paused">
-            <div class="v">{{ rounds|filter(r => r.status == 1)|length }}</div>
+            <div class="v">{{ all_rounds|filter(r => r.status == 1)|length }}</div>
             <div class="l">cerrados</div>
         </div>
         <div class="prl-stat prl-stat--active">
-            <div class="v">{{ rounds|filter(r => r.confirmed)|length }}</div>
+            <div class="v">{{ all_rounds|filter(r => r.confirmed)|length }}</div>
             <div class="l">confirmados</div>
         </div>
         <div class="prl-stat prl-stat--leave">
-            <div class="v">{{ rounds|filter(r => r.status == 3)|length }}</div>
+            <div class="v">{{ all_rounds|filter(r => r.status == 3)|length }}</div>
             <div class="l">cancelados</div>
         </div>
     </div>
 
-    {# ============ TOOLBAR ============ #}
-    <div class="prl-toolbar">
-        <div class="counters">
-            <b>{{ rounds|length }}</b> pedido{{ rounds|length == 1 ? '' : 's' }}
+    {# ============ FILTROS ============ #}
+    <form method="get" action="{{ path('consumer_group_index') }}" id="prl-filter-form">
+        <div class="prl-toolbar">
+            {% set selected_producer = filters.producer ? producers|filter(p => p.id == filters.producer)|first : null %}
+            <div class="prl-filt-wrap">
+                <button type="button" class="prl-filt {{ filters.producer ? 'has' : '' }}" data-pop-trigger="pop-productor">
+                    {{ selected_producer ? selected_producer.name : 'Productor' }}
+                    <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="prl-pop" id="pop-productor" hidden>
+                    <label><input type="radio" name="producer" value="" {{ filters.producer is null ? 'checked' : '' }}> Todos</label>
+                    {% for p in producers %}
+                        <label><input type="radio" name="producer" value="{{ p.id }}" {{ filters.producer == p.id ? 'checked' : '' }}> {{ p.name }}</label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="prl-filt-wrap">
+                <button type="button" class="prl-filt {{ filters.status is not null ? 'has' : '' }}" data-pop-trigger="pop-estado">
+                    {{ filters.status is not null ? statuses[filters.status]|default('Estado') : 'Estado' }}
+                    <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="prl-pop" id="pop-estado">
+                    <label><input type="radio" name="status" value="" {{ filters.status is null ? 'checked' : '' }}> Todos</label>
+                    {% for value, label in statuses %}
+                        <label><input type="radio" name="status" value="{{ value }}" {{ filters.status == value ? 'checked' : '' }}> {{ label }}</label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <input type="date" name="from" value="{{ filters.from }}" aria-label="Entrega desde" class="prl-filt" style="cursor: text;">
+                <span class="csa-muted">–</span>
+                <input type="date" name="to" value="{{ filters.to }}" aria-label="Entrega hasta" class="prl-filt" style="cursor: text;">
+                <button type="submit" class="prl-btn prl-btn--sm">Filtrar</button>
+            </div>
+
+            {% if filters.producer or filters.status is not null or filters.from or filters.to %}
+                <a class="prl-filt prl-filt--clear" href="{{ path('consumer_group_index') }}">
+                    <i class="fa fa-times" aria-hidden="true"></i> Quitar filtros
+                </a>
+            {% endif %}
+
+            <div class="spacer"></div>
+            <div class="counters">
+                <b>{{ rounds|length }}</b> pedido{{ rounds|length == 1 ? '' : 's' }}
+            </div>
+            {% if is_granted('ROLE_GESTION_GRUPO_CONSUMO_EDIT') %}
+                <a href="{{ path('consumer_group_new') }}" class="prl-btn prl-btn--primary">
+                    <i class="fa fa-plus"></i> Nuevo pedido
+                </a>
+            {% endif %}
         </div>
-        <div class="spacer"></div>
-        {% if is_granted('ROLE_GESTION_GRUPO_CONSUMO_EDIT') %}
-            <a href="{{ path('consumer_group_new') }}" class="prl-btn prl-btn--primary">
-                <i class="fa fa-plus"></i> Nuevo pedido
-            </a>
-        {% endif %}
-    </div>
+    </form>
 
     {# ============ TABLA ============ #}
     <div class="prl-table-wrap">

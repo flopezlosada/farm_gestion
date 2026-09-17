@@ -35,6 +35,60 @@ class ConsumerGroupRoundRepository extends ServiceEntityRepository
     }
 
     /**
+     * Igual que {@see findAllForManagement()}, pero con los filtros del listado
+     * de gestión: productor, estado y rango de fecha de entrega.
+     *
+     * @param array{producer: ?int, status: ?int, from: ?string, to: ?string} $filters
+     *
+     * @return ConsumerGroupRound[]
+     */
+    public function findFilteredForManagement(array $filters): array
+    {
+        $qb = $this->createQueryBuilder('r')
+            ->orderBy('r.deliveryDate', 'DESC')
+            ->addOrderBy('r.id', 'DESC');
+
+        if (!empty($filters['producer'])) {
+            $qb->andWhere('r.producer = :producer')->setParameter('producer', $filters['producer']);
+        }
+
+        if (null !== ($filters['status'] ?? null)) {
+            $qb->andWhere('r.status = :status')->setParameter('status', $filters['status']);
+        }
+
+        if (!empty($filters['from'])) {
+            $qb->andWhere('r.deliveryDate >= :from')->setParameter('from', new \DateTime($filters['from']));
+        }
+
+        if (!empty($filters['to'])) {
+            $qb->andWhere('r.deliveryDate <= :to')->setParameter('to', new \DateTime($filters['to']));
+        }
+
+        return $qb->getQuery()->getResult();
+    }
+
+    /**
+     * Los productores que tienen al menos un pedido, para el desplegable del
+     * filtro (no todo el catálogo de productores: uno sin pedidos nunca
+     * filtraría nada).
+     *
+     * @return Producer[]
+     */
+    public function findProducersWithRounds(): array
+    {
+        // FROM Producer, no ConsumerGroupRound: Doctrine no deja seleccionar sólo
+        // el alias de un join sin incluir también el alias raíz del FROM.
+        return $this->getEntityManager()->createQueryBuilder()
+            ->select('p')
+            ->distinct()
+            ->from(Producer::class, 'p')
+            ->join(ConsumerGroupRound::class, 'r', 'WITH', 'r.producer = p')
+            ->orderBy('p.name', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Rondas actualmente abiertas a apuntes (OPEN), con la de cierre más próximo
      * primero. Para el panel del socio.
      *

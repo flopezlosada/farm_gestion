@@ -64,6 +64,9 @@ class Notification
     /** Se ha abierto un pedido del grupo de consumo al que puedes apuntarte. */
     public const KIND_CONSUMER_GROUP_OPEN = 'consumer_group.open';
 
+    /** Han cambiado los productos de un pedido del grupo de consumo al que ya estabas apuntada. */
+    public const KIND_CONSUMER_GROUP_ITEMS_CHANGED = 'consumer_group.items_changed';
+
     /**
      * La cesta que compartes con otro hogar ha cambiado de día o de punto.
      *
