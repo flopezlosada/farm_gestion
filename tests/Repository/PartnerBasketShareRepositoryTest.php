@@ -106,6 +106,46 @@ class PartnerBasketShareRepositoryTest extends KernelTestCase
     }
 
     /**
+     * Una cesta que entra en vigor DESPUÉS del día 1 (socio que empieza un viernes) no la
+     * ve findActiveForPartner cuando se le pregunta por el día 1 de ese mes, pero sí la
+     * devuelve findLatestActiveForPartner. De esa diferencia depende el calendario de
+     * recogida: preguntaba sólo por el día 1 y, al no encontrar cesta, dejaba el mes entero
+     * sin ningún destino de arrastre (la cesta no se podía mover a ninguna parte).
+     */
+    public function testCestaQueEmpiezaTrasElDiaUnoSoloLaEncuentraElFinderDeLaMasReciente(): void
+    {
+        self::bootKernel();
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $weekly = $em->getRepository(BasketShare::class)->find(self::SHARE_WEEKLY);
+        $this->assertNotNull($weekly, 'El catálogo debe tener la cesta semanal (id 1).');
+
+        $share = $this->makeWeeklyShare($em, $weekly, 'RepoTest Alta a mes empezado', null);
+        $share->setStartDate(new \DateTime('2099-09-04')); // viernes, con el mes ya empezado
+        $em->flush();
+
+        /** @var PartnerBasketShareRepository $repo */
+        $repo = $em->getRepository(PartnerBasketShare::class);
+        $partner = $share->getPartner();
+
+        $this->assertNull(
+            $repo->findActiveForPartner($partner, new \DateTimeImmutable('2099-09-01')),
+            'El día 1 todavía no hay cesta en vigor: por eso el calendario se quedaba sin destinos.',
+        );
+        $this->assertSame(
+            $share->getId(),
+            $repo->findLatestActiveForPartner($partner)?->getId(),
+            'La cesta en curso sí se encuentra ignorando la ventana de fechas (fallback del calendario).',
+        );
+        $this->assertSame(
+            $share->getId(),
+            $repo->findActiveForPartner($partner, new \DateTimeImmutable('2099-09-18'))?->getId(),
+            'Desde su fecha de inicio la cesta se resuelve con normalidad.',
+        );
+    }
+
+    /**
      * Mensual con orden y, opcionalmente, turno al que anclarlo. Sin grupo de
      * recogida: la rama weekly del finder acepta `n.id IS NULL`.
      */
