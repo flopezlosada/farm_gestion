@@ -76,9 +76,13 @@ class ConsumerGroupRoundRepository extends ServiceEntityRepository
      */
     public function findProducersWithRounds(): array
     {
-        return $this->createQueryBuilder('r')
-            ->select('DISTINCT p')
-            ->join('r.producer', 'p')
+        // FROM Producer, no ConsumerGroupRound: Doctrine no deja seleccionar sólo
+        // el alias de un join sin incluir también el alias raíz del FROM.
+        return $this->getEntityManager()->createQueryBuilder()
+            ->select('p')
+            ->distinct()
+            ->from(Producer::class, 'p')
+            ->join(ConsumerGroupRound::class, 'r', 'WITH', 'r.producer = p')
             ->orderBy('p.name', 'ASC')
             ->getQuery()
             ->getResult();
