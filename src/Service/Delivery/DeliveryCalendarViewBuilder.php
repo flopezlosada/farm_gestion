@@ -134,7 +134,15 @@ final class DeliveryCalendarViewBuilder
         $dropDays = [];
         $eggDropDays = [];
         if ($withDropTargets) {
-            $activeShare = $this->em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $current);
+            // El ancla es el día 1 del mes, pero una cesta puede entrar en vigor DESPUÉS
+            // (socio nuevo que empieza un viernes, alta tras una baja): ese día 1 no tiene
+            // cesta y sin ella no se calculaba ningún destino, así que el mes entero se
+            // quedaba sin sitio donde soltar —ni error ni petición, la cesta simplemente no
+            // se podía mover—. La cesta en curso sirve igual aquí: los destinos sólo usan el
+            // NODO del socio, y el endpoint de mover revalida con la cesta del día real.
+            $shareRepo = $this->em->getRepository(PartnerBasketShare::class);
+            $activeShare = $shareRepo->findActiveForPartner($partner, $current)
+                ?? $shareRepo->findLatestActiveForPartner($partner);
             if ($activeShare !== null) {
                 $monthBaskets = $this->em->getRepository(Basket::class)->createQueryBuilder('b')
                     ->where('b.date BETWEEN :start AND :end')
