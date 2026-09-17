@@ -309,17 +309,6 @@ class ConsumerGroupController extends AbstractController
                 }
             }
 
-            // Se borran explícitamente ANTES de quitar el item: el FK las borra en
-            // cascada en BBDD igualmente, pero si Doctrine no se entera, se quedan
-            // en el UnitOfWork apuntando a un item que ya se ha ido, y el próximo
-            // flush() de la request (aquí, el del aviso) revienta con "a new entity
-            // was found through the relationship ...OrderLine#roundItem".
-            foreach ($removalsWithOrders as $removal) {
-                foreach ($removal['lines'] as $line) {
-                    $em->remove($line);
-                }
-            }
-
             $itemEditor->apply($round, $desired);
             $recorder->record(ConsumerGroupEventLog::KIND_ITEMS_UPDATED, $round, $this->getUser(), 'Productos y precios del pedido actualizados.');
             $em->flush();

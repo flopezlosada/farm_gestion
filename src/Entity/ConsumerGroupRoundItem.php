@@ -2,6 +2,8 @@
 
 namespace App\Entity;
 
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
 
@@ -44,6 +46,19 @@ class ConsumerGroupRoundItem
     private ?ConsumerGroupProduct $product = null;
 
     /**
+     * Líneas de pedido de las socias sobre este item. Cascade remove +
+     * orphanRemoval para que Doctrine sepa, al quitar el item de una ronda
+     * ({@see ConsumerGroupRound::removeItem()}), que estas líneas se van con
+     * él: sin este mapeo, el ORM no conoce esa relación (sólo existe el FK
+     * `ON DELETE CASCADE` en BBDD) y se queda con líneas fantasma en el
+     * UnitOfWork que revientan el siguiente flush() de la request.
+     *
+     * @ORM\OneToMany(targetEntity="ConsumerGroupOrderLine", mappedBy="roundItem", cascade={"remove"}, orphanRemoval=true)
+     * @var Collection<int, ConsumerGroupOrderLine>
+     */
+    private Collection $lines;
+
+    /**
      * Precio por unidad PARA ESTA RONDA, en euros. Decimal como string.
      * @ORM\Column(type="decimal", precision=8, scale=2)
      */
@@ -78,6 +93,7 @@ class ConsumerGroupRoundItem
         $this->round = $round;
         $this->product = $product;
         $this->price = $price;
+        $this->lines = new ArrayCollection();
     }
 
     public function getId(): ?int
