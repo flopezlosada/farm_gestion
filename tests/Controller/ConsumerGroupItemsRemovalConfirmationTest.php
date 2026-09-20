@@ -5,7 +5,6 @@ namespace App\Tests\Controller;
 use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupOrderLine;
 use App\Entity\ConsumerGroupProduct;
-use App\Entity\ConsumerGroupUnit;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupRoundItem;
 use App\Entity\Notification;
@@ -87,8 +86,8 @@ class ConsumerGroupItemsRemovalConfirmationTest extends AbstractAuthenticatedTes
         $em = self::getContainer()->get('doctrine')->getManager();
 
         $producer = (new Producer())->setName('Huerta Test');
-        $naranjas = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit((new ConsumerGroupUnit())->setName('kg'));
-        $aceite = (new ConsumerGroupProduct())->setName('Aceite')->setUnit((new ConsumerGroupUnit())->setName('L'));
+        $naranjas = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit($this->unidadGlobal('kg'));
+        $aceite = (new ConsumerGroupProduct())->setName('Aceite')->setUnit($this->unidadGlobal('L'));
         $producer->addProduct($naranjas);
         $producer->addProduct($aceite);
 
@@ -111,8 +110,6 @@ class ConsumerGroupItemsRemovalConfirmationTest extends AbstractAuthenticatedTes
         $order = new ConsumerGroupOrder($round, $partner);
         $order->addLine(new ConsumerGroupOrderLine($order, $item, '3'));
 
-        $em->persist($naranjas->getUnit());
-        $em->persist($aceite->getUnit());
         $em->persist($producer);
         $em->persist($naranjas);
         $em->persist($aceite);

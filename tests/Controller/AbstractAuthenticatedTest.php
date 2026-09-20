@@ -2,6 +2,7 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\ConsumerGroupUnit;
 use App\Entity\User;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -70,5 +71,24 @@ abstract class AbstractAuthenticatedTest extends WebTestCase
         $em->flush();
 
         return $user;
+    }
+
+    /**
+     * Devuelve la unidad global con ese nombre, creándola si no existe.
+     *
+     * La BBDD de test no se resetea entre tests dentro de la misma
+     * ejecución, así que crear siempre "kg" desde cero choca con su
+     * restricción de unicidad en cuanto corre más de un test que la usa.
+     */
+    protected function unidadGlobal(string $name): ConsumerGroupUnit
+    {
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $unit = $em->getRepository(ConsumerGroupUnit::class)->findOneBy(['name' => $name]);
+        if ($unit === null) {
+            $unit = (new ConsumerGroupUnit())->setName($name);
+            $em->persist($unit);
+        }
+
+        return $unit;
     }
 }

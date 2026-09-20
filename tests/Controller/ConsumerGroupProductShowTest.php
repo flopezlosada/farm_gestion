@@ -5,7 +5,6 @@ namespace App\Tests\Controller;
 use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupOrderLine;
 use App\Entity\ConsumerGroupProduct;
-use App\Entity\ConsumerGroupUnit;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupRoundItem;
 use App\Entity\Image;
@@ -118,7 +117,7 @@ class ConsumerGroupProductShowTest extends AbstractAuthenticatedTest
         $em = self::getContainer()->get('doctrine')->getManager();
 
         $producer = (new Producer())->setName('Huerta Test ' . uniqid());
-        $naranjas = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit((new ConsumerGroupUnit())->setName('kg'));
+        $naranjas = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit($this->unidadGlobal('kg'));
         $producer->addProduct($naranjas);
 
         $round = new ConsumerGroupRound();
@@ -131,7 +130,6 @@ class ConsumerGroupProductShowTest extends AbstractAuthenticatedTest
         $order = new ConsumerGroupOrder($round, $partner);
         $order->addLine(new ConsumerGroupOrderLine($order, $item, '4'));
 
-        $em->persist($naranjas->getUnit());
         $em->persist($producer);
         $em->persist($naranjas);
         $em->persist($round);
