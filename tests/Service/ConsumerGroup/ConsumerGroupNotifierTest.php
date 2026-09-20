@@ -5,6 +5,7 @@ namespace App\Tests\Service\ConsumerGroup;
 use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupOrderLine;
 use App\Entity\ConsumerGroupProduct;
+use App\Entity\ConsumerGroupUnit;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupRoundItem;
 use App\Entity\Partner;
@@ -32,7 +33,7 @@ class ConsumerGroupNotifierTest extends TestCase
         $producer = new Producer();
         $round = new ConsumerGroupRound();
         $round->setProducer($producer);
-        $product = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit('kg');
+        $product = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit((new ConsumerGroupUnit())->setName('kg'));
         $producer->addProduct($product);
         $this->item = new ConsumerGroupRoundItem($round, $product, '2.50');
         $round->addItem($this->item);
@@ -116,6 +117,43 @@ class ConsumerGroupNotifierTest extends TestCase
 
         self::assertSame(1, $result['sent']);
         self::assertSame(1, $result['failed']);
+    }
+
+    public function testNotificaAlProductorSiTieneEmail(): void
+    {
+        $this->round->getProducer()->setEmail('productor@example.com');
+
+        $mailer = $this->createMock(MailerInterface::class);
+        $mailer->expects(self::once())->method('send');
+
+        $result = $this->notifier($mailer, true)->notifyProducerConfirmed($this->round);
+
+        self::assertTrue($result['enabled']);
+        self::assertTrue($result['sent']);
+    }
+
+    public function testNoNotificaAlProductorSinEmail(): void
+    {
+        $mailer = $this->createMock(MailerInterface::class);
+        $mailer->expects(self::never())->method('send');
+
+        $result = $this->notifier($mailer, true)->notifyProducerConfirmed($this->round);
+
+        self::assertTrue($result['enabled']);
+        self::assertFalse($result['sent']);
+    }
+
+    public function testNoNotificaAlProductorConElInterruptorApagado(): void
+    {
+        $this->round->getProducer()->setEmail('productor@example.com');
+
+        $mailer = $this->createMock(MailerInterface::class);
+        $mailer->expects(self::never())->method('send');
+
+        $result = $this->notifier($mailer, false)->notifyProducerConfirmed($this->round);
+
+        self::assertFalse($result['enabled']);
+        self::assertFalse($result['sent']);
     }
 
     public function testRecipientStats(): void

@@ -7,9 +7,9 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 /**
  * Producto del CATÁLOGO de un {@see Producer}: persistente y reutilizable entre
- * rondas. Lleva un precio de REFERENCIA (orientativo) que precarga el precio de la
- * ronda al añadirlo, pero el precio efectivo de cada ronda vive en
- * {@see ConsumerGroupRoundItem} porque varía de una ronda a otra.
+ * rondas. SIN precio: el precio vive en {@see ConsumerGroupRoundItem} porque
+ * varía de una ronda a otra (arranca con el de la última ronda que lo llevó,
+ * ver {@see \App\Repository\ConsumerGroupRoundItemRepository::findLastPriceForProduct()}).
  *
  * LA FOTO NO ES UNA COLUMNA DE AQUÍ. Se guarda como {@see Image} polimórfica
  * ({@see self::OBJECT_CLASS} + id), que es el mecanismo de subida que ya usa el
@@ -60,13 +60,15 @@ class ConsumerGroupProduct
     private string $name = '';
 
     /**
-     * Unidad de venta (p. ej. "kg", "L", "docena", "caja", "ud"). Texto libre: los
-     * productores no comparten catálogo de unidades.
-     * @ORM\Column(type="string", length=30)
+     * Unidad de venta (kg, L, docena, garrafa de 5 L…). GLOBAL, no por
+     * productor: así se puede comparar/sumar entre productos distintos
+     * ({@see ConsumerGroupUnit}). RESTRICT: una unidad en uso no se borra, se
+     * marca inactiva.
+     * @ORM\ManyToOne(targetEntity="ConsumerGroupUnit")
+     * @ORM\JoinColumn(name="unit_id", nullable=false, onDelete="RESTRICT")
      */
-    #[Assert\NotBlank]
-    #[Assert\Length(max: 30)]
-    private string $unit = '';
+    #[Assert\NotNull]
+    private ?ConsumerGroupUnit $unit = null;
 
     /**
      * ¿Se puede pedir en MEDIAS unidades (medio kilo, media caja)?
@@ -87,14 +89,6 @@ class ConsumerGroupProduct
      * @ORM\Column(type="text", nullable=true)
      */
     private ?string $description = null;
-
-    /**
-     * Precio de referencia por unidad, en euros (orientativo; el precio real lo
-     * fija cada ronda). Decimal como string para no arrastrar coma flotante.
-     * @ORM\Column(type="decimal", precision=8, scale=2, nullable=true)
-     */
-    #[Assert\PositiveOrZero]
-    private ?string $referencePrice = null;
 
     /**
      * Producto retirado del catálogo: no se ofrece en rondas nuevas, pero se conserva
@@ -147,12 +141,12 @@ class ConsumerGroupProduct
         return $this;
     }
 
-    public function getUnit(): string
+    public function getUnit(): ?ConsumerGroupUnit
     {
         return $this->unit;
     }
 
-    public function setUnit(string $unit): self
+    public function setUnit(?ConsumerGroupUnit $unit): self
     {
         $this->unit = $unit;
         return $this;
@@ -189,17 +183,6 @@ class ConsumerGroupProduct
     public function setDescription(?string $description): self
     {
         $this->description = $description;
-        return $this;
-    }
-
-    public function getReferencePrice(): ?string
-    {
-        return $this->referencePrice;
-    }
-
-    public function setReferencePrice(?string $referencePrice): self
-    {
-        $this->referencePrice = $referencePrice;
         return $this;
     }
 

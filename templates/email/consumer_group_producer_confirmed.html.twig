@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Pedido confirmado · Grupo de consumo · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 580px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Hola {{ round.producer }},</h2>
+
+    <p>El pedido <strong>«{{ round.title }}»</strong> ha alcanzado el mínimo y queda
+       <strong>confirmado</strong>: puedes darlo por bueno.</p>
+
+    {% if round.deliveryDate %}
+        <p>Fecha de entrega prevista: <strong>{{ round.deliveryDate|format_date('full', locale='es') }}</strong>.</p>
+    {% endif %}
+
+    <p style="margin-top: 32px; color: #777; font-size: 13px;">
+        Un abrazo,<br>
+        CSA Vega de Jarama<br>
+        <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+</body>
+</html>

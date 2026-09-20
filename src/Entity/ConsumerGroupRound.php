@@ -6,6 +6,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 use Gedmo\Mapping\Annotation as Gedmo;
 
 /**
@@ -27,16 +28,31 @@ use Gedmo\Mapping\Annotation as Gedmo;
  * plazo, y por eso está separado: un pedido confirmado sigue admitiendo apuntes
  * hasta que se cierra.
  *
- * El MÍNIMO del productor NO se automatiza: su unidad varía (importe, cantidad,
- * nº de pedidos) e incluso se desconoce. Se guarda como texto informativo
- * ({@see $minimumCondition}) y la comisión confirma la ronda a mano viendo los
- * agregados. La app NO cobra en v1: las socias pagan por transferencia como hoy.
+ * El MÍNIMO del productor se automatiza SOLO cuando encaja en uno de los dos
+ * tipos calculables sin ambigüedad ({@see $minimumType}: importe total o nº de
+ * socias con pedido — ver {@see minimumReached()}); en ese caso
+ * {@see \App\Service\ConsumerGroup\MinimumAutoConfirmer} confirma la ronda sola
+ * al guardar un pedido. Cuando el mínimo es de otro tipo (una cantidad de
+ * producto concreto, o directamente se desconoce), se guarda como texto
+ * informativo ({@see $minimumCondition}) y la comisión confirma a mano viendo
+ * los agregados, como siempre. La app NO cobra en v1: las socias pagan por
+ * transferencia como hoy.
  *
  * @ORM\Table(name="consumer_group_round")
  * @ORM\Entity(repositoryClass="App\Repository\ConsumerGroupRoundRepository")
  */
 class ConsumerGroupRound
 {
+    /** Mínimo expresado como importe total (€) del agregado de la ronda. */
+    public const MINIMUM_TYPE_AMOUNT = 1;
+    /** Mínimo expresado como nº de socias con pedido no vacío. */
+    public const MINIMUM_TYPE_PARTICIPANTS = 2;
+
+    public const MINIMUM_TYPE_LABELS = [
+        self::MINIMUM_TYPE_AMOUNT => 'Importe total (€)',
+        self::MINIMUM_TYPE_PARTICIPANTS => 'Nº de socias con pedido',
+    ];
+
     public const STATUS_OPEN = 0;
     public const STATUS_CLOSED = 1;
     /** @deprecated El "confirmado" ya no es un estado del plazo, es el flag {@see $confirmed}. Se conserva el valor 2 solo para el backfill de la migración. */
@@ -100,12 +116,35 @@ class ConsumerGroupRound
     private bool $confirmed = false;
 
     /**
-     * Condición de mínimo del productor, informativa (p. ej. "mínimo 150 €" o
-     * "50 kg" o "10 pedidos"). NO se calcula: la comisión decide viéndola.
+     * Nota del mínimo del productor, informativa e independiente de
+     * {@see $minimumType}/{@see $minimumValue} (p. ej. "sujeto a disponibilidad" o
+     * un mínimo en una unidad que no se automatiza, como "50 kg de aceitunas").
      * @ORM\Column(type="string", length=255, nullable=true)
      */
     #[Assert\Length(max: 255)]
     private ?string $minimumCondition = null;
+
+    /**
+     * Qué se compara para el mínimo automatizable ({@see MINIMUM_TYPE_LABELS}), o
+     * null si el mínimo de esta ronda no se automatiza (se confirma a mano, como
+     * siempre). Solo estos dos tipos son calculables sin ambigüedad a partir del
+     * agregado de la ronda: un mínimo en unidades de producto ("50 kg") no lo es,
+     * porque una ronda puede tener varios productos con unidades distintas.
+     * @ORM\Column(type="smallint", nullable=true)
+     */
+    #[Assert\Choice(choices: [self::MINIMUM_TYPE_AMOUNT, self::MINIMUM_TYPE_PARTICIPANTS], message: 'Tipo de mínimo no válido.')]
+    private ?int $minimumType = null;
+
+    /**
+     * Umbral del mínimo, en la unidad de {@see $minimumType}. Decimal como string,
+     * igual que el resto de importes/cantidades del módulo. Positivo estricto:
+     * un umbral de 0 se cumpliría siempre (incluso con la ronda vacía), que
+     * autoconfirmaría cualquier ronda con este tipo en cuanto alguien tocara un
+     * apunte, sin que nadie lo haya pedido de verdad.
+     * @ORM\Column(type="decimal", precision=8, scale=2, nullable=true)
+     */
+    #[Assert\Positive(message: 'El umbral del mínimo tiene que ser mayor que cero.')]
+    private ?string $minimumValue = null;
 
     /**
      * Notas / descripción para las socias (opcional).
@@ -303,6 +342,42 @@ class ConsumerGroupRound
         return $this->confirmed;
     }
 
+    /**
+     * ¿Ya se entregó? Sólo entonces tiene sentido hablar de recogida: antes no
+     * hay nada físico que recoger.
+     */
+    public function isDelivered(): bool
+    {
+        return $this->status === self::STATUS_DELIVERED;
+    }
+
+    /**
+     * ¿Ya ha recogido TODA socia con pedido real? "Entregado" solo dice que
+     * llegó al local, no que se lo hayan llevado — esto es lo segundo, y no es
+     * un estado propio de la ronda (no hay transición de máquina de estados
+     * para ello): se calcula solo, se pone al día sin que nadie tenga que
+     * tocar nada, y deja de ser cierto si luego se desmarca una recogida.
+     */
+    public function isFullyPickedUp(): bool
+    {
+        if (!$this->isDelivered()) {
+            return false;
+        }
+
+        $withOrder = false;
+        foreach ($this->orders as $order) {
+            if ($order->isEmpty()) {
+                continue;
+            }
+            $withOrder = true;
+            if (!$order->isPickedUp()) {
+                return false;
+            }
+        }
+
+        return $withOrder;
+    }
+
     public function setConfirmed(bool $confirmed): self
     {
         $this->confirmed = $confirmed;
@@ -318,6 +393,87 @@ class ConsumerGroupRound
     {
         $this->minimumCondition = $minimumCondition;
         return $this;
+    }
+
+    public function getMinimumType(): ?int
+    {
+        return $this->minimumType;
+    }
+
+    public function setMinimumType(?int $minimumType): self
+    {
+        $this->minimumType = $minimumType;
+        return $this;
+    }
+
+    public function getMinimumValue(): ?string
+    {
+        return $this->minimumValue;
+    }
+
+    /**
+     * "Importe total (€): 150" o similar, para pintar de un vistazo el mínimo
+     * automático configurado. Null si no hay uno (mínimo manual, o ninguno).
+     */
+    public function getMinimumTypeLabel(): ?string
+    {
+        if ($this->minimumType === null) {
+            return null;
+        }
+
+        return sprintf('%s: %s', self::MINIMUM_TYPE_LABELS[$this->minimumType] ?? $this->minimumType, $this->minimumValue ?? '—');
+    }
+
+    public function setMinimumValue(?string $minimumValue): self
+    {
+        $this->minimumValue = $minimumValue;
+        return $this;
+    }
+
+    /**
+     * ¿Se alcanza el mínimo automatizable con este agregado? Null si la ronda no
+     * tiene un mínimo de este tipo configurado (sigue siendo manual). Lógica pura:
+     * recibe el resultado de {@see \App\Service\ConsumerGroup\OrderAggregator::aggregate()},
+     * no vuelve a calcularlo.
+     *
+     * @param array{participantCount: int, total: float} $aggregate
+     */
+    public function minimumReached(array $aggregate): ?bool
+    {
+        if ($this->minimumType === null || $this->minimumValue === null) {
+            return null;
+        }
+
+        $threshold = (float) $this->minimumValue;
+
+        return match ($this->minimumType) {
+            // En CÉNTIMOS enteros, no en float directo: sumar varios round(x,2)
+            // en coma flotante puede dar 149.99999999999997 en vez de 150.0, y
+            // eso dejaría un pedido justo en el mínimo sin confirmarse hasta el
+            // siguiente apunte. Redondear a entero antes de comparar lo evita
+            // sin arrastrar bcmath (no es una dependencia del proyecto).
+            self::MINIMUM_TYPE_AMOUNT => (int) round($aggregate['total'] * 100) >= (int) round($threshold * 100),
+            self::MINIMUM_TYPE_PARTICIPANTS => $aggregate['participantCount'] >= $threshold,
+            default => null,
+        };
+    }
+
+    /**
+     * El mínimo automático va TODO O NADA: tipo y umbral juntos, o ninguno de
+     * los dos. Un tipo sin umbral (o al revés) no da error al guardar —cada
+     * campo por separado es válido— pero deja la ronda en un limbo donde
+     * {@see getMinimumTypeLabel()} pinta un mínimo automático que
+     * {@see minimumReached()} nunca evalúa (falta uno de los dos datos), sin
+     * ningún aviso de que no está vigilando nada.
+     */
+    #[Assert\Callback]
+    public function validateMinimumTypeAndValueGoTogether(ExecutionContextInterface $context): void
+    {
+        if (($this->minimumType === null) !== ($this->minimumValue === null)) {
+            $context->buildViolation('El mínimo automático necesita tipo y umbral a la vez, o ninguno de los dos.')
+                ->atPath('minimumValue')
+                ->addViolation();
+        }
     }
 
     public function getDescription(): ?string

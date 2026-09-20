@@ -69,6 +69,14 @@
 .prt-hero__lead {
     margin: 8px 0 0; max-width: 62ch; font-size: 13px; line-height: 1.5;
     color: var(--prt-ink-soft);
+    /* El hero es la CABECERA, no el sitio para un texto libre sin límite: si el
+     * campo de origen es un textarea, alguien puede escribir un párrafo entero
+     * y se comería la pantalla. Recortado a 3 líneas con "…"; el texto
+     * completo sigue disponible donde se edita. */
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 .prt-hero__actions { display: flex; gap: 8px; }
 

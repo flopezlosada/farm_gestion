@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\ConsumerGroupEventLog;
 use App\Entity\ConsumerGroupRound;
+use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -30,6 +31,25 @@ class ConsumerGroupEventLogRepository extends ServiceEntityRepository
             ->leftJoin('e.actorUser', 'u')->addSelect('u')
             ->where('e.round = :round')
             ->setParameter('round', $round)
+            ->orderBy('e.occurredAt', 'DESC')
+            ->addOrderBy('e.id', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Actividad de UN actor concreto, de más nueva a más vieja. Pensado para el
+     * productor autogestionado: su login y las altas/ediciones/bajas de su
+     * catálogo quedan con `actorUser` = su propio User, así que esto es "lo que
+     * ha hecho este productor" sin necesitar una FK propia a Producer.
+     *
+     * @return ConsumerGroupEventLog[]
+     */
+    public function findByActor(User $actor): array
+    {
+        return $this->createQueryBuilder('e')
+            ->where('e.actorUser = :actor')
+            ->setParameter('actor', $actor)
             ->orderBy('e.occurredAt', 'DESC')
             ->addOrderBy('e.id', 'DESC')
             ->getQuery()

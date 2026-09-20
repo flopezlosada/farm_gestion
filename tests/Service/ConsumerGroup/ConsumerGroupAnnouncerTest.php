@@ -3,6 +3,7 @@
 namespace App\Tests\Service\ConsumerGroup;
 
 use App\Entity\ConsumerGroupProduct;
+use App\Entity\ConsumerGroupUnit;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupRoundItem;
 use App\Entity\Notification;
@@ -54,7 +55,7 @@ class ConsumerGroupAnnouncerTest extends TestCase
         // tiene nada que ver con lo que comprueban—.
         $round->setOrdersCloseAt(new \DateTime('+10 days'));
 
-        $product = (new ConsumerGroupProduct())->setName('Aceite')->setUnit('garrafa de 5 L');
+        $product = (new ConsumerGroupProduct())->setName('Aceite')->setUnit((new ConsumerGroupUnit())->setName('garrafa de 5 L'));
         $producer->addProduct($product);
         $round->addItem(new ConsumerGroupRoundItem($round, $product, '25.00'));
 

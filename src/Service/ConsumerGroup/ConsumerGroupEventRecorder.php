@@ -48,6 +48,15 @@ class ConsumerGroupEventRecorder
             return $producer.' (productor)';
         }
 
-        return $actor->getEmail() ?: (string) $actor;
+        $worker = $actor->getWorker();
+        if ($worker !== null && $worker->getName() !== null) {
+            return $worker->getName().' (gestión)';
+        }
+
+        // Ni socia, ni productor, ni trabajador de granja: sólo queda la cuenta
+        // de gestión/admin. getDisplayName() usa el username (identifica), NO
+        // el email de la cuenta (puede ser cualquier correo personal antiguo,
+        // sin relación con quién es en la app).
+        return $actor->getDisplayName().' (gestión)';
     }
 }

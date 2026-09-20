@@ -5,6 +5,7 @@ namespace App\Tests\Service\ConsumerGroup;
 use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupOrderLine;
 use App\Entity\ConsumerGroupProduct;
+use App\Entity\ConsumerGroupUnit;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupRoundItem;
 use App\Entity\Producer;
@@ -30,8 +31,8 @@ class OrderEditorTest extends TestCase
 
         // La fruta se vende al peso y admite medios kilos; el aceite viene en
         // garrafa y no se parte. El salto lo dice el producto.
-        $frutaProduct = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit('kg')->setHalfUnits(true);
-        $aceiteProduct = (new ConsumerGroupProduct())->setName('Aceite')->setUnit('garrafa de 5 L');
+        $frutaProduct = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit((new ConsumerGroupUnit())->setName('kg'))->setHalfUnits(true);
+        $aceiteProduct = (new ConsumerGroupProduct())->setName('Aceite')->setUnit((new ConsumerGroupUnit())->setName('garrafa de 5 L'));
         $producer->addProduct($frutaProduct);
         $producer->addProduct($aceiteProduct);
 

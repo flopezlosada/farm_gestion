@@ -3,6 +3,7 @@
 namespace App\Form;
 
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
@@ -19,7 +20,11 @@ class ImageType extends AbstractType
                 "required"=>null===$builder->getData()->getId()?true:false,
                 "label"=>"Imagen"
             ))
-            ->add('title',null,array('label'=>'Título'))
+            // TextType explícito: la columna es TEXT (sin límite) y sin esto
+            // Symfony adivina TextareaType. El título de una foto es una
+            // línea corta en todos lados donde se usa (alt, title, leyenda
+            // del lightbox) — el LAR ya lo pinta como <input> de siempre.
+            ->add('title', TextType::class, array('label'=>'Título'))
         ;
     }
     

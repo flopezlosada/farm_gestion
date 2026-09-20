@@ -6,9 +6,12 @@ use App\Entity\ConsumerGroupProduct;
 use App\Entity\Image;
 use App\Entity\Producer;
 use App\Form\ProducerType;
+use App\Repository\ConsumerGroupEventLogRepository;
+use App\Repository\ConsumerGroupRoundRepository;
 use App\Repository\ProducerRepository;
 use App\Security\MagicLinkMailer;
 use App\Security\ProducerUserProvisioner;
+use App\Service\ConsumerGroup\ConsumerGroupStats;
 use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -68,7 +71,7 @@ class ProducerController extends AbstractController
      * Ficha del productor con su catálogo.
      */
     #[Route('/{id}', name: 'consumer_group_producer_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(Producer $producer, ProducerUserProvisioner $provisioner, EntityManagerInterface $em): Response
+    public function show(Producer $producer, ProducerUserProvisioner $provisioner, ConsumerGroupStats $stats, ConsumerGroupEventLogRepository $events, ConsumerGroupRoundRepository $rounds, EntityManagerInterface $em): Response
     {
         // Las fotos del catálogo, en una consulta: la tabla las pinta por fila y
         // preguntar una vez por producto sería un N+1 con veinte referencias.
@@ -77,13 +80,24 @@ class ProducerController extends AbstractController
             $productIds[] = $product->getId();
         }
 
+        // Sólo tiene sentido ofrecer acceso a un productor autogestionado: el
+        // que va vía comisión no lleva panel propio.
+        $accessUser = $producer->isSelfManaged() ? $provisioner->userFor($producer) : null;
+
         return $this->render('producer/show.html.twig', [
             'producer' => $producer,
+            'stats' => $stats->forProducer($producer),
+            'by_round' => $stats->byRoundForProducer($producer),
+            'by_product' => $stats->byProductForProducer($producer),
+            'by_partner' => $stats->byPartnerForProducer($producer),
+            'rounds' => $rounds->findAllForProducer($producer),
             'photos' => $em->getRepository(Image::class)
                 ->findOneForObjects(ConsumerGroupProduct::OBJECT_CLASS, array_filter($productIds)),
-            // Sólo tiene sentido ofrecer acceso a un productor autogestionado: el
-            // que va vía comisión no lleva panel propio.
-            'access_user' => $producer->isSelfManaged() ? $provisioner->userFor($producer) : null,
+            'access_user' => $accessUser,
+            // Lo que ha hecho el productor con SU propia cuenta: accesos y
+            // cambios en su catálogo. Lo que toca la comisión sobre este
+            // productor no sale aquí (ver ficha de cada ronda para eso).
+            'producer_activity' => $accessUser !== null ? $events->findByActor($accessUser) : [],
         ]);
     }
 

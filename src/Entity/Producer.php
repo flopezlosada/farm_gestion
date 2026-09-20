@@ -69,18 +69,12 @@ class Producer
     private ?string $web = null;
 
     /**
-     * Notas internas de la comisión sobre el productor (opcional).
+     * A qué se dedica: "aceite de oliva ecológico", "huerta y hortalizas de
+     * temporada"… El nombre ({@see $name}) identifica la actividad o empresa,
+     * no necesariamente lo dice; esto sí. Se enseña en su ficha, no es interno.
      * @ORM\Column(type="text", nullable=true)
      */
-    private ?string $notes = null;
-
-    /**
-     * Nota de pedido mínimo por defecto (informativa), que precarga la condición de
-     * mínimo al abrir una ronda de este productor. No se calcula (ver diseño).
-     * @ORM\Column(type="string", length=255, nullable=true)
-     */
-    #[Assert\Length(max: 255)]
-    private ?string $minimumNote = null;
+    private ?string $activityDescription = null;
 
     /**
      * ¿El productor autogestiona sus rondas (true) o las lleva la comisión (false)?
@@ -181,25 +175,14 @@ class Producer
         return $this;
     }
 
-    public function getNotes(): ?string
+    public function getActivityDescription(): ?string
     {
-        return $this->notes;
+        return $this->activityDescription;
     }
 
-    public function setNotes(?string $notes): self
+    public function setActivityDescription(?string $activityDescription): self
     {
-        $this->notes = $notes;
-        return $this;
-    }
-
-    public function getMinimumNote(): ?string
-    {
-        return $this->minimumNote;
-    }
-
-    public function setMinimumNote(?string $minimumNote): self
-    {
-        $this->minimumNote = $minimumNote;
+        $this->activityDescription = $activityDescription;
         return $this;
     }
 

@@ -5,6 +5,7 @@ namespace App\Tests\Controller;
 use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupOrderLine;
 use App\Entity\ConsumerGroupProduct;
+use App\Entity\ConsumerGroupUnit;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupRoundItem;
 use App\Entity\Notification;
@@ -86,8 +87,8 @@ class ConsumerGroupItemsRemovalConfirmationTest extends AbstractAuthenticatedTes
         $em = self::getContainer()->get('doctrine')->getManager();
 
         $producer = (new Producer())->setName('Huerta Test');
-        $naranjas = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit('kg')->setReferencePrice('2.50');
-        $aceite = (new ConsumerGroupProduct())->setName('Aceite')->setUnit('L')->setReferencePrice('8.00');
+        $naranjas = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit((new ConsumerGroupUnit())->setName('kg'));
+        $aceite = (new ConsumerGroupProduct())->setName('Aceite')->setUnit((new ConsumerGroupUnit())->setName('L'));
         $producer->addProduct($naranjas);
         $producer->addProduct($aceite);
 

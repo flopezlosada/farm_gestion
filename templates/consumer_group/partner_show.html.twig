@@ -1,0 +1,71 @@
+{# ============================================================
+ # Ficha de una socia DENTRO del grupo de consumo (no la ficha general de
+ # socia): sus cifras y el detalle de sus pedidos en el módulo.
+ #   - partner  Partner
+ #   - stats    { rounds, money }
+ #   - orders   ConsumerGroupOrder[] más reciente primero, con ronda y líneas
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}{{ partner.name }} {{ partner.surname }} · Grupo de consumo{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_index') }}">Grupo de consumo</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_stats') }}">Estadísticas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ partner.name }} {{ partner.surname }}</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Grupo de consumo', partner.name ~ ' ' ~ partner.surname, 'Su ficha completa de socia está en otro sitio: aquí solo lo suyo del grupo de consumo.') }}
+
+    <div class="csa-stack-lg">
+
+        <div class="csa-card">
+            <h2 class="csa-card__title">Estadísticas</h2>
+            <p class="csa-muted" style="margin-top: calc(-1 * var(--csa-sp-2));">Sobre pedidos confirmados. Los importes son informativos.</p>
+            <div class="cg-kpis">
+                <div class="cg-kpi"><div class="cg-kpi__v">{{ stats.rounds }}</div><div class="cg-kpi__l">rondas con pedido confirmado</div></div>
+                <div class="cg-kpi"><div class="cg-kpi__v">{{ stats.money|number_format(2, ',', '.') }} €</div><div class="cg-kpi__l">gastado (informativo)</div></div>
+            </div>
+        </div>
+
+        <div class="csa-card">
+            <h2 class="csa-card__title">Sus pedidos</h2>
+            {% if orders is empty %}
+                <p class="csa-muted">Todavía no se ha apuntado a ningún pedido.</p>
+            {% else %}
+                <div class="prl prl-table-wrap">
+                <table class="prl-table">
+                    <thead>
+                        <tr><th>Pedido</th><th class="tight">Estado</th><th class="tight">Importe</th><th class="tight">Pagado</th><th class="tight">Recogido</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for order in orders %}
+                            <tr>
+                                <td><a href="{{ path('consumer_group_show', { id: order.round.id }) }}">{{ order.round.title }}</a></td>
+                                <td class="tight">{{ order.round.statusLabel }}{{ order.round.confirmed ? ' · confirmada' : '' }}</td>
+                                <td class="tight">{{ order.total|number_format(2, ',', '.') }} €</td>
+                                <td class="tight">{{ order.paid ? 'Sí' : 'No' }}</td>
+                                <td class="tight">{{ order.pickedUp ? 'Sí' : 'No' }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                </div>
+            {% endif %}
+        </div>
+
+    </div>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/cg_kpi_styles.html.twig' %}
+    {% include 'partner/_listing_styles.html.twig' %}
+{% endblock %}

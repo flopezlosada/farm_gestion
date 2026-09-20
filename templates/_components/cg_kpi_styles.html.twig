@@ -1,0 +1,11 @@
+{# ============================================================
+ # Tarjetas de KPI usadas por las pantallas de estadísticas del grupo de
+ # consumo: la global (consumer_group/stats.html.twig) y las de cada ficha
+ # (productor, producto).
+ # ============================================================ #}
+<style>
+    .cg-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--csa-sp-3); }
+    .cg-kpi { border: 1px solid var(--csa-rule); border-radius: 10px; padding: var(--csa-sp-4); background: #fff; }
+    .cg-kpi__v { font-size: 1.6rem; font-weight: 700; }
+    .cg-kpi__l { font-size: .8rem; color: var(--csa-muted); }
+</style>

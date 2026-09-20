@@ -5,6 +5,7 @@ namespace App\Tests\Service\ConsumerGroup;
 use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupOrderLine;
 use App\Entity\ConsumerGroupProduct;
+use App\Entity\ConsumerGroupUnit;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupRoundItem;
 use App\Entity\Node;
@@ -116,7 +117,7 @@ class NodeConsumerGroupDeliveriesTest extends TestCase
         $order = new ConsumerGroupOrder($round, (new Partner())->setName('Socia'));
 
         foreach (['Aceite', 'Aceitunas'] as $i => $name) {
-            $product = (new ConsumerGroupProduct())->setName($name)->setUnit('ud');
+            $product = (new ConsumerGroupProduct())->setName($name)->setUnit((new ConsumerGroupUnit())->setName('ud'));
             $producer->addProduct($product);
             $item = new ConsumerGroupRoundItem($round, $product, '10.00');
             $round->addItem($item);

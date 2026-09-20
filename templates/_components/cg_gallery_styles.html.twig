@@ -1,0 +1,13 @@
+{# ============================================================
+ # Estilos de la galería de fotos de un producto del grupo de consumo.
+ # Usados por consumer_group_product/show.html.twig y
+ # Panel/producer/product_edit.html.twig junto con _components/cg_product_gallery.html.twig.
+ # ============================================================ #}
+<style>
+    .cg-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--csa-sp-3); margin-bottom: var(--csa-sp-3); }
+    .cg-gallery__card { position: relative; margin: 0; border: 1px solid var(--csa-rule); border-radius: 8px; overflow: hidden; background: var(--csa-surface, #fff); }
+    .cg-gallery__card img { display: block; width: 100%; height: 100px; object-fit: cover; }
+    .cg-gallery__card form { position: absolute; top: 4px; right: 4px; margin: 0; }
+    .cg-gallery__delete { background: rgba(255,255,255,.9); border: 0; border-radius: 6px; padding: 4px 6px; cursor: pointer; color: var(--csa-ink-muted, #666); }
+    .cg-gallery__delete:hover { color: var(--csa-danger, #c0392b); }
+</style>

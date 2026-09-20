@@ -87,7 +87,7 @@
                     {{ filters.status is not null ? statuses[filters.status]|default('Estado') : 'Estado' }}
                     <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
                 </button>
-                <div class="prl-pop" id="pop-estado">
+                <div class="prl-pop" id="pop-estado" hidden>
                     <label><input type="radio" name="status" value="" {{ filters.status is null ? 'checked' : '' }}> Todos</label>
                     {% for value, label in statuses %}
                         <label><input type="radio" name="status" value="{{ value }}" {{ filters.status == value ? 'checked' : '' }}> {{ label }}</label>

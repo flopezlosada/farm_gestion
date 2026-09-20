@@ -8,6 +8,7 @@ use App\Entity\ConsumerGroupOrderLine;
 use App\Entity\ConsumerGroupProduct;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupRoundItem;
+use App\Entity\ConsumerGroupUnit;
 use App\Entity\Partner;
 use App\Entity\Producer;
 use App\Entity\User;
@@ -33,6 +34,9 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 #[AsCommand(name: 'app:seed-consumer-group-fakes', description: 'Siembra datos fake del grupo de consumo (solo dev)')]
 class SeedConsumerGroupFakesCommand extends Command
 {
+    /** @var array<string, ConsumerGroupUnit> */
+    private array $unitCache = [];
+
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly RoundItemEditor $roundItemEditor,
@@ -62,20 +66,22 @@ class SeedConsumerGroupFakesCommand extends Command
             $cats[$name] = $c;
         }
 
-        // 3) Productores con catálogo.
-        $huerta = $this->producer('Huerta La Vega', 'Marisa', 'huerta@example.org', false, 'mínimo 100 €');
-        $this->product($huerta, $cats['Verdura'], 'Acelgas', 'manojo', '1.80');
-        $this->product($huerta, $cats['Verdura'], 'Tomate de temporada', 'kg', '2.60');
-        $this->product($huerta, $cats['Verdura'], 'Calabacín', 'kg', '1.90');
-        $this->product($huerta, $cats['Fruta'], 'Naranjas de zumo', 'kg', '1.40');
+        // 3) Productores con catálogo. El precio ya no vive en el catálogo (se
+        // quitó: nadie lo mantenía al día); se fija abajo, ronda a ronda, como
+        // en el flujo real.
+        $huerta = $this->producer('Huerta La Vega', 'Marisa', 'huerta@example.org', false);
+        $this->product($huerta, $cats['Verdura'], 'Acelgas', 'manojo');
+        $this->product($huerta, $cats['Verdura'], 'Tomate de temporada', 'kg');
+        $this->product($huerta, $cats['Verdura'], 'Calabacín', 'kg');
+        $this->product($huerta, $cats['Fruta'], 'Naranjas de zumo', 'kg');
 
-        $almazara = $this->producer('Almazara El Olivar', 'Paco (socio)', 'olivar@example.org', true, 'mínimo 1 garrafa de 5 L por pedido');
-        $this->product($almazara, $cats['Aceite'], 'AOVE 5 L', 'garrafa', '38.00');
-        $this->product($almazara, $cats['Aceite'], 'AOVE 3 L', 'garrafa', '24.00');
+        $almazara = $this->producer('Almazara El Olivar', 'Paco (socio)', 'olivar@example.org', true);
+        $this->product($almazara, $cats['Aceite'], 'AOVE 5 L', 'garrafa');
+        $this->product($almazara, $cats['Aceite'], 'AOVE 3 L', 'garrafa');
 
-        $legumbres = $this->producer('Legumbres del Páramo', 'Cooperativa', 'legumbres@example.org', false, 'mínimo 20 kg en total');
-        $this->product($legumbres, $cats['Legumbre'], 'Lenteja pardina', 'kg', '3.90');
-        $this->product($legumbres, $cats['Legumbre'], 'Garbanzo', 'kg', '3.40');
+        $legumbres = $this->producer('Legumbres del Páramo', 'Cooperativa', 'legumbres@example.org', false);
+        $this->product($legumbres, $cats['Legumbre'], 'Lenteja pardina', 'kg');
+        $this->product($legumbres, $cats['Legumbre'], 'Garbanzo', 'kg');
 
         $this->em->flush();
 
@@ -94,6 +100,12 @@ class SeedConsumerGroupFakesCommand extends Command
         // 5) Pedido ABIERTA (Huerta) con un par de apuntes.
         $abierto = $this->round($huerta, 'Verdura de temporada — julio', ConsumerGroupRound::STATUS_OPEN, '+5 days', '+7 days');
         $this->roundItemEditor->seedFromCatalog($abierto);
+        $this->setPrices($abierto, [
+            'Acelgas' => '1.80',
+            'Tomate de temporada' => '2.60',
+            'Calabacín' => '1.90',
+            'Naranjas de zumo' => '1.40',
+        ]);
         $this->em->flush(); // para que los items tengan id
         $this->orderFor($abierto, $partners[0] ?? null, [0 => '2', 1 => '3']);
         $this->orderFor($abierto, $partners[1] ?? null, [1 => '1.5']);
@@ -121,6 +133,10 @@ class SeedConsumerGroupFakesCommand extends Command
         }
 
         $this->roundItemEditor->seedFromCatalog($confirmado);
+        $this->setPrices($confirmado, [
+            'AOVE 5 L' => '38.00',
+            'AOVE 3 L' => '24.00',
+        ]);
         $this->em->flush();
         foreach ($partners as $i => $partner) {
             // Cada socio pide 1-2 garrafas de 5 L (item 0) alternando algo de 3 L.
@@ -205,30 +221,66 @@ class SeedConsumerGroupFakesCommand extends Command
         return null;
     }
 
-    private function producer(string $name, string $contact, string $email, bool $selfManaged, string $minimum): Producer
+    private function producer(string $name, string $contact, string $email, bool $selfManaged): Producer
     {
         $p = (new Producer())
             ->setName($name)->setContactName($contact)->setEmail($email)
-            ->setSelfManaged($selfManaged)->setMinimumNote($minimum)->setActive(true);
+            ->setSelfManaged($selfManaged)->setActive(true);
         $this->em->persist($p);
         return $p;
     }
 
-    private function product(Producer $producer, ConsumerGroupCategory $cat, string $name, string $unit, string $price): void
+    private function product(Producer $producer, ConsumerGroupCategory $cat, string $name, string $unitName): void
     {
         $prod = (new ConsumerGroupProduct())
             ->setProducer($producer)->setCategory($cat)
-            ->setName($name)->setUnit($unit)->setReferencePrice($price)
+            ->setName($name)->setUnit($this->unit($unitName))
             ->setActive(true)->setSortOrder($producer->getProducts()->count());
         $producer->addProduct($prod);
         $this->em->persist($prod);
+    }
+
+    /**
+     * Unidad GLOBAL por nombre: la reutiliza si ya existe (de una siembra
+     * anterior o de datos reales), la crea si no. A diferencia de las
+     * categorías, las unidades NO se borran al resembrar.
+     */
+    private function unit(string $name): ConsumerGroupUnit
+    {
+        if (isset($this->unitCache[$name])) {
+            return $this->unitCache[$name];
+        }
+
+        $unit = $this->em->getRepository(ConsumerGroupUnit::class)->findOneBy(['name' => $name]);
+        if ($unit === null) {
+            $unit = (new ConsumerGroupUnit())->setName($name);
+            $this->em->persist($unit);
+        }
+
+        return $this->unitCache[$name] = $unit;
+    }
+
+    /**
+     * Fija el precio de los items ya sembrados por nombre de producto: el
+     * catálogo no lleva precio, así que el de cada ronda fake se pone aquí,
+     * como haría la comisión en la pantalla de "Productos del pedido".
+     *
+     * @param array<string, string> $byProductName
+     */
+    private function setPrices(ConsumerGroupRound $round, array $byProductName): void
+    {
+        foreach ($round->getItems() as $item) {
+            $name = $item->getProduct()?->getName();
+            if ($name !== null && isset($byProductName[$name])) {
+                $item->setPrice($byProductName[$name]);
+            }
+        }
     }
 
     private function round(Producer $producer, string $title, int $status, string $close, string $delivery): ConsumerGroupRound
     {
         $r = (new ConsumerGroupRound())
             ->setProducer($producer)->setTitle($title)->setStatus($status)
-            ->setMinimumCondition($producer->getMinimumNote())
             ->setOrdersCloseAt(new \DateTime($close))
             ->setDeliveryDate(new \DateTime($delivery));
         $this->em->persist($r);

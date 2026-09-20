@@ -1,12 +1,28 @@
 {# ============================================================
- # Ficha de un productor + su catálogo.
- #   - producer  Producer
+ # Ficha de un productor: datos + 4 pestañas (Catálogo, Pedidos,
+ # Estadísticas, Actividad). Catálogo es la que se ve al entrar.
+ #   - producer          Producer
+ #   - stats             { rounds, confirmedRounds, orders, money }
+ #   - by_round          list de ConsumerGroupStats::byRoundForProducer()
+ #   - by_product        list de ConsumerGroupStats::byProductForProducer()
+ #   - by_partner        list de ConsumerGroupStats::byPartnerForProducer()
+ #   - rounds            ConsumerGroupRound[] de este productor
+ #   - photos            fotos del catálogo, por product id
+ #   - access_user       User|null si autogestiona y tiene cuenta
+ #   - producer_activity ConsumerGroupEventLog[] de SU propia cuenta
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
 {% set can_edit = is_granted('ROLE_GESTION_GRUPO_CONSUMO_EDIT') %}
+{% set can_socixs = is_granted('ROLE_GESTION_SOCIXS') %}
+{% set status_badge = {
+    0: { label: 'Abierto',    cls: 'activo'  },
+    1: { label: 'Cerrado',    cls: 'pausado' },
+    3: { label: 'Cancelado',  cls: 'baja'    },
+    4: { label: 'Entregado',  cls: 'mute'    }
+} %}
 
 {% block title %}{{ producer.name }} · Productores{% endblock %}
 
@@ -21,55 +37,66 @@
 {% endblock %}
 
 {% block csa_main %}
-    {{ csa.page_header('Grupo de consumo', producer.name, producer.selfManaged ? 'Autogestiona sus pedidos' : 'Gestionado por la comisión') }}
 
-    <div class="csa-stack-lg">
-
-        <div class="csa-card">
-            <div class="csa-row-between" style="align-items: flex-start; gap: var(--csa-sp-4);">
-                <dl class="cg-meta">
-                    {% if producer.contactName %}<div><dt>Contacto</dt><dd>{{ producer.contactName }}</dd></div>{% endif %}
-                    {% if producer.email %}<div><dt>Email</dt><dd>{{ producer.email }}</dd></div>{% endif %}
-                    {% if producer.phone %}<div><dt>Teléfono</dt><dd>{{ producer.phone }}</dd></div>{% endif %}
-                    {% if producer.web %}<div><dt>Web</dt><dd>{{ producer.web }}</dd></div>{% endif %}
-                    {% if producer.minimumNote %}<div><dt>Pedido mínimo</dt><dd>{{ producer.minimumNote }}</dd></div>{% endif %}
-                </dl>
+    <div class="prt">
+        <header class="prt-hero">
+            <div>
+                <h1 class="prt-hero__title">{{ producer.name }}</h1>
+                <div class="prt-hero__meta">
+                    <span class="prt-chip prt-chip--{{ producer.active ? 'activo' : 'baja' }}"><span class="dot"></span>{{ producer.active ? 'Activo' : 'De baja' }}</span>
+                    <span class="sep">·</span>
+                    <span>{{ producer.selfManaged ? 'Autogestiona sus pedidos' : 'Gestionado por la comisión' }}</span>
+                </div>
+            </div>
+            <div class="prt-hero__actions">
+                <a href="{{ path('consumer_group_index', { producer: producer.id }) }}" class="prt-btn"><i class="fa fa-list"></i> Ver pedidos</a>
                 {% if can_edit %}
-                    <div class="csa-row" style="gap: var(--csa-sp-2);">
-                        {{ csa.btn('Editar', { variant: 'ghost', href: path('consumer_group_producer_edit', { id: producer.id }) }) }}
-                    </div>
+                    <a href="{{ path('consumer_group_producer_edit', { id: producer.id }) }}" class="prt-btn prt-btn--primary"><i class="fa fa-pencil"></i> Editar</a>
                 {% endif %}
             </div>
-            {% if producer.notes %}<p class="cg-desc">{{ producer.notes|nl2br }}</p>{% endif %}
+        </header>
+
+        <div class="cg-facts">
+            {% if producer.contactName %}<div class="cg-fact"><span class="cg-fact__l">Contacto</span><span class="cg-fact__v">{{ producer.contactName }}</span></div>{% endif %}
+            {% if producer.email %}<div class="cg-fact"><span class="cg-fact__l">Email</span><span class="cg-fact__v">{{ producer.email }}</span></div>{% endif %}
+            {% if producer.phone %}<div class="cg-fact"><span class="cg-fact__l">Teléfono</span><span class="cg-fact__v">{{ producer.phone }}</span></div>{% endif %}
+            {% if producer.web %}<div class="cg-fact"><span class="cg-fact__l">Web</span><span class="cg-fact__v">{{ producer.web }}</span></div>{% endif %}
+            {% if producer.contactName is empty and producer.email is empty and producer.phone is empty and producer.web is empty %}
+                <div class="cg-fact"><span class="cg-fact__v csa-muted">Sin datos de contacto todavía.</span></div>
+            {% endif %}
+            {% if producer.activityDescription %}
+                <div class="cg-fact cg-fact--full">
+                    <span class="cg-fact__l">A qué se dedica</span>
+                    <span class="cg-fact__v cg-fact__v--text">{{ producer.activityDescription|nl2br }}</span>
+                </div>
+            {% endif %}
         </div>
 
         {% if producer.selfManaged and can_edit %}
-            <div class="csa-card">
-                <h2 class="csa-card__title" style="margin: 0 0 var(--csa-sp-3);">Acceso al panel del productor</h2>
+            <div class="cg-access-strip">
+                <span class="cg-fact__l">Acceso al panel del productor</span>
                 {% if access_user %}
-                    <p class="csa-muted" style="margin: 0 0 var(--csa-sp-3);">
+                    <span class="cg-access-strip__status">
                         <i class="fa fa-check-circle" style="color: #2f8f4e;"></i>
-                        Tiene acceso con <strong>{{ access_user.email }}</strong>.
-                    </p>
-                    <div class="csa-row" style="gap: var(--csa-sp-2);">
-                        <form method="post" action="{{ path('consumer_group_producer_access_resend', { id: producer.id }) }}">
-                            <input type="hidden" name="_token" value="{{ csrf_token('producer_access' ~ producer.id) }}">
-                            <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm"><i class="fa fa-paper-plane"></i><span>Reenviar enlace</span></button>
-                        </form>
-                        <form method="post" action="{{ path('consumer_group_producer_access_revoke', { id: producer.id }) }}"
-                              onsubmit="return confirm('¿Retirar el acceso de {{ producer.name|e('js') }}? No podrá entrar a su panel hasta que se lo vuelvas a dar.');">
-                            <input type="hidden" name="_token" value="{{ csrf_token('producer_access' ~ producer.id) }}">
-                            <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm">Retirar acceso</button>
-                        </form>
-                    </div>
+                        Tiene acceso con <strong>{{ access_user.email }}</strong>
+                    </span>
+                    <form method="post" action="{{ path('consumer_group_producer_access_resend', { id: producer.id }) }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('producer_access' ~ producer.id) }}">
+                        <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm"><i class="fa fa-paper-plane"></i><span>Reenviar enlace</span></button>
+                    </form>
+                    <form method="post" action="{{ path('consumer_group_producer_access_revoke', { id: producer.id }) }}"
+                          onsubmit="return confirm('¿Retirar el acceso de {{ producer.name|e('js') }}? No podrá entrar a su panel hasta que se lo vuelvas a dar.');">
+                        <input type="hidden" name="_token" value="{{ csrf_token('producer_access' ~ producer.id) }}">
+                        <button type="submit" class="csa-btn csa-btn--ghost csa-btn--sm">Retirar acceso</button>
+                    </form>
                 {% else %}
-                    <p class="csa-muted" style="margin: 0 0 var(--csa-sp-3);">
+                    <span class="cg-access-strip__status csa-muted">
                         {% if producer.email %}
-                            Aún no puede entrar a su panel. Dale acceso: se le crea (o reutiliza) una cuenta con <strong>{{ producer.email }}</strong> y se le envía un enlace para entrar.
+                            Aún no puede entrar a su panel (email: {{ producer.email }})
                         {% else %}
-                            Este productor no tiene email en su ficha. Añádelo primero para poder darle acceso.
+                            Sin email en la ficha: añádelo para poder darle acceso.
                         {% endif %}
-                    </p>
+                    </span>
                     {% if producer.email %}
                         <form method="post" action="{{ path('consumer_group_producer_access_grant', { id: producer.id }) }}">
                             <input type="hidden" name="_token" value="{{ csrf_token('producer_access' ~ producer.id) }}">
@@ -80,62 +107,238 @@
             </div>
         {% endif %}
 
-        <div class="csa-card">
-            <div class="csa-row-between" style="margin-bottom: var(--csa-sp-3);">
-                <h2 class="csa-card__title" style="margin: 0;">Catálogo</h2>
-                {% if can_edit %}
-                    <a href="{{ path('consumer_group_product_new', { id: producer.id }) }}" class="csa-btn csa-btn--primary csa-btn--sm">
-                        <i class="fa fa-plus"></i> Añadir producto
-                    </a>
-                {% endif %}
-            </div>
-            {% if producer.products is empty %}
-                <p class="csa-muted">Sin productos en el catálogo. {% if can_edit %}Añade el primero con el botón de arriba.{% endif %}</p>
-            {% else %}
-                <div class="prl prl-table-wrap">
-                <table class="prl-table">
-                    <thead>
-                        <tr><th>Producto</th><th class="tight">Categoría</th><th class="tight">Unidad</th><th class="tight">Precio ref.</th><th class="tight">Estado</th><th class="actions"></th></tr>
-                    </thead>
-                    <tbody>
-                        {% for product in producer.products %}
-                            <tr>
-                                <td>
-                                    {# Miniatura en el listado para ver de un vistazo a qué
-                                     # producto le falta foto: es lo que verá la socia. #}
-                                    <div class="cg-cat-row">
-                                        {% set foto = photos[product.id]|default(null) %}
-                                        {% if foto %}
-                                            <img class="cg-cat-row__photo" src="{{ asset(foto.webPath) }}" alt="">
-                                        {% else %}
-                                            <span class="cg-cat-row__photo cg-cat-row__photo--empty" aria-hidden="true"><i class="fa fa-camera"></i></span>
-                                        {% endif %}
-                                        <span>{{ product.name }}{% if product.description %} <span class="csa-muted">— {{ product.description }}</span>{% endif %}</span>
-                                    </div>
-                                </td>
-                                <td class="tight">{{ product.category ? product.category.name : '—' }}</td>
-                                <td class="tight">{{ product.unit }}</td>
-                                <td class="tight">{{ product.referencePrice is not null ? product.referencePrice|number_format(2, ',', '.') ~ ' €' : '—' }}</td>
-                                <td class="tight">{{ product.active ? 'Activo' : 'Inactivo' }}</td>
-                                <td class="actions">
-                                    {% if can_edit %}
-                                        <a href="{{ path('consumer_group_product_edit', { id: product.id }) }}" title="Editar"><i class="fa fa-pencil"></i></a>
-                                        <form method="post" action="{{ path('consumer_group_product_delete', { id: product.id }) }}" style="display:inline;" onsubmit="return confirm('¿Borrar “{{ product.name }}” del catálogo?')">
-                                            <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_product_delete_' ~ product.id) }}">
-                                            <button type="submit" class="prl-btn prl-btn--sm" title="Borrar"><i class="fa fa-trash"></i></button>
-                                        </form>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                </div>
-            {% endif %}
+        <div class="prt-tabbar" role="tablist">
+            <button type="button" class="prt-tab is-active" data-tab="catalogo" role="tab" aria-selected="true">Catálogo</button>
+            <button type="button" class="prt-tab" data-tab="pedidos" role="tab" aria-selected="false">Pedidos <span class="csa-muted">({{ rounds|length }})</span></button>
+            <button type="button" class="prt-tab" data-tab="stats" role="tab" aria-selected="false">Estadísticas</button>
+            <button type="button" class="prt-tab" data-tab="actividad" role="tab" aria-selected="false">Actividad</button>
         </div>
 
+        {# ---------- CATÁLOGO ---------- #}
+        <section class="prt-tabpanel" data-tabpanel="catalogo">
+            <div class="prt-card">
+                <div class="prt-card__head">
+                    <h2 class="prt-card__title"><span class="accent"></span>Catálogo</h2>
+                    {% if can_edit %}
+                        <a href="{{ path('consumer_group_product_new', { id: producer.id }) }}" class="csa-btn csa-btn--primary csa-btn--sm">
+                            <i class="fa fa-plus"></i> Añadir producto
+                        </a>
+                    {% endif %}
+                </div>
+                <div class="prt-card__body">
+                {% if producer.products is empty %}
+                    <p class="csa-muted" style="margin: 0;">Sin productos en el catálogo. {% if can_edit %}Añade el primero con el botón de arriba.{% endif %}</p>
+                {% else %}
+                    <div class="prl prl-table-wrap">
+                    <table class="prl-table">
+                        <thead>
+                            <tr><th>Producto</th><th class="tight">Categoría</th><th class="tight">Unidad</th><th class="tight">Estado</th><th class="actions"></th></tr>
+                        </thead>
+                        <tbody>
+                            {% for product in producer.products %}
+                                <tr>
+                                    <td>
+                                        {# Miniatura en el listado para ver de un vistazo a qué
+                                         # producto le falta foto: es lo que verá la socia. #}
+                                        <div class="cg-cat-row">
+                                            {% set foto = photos[product.id]|default(null) %}
+                                            {% if foto %}
+                                                <img class="cg-cat-row__photo" src="{{ asset(foto.webPath) }}" alt="">
+                                            {% else %}
+                                                <span class="cg-cat-row__photo cg-cat-row__photo--empty" aria-hidden="true"><i class="fa fa-camera"></i></span>
+                                            {% endif %}
+                                            <a href="{{ path('consumer_group_product_show', { id: product.id }) }}" class="cg-cat-row__link">{{ product.name }}</a>{% if product.description %} <span class="csa-muted">— {{ product.description|striptags|u.truncate(80, '…', false) }}</span>{% endif %}
+                                        </div>
+                                    </td>
+                                    <td class="tight">{{ product.category ? product.category.name : '—' }}</td>
+                                    <td class="tight">{{ product.unit }}</td>
+                                    <td class="tight">{{ product.active ? 'Activo' : 'Inactivo' }}</td>
+                                    <td class="actions">
+                                        {% if can_edit %}
+                                            <a href="{{ path('consumer_group_product_edit', { id: product.id }) }}" title="Editar"><i class="fa fa-pencil"></i></a>
+                                            <form method="post" action="{{ path('consumer_group_product_delete', { id: product.id }) }}" style="display:inline;" onsubmit="return confirm('¿Borrar “{{ product.name }}” del catálogo?')">
+                                                <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_product_delete_' ~ product.id) }}">
+                                                <button type="submit" class="prl-btn prl-btn--sm" title="Borrar"><i class="fa fa-trash"></i></button>
+                                            </form>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    </div>
+                {% endif %}
+                </div>
+            </div>
+        </section>
+
+        {# ---------- PEDIDOS ---------- #}
+        <section class="prt-tabpanel" data-tabpanel="pedidos" hidden>
+            <div class="prt-card">
+                <div class="prt-card__head">
+                    <h2 class="prt-card__title"><span class="accent"></span>Pedidos de este productor</h2>
+                </div>
+                <div class="prt-card__body">
+                {% if rounds is empty %}
+                    <p class="csa-muted" style="margin: 0;">Todavía no se ha abierto ningún pedido con este productor.</p>
+                {% else %}
+                    <div class="prl prl-table-wrap">
+                    <table class="prl-table">
+                        <thead>
+                            <tr><th>Pedido</th><th class="tight">Estado</th><th class="tight">Entrega</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for round in rounds %}
+                                {% set sb = status_badge[round.status]|default({ label: round.statusLabel, cls: 'mute' }) %}
+                                <tr>
+                                    <td><a href="{{ path('consumer_group_show', { id: round.id }) }}">{{ round.title }}</a></td>
+                                    <td class="tight"><span class="prt-chip prt-chip--{{ sb.cls }}"><span class="dot"></span>{{ sb.label }}</span></td>
+                                    <td class="tight">{{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    </div>
+                {% endif %}
+                </div>
+            </div>
+        </section>
+
+        {# ---------- ESTADÍSTICAS ---------- #}
+        <section class="prt-tabpanel" data-tabpanel="stats" hidden>
+            <div class="prt-card">
+                <div class="prt-card__head">
+                    <h2 class="prt-card__title"><span class="accent"></span>Resumen</h2>
+                    <span class="prt-card__head-meta">Sobre pedidos confirmados</span>
+                </div>
+                <div class="prt-card__body">
+                    <div class="cg-kpis">
+                        <div class="cg-kpi"><div class="cg-kpi__v">{{ stats.rounds }}</div><div class="cg-kpi__l">rondas ({{ stats.confirmedRounds }} confirmadas)</div></div>
+                        <div class="cg-kpi"><div class="cg-kpi__v">{{ stats.orders }}</div><div class="cg-kpi__l">pedidos de socias</div></div>
+                        <div class="cg-kpi"><div class="cg-kpi__v">{{ stats.money|number_format(2, ',', '.') }} €</div><div class="cg-kpi__l">movido (informativo)</div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="prt-card">
+                <div class="prt-card__head">
+                    <h2 class="prt-card__title"><span class="accent"></span>Por ronda (en el tiempo)</h2>
+                </div>
+                <div class="prt-card__body">
+                {% if by_round is not empty %}
+                    {{ csa.vbar_chart(
+                        by_round|reverse|map(r => { label: r.deliveryDate ? r.deliveryDate|date('d/m') : r.title, value: r.money, value_label: r.money|number_format(0, ',', '.') ~ ' €' })
+                    ) }}
+                {% endif %}
+                {% if by_round is empty %}
+                    <p class="csa-muted" style="margin: 0;">Sin rondas confirmadas todavía.</p>
+                {% else %}
+                    <div class="prl prl-table-wrap" style="margin-top: var(--csa-sp-4);">
+                    <table class="prl-table">
+                        <thead><tr><th>Pedido</th><th class="tight">Entrega</th><th class="tight">Pedidos</th><th class="tight">Movido</th></tr></thead>
+                        <tbody>
+                            {% for r in by_round %}
+                                <tr>
+                                    <td><a href="{{ path('consumer_group_show', { id: r.roundId }) }}">{{ r.title }}</a></td>
+                                    <td class="tight">{{ r.deliveryDate ? r.deliveryDate|date('d/m/Y') : '—' }}</td>
+                                    <td class="tight">{{ r.orders }}</td>
+                                    <td class="tight">{{ r.money|number_format(2, ',', '.') }} €</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    </div>
+                {% endif %}
+                </div>
+            </div>
+
+            <div class="prt-card">
+                <div class="prt-card__head">
+                    <h2 class="prt-card__title"><span class="accent"></span>Por producto</h2>
+                </div>
+                <div class="prt-card__body">
+                {% if by_product is not empty %}
+                    {{ csa.hbar_chart(
+                        by_product|slice(0, 10)|map(p => { label: p.name, value: p.money, value_label: p.money|number_format(0, ',', '.') ~ ' €' })
+                    ) }}
+                {% endif %}
+                {% if by_product is empty %}
+                    <p class="csa-muted" style="margin: 0;">Sin datos todavía.</p>
+                {% else %}
+                    <div class="prl prl-table-wrap" style="margin-top: var(--csa-sp-4);">
+                    <table class="prl-table">
+                        <thead><tr><th>Producto</th><th class="tight">Cantidad</th><th class="tight">Precio medio</th><th class="tight">Rondas</th><th class="tight">Movido</th></tr></thead>
+                        <tbody>
+                            {% for p in by_product %}
+                                <tr>
+                                    <td>{{ p.name }}</td>
+                                    <td class="tight">{{ p.quantity|number_format(2, ',', '.') }} {{ p.unit }}</td>
+                                    <td class="tight">{{ p.avgPrice is not null ? p.avgPrice|number_format(2, ',', '.') ~ ' €' : '—' }}</td>
+                                    <td class="tight">{{ p.rounds }}</td>
+                                    <td class="tight">{{ p.money|number_format(2, ',', '.') }} €</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    </div>
+                {% endif %}
+                </div>
+            </div>
+
+            <div class="prt-card">
+                <div class="prt-card__head">
+                    <h2 class="prt-card__title"><span class="accent"></span>Por socia</h2>
+                </div>
+                <div class="prt-card__body">
+                {% if by_partner is not empty %}
+                    {{ csa.hbar_chart(
+                        by_partner|slice(0, 10)|map(p => { label: p.name, value: p.money, value_label: p.money|number_format(0, ',', '.') ~ ' €' })
+                    ) }}
+                    {% if by_partner|length > 10 %}
+                        <p class="csa-muted" style="margin: var(--csa-sp-2) 0 0; font-size: 12px;">Mostrando las 10 con más gasto; el resto sigue en la tabla de abajo.</p>
+                    {% endif %}
+                {% endif %}
+                {% if by_partner is empty %}
+                    <p class="csa-muted" style="margin: 0;">Sin datos todavía.</p>
+                {% else %}
+                    <div class="prl prl-table-wrap" style="margin-top: var(--csa-sp-4);">
+                    <table class="prl-table">
+                        <thead><tr><th>Socia</th><th class="tight">Rondas</th><th class="tight">Gastado</th></tr></thead>
+                        <tbody>
+                            {% for p in by_partner %}
+                                <tr>
+                                    <td>{% if can_socixs %}<a href="{{ path('partner_show', { id: p.id }) }}">{{ p.name }}</a>{% else %}{{ p.name }}{% endif %}</td>
+                                    <td class="tight">{{ p.rounds }}</td>
+                                    <td class="tight">{{ p.money|number_format(2, ',', '.') }} €</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    </div>
+                {% endif %}
+                </div>
+            </div>
+        </section>
+
+        {# ---------- ACTIVIDAD ---------- #}
+        <section class="prt-tabpanel" data-tabpanel="actividad" hidden>
+            {% if access_user %}
+                {% include '_components/cg_activity.html.twig' with {
+                    activity: producer_activity,
+                    title: 'Actividad del productor',
+                    empty_text: 'Todavía no ha entrado a su panel ni ha tocado su catálogo.',
+                } %}
+            {% else %}
+                <div class="prt-card">
+                    <div class="prt-card__body">
+                        <p class="csa-muted" style="margin: 0;">Este productor no tiene acceso propio: lo gestiona la comisión, y sus cambios quedan en la actividad de cada pedido.</p>
+                    </div>
+                </div>
+            {% endif %}
+        </section>
+
         {% if can_edit %}
-            <div class="csa-row" style="justify-content: flex-end;">
+            <div class="csa-row" style="justify-content: flex-end; margin-top: var(--csa-sp-4);">
                 <form method="post" action="{{ path('consumer_group_producer_delete', { id: producer.id }) }}"
                       onsubmit="return confirm('¿Borrar este productor? Si tiene rondas no se podrá; márcalo inactivo en su lugar.')">
                     <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_producer_delete_' ~ producer.id) }}">
@@ -149,15 +352,32 @@
 
 {% block more_css %}
     {{ parent() }}
+    {% include '_components/partner_card_styles.html.twig' %}
+    {% include '_components/cg_facts_styles.html.twig' %}
+    {% include '_components/cg_kpi_styles.html.twig' %}
+    {% include '_components/cg_tabs_styles.html.twig' %}
+    {% include '_components/cg_activity_styles.html.twig' %}
+    {% include '_components/csa_chart_styles.html.twig' %}
     {% include 'partner/_listing_styles.html.twig' %}
     <style>
         .cg-cat-row { display: flex; align-items: center; gap: var(--csa-sp-3); }
+        /* Fila densa de tabla: el subrayado-al-hover (línea verde) de los links
+         * del shell sobra aquí, solo cambia de color. */
+        .cg-cat-row__link:hover { border-bottom-color: transparent; }
         .cg-cat-row__photo { flex: 0 0 40px; width: 40px; height: 40px; object-fit: cover; border-radius: 6px; }
         .cg-cat-row__photo--empty { display: inline-flex; align-items: center; justify-content: center;
             background: var(--csa-surface-2, #f2f2ef); color: var(--csa-muted); font-size: .8rem; }
-        .cg-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--csa-sp-3); margin: 0; }
-        .cg-meta dt { font-size: .8rem; color: var(--csa-muted); }
-        .cg-meta dd { margin: 0; font-weight: 600; }
-        .cg-desc { margin-top: var(--csa-sp-3); }
+        /* Tira de acceso al panel, DENTRO de la tarjeta de datos en vez de en su
+         * propia tarjeta: es un solo dato más (¿tiene acceso o no?) con dos
+         * botones, no una sección con peso propio. */
+        .cg-access-strip { display: flex; align-items: center; flex-wrap: wrap; gap: var(--csa-sp-3);
+            margin-top: var(--csa-sp-4); padding-top: var(--csa-sp-3); border-top: 1px solid var(--csa-rule); }
+        .cg-access-strip__status { font-size: 14px; }
+
     </style>
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {% include '_components/cg_tabs.html.twig' %}
 {% endblock %}

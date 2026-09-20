@@ -60,10 +60,16 @@ class ConsumerGroupRoundItem
 
     /**
      * Precio por unidad PARA ESTA RONDA, en euros. Decimal como string.
+     *
+     * 0 es un estado TRANSITORIO válido (recién sembrado desde el catálogo,
+     * antes de que la comisión lo revise: {@see \App\Service\ConsumerGroup\RoundItemEditor::seedFromCatalog()}),
+     * pero no se puede GUARDAR un producto incluido en la ronda con precio 0
+     * —eso lo exige el controller al validar el precio explícitamente en el
+     * guardado de "Productos del pedido", no aquí en el flush del alta—.
      * @ORM\Column(type="decimal", precision=8, scale=2)
      */
     #[Assert\NotNull]
-    #[Assert\PositiveOrZero]
+    #[Assert\Positive(message: 'Pon un precio: no puede quedarse a 0.')]
     private string $price = '0';
 
     /**
@@ -168,10 +174,11 @@ class ConsumerGroupRoundItem
     }
 
     /**
-     * Unidad del producto (del catálogo).
+     * Unidad del producto (del catálogo), como texto: para pintar sin que
+     * cada plantilla tenga que navegar product->unit->name.
      */
     public function getUnit(): string
     {
-        return $this->product?->getUnit() ?? '';
+        return $this->product?->getUnit()?->getName() ?? '';
     }
 }

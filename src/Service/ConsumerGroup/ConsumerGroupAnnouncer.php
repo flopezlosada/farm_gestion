@@ -37,10 +37,15 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
  * previa, el primer pedido lo habrían visto cero personas, porque nadie entra a
  * darse de alta en algo cuya existencia todavía no conoce.
  *
- * LO DISPARA UN BOTÓN, no el guardado del pedido. Abrir el pedido y dejarlo a
- * medias mientras se ajustan productos y precios es el flujo normal de la
- * comisión; avisar en el momento de crearlo mandaría a la asociación a un
- * catálogo vacío. Quien avisa decide cuándo está presentable.
+ * SE DISPARA SOLA la primera vez que el pedido queda presentable —tiene
+ * productos, ver {@see canAnnounce()}—, justo al guardar la pantalla de
+ * "productos del pedido" ({@see \App\Controller\ConsumerGroupController::items()}).
+ * No al crear el pedido: crear y sembrar el catálogo es un paso, y la comisión
+ * puede necesitar ajustar precios antes de que se vea presentable; ni al
+ * guardar productos una segunda vez, porque entonces ya se avisó y esto no
+ * repite solo (ver más abajo). El botón de esta clase sigue existiendo para
+ * el reenvío consciente y para el caso raro de una ronda que nace sin
+ * productos y se rellena más tarde.
  *
  * NO SE PUEDE AVISAR DOS VECES SIN QUERER. La protección es doble y cada mitad
  * hace un trabajo distinto: {@see ConsumerGroupRound::getAnnouncedAt()} es la

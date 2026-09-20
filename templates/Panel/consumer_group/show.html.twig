@@ -87,7 +87,7 @@
                                         {{ item.name }}
                                         <span class="csa-muted">· {{ item.price|number_format(2, ',', '.') }} € / {{ item.unit }}</span>
                                         {% if item.product and item.product.description %}
-                                            <span class="cg-order-line__desc">{{ item.product.description }}</span>
+                                            <span class="cg-order-line__desc">{{ item.product.description|striptags|u.truncate(80, '…', false) }}</span>
                                         {% endif %}
                                     </label>
                                     {# EL SALTO LO DICE EL PRODUCTO, no el formulario. Lo que viene
@@ -181,7 +181,7 @@
 
                     {% include 'Panel/consumer_group/_payment.html.twig' with { order: order, payment_info: payment_info } only %}
 
-                    {% if round.status == constant('App\\Entity\\ConsumerGroupRound::STATUS_DELIVERED') %}
+                    {% if round.delivered %}
                         <div class="cg-money" style="margin-top: var(--csa-sp-2);">
                             <div class="cg-money__row">
                                 <span>Recogida</span>

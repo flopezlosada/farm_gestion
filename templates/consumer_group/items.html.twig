@@ -9,10 +9,14 @@
  #                          se están quitando y que alguna socia ya tenía
  #                          pedidos de verdad. Si viene, hace falta confirmar
  #                          antes de que el controlador aplique el cambio.
+ #   - locked_product_ids   map product_id => true — productos con pedidos
+ #                          reales (cantidad > 0): su precio no se puede tocar.
+ #
+ # Mismo lenguaje visual que consumer_group/show.html.twig (hero .prt +
+ # .prt-card): esto es una pestaña de esa misma ficha, no un formulario suelto.
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
-{% import '_macros/csa.html.twig' as csa %}
 
 {% block title %}Productos del pedido · Grupo de consumo{% endblock %}
 
@@ -27,19 +31,31 @@
 {% endblock %}
 
 {% block csa_main %}
-    {{ csa.page_header('Grupo de consumo', 'Productos del pedido', round.producer ? round.producer.name : '') }}
 
-    <div class="csa-card csa-form-narrow">
+    <div class="prt">
+        <header class="prt-hero">
+            <div>
+                <h1 class="prt-hero__title">{{ round.title }}</h1>
+                <div class="prt-hero__meta">
+                    <span class="prt-chip prt-chip--mod-1"><span class="dot"></span>Editando productos</span>
+                    {% if round.producer %}<span class="sep">·</span><span>{{ round.producer.name }}</span>{% endif %}
+                </div>
+            </div>
+            <div class="prt-hero__actions">
+                <a href="{{ path('consumer_group_show', { id: round.id }) }}" class="prt-btn"><i class="fa fa-arrow-left"></i> Volver al pedido</a>
+            </div>
+        </header>
+
         {% if catalog is empty %}
-            <p class="csa-muted">
-                El productor no tiene productos activos en su catálogo.
-                <a href="{{ path('consumer_group_producer_show', { id: round.producer.id }) }}">Añádelos primero</a>.
-            </p>
+            <div class="prt-card">
+                <div class="prt-card__body">
+                    <p class="csa-muted" style="margin: 0;">
+                        El productor no tiene productos activos en su catálogo.
+                        <a href="{{ path('consumer_group_producer_show', { id: round.producer.id }) }}">Añádelos primero</a>.
+                    </p>
+                </div>
+            </div>
         {% else %}
-            <p class="csa-muted" style="margin-top: 0;">
-                Marca los productos que entran en este pedido y ajusta su precio. El precio es de este pedido; el del catálogo es solo de referencia.
-            </p>
-
             {% if removals_with_orders is defined and removals_with_orders is not empty %}
                 <div class="csa-alert csa-alert--warning cg-removal-warning">
                     <p><strong>Ojo: estás quitando productos con pedidos ya hechos.</strong> Si confirmas, esos pedidos se pierden y se avisará a las socias afectadas.</p>
@@ -60,34 +76,64 @@
 
             <form method="post" action="{{ path('consumer_group_items', { id: round.id }) }}">
                 <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_items_' ~ round.id) }}">
-                <div class="cg-items">
-                    {% for product in catalog %}
-                        <div class="cg-item-row">
-                            <label class="cg-item-row__inc">
-                                <input type="checkbox" name="include[{{ product.id }}]" value="1" {{ included[product.id]|default(false) ? 'checked' : '' }}>
-                                <span>{{ product.name }} <span class="csa-muted">/ {{ product.unit }}</span></span>
-                            </label>
-                            <div class="cg-item-row__price">
-                                <input type="number" min="0" step="0.01" inputmode="decimal"
-                                       name="price[{{ product.id }}]"
-                                       value="{{ current_price[product.id]|default(product.referencePrice) }}"
-                                       class="csa-input" placeholder="0,00">
-                                <span class="csa-muted">€ / {{ product.unit }}</span>
-                            </div>
+
+                <div class="prt-card">
+                    <div class="prt-card__head">
+                        <h2 class="prt-card__title"><span class="accent"></span>Productos y precios</h2>
+                        <span class="prt-card__head-meta">{{ catalog|length }} en el catálogo</span>
+                    </div>
+                    <div class="prt-card__body">
+                        <p class="csa-muted" style="margin-top: 0;">
+                            Marca los productos que entran en este pedido y ajusta su precio. El precio es de este pedido: se ha rellenado con el de la última vez que lo llevó este productor.
+                        </p>
+                        <div class="prl prl-table-wrap">
+                            <table class="prl-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40px;"><span class="sr-only">Incluir</span></th>
+                                        <th>Producto</th>
+                                        <th class="tight" style="width: 190px;">Precio</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for product in catalog %}
+                                        {% set is_locked = locked_product_ids[product.id]|default(false) %}
+                                        <tr class="{{ is_locked ? 'cg-row-locked' : '' }}">
+                                            <td class="tight">
+                                                <input type="checkbox" name="include[{{ product.id }}]" value="1" {{ included[product.id]|default(false) ? 'checked' : '' }}>
+                                            </td>
+                                            <td>
+                                                {{ product.name }} <span class="csa-muted">/ {{ product.unit }}</span>
+                                                {% if product.description %}<div class="csa-muted" style="font-size: .85em;">{{ product.description|striptags|u.truncate(80, '…', false) }}</div>{% endif %}
+                                            </td>
+                                            <td class="tight cg-cell-price">
+                                                <input type="number" min="0" step="0.01" inputmode="decimal"
+                                                       name="price[{{ product.id }}]"
+                                                       value="{{ current_price[product.id]|default('0') }}"
+                                                       class="csa-input" placeholder="0,00"
+                                                       {{ is_locked ? 'disabled title="Ya hay pedidos de socias con este precio: no se puede cambiar."' : '' }}>
+                                                <span class="csa-muted">€/{{ product.unit }}</span>
+                                                {% if is_locked %}
+                                                    <i class="fa fa-lock csa-muted" title="Ya hay pedidos de socias con este precio: no se puede cambiar."></i>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
                         </div>
-                    {% endfor %}
-                </div>
 
-                {% if removals_with_orders is defined and removals_with_orders is not empty %}
-                    <label class="cg-removal-confirm">
-                        <input type="checkbox" name="confirm_removal" value="1" required>
-                        <span>Confirmo que quiero quitar estos productos aunque ya tengan pedidos, y avisar a las socias afectadas.</span>
-                    </label>
-                {% endif %}
-
-                <div class="csa-row" style="justify-content: flex-end; margin-top: var(--csa-sp-4);">
-                    {{ csa.btn('Volver', { variant: 'ghost', href: path('consumer_group_show', { id: round.id }) }) }}
-                    <button type="submit" class="csa-btn csa-btn--primary">Guardar productos</button>
+                        {% if removals_with_orders is defined and removals_with_orders is not empty %}
+                            <label class="cg-removal-confirm">
+                                <input type="checkbox" name="confirm_removal" value="1" required>
+                                <span>Confirmo que quiero quitar estos productos aunque ya tengan pedidos, y avisar a las socias afectadas.</span>
+                            </label>
+                        {% endif %}
+                    </div>
+                    <div class="prt-card__foot" style="display: flex; justify-content: flex-end; gap: 8px;">
+                        <a href="{{ path('consumer_group_show', { id: round.id }) }}" class="prt-btn">Cancelar</a>
+                        <button type="submit" class="prt-btn prt-btn--primary"><i class="fa fa-check"></i> Guardar productos</button>
+                    </div>
                 </div>
             </form>
         {% endif %}
@@ -96,22 +142,26 @@
 
 {% block more_css %}
     {{ parent() }}
+    {% include '_components/partner_card_styles.html.twig' %}
+    {% include 'partner/_listing_styles.html.twig' %}
     <style>
         .cg-removal-warning { margin-bottom: var(--csa-sp-4); }
         .cg-removal-warning__list { margin: var(--csa-sp-2) 0 0; padding-left: var(--csa-sp-4); }
         .cg-removal-warning__list ul { margin: var(--csa-sp-1) 0 var(--csa-sp-2); }
         .cg-removal-confirm { display: flex; align-items: flex-start; gap: var(--csa-sp-2); margin-top: var(--csa-sp-4); font-weight: 400; }
         .cg-removal-confirm input { width: auto; height: auto; margin-top: 3px; }
-        .cg-items { display: flex; flex-direction: column; gap: var(--csa-sp-2); }
-        .cg-item-row { display: flex; align-items: center; justify-content: space-between; gap: var(--csa-sp-3); padding: var(--csa-sp-2) 0; border-bottom: 1px solid var(--csa-rule); }
-        .cg-item-row__inc { display: inline-flex; align-items: center; gap: var(--csa-sp-2); font-weight: 400; }
-        .cg-item-row__inc input { width: auto; height: auto; }
-        .cg-item-row__price { display: inline-flex; align-items: center; gap: var(--csa-sp-2); }
-        .cg-item-row__price .csa-input { width: 7rem; }
+        .cg-row-locked { background: var(--prl-sage-l, #eaf0e2); }
+        {# Sin nowrap: "€/garrafa de 5 L" es más ancho que la columna (190px,
+           table-layout: fixed) y desbordaba la fila hacia la derecha,
+           empujando toda la página a scroll horizontal. Envuelve en vez de
+           salirse — para eso está flex-wrap. #}
+        .cg-cell-price { display: flex; align-items: center; flex-wrap: wrap; gap: 2px var(--csa-sp-2); }
+        .cg-cell-price .csa-input { width: 6.5rem; height: 34px; }
         {# Las flechas nativas de type=number solo sirven para sumar/restar de
            céntimo en céntimo: para un precio se escribe, no se "sube". #}
-        .cg-item-row__price .csa-input::-webkit-outer-spin-button,
-        .cg-item-row__price .csa-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        .cg-item-row__price .csa-input[type=number] { -moz-appearance: textfield; }
+        .cg-cell-price .csa-input::-webkit-outer-spin-button,
+        .cg-cell-price .csa-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .cg-cell-price .csa-input[type=number] { -moz-appearance: textfield; }
+        .cg-cell-price .fa-lock { font-size: 12px; }
     </style>
 {% endblock %}

@@ -1,23 +1,51 @@
+{# ============================================================
+ # Form de un producto del catálogo (alta/edición).
+ #   - form          FormView (ConsumerGroupProductType)
+ #   - submit_label, cancel_url
+ # ============================================================ #}
 {% import '_macros/csa.html.twig' as csa %}
 {% form_theme form 'form_div_layout.html.twig' %}
 
-<div class="csa-card csa-form-narrow">
-    {{ form_start(form, { attr: { 'data-csa-dropdowns': '1' } }) }}
-        <div class="csa-form-grid">
-            {{ csa.field(form.name, 'Producto', { full: true }) }}
-            {{ csa.field(form.category, 'Categoría') }}
-            {{ csa.field(form.unit, 'Unidad de venta') }}
-            {{ csa.field(form.referencePrice, 'Precio de referencia (€ / unidad)') }}
-            {{ csa.field(form.description, 'Descripción', { full: true }) }}
+{{ form_start(form, { attr: { class: 'csa-form-narrow', 'data-csa-dropdowns': '1' } }) }}
+
+    <div class="csa-stack-lg">
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Producto', subtitle: 'Nombre, categoría y unidad de venta.' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.name, 'Producto', { full: true }) }}
+                    {{ csa.field(form.category, 'Categoría') }}
+
+                    {# data-csa-no-search: son ~20 palabras cortas para ojear, no
+                     # 246 nombres para buscar — el modo búsqueda del enhancer
+                     # (escribir 3 letras antes de ver nada) parecía un control roto. #}
+                    {{ csa.field(form.unit, 'Unidad de venta', { attr: { 'data-csa-no-search': '1' } }) }}
+
+                    {{ csa.field(form.description, 'Descripción', { full: true, widget_class: 'csa-textarea' }) }}
+                </div>
+
+                <div class="csa-stack" style="margin-top: var(--csa-sp-4); gap: var(--csa-sp-3);">
+                    <label class="csa-check" style="display:flex; align-items:flex-start; gap: var(--csa-sp-2);">
+                        {{ form_widget(form.halfUnits) }}
+                        <span>
+                            <span>Se puede pedir en medias unidades</span>
+                            <span class="csa-field__hint" style="display:block; font-weight: 400;">{{ form.halfUnits.vars.help }}</span>
+                        </span>
+                    </label>
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+            <div></div>
+            <div class="csa-row">
+                {{ csa.btn('Cancelar', { variant: 'ghost', href: cancel_url }) }}
+                <button type="submit" class="csa-btn csa-btn--primary">{{ submit_label|default('Guardar') }}</button>
+            </div>
         </div>
-        <div style="margin-top: var(--csa-sp-4);">
-            <label class="csa-check" style="display:inline-flex; align-items:center; gap: var(--csa-sp-2);">
-                {{ form_widget(form.active) }} <span>Producto activo (disponible para las rondas)</span>
-            </label>
-        </div>
-        <div class="csa-row" style="justify-content: flex-end; margin-top: var(--csa-sp-4);">
-            {{ csa.btn('Cancelar', { variant: 'ghost', href: cancel_url }) }}
-            <button type="submit" class="csa-btn csa-btn--primary">{{ submit_label|default('Guardar') }}</button>
-        </div>
-    {{ form_end(form) }}
-</div>
+
+    </div>
+
+    {{ form_rest(form) }}
+{{ form_end(form, { render_rest: false }) }}

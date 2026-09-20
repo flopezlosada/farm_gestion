@@ -1,0 +1,30 @@
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Editar unidad · Grupo de consumo{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_index') }}">Grupo de consumo</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_unit_index') }}">Unidades</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Editar</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Grupo de consumo', 'Editar unidad', unit.name) }}
+    <div class="csa-card csa-form-narrow">
+        {{ form_start(form) }}
+            <div class="csa-form-grid">
+                {{ csa.field(form.name, 'Unidad') }}
+                <label class="cg-flag" style="display:inline-flex; align-items:center; gap: var(--csa-sp-2);">{{ form_widget(form.active) }} <span>Activa</span></label>
+            </div>
+            <div class="csa-row" style="justify-content: flex-end; margin-top: var(--csa-sp-4);">
+                {{ csa.btn('Cancelar', { variant: 'ghost', href: path('consumer_group_unit_index') }) }}
+                <button type="submit" class="csa-btn csa-btn--primary">Guardar</button>
+            </div>
+        {{ form_end(form) }}
+    </div>
+{% endblock %}

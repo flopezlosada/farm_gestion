@@ -1,0 +1,61 @@
+{# ============================================================
+ # Paso de confirmación al desactivar un producto que tiene pedidos REALES
+ # de socias en rondas todavía abiertas: se van a borrar esas líneas, así
+ # que se lista qué y de quién antes de aplicar nada.
+ #   - product   ConsumerGroupProduct
+ #   - affected  list<{round: ConsumerGroupRound, item: ConsumerGroupRoundItem, lines: ConsumerGroupOrderLine[]}>
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Desactivar {{ product.name }} · {{ product.producer.name }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_producer_index') }}">Productores</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_producer_show', { id: product.producer.id }) }}">{{ product.producer.name }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_product_show', { id: product.id }) }}">{{ product.name }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Desactivar</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Catálogo', 'Desactivar ' ~ product.name, product.producer.name) }}
+
+    <div class="csa-card csa-form-narrow">
+        <div class="csa-alert csa-alert--warning">
+            <p><strong>Hay pedidos ya hechos de este producto en pedidos todavía abiertos.</strong>
+               Desactivarlo los quita del pedido del productor y se pierden sin dejar rastro. Se avisará a cada socia afectada.</p>
+        </div>
+
+        {% for entry in affected %}
+            <div style="margin-top: var(--csa-sp-4);">
+                <p style="margin-bottom: var(--csa-sp-2);">
+                    <a href="{{ path('consumer_group_show', { id: entry.round.id }) }}">{{ entry.round.title }}</a>
+                </p>
+                <ul style="margin: 0; padding-left: var(--csa-sp-4);">
+                    {% for line in entry.lines %}
+                        <li>{{ line.order.partner.name }} {{ line.order.partner.surname }} — {{ line.quantity|number_format(2, ',', '.') }} {{ product.unit }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endfor %}
+
+        <form method="post" action="{{ path('consumer_group_product_toggle_active', { id: product.id }) }}" style="margin-top: var(--csa-sp-5);">
+            <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_product_toggle_active_' ~ product.id) }}">
+            <input type="hidden" name="confirm_deactivate" value="1">
+            <label class="cg-removal-confirm" style="display: flex; align-items: flex-start; gap: var(--csa-sp-2); font-weight: 400;">
+                <input type="checkbox" required style="width: auto; height: auto; margin-top: 3px;">
+                <span>Confirmo que quiero desactivar el producto aunque se pierdan esos pedidos, y avisar a las socias afectadas.</span>
+            </label>
+            <div class="csa-row" style="justify-content: flex-end; margin-top: var(--csa-sp-4);">
+                {{ csa.btn('Cancelar', { variant: 'ghost', href: path('consumer_group_product_show', { id: product.id }) }) }}
+                <button type="submit" class="csa-btn csa-btn--danger">Desactivar y borrar esos pedidos</button>
+            </div>
+        </form>
+    </div>
+{% endblock %}
