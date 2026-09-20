@@ -13,7 +13,7 @@
 {% block csa_main %}
     {{ csa.page_header('Personal', 'Trabajadores', 'Fichas laborales para el registro de jornada y las vacaciones.') }}
 
-    <div class="csa-grid-kpi" style="margin-bottom: var(--csa-sp-6);">
+    <div class="csa-kpi-row" style="margin-bottom: var(--csa-sp-6);">
         {{ csa.kpi('Trabajadores', stats.total, null, null, null, 'sky', 'fa-id-badge') }}
         {{ csa.kpi('Activos', stats.active, null, null, null, 'green', 'fa-check') }}
     </div>

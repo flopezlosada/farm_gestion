@@ -23,7 +23,7 @@
 
     {{ csa.page_header('Personal', worker.name, worker.active ? 'Trabajador activo' : 'Trabajador inactivo') }}
 
-    <div class="csa-grid-kpi" style="margin-bottom: 1.4rem;">
+    <div class="csa-kpi-row" style="margin-bottom: 1.4rem;">
         {{ csa.kpi('Alta', worker.hireDate ? worker.hireDate|date('d/m/Y') : '—', null, null, null, 'sky', 'fa-calendar') }}
         {{ csa.kpi('Vacaciones ' ~ year, vacation_used ~ ' / ' ~ vacation_total, 'días', null, null, 'ochre', 'fa-umbrella') }}
     </div>
