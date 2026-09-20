@@ -55,6 +55,7 @@ class ConsumerGroupPartnerShowTest extends AbstractAuthenticatedTest
         $order = new ConsumerGroupOrder($round, $partner);
         $order->addLine(new ConsumerGroupOrderLine($order, $item, '4'));
 
+        $em->persist($naranjas->getUnit());
         $em->persist($producer);
         $em->persist($naranjas);
         $em->persist($round);

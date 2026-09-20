@@ -111,6 +111,8 @@ class ConsumerGroupItemsRemovalConfirmationTest extends AbstractAuthenticatedTes
         $order = new ConsumerGroupOrder($round, $partner);
         $order->addLine(new ConsumerGroupOrderLine($order, $item, '3'));
 
+        $em->persist($naranjas->getUnit());
+        $em->persist($aceite->getUnit());
         $em->persist($producer);
         $em->persist($naranjas);
         $em->persist($aceite);
