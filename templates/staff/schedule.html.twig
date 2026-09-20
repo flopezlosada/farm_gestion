@@ -20,8 +20,9 @@
     {{ parent() }}
     <style>
         /* Columnas fijas (no por contenido): así todas las filas miden igual
-           tenga o no "Borrar"/texto heredado, que era lo que las descuadraba. */
-        .sch-row { display: grid; grid-template-columns: 110px 1fr 130px;
+           tenga o no "Borrar"/texto heredado, que era lo que las descuadraba.
+           Una sola fila de grid (nada de wrap a una 2ª línea de acciones). */
+        .sch-row { display: grid; grid-template-columns: 100px 1fr auto;
                    gap: var(--csa-sp-4); align-items: center;
                    background: var(--csa-surface); border: 1px solid var(--csa-rule);
                    border-radius: var(--csa-radius-lg); padding: var(--csa-sp-4) var(--csa-sp-5);
@@ -30,9 +31,8 @@
         .sch-row__tramos { display: flex; gap: var(--csa-sp-5); align-items: center; flex-wrap: wrap; }
         .sch-row__tramo { display: flex; gap: var(--csa-sp-2); align-items: center; color: var(--csa-ink-soft); font-size: var(--csa-fs-sm); }
         .sch-row__tramo input[type="time"] { width: 8.5em; }
-        .sch-row__aside { text-align: right; }
-        .sch-row__inherited { color: var(--csa-ink-soft); font-size: var(--csa-fs-sm); font-style: italic; }
-        .sch-row__actions { display: flex; gap: var(--csa-sp-3); align-items: center; grid-column: 1 / -1; justify-content: flex-end; }
+        .sch-row__inherited { color: var(--csa-ink-soft); font-size: var(--csa-fs-sm); font-style: italic; white-space: nowrap; }
+        .sch-row__actions { display: flex; gap: var(--csa-sp-3); align-items: center; white-space: nowrap; }
     </style>
 {% endblock %}
 
@@ -71,13 +71,10 @@
                 </span>
             </div>
 
-            <span class="sch-row__aside">
+            <div class="sch-row__actions">
                 {% if not schedule and worker and global_week[day] %}
                     <span class="sch-row__inherited">Sigue la global</span>
                 {% endif %}
-            </span>
-
-            <div class="sch-row__actions">
                 <form id="sch-form-{{ day }}" method="post" action="{{ save_route }}" style="display:contents;">
                     <input type="hidden" name="_token" value="{{ csrf_token(token_id) }}">
                     {{ csa.btn('Guardar', { variant: 'primary', type: 'submit' }) }}
