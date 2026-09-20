@@ -1,0 +1,179 @@
+{# ============================================================
+ # Ficha de un producto del catálogo del grupo de consumo. SIN precio
+ # destacado a propósito: el precio es de cada RONDA (ConsumerGroupRoundItem),
+ # no del catálogo — aquí solo se enseña el histórico de precio por ronda.
+ #   - product     ConsumerGroupProduct
+ #   - photos      Image[]
+ #   - photo_form  FormView|null
+ #   - history     ConsumerGroupRoundItem[] más reciente primero
+ #   - stats       { rounds, quantity, money, avgPrice }
+ # Mismo lenguaje visual que producer/show.html.twig (hero .prt + pestañas).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set can_edit = is_granted('ROLE_GESTION_GRUPO_CONSUMO_EDIT') %}
+{% set status_labels = { 0: 'Abierto', 1: 'Cerrado', 3: 'Cancelado', 4: 'Entregado' } %}
+
+{% block title %}{{ product.name }} · {{ product.producer.name }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_producer_index') }}">Productores</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_producer_show', { id: product.producer.id }) }}">{{ product.producer.name }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ product.name }}</span>
+{% endblock %}
+
+{% block csa_main %}
+
+    <div class="prt">
+        <header class="prt-hero">
+            <div>
+                <h1 class="prt-hero__title">{{ product.name }}</h1>
+                <div class="prt-hero__meta">
+                    <span>{{ product.producer.name }}</span>
+                    {% if product.category %}<span class="sep">·</span><span>{{ product.category.name }}</span>{% endif %}
+                </div>
+            </div>
+            <div class="prt-hero__actions">
+                <a href="{{ path('consumer_group_producer_show', { id: product.producer.id }) }}" class="prt-btn"><i class="fa fa-arrow-left"></i> Volver</a>
+                {% if can_edit %}
+                    <a href="{{ path('consumer_group_product_edit', { id: product.id }) }}" class="prt-btn prt-btn--primary"><i class="fa fa-pencil"></i> Editar</a>
+                {% endif %}
+            </div>
+        </header>
+
+        <div class="cg-facts">
+            <div class="cg-fact"><span class="cg-fact__l">Unidad</span><span class="cg-fact__v">{{ product.unit }}</span></div>
+            <div class="cg-fact"><span class="cg-fact__l">Medias unidades</span><span class="cg-fact__v">{{ product.halfUnits ? 'Sí' : 'No' }}</span></div>
+            <div class="cg-fact">
+                <span class="cg-fact__l">Estado</span>
+                <span class="cg-fact__v">
+                    {% if can_edit %}
+                        <label class="csa-toggle" style="cursor: pointer;"
+                               onclick="event.preventDefault(); document.getElementById('confirm-toggle-active-{{ product.id }}').showModal();">
+                            <input type="checkbox" class="csa-toggle__input" {{ product.active ? 'checked' : '' }} readonly>
+                            <span class="csa-toggle__track"><span class="csa-toggle__thumb"></span></span>
+                            <span class="csa-toggle__text">{{ product.active ? 'Activo' : 'Inactivo' }}</span>
+                        </label>
+                        {{ csa.confirm_dialog('confirm-toggle-active-' ~ product.id, {
+                            variant: product.active ? 'warning' : 'success',
+                            title: product.active ? 'Desactivar este producto' : 'Activar este producto',
+                            body: product.active
+                                ? 'Dejará de ofrecerse en rondas nuevas. Las rondas que ya lo llevan no se ven afectadas.'
+                                : 'Volverá a estar disponible para incluirlo en rondas nuevas.',
+                            confirm_label: product.active ? 'Desactivar' : 'Activar',
+                            action: path('consumer_group_product_toggle_active', { id: product.id }),
+                            csrf_token: csrf_token('consumer_group_product_toggle_active_' ~ product.id),
+                            csrf_name: '_token',
+                        }) }}
+                    {% else %}
+                        <span class="prt-chip prt-chip--{{ product.active ? 'activo' : 'baja' }}"><span class="dot"></span>{{ product.active ? 'Activo' : 'Inactivo' }}</span>
+                    {% endif %}
+                </span>
+            </div>
+            {% if product.description %}
+                <div class="cg-fact cg-fact--full">
+                    <span class="cg-fact__l">Descripción</span>
+                    <span class="cg-fact__v cg-fact__v--text">{{ product.description|nl2br }}</span>
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="prt-tabbar" role="tablist">
+            <button type="button" class="prt-tab is-active" data-tab="fotos" role="tab" aria-selected="true">Fotos {% if photos is not empty %}<span class="csa-muted">({{ photos|length }})</span>{% endif %}</button>
+            <button type="button" class="prt-tab" data-tab="historial" role="tab" aria-selected="false">Historial</button>
+            <button type="button" class="prt-tab" data-tab="stats" role="tab" aria-selected="false">Estadísticas</button>
+        </div>
+
+        {# ---------- FOTOS ---------- #}
+        <section class="prt-tabpanel" data-tabpanel="fotos">
+            <div class="prt-card">
+                <div class="prt-card__body">
+                    <p class="csa-muted" style="margin-top: 0;">Las ve la socia al apuntarse. Click en una foto para verla en grande.</p>
+                    {% include '_components/cg_product_gallery.html.twig' with {
+                        product: product,
+                        photos: photos,
+                        photo_form: can_edit ? photo_form : null,
+                        delete_route: 'consumer_group_product_photo_delete',
+                        csrf_prefix: 'consumer_group_product_photo_'
+                    } %}
+                </div>
+            </div>
+        </section>
+
+        {# ---------- HISTORIAL ---------- #}
+        <section class="prt-tabpanel" data-tabpanel="historial" hidden>
+            <div class="prt-card">
+                <div class="prt-card__head">
+                    <h2 class="prt-card__title"><span class="accent"></span>Histórico por ronda</h2>
+                </div>
+                <div class="prt-card__body">
+                {% if history is empty %}
+                    <p class="csa-muted" style="margin: 0;">Este producto todavía no ha entrado en ninguna ronda.</p>
+                {% else %}
+                    <div class="prl prl-table-wrap">
+                    <table class="prl-table">
+                        <thead>
+                            <tr><th>Ronda</th><th class="tight">Fecha</th><th class="tight">Estado</th><th class="tight">Precio</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for item in history %}
+                                <tr>
+                                    <td><a href="{{ path('consumer_group_show', { id: item.round.id }) }}">{{ item.round.title }}</a></td>
+                                    <td class="tight">{{ item.round.created|date('d/m/Y') }}</td>
+                                    <td class="tight">
+                                        {{ status_labels[item.round.status]|default(item.round.statusLabel) }}{{ item.round.confirmed ? ' · confirmada' : '' }}
+                                    </td>
+                                    <td class="tight">{{ item.price|number_format(2, ',', '.') }} €</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    </div>
+                {% endif %}
+                </div>
+            </div>
+        </section>
+
+        {# ---------- ESTADÍSTICAS ---------- #}
+        <section class="prt-tabpanel" data-tabpanel="stats" hidden>
+            <div class="prt-card">
+                <div class="prt-card__head">
+                    <h2 class="prt-card__title"><span class="accent"></span>Resumen</h2>
+                    <span class="prt-card__head-meta">Sobre pedidos confirmados</span>
+                </div>
+                <div class="prt-card__body">
+                    <div class="cg-kpis">
+                        <div class="cg-kpi"><div class="cg-kpi__v">{{ stats.rounds }}</div><div class="cg-kpi__l">rondas con este producto</div></div>
+                        <div class="cg-kpi"><div class="cg-kpi__v">{{ stats.quantity|number_format(2, ',', '.') }}</div><div class="cg-kpi__l">{{ product.unit }} pedidas en total</div></div>
+                        <div class="cg-kpi"><div class="cg-kpi__v">{{ stats.avgPrice is not null ? stats.avgPrice|number_format(2, ',', '.') ~ ' €' : '—' }}</div><div class="cg-kpi__l">precio medio / {{ product.unit }}</div></div>
+                        <div class="cg-kpi"><div class="cg-kpi__v">{{ stats.money|number_format(2, ',', '.') }} €</div><div class="cg-kpi__l">movido (informativo)</div></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </div>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include '_components/partner_card_styles.html.twig' %}
+    {% include '_components/cg_facts_styles.html.twig' %}
+    {% include '_components/cg_kpi_styles.html.twig' %}
+    {% include '_components/cg_tabs_styles.html.twig' %}
+    {% include '_components/cg_gallery_styles.html.twig' %}
+    {% include '_components/cg_lightbox_styles.html.twig' %}
+    {% include 'partner/_listing_styles.html.twig' %}
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {% include '_components/cg_tabs.html.twig' %}
+    {% include '_components/cg_lightbox.html.twig' %}
+{% endblock %}

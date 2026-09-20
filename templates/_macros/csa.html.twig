@@ -166,6 +166,61 @@
 {% endmacro %}
 
 
+{# ---------- BAR CHARTS ----------
+ # Series de un solo valor (magnitud), un solo color de marca: no hay
+ # identidad que codificar en color, así que no hace falta leyenda ni
+ # paleta categórica. Requieren '_components/csa_chart_styles.html.twig'.
+ #
+ # hbar_chart: ranking (barras horizontales, más alto = más valor). Úsalo
+ # cuando el eje es una CATEGORÍA (producto, socia…), ya ordenada por el
+ # llamante — el macro no reordena.
+ #   items: list de {label, value, value_label} (value_label ya formateado)
+ #
+ # vbar_chart: serie en el TIEMPO (barras verticales, cronológico
+ # izquierda→derecha). Úsalo solo cuando el eje es una fecha/ronda.
+ #   items: list de {label, value, value_label}
+ #}
+{% macro hbar_chart(items, empty_text = 'Sin datos todavía.') %}
+    {% if items is empty %}
+        <p class="csa-muted" style="margin: 0;">{{ empty_text }}</p>
+    {% else %}
+        {% set max = 0 %}
+        {% for i in items %}{% if i.value > max %}{% set max = i.value %}{% endif %}{% endfor %}
+        <div class="csa-chart csa-chart--hbar">
+            {% for i in items %}
+                <div class="csa-chart__hrow" title="{{ i.label }}: {{ i.value_label }}">
+                    <span class="csa-chart__label">{{ i.label }}</span>
+                    <span class="csa-chart__track">
+                        <span class="csa-chart__bar" style="width: {{ max > 0 ? (i.value / max * 100) : 0 }}%;"></span>
+                    </span>
+                    <span class="csa-chart__value">{{ i.value_label }}</span>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endmacro %}
+
+{% macro vbar_chart(items, empty_text = 'Sin datos todavía.') %}
+    {% if items is empty %}
+        <p class="csa-muted" style="margin: 0;">{{ empty_text }}</p>
+    {% else %}
+        {% set max = 0 %}
+        {% for i in items %}{% if i.value > max %}{% set max = i.value %}{% endif %}{% endfor %}
+        <div class="csa-chart csa-chart--vbar">
+            {% for i in items %}
+                <div class="csa-chart__vcol" title="{{ i.label }}: {{ i.value_label }}">
+                    <span class="csa-chart__value csa-chart__value--top">{{ i.value_label }}</span>
+                    <span class="csa-chart__vtrack">
+                        <span class="csa-chart__bar csa-chart__bar--v" style="height: {{ max > 0 ? (i.value / max * 100) : 0 }}%;"></span>
+                    </span>
+                    <span class="csa-chart__label csa-chart__label--v">{{ i.label }}</span>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endmacro %}
+
+
 {# ---------- CALLOUT ----------
  # Mensaje inline destacado dentro de cards o secciones.
  # tone: info | warning | danger (default: info)

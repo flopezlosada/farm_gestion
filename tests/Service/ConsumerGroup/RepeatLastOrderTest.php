@@ -5,6 +5,7 @@ namespace App\Tests\Service\ConsumerGroup;
 use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupOrderLine;
 use App\Entity\ConsumerGroupProduct;
+use App\Entity\ConsumerGroupUnit;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupRoundItem;
 use App\Entity\Partner;
@@ -103,7 +104,7 @@ class RepeatLastOrderTest extends TestCase
      */
     private function product(int $id, string $name, string $unit): ConsumerGroupProduct
     {
-        $product = (new ConsumerGroupProduct())->setName($name)->setUnit($unit);
+        $product = (new ConsumerGroupProduct())->setName($name)->setUnit((new ConsumerGroupUnit())->setName($unit));
         $this->producer->addProduct($product);
         $this->setId($product, $id);
 

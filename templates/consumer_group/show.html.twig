@@ -40,6 +40,7 @@
                 <div class="prt-hero__meta">
                     <span class="prt-chip prt-chip--{{ sb.cls }}"><span class="dot"></span>{{ sb.label }}</span>
                     {% if round.confirmed %}<span class="prt-chip prt-chip--mod-1"><span class="dot"></span>Confirmado</span>{% endif %}
+                    {% if round.fullyPickedUp %}<span class="prt-chip prt-chip--activo"><span class="dot"></span>Recogido por todas</span>{% endif %}
                     <span class="sep">·</span>
                     <span>{{ round.producer ? round.producer.name : '' }}</span>
                     {% if round.deliveryDate %}<span class="sep">·</span><span>Entrega {{ round.deliveryDate|date('d/m/Y') }}</span>{% endif %}
@@ -64,7 +65,14 @@
                 </span>
             </div>
             <div class="cg-fact"><span class="cg-fact__l">Entrega</span><span class="cg-fact__v">{{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}</span></div>
-            <div class="cg-fact"><span class="cg-fact__l">Mínimo</span><span class="cg-fact__v">{{ round.minimumCondition ?: '—' }}</span></div>
+            <div class="cg-fact">
+                <span class="cg-fact__l">Mínimo</span>
+                <span class="cg-fact__v">
+                    {{ round.minimumCondition ?: (round.minimumTypeLabel ?: '—') }}
+                    {% if round.minimumTypeLabel and round.minimumCondition %}<span class="cg-fact__note">· {{ round.minimumTypeLabel }}</span>{% endif %}
+                    {% if round.minimumTypeLabel and not round.confirmed %}<span class="cg-fact__note">· se confirma sola al alcanzarlo</span>{% endif %}
+                </span>
+            </div>
             {% if round.confirmedAt %}<div class="cg-fact"><span class="cg-fact__l">Confirmado</span><span class="cg-fact__v">{{ round.confirmedAt|date('d/m/Y') }}</span></div>{% endif %}
             {# Sin aviso, el pedido existe pero no lo ha visto nadie: es un dato de
              # primera línea, no un detalle de trazabilidad. #}
@@ -217,6 +225,13 @@
                             <button type="button" class="prl-btn prl-btn--sm" data-pago="pending">Pendientes</button>
                             <button type="button" class="prl-btn prl-btn--sm" data-pago="paid">Pagadas</button>
                         </div>
+                        {% if round.delivered %}
+                            <div class="cg-pago-filter" role="group" aria-label="Filtrar por recogida">
+                                <button type="button" class="prl-btn prl-btn--sm is-active" data-pickup="all">Todas</button>
+                                <button type="button" class="prl-btn prl-btn--sm" data-pickup="pending">Sin recoger</button>
+                                <button type="button" class="prl-btn prl-btn--sm" data-pickup="picked">Recogidas</button>
+                            </div>
+                        {% endif %}
                     </div>
                     <div class="prl-table-wrap">
                         <table class="prl-table" id="cg-socias">
@@ -224,10 +239,10 @@
                                 <tr>
                                     <th>Socia</th>
                                     <th>Pedido</th>
-                                    <th class="tight">Total</th>
-                                    <th class="tight">Pago</th>
-                                    {% if round.status == constant('App\\Entity\\ConsumerGroupRound::STATUS_DELIVERED') %}
-                                        <th class="tight">Recogida</th>
+                                    <th class="tight" style="width: 80px;">Total</th>
+                                    <th class="tight" style="width: 140px;">Pago</th>
+                                    {% if round.delivered %}
+                                        <th class="tight" style="width: 130px;">Recogida</th>
                                     {% endif %}
                                     <th class="tight" style="width: 44px;"><span class="sr-only">Acciones</span></th>
                                 </tr>
@@ -235,7 +250,7 @@
                             <tbody>
                                 {% for order in socias %}
                                     {% set partner = order.partner %}
-                                    <tr data-name="{{ (partner.name ~ ' ' ~ partner.surname)|lower }}" data-paid="{{ order.paid ? '1' : '0' }}">
+                                    <tr data-name="{{ (partner.name ~ ' ' ~ partner.surname)|lower }}" data-paid="{{ order.paid ? '1' : '0' }}" data-picked-up="{{ order.pickedUp ? '1' : '0' }}">
                                         <td class="prl-cell-person">
                                             <div class="prl-person">
                                                 <span class="prl-person__avatar prl-person__avatar--sage" aria-hidden="true"><i class="fa fa-user"></i></span>
@@ -260,38 +275,42 @@
                                             </ul>
                                         </td>
                                         <td class="tight" data-label="Total"><b>{{ order.total|number_format(2, ',', '.') }} €</b></td>
-                                        <td class="tight cg-cell-pago" data-label="Pago">
-                                            {% if order.paid %}
-                                                <span class="prl-chip prl-chip--activo"><span class="dot"></span>Pagado</span>
-                                            {% else %}
-                                                <span class="prl-chip prl-chip--pausado"><span class="dot"></span>Pendiente</span>
-                                                {# El mismo concepto que se le pide a la socia, para poder
-                                                 # buscarlo en el extracto: en el banco aparece el titular de
-                                                 # la cuenta, que no siempre es quien figura aquí. Rotulado a
-                                                 # propósito: sin "Concepto:" delante, en la vista apilada de
-                                                 # móvil parece un segundo nombre suelto, no una referencia. #}
-                                                <div class="cg-order__ref"><span class="cg-order__ref-label">Concepto:</span> {{ order.paymentReference }}</div>
-                                            {% endif %}
-                                            {% if can_edit %}
-                                                <form method="post" action="{{ path('consumer_group_order_toggle_paid', { id: order.id }) }}" class="cg-order__pay-form">
-                                                    <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_toggle_paid_' ~ order.id) }}">
-                                                    <button type="submit" class="prl-btn prl-btn--sm">{{ order.paid ? 'Marcar pendiente' : 'Marcar pagado' }}</button>
-                                                </form>
-                                            {% endif %}
-                                        </td>
-                                        {% if round.status == constant('App\\Entity\\ConsumerGroupRound::STATUS_DELIVERED') %}
-                                            <td class="tight cg-cell-pago" data-label="Recogida">
-                                                {% if order.pickedUp %}
-                                                    <span class="prl-chip prl-chip--activo"><span class="dot"></span>Recogido</span>
-                                                {% else %}
-                                                    <span class="prl-chip prl-chip--pausado"><span class="dot"></span>Sin recoger</span>
-                                                {% endif %}
+                                        <td class="tight" data-label="Pago">
+                                            <div class="cg-cell-pago">
                                                 {% if can_edit %}
-                                                    <form method="post" action="{{ path('consumer_group_order_toggle_picked_up', { id: order.id }) }}" class="cg-order__pay-form">
-                                                        <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_toggle_picked_up_' ~ order.id) }}">
-                                                        <button type="submit" class="prl-btn prl-btn--sm">{{ order.pickedUp ? 'Marcar sin recoger' : 'Marcar recogido' }}</button>
+                                                    <form method="post" action="{{ path('consumer_group_order_toggle_paid', { id: order.id }) }}" class="cg-order__pay-form">
+                                                        <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_toggle_paid_' ~ order.id) }}">
+                                                        <button type="submit" class="prl-chip prl-chip--{{ order.paid ? 'activo' : 'pausado' }} cg-chip-btn" title="Click para marcar {{ order.paid ? 'pendiente' : 'pagado' }}">
+                                                            <span class="dot"></span>{{ order.paid ? 'Pagado' : 'Pendiente' }}
+                                                        </button>
                                                     </form>
+                                                {% else %}
+                                                    <span class="prl-chip prl-chip--{{ order.paid ? 'activo' : 'pausado' }}"><span class="dot"></span>{{ order.paid ? 'Pagado' : 'Pendiente' }}</span>
                                                 {% endif %}
+                                                {% if not order.paid %}
+                                                    {# El mismo concepto que se le pide a la socia, para poder
+                                                     # buscarlo en el extracto: en el banco aparece el titular de
+                                                     # la cuenta, que no siempre es quien figura aquí. Rotulado a
+                                                     # propósito: sin "Concepto:" delante, en la vista apilada de
+                                                     # móvil parece un segundo nombre suelto, no una referencia. #}
+                                                    <div class="cg-order__ref"><span class="cg-order__ref-label">Concepto:</span> {{ order.paymentReference }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                        {% if round.delivered %}
+                                            <td class="tight" data-label="Recogida">
+                                                <div class="cg-cell-pago">
+                                                    {% if can_edit %}
+                                                        <form method="post" action="{{ path('consumer_group_order_toggle_picked_up', { id: order.id }) }}" class="cg-order__pay-form">
+                                                            <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_toggle_picked_up_' ~ order.id) }}">
+                                                            <button type="submit" class="prl-chip prl-chip--{{ order.pickedUp ? 'activo' : 'mod-3' }} cg-chip-btn" title="Click para marcar {{ order.pickedUp ? 'sin recoger' : 'recogido' }}">
+                                                                <span class="dot"></span>{{ order.pickedUp ? 'Recogido' : 'Sin recoger' }}
+                                                            </button>
+                                                        </form>
+                                                    {% else %}
+                                                        <span class="prl-chip prl-chip--{{ order.pickedUp ? 'activo' : 'mod-3' }}"><span class="dot"></span>{{ order.pickedUp ? 'Recogido' : 'Sin recoger' }}</span>
+                                                    {% endif %}
+                                                </div>
                                             </td>
                                         {% endif %}
                                         <td class="tight" data-label="Acciones" style="text-align: right;">
@@ -321,6 +340,7 @@
                     var rows = Array.prototype.slice.call(table.querySelectorAll('tbody tr[data-name]'));
                     var emptyRow = document.getElementById('cg-socias-empty');
                     var pago = 'all';
+                    var pickup = 'all';
                     function apply() {
                         var term = (q.value || '').trim().toLowerCase();
                         var visible = 0;
@@ -328,7 +348,9 @@
                             var okName = !term || r.getAttribute('data-name').indexOf(term) !== -1;
                             var paid = r.getAttribute('data-paid') === '1';
                             var okPago = pago === 'all' || (pago === 'paid' ? paid : !paid);
-                            var show = okName && okPago;
+                            var pickedUp = r.getAttribute('data-picked-up') === '1';
+                            var okPickup = pickup === 'all' || (pickup === 'picked' ? pickedUp : !pickedUp);
+                            var show = okName && okPago && okPickup;
                             r.hidden = !show;
                             if (show) { visible++; }
                         });
@@ -340,6 +362,14 @@
                             document.querySelectorAll('.cg-pago-filter [data-pago]').forEach(function (b) { b.classList.remove('is-active'); });
                             btn.classList.add('is-active');
                             pago = btn.getAttribute('data-pago');
+                            apply();
+                        });
+                    });
+                    Array.prototype.forEach.call(document.querySelectorAll('.cg-pago-filter [data-pickup]'), function (btn) {
+                        btn.addEventListener('click', function () {
+                            document.querySelectorAll('.cg-pago-filter [data-pickup]').forEach(function (b) { b.classList.remove('is-active'); });
+                            btn.classList.add('is-active');
+                            pickup = btn.getAttribute('data-pickup');
                             apply();
                         });
                     });
@@ -376,27 +406,7 @@
          # consulte al entrar a la ficha, y una lista que crece con cada apunte
          # y cada cambio de estado saturaba la pantalla por debajo de lo que sí
          # se mira siempre (socias, agregado, acciones). #}
-        <details class="prt-card cg-activity-card">
-            <summary class="prt-card__head cg-activity-summary">
-                <h2 class="prt-card__title"><span class="accent"></span>Actividad{% if activity is not empty %} <span class="csa-muted">({{ activity|length }})</span>{% endif %}</h2>
-            </summary>
-            <div class="prt-card__body">
-            {% if activity is empty %}
-                <p class="csa-muted">Sin actividad registrada todavía.</p>
-            {% else %}
-                <ul class="cg-activity">
-                    {% for event in activity %}
-                        <li>
-                            <span class="csa-muted">{{ event.occurredAt|date('d/m/Y H:i') }}</span>
-                            <b>{{ event.kindLabel }}</b>
-                            — {{ event.summary }}
-                            <span class="csa-muted">({{ event.actorLabel }})</span>
-                        </li>
-                    {% endfor %}
-                </ul>
-            {% endif %}
-            </div>
-        </details>
+        {% include '_components/cg_activity.html.twig' with { activity: activity } %}
 
         {% if can_edit and round.orders is empty %}
             <div class="csa-row" style="justify-content: flex-end;">
@@ -415,15 +425,10 @@
 {% block more_css %}
     {{ parent() }}
     {% include '_components/partner_card_styles.html.twig' %}
+    {% include '_components/cg_facts_styles.html.twig' %}
+    {% include '_components/cg_activity_styles.html.twig' %}
     {% include 'partner/_listing_styles.html.twig' %}
     <style>
-        /* Tira compacta de datos del pedido (hermana de prt-pickup de la ficha). */
-        .cg-facts { display: flex; flex-wrap: wrap; gap: var(--csa-sp-5); margin-top: var(--csa-sp-4);
-            padding: var(--csa-sp-3) var(--csa-sp-4); background: var(--prt-bg, #fbfaf6); border: 1px solid var(--prt-line, #ebe7dd); border-radius: 10px; }
-        .cg-fact { display: flex; flex-direction: column; gap: 2px; }
-        .cg-fact__l { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--prt-ink-faint, #8d8773); font-weight: 600; }
-        .cg-fact__v { font-family: 'Fraunces', serif; font-weight: 600; font-size: 15px; color: var(--prt-ink, #1d1c17); }
-        .cg-fact__note { font-family: inherit; font-weight: 400; font-size: 12.5px; color: var(--prt-ink-faint, #8d8773); }
         .cg-notes { margin-top: var(--csa-sp-3); color: var(--prt-ink-soft, #5a564a); }
         .cg-notes p { margin: 0 0 var(--csa-sp-2); }
         /* Separar y dar contraste a la barra de acciones respecto a la cabecera. */
@@ -441,16 +446,19 @@
         .prt-actionbar .prt-btn--danger .fa { color: var(--prt-terra, #b45d3a); }
         .prt-actionbar .prt-btn--danger:hover { background: var(--prt-terra-l, #fae6dc); border-color: var(--prt-terra-d, #7d3a1f); }
         .cg-order__lines { margin: 0; padding-left: var(--csa-sp-4); font-size: .9rem; }
-        .cg-cell-pago { display: flex; flex-direction: column; align-items: flex-start; gap: var(--csa-sp-1); }
-        .cg-order__ref { font-size: .8rem; color: var(--csa-muted); white-space: nowrap; }
+        .cg-cell-pago { display: flex; flex-direction: column; align-items: flex-start; gap: var(--csa-sp-1); max-width: 100%; }
+        {# Sin wrap, "Concepto: GC15 FRANCISCO LOPEZ LOSADA" no cabía en la
+           columna y se salía por la derecha, empujando la página entera a
+           scroll horizontal — el mismo problema que ya se arregló en
+           "Productos del pedido", aquí con el nombre del concepto en vez de
+           la unidad. #}
+        .cg-order__ref { font-size: .8rem; color: var(--csa-muted); white-space: normal; overflow-wrap: anywhere; }
         .cg-order__ref-label { font-weight: 600; }
-        .cg-order__pay-form { margin: 0; }
-        .cg-activity-summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; }
-        .cg-activity-summary::-webkit-details-marker { display: none; }
-        .cg-activity-summary::after {
-            content: '▸'; color: var(--prt-ink-faint, #8d8773); transition: transform .15s ease;
-        }
-        .cg-activity-card[open] .cg-activity-summary::after { transform: rotate(90deg); }
+        .cg-order__pay-form { margin: 0; max-width: 100%; }
+        {# El chip ES el botón: un click cambia el estado, sin un botón de
+           texto aparte al lado —eso era lo que hacía desbordar la columna—. #}
+        .cg-chip-btn { border: none; cursor: pointer; font: inherit; }
+        .cg-chip-btn:hover { filter: brightness(0.96); }
         .cg-pay-summary { display: flex; align-items: center; gap: var(--csa-sp-3); flex-wrap: wrap; }
         /* Cabe una cantidad de tres cifras y media: no tiene que estirarse a lo
            ancho de la columna, que en una tabla de seis descuadra el resto. */

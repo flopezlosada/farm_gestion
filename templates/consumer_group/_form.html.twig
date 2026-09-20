@@ -17,9 +17,11 @@
                     {{ csa.field(form.producer, 'Productor') }}
                     {{ csa.field(form.ordersCloseAt, 'Cierre de apuntes') }}
                     {{ csa.field(form.deliveryDate, 'Fecha de entrega') }}
-                    {{ csa.field(form.minimumCondition, 'Condición de mínimo (informativa)') }}
-                    {{ csa.field(form.description, 'Descripción para las socias', { full: true }) }}
-                    {{ csa.field(form.providerNote, 'Nota para el productor (interna)', { full: true }) }}
+                    {{ csa.field(form.minimumType, 'Mínimo automático') }}
+                    {{ csa.field(form.minimumValue, 'Umbral del mínimo', { show_when: 'minimumType=1|2' }) }}
+                    {{ csa.field(form.minimumCondition, 'Nota del mínimo (informativa)', { full: true }) }}
+                    {{ csa.field(form.description, 'Descripción para las socias', { full: true, widget_class: 'csa-textarea' }) }}
+                    {{ csa.field(form.providerNote, 'Nota para el productor (interna)', { full: true, widget_class: 'csa-textarea' }) }}
                 </div>
                 {% if create_hint|default(false) %}
                     <p class="csa-muted" style="margin-top: var(--csa-sp-3);">

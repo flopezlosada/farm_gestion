@@ -4,7 +4,10 @@ namespace App\Controller;
 
 use App\Entity\ConsumerGroupEventLog;
 use App\Entity\ConsumerGroupRound;
+use App\Entity\ConsumerGroupRoundItem;
 use App\Form\ConsumerGroupRoundType;
+use App\Repository\ConsumerGroupOrderLineRepository;
+use App\Repository\ConsumerGroupRoundItemRepository;
 use App\Repository\ConsumerGroupRoundRepository;
 use App\Service\ConsumerGroup\ConsumerGroupEventRecorder;
 use App\Service\ConsumerGroup\InvalidRoundTransition;
@@ -18,6 +21,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 /**
  * Panel de autogestión del PRODUCTOR: abrir/cerrar sus propias rondas y elegir
@@ -100,7 +104,7 @@ class PanelProducerController extends AbstractController
      * Mismo servicio y misma lógica que la pantalla equivalente de gestión.
      */
     #[Route('/rounds/{id}/items', name: 'panel_producer_round_items', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function items(Request $request, ConsumerGroupRound $round, RoundItemEditor $itemEditor, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
+    public function items(Request $request, ConsumerGroupRound $round, RoundItemEditor $itemEditor, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em, ConsumerGroupOrderLineRepository $orderLines, ConsumerGroupRoundItemRepository $roundItemRepo, ValidatorInterface $validator): Response
     {
         $this->assertOwnRound($round);
 
@@ -114,9 +118,20 @@ class PanelProducerController extends AbstractController
         foreach ($round->getProducer()?->getActiveProducts() ?? [] as $product) {
             $catalog[$product->getId()] = $product;
         }
+        $existingItemByProductId = [];
         foreach ($round->getItems() as $item) {
             if ($item->getProduct() !== null) {
                 $catalog[$item->getProduct()->getId()] = $item->getProduct();
+                $existingItemByProductId[$item->getProduct()->getId()] = $item;
+            }
+        }
+
+        // Productos con pedidos REALES de socias (cantidad > 0): su precio queda
+        // fijado, igual que en la pantalla de gestión.
+        $lockedProductIds = [];
+        foreach ($existingItemByProductId as $productId => $item) {
+            if ($orderLines->findWithQuantityForItem($item) !== []) {
+                $lockedProductIds[$productId] = true;
             }
         }
 
@@ -131,13 +146,29 @@ class PanelProducerController extends AbstractController
             $prices = $request->request->all('price');
 
             $desired = [];
+            $zeroPriceProducts = [];
             foreach ($catalog as $id => $product) {
+                $price = $this->normalizeDecimal($prices[$id] ?? '0');
+                if (isset($lockedProductIds[$id])) {
+                    $price = $existingItemByProductId[$id]->getPrice();
+                }
+                $included_ = isset($included[$id]);
+                if ($included_ && count($validator->validatePropertyValue(ConsumerGroupRoundItem::class, 'price', $price)) > 0) {
+                    $zeroPriceProducts[] = $product->getName();
+                }
                 $desired[] = [
                     'product'  => $product,
-                    'included' => isset($included[$id]),
-                    'price'    => $this->normalizeDecimal($prices[$id] ?? $product->getReferencePrice() ?? '0'),
+                    'included' => $included_,
+                    'price'    => $price,
                 ];
             }
+
+            if ($zeroPriceProducts !== []) {
+                $this->addFlash('warning', sprintf('Falta poner precio a: %s. No se ha guardado.', implode(', ', $zeroPriceProducts)));
+
+                return $this->redirectToRoute('panel_producer_round_items', ['id' => $round->getId()]);
+            }
+
             $itemEditor->apply($round, $desired);
             $recorder->record(ConsumerGroupEventLog::KIND_ITEMS_UPDATED, $round, $this->getUser(), 'Productos y precios actualizados por el productor.');
             $em->flush();
@@ -154,12 +185,18 @@ class PanelProducerController extends AbstractController
                 $included[$item->getProduct()->getId()] = true;
             }
         }
+        foreach ($catalog as $id => $product) {
+            if (!isset($currentPrice[$id])) {
+                $currentPrice[$id] = $roundItemRepo->findLastPriceForProduct($product) ?? '0';
+            }
+        }
 
         return $this->render('Panel/producer/items.html.twig', [
-            'round'         => $round,
-            'catalog'       => array_values($catalog),
-            'current_price' => $currentPrice,
-            'included'      => $included,
+            'round'              => $round,
+            'catalog'            => array_values($catalog),
+            'current_price'      => $currentPrice,
+            'included'           => $included,
+            'locked_product_ids' => $lockedProductIds,
         ]);
     }
 

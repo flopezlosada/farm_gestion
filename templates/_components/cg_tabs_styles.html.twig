@@ -1,0 +1,12 @@
+{# Estilos de pestañas compartidas (producer/show, consumer_group_product/show).
+ # Requiere las variables --prt-* de partner_card_styles.html.twig. #}
+<style>
+    .prt-tabbar { display: flex; gap: 22px; border-bottom: 1px solid var(--prt-line); margin: 22px 0 18px; overflow-x: auto; }
+    .prt-tab {
+        background: none; border: none; cursor: pointer; white-space: nowrap;
+        padding: 0 0 10px; font-family: inherit; font-size: 13px; font-weight: 600;
+        color: var(--prt-ink-faint); border-bottom: 2px solid transparent;
+    }
+    .prt-tab:hover { color: var(--prt-ink); }
+    .prt-tab.is-active { color: var(--prt-ink); border-bottom-color: var(--prt-sage-d); }
+</style>

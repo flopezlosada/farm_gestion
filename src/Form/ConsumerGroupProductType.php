@@ -4,11 +4,12 @@ namespace App\Form;
 
 use App\Entity\ConsumerGroupCategory;
 use App\Entity\ConsumerGroupProduct;
+use App\Entity\ConsumerGroupUnit;
 use App\Repository\ConsumerGroupCategoryRepository;
+use App\Repository\ConsumerGroupUnitRepository;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
-use Symfony\Component\Form\Extension\Core\Type\MoneyType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
@@ -16,8 +17,11 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 
 /**
  * Una línea del catálogo de un {@see \App\Entity\Producer}: categoría, nombre,
- * unidad, descripción, precio de referencia y si sigue activo. Entry_type de la
- * colección dinámica en {@see ProducerType}.
+ * unidad, descripción y si sigue activo. Entry_type de la colección dinámica
+ * en {@see ProducerType}.
+ *
+ * SIN precio: el precio es de cada RONDA ({@see \App\Entity\ConsumerGroupRoundItem}),
+ * no del catálogo — se pone al abrir/editar el pedido, nunca aquí.
  */
 class ConsumerGroupProductType extends AbstractType
 {
@@ -37,29 +41,24 @@ class ConsumerGroupProductType extends AbstractType
                     ->where('c.active = true')
                     ->orderBy('c.sortOrder', 'ASC')->addOrderBy('c.name', 'ASC'),
             ])
-            ->add('unit', TextType::class, [
-                'label' => 'Unidad',
-                'attr'  => ['placeholder' => 'kg, L, docena, ud…'],
+            ->add('unit', EntityType::class, [
+                'label'         => 'Unidad de venta',
+                'class'         => ConsumerGroupUnit::class,
+                'choice_label'  => 'name',
+                'placeholder'   => 'Elige una unidad…',
+                'query_builder' => static fn (ConsumerGroupUnitRepository $r) => $r->createQueryBuilder('u')
+                    ->where('u.active = true')
+                    ->orderBy('u.sortOrder', 'ASC')->addOrderBy('u.name', 'ASC'),
             ])
             ->add('halfUnits', CheckboxType::class, [
                 'label'    => 'Se puede pedir en medias unidades',
                 'help'     => 'Márcalo en lo que se vende por peso (medio kilo de queso). Déjalo sin marcar en lo que viene en formato cerrado: una garrafa o una caja no se parten.',
                 'required' => false,
             ])
-            ->add('referencePrice', MoneyType::class, [
-                'label'    => 'Precio de referencia',
-                'currency' => 'EUR',
-                'scale'    => 2,
-                'required' => false,
-            ])
             ->add('description', TextareaType::class, [
                 'label'    => 'Descripción',
                 'required' => false,
-                'attr'     => ['rows' => 2],
-            ])
-            ->add('active', CheckboxType::class, [
-                'label'    => 'Activo',
-                'required' => false,
+                'attr'     => ['rows' => 3],
             ]);
     }
 

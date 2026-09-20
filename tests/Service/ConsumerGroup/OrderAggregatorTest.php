@@ -5,6 +5,7 @@ namespace App\Tests\Service\ConsumerGroup;
 use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupOrderLine;
 use App\Entity\ConsumerGroupProduct;
+use App\Entity\ConsumerGroupUnit;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupRoundItem;
 use App\Entity\Producer;
@@ -27,7 +28,7 @@ class OrderAggregatorTest extends TestCase
 
     private function product(string $name, string $unit): ConsumerGroupProduct
     {
-        $p = (new ConsumerGroupProduct())->setName($name)->setUnit($unit);
+        $p = (new ConsumerGroupProduct())->setName($name)->setUnit((new ConsumerGroupUnit())->setName($unit));
         $this->producer->addProduct($p);
         return $p;
     }

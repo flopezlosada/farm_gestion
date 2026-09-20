@@ -2,7 +2,9 @@
 
 namespace App\EventListener;
 
+use App\Entity\ConsumerGroupEventLog;
 use App\Entity\User;
+use App\Service\ConsumerGroup\ConsumerGroupEventRecorder;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\Security\Http\Event\LoginSuccessEvent;
@@ -17,11 +19,16 @@ use Symfony\Component\Security\Http\Event\LoginSuccessEvent;
  * LoginSuccessEvent lo dispara Symfony tras CUALQUIER authenticator con éxito
  * (formulario, magic-link, SSO de Google, remember-me), de modo que este único
  * listener cubre todos los caminos de entrada.
+ *
+ * De paso, si quien entra es un PRODUCTOR autogestionado, deja constancia en la
+ * bitácora del grupo de consumo ({@see ConsumerGroupEventLog}): a la comisión
+ * le interesa saber cuándo entra a su panel, no solo qué productos toca.
  */
 class UpdateLastLoginListener
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
+        private readonly ConsumerGroupEventRecorder $recorder,
     ) {
     }
 
@@ -34,6 +41,12 @@ class UpdateLastLoginListener
         }
 
         $user->setLastLogin(new \DateTime());
+
+        $producer = $user->getProducer();
+        if ($producer !== null) {
+            $this->recorder->record(ConsumerGroupEventLog::KIND_PRODUCER_LOGIN, null, $user, sprintf('%s accedió a su panel de productor.', $producer));
+        }
+
         $this->em->flush();
     }
 }

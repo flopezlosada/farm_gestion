@@ -111,4 +111,47 @@ class ConsumerGroupNotifier
 
         return ['enabled' => true, 'sent' => $sent, 'skippedNoEmail' => $skippedNoEmail, 'failed' => $failed];
     }
+
+    /**
+     * Avisa al productor de que su ronda está confirmada: ya puede darla por
+     * buena y prepararla. Se llama tanto si se confirmó sola al alcanzar el
+     * mínimo automático ({@see MinimumAutoConfirmer}) como si la confirmó la
+     * comisión a mano ({@see \App\Controller\ConsumerGroupController::confirm()}
+     * con el email activado) — al productor le da igual cómo se llegó a la
+     * confirmación. Solo si el productor tiene email; si no lo tiene, no hay
+     * nada que enviar (no es un fallo).
+     *
+     * @return array{enabled: bool, sent: bool}
+     */
+    public function notifyProducerConfirmed(ConsumerGroupRound $round): array
+    {
+        if (!$this->settings->getBool(AppSettings::EMAIL_ENABLED)) {
+            return ['enabled' => false, 'sent' => false];
+        }
+
+        $email = (string) ($round->getProducer()?->getEmail() ?? '');
+        if ($email === '') {
+            return ['enabled' => true, 'sent' => false];
+        }
+
+        $message = (new TemplatedEmail())
+            ->to($email)
+            ->subject(sprintf('Pedido «%s» confirmado', $round->getTitle()))
+            ->htmlTemplate('email/consumer_group_producer_confirmed.html.twig')
+            ->textTemplate('email/consumer_group_producer_confirmed.txt.twig')
+            ->context(['round' => $round]);
+
+        try {
+            $this->mailer->send($message);
+            return ['enabled' => true, 'sent' => true];
+        } catch (\Throwable $e) {
+            $this->logger->error('Fallo al avisar al productor de la confirmación del pedido.', [
+                'round' => $round->getId(),
+                'producer' => $round->getProducer()?->getId(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return ['enabled' => true, 'sent' => false];
+        }
+    }
 }

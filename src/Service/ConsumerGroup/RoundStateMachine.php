@@ -79,10 +79,25 @@ class RoundStateMachine
         $now = new \DateTime();
         match ($to) {
             ConsumerGroupRound::STATUS_CLOSED => $round->setClosedAt($now),
-            ConsumerGroupRound::STATUS_DELIVERED => $round->setDeliveredAt($now),
+            ConsumerGroupRound::STATUS_DELIVERED => $this->markDelivered($round, $now),
             ConsumerGroupRound::STATUS_CANCELLED => $round->setCancelledAt($now),
             default => null,
         };
+    }
+
+    /**
+     * "Entregado" significa que ha llegado al local — no que las socias lo
+     * hayan recogido. La fecha de entrega inicial es orientativa (el
+     * productor la mueve constantemente); en cuanto se marca como recibido,
+     * ESE es el dato real, así que se sincroniza sola en vez de obligar a
+     * editar la ronda aparte para que la hoja de reparto y el calendario de
+     * la socia (que casan por esta fecha, no por deliveredAt) no se queden
+     * apuntando al día que ya no es.
+     */
+    private function markDelivered(ConsumerGroupRound $round, \DateTime $now): void
+    {
+        $round->setDeliveredAt($now);
+        $round->setDeliveryDate(clone $now);
     }
 
     /**

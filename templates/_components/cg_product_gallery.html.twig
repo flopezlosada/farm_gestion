@@ -1,0 +1,44 @@
+{# ============================================================
+ # Galería de fotos de un producto del grupo de consumo. Mismo patrón que el
+ # LAR (media polimórfica, varias fotos, borrado por foto), pero sin renombrar
+ # título: aquí el nombre lo lleva el producto, no cada foto suelta.
+ #   - product      ConsumerGroupProduct
+ #   - photos       Image[]
+ #   - photo_form   FormView|null  null si el que mira no puede subir
+ #   - delete_route string         nombre de ruta para borrar una foto (id, imageId)
+ #   - csrf_prefix  string         prefijo del token CSRF de borrado
+ # Incluye _components/cg_gallery_styles.html.twig en el more_css y
+ # _components/cg_lightbox.html.twig en el more_js del que llame: al hacer
+ # click en una foto se abre en grande, con flechas para pasar a la siguiente.
+ # ============================================================ #}
+{% if photos is empty %}
+    <p class="csa-muted">Sin fotos todavía.</p>
+{% else %}
+    <div class="cg-gallery" data-cg-lightbox-gallery>
+        {% for photo in photos %}
+            <figure class="cg-gallery__card">
+                <img src="{{ asset(photo.webPath) }}" alt="{{ photo.title }}"
+                     data-cg-lightbox-trigger data-full="{{ asset(photo.webPath) }}" data-caption="{{ photo.title }}">
+                {% if photo_form is not null %}
+                    <form method="post" action="{{ path(delete_route, { id: product.id, imageId: photo.id }) }}"
+                          onsubmit="return confirm('¿Borrar esta foto?');">
+                        <input type="hidden" name="_token" value="{{ csrf_token(csrf_prefix ~ photo.id) }}">
+                        <button type="submit" class="cg-gallery__delete" title="Borrar foto" aria-label="Borrar foto"><i class="fa fa-trash"></i></button>
+                    </form>
+                {% endif %}
+            </figure>
+        {% endfor %}
+    </div>
+{% endif %}
+
+{% if photo_form is not null %}
+    {% import '_macros/csa.html.twig' as csa %}
+    {% form_theme photo_form 'form_div_layout.html.twig' %}
+    {{ form_start(photo_form) }}
+        <div class="csa-row" style="align-items: flex-end; gap: var(--csa-sp-4); flex-wrap: wrap;">
+            <div>{{ csa.field(photo_form.file, 'Imagen', { widget_class: 'csa-input' }) }}</div>
+            <div style="flex: 1; min-width: 200px; max-width: 320px;">{{ csa.field(photo_form.title, 'Título', { widget_class: 'csa-input' }) }}</div>
+            <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm"><i class="fa fa-upload"></i> Añadir foto</button>
+        </div>
+    {{ form_end(photo_form) }}
+{% endif %}

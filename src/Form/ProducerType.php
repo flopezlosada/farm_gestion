@@ -22,7 +22,13 @@ class ProducerType extends AbstractType
     {
         $builder
             ->add('name', TextType::class, [
-                'label' => 'Nombre del productor',
+                'label' => 'Nombre de la actividad o empresa',
+                'attr'  => ['placeholder' => 'p. ej. Almazara de la Sierra'],
+            ])
+            ->add('activityDescription', TextareaType::class, [
+                'label'    => 'A qué se dedica',
+                'required' => false,
+                'attr'     => ['rows' => 3, 'placeholder' => 'p. ej. Aceite de oliva ecológico de la Sierra Norte'],
             ])
             ->add('contactName', TextType::class, [
                 'label'    => 'Persona de contacto',
@@ -39,17 +45,6 @@ class ProducerType extends AbstractType
             ->add('web', TextType::class, [
                 'label'    => 'Web',
                 'required' => false,
-            ])
-            ->add('minimumNote', TextType::class, [
-                'label'    => 'Pedido mínimo (por defecto)',
-                'required' => false,
-                'attr'     => ['placeholder' => 'p. ej. mínimo 150 € / 50 kg'],
-                'help'     => 'Precarga la condición de mínimo al abrir una ronda de este productor. Informativa: no se calcula sola.',
-            ])
-            ->add('notes', TextareaType::class, [
-                'label'    => 'Notas internas',
-                'required' => false,
-                'attr'     => ['rows' => 3],
             ])
             ->add('selfManaged', CheckboxType::class, [
                 'label'    => 'Autogestiona sus pedidos',

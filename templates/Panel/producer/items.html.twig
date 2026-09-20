@@ -5,6 +5,7 @@
  #   - catalog        ConsumerGroupProduct[] (activos + los ya en el pedido)
  #   - current_price  map product_id => precio de pedido actual
  #   - included       map product_id => true (si está en el pedido)
+ #   - locked_product_ids map product_id => true — ya hay pedidos reales, precio fijo
  # ============================================================ #}
 
 {% extends '_layouts/csa_producer.html.twig' %}
@@ -31,12 +32,13 @@
             </p>
         {% else %}
             <p class="csa-muted" style="margin-top: 0;">
-                Marca los productos que entran en este pedido y ajusta su precio. El precio es de este pedido; el de tu catálogo es solo de referencia.
+                Marca los productos que entran en este pedido y ajusta su precio. El precio es de este pedido: se ha rellenado con el de la última vez que lo llevaste.
             </p>
             <form method="post" action="{{ path('panel_producer_round_items', { id: round.id }) }}">
                 <input type="hidden" name="_token" value="{{ csrf_token('panel_producer_items_' ~ round.id) }}">
                 <div class="cg-items">
                     {% for product in catalog %}
+                        {% set is_locked = locked_product_ids[product.id]|default(false) %}
                         <div class="cg-item-row">
                             <label class="cg-item-row__inc">
                                 <input type="checkbox" name="include[{{ product.id }}]" value="1" {{ included[product.id]|default(false) ? 'checked' : '' }}>
@@ -45,9 +47,13 @@
                             <div class="cg-item-row__price">
                                 <input type="number" min="0" step="0.01" inputmode="decimal"
                                        name="price[{{ product.id }}]"
-                                       value="{{ current_price[product.id]|default(product.referencePrice) }}"
-                                       class="csa-input" placeholder="0,00">
+                                       value="{{ current_price[product.id]|default('0') }}"
+                                       class="csa-input" placeholder="0,00"
+                                       {{ is_locked ? 'disabled title="Ya hay pedidos de socias con este precio: no se puede cambiar."' : '' }}>
                                 <span class="csa-muted">€ / {{ product.unit }}</span>
+                                {% if is_locked %}
+                                    <i class="fa fa-lock csa-muted" title="Ya hay pedidos de socias con este precio: no se puede cambiar."></i>
+                                {% endif %}
                             </div>
                         </div>
                     {% endfor %}

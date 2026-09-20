@@ -4,11 +4,16 @@ namespace App\Controller;
 
 use App\Entity\ConsumerGroupEventLog;
 use App\Entity\ConsumerGroupProduct;
+use App\Entity\ConsumerGroupRound;
 use App\Entity\Image;
 use App\Entity\Producer;
 use App\Form\ConsumerGroupProductType;
 use App\Form\ImageType;
+use App\Repository\ConsumerGroupOrderLineRepository;
+use App\Repository\ConsumerGroupRoundItemRepository;
 use App\Service\ConsumerGroup\ConsumerGroupEventRecorder;
+use App\Service\ConsumerGroup\ConsumerGroupStats;
+use App\Service\ConsumerGroup\ItemsChangeNotifier;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\FormInterface;
@@ -51,8 +56,30 @@ class ConsumerGroupProductController extends AbstractController
         }
 
         return $this->render('consumer_group_product/new.html.twig', [
-            'producer' => $producer,
-            'form'     => $form->createView(),
+            'producer'     => $producer,
+            'form'         => $form->createView(),
+        ]);
+    }
+
+    /**
+     * Ficha del producto: fotos (galería), histórico de precios/consumo por ronda
+     * y cifras agregadas. SIN precio destacado a propósito —el precio es de cada
+     * RONDA ({@see \App\Entity\ConsumerGroupRoundItem}), no del catálogo—; el
+     * histórico ya enseña cómo ha variado ronda a ronda.
+     */
+    #[Route('/gestion/consumer-group/products/{id}', name: 'consumer_group_product_show', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function show(ConsumerGroupProduct $product, ConsumerGroupRoundItemRepository $historyRepo, ConsumerGroupStats $stats, EntityManagerInterface $em): Response
+    {
+        $canEdit = $this->isGranted('ROLE_GESTION_GRUPO_CONSUMO_EDIT');
+
+        return $this->render('consumer_group_product/show.html.twig', [
+            'product' => $product,
+            'photos'  => $this->photosOf($product, $em),
+            'history' => $historyRepo->findHistoryForProduct($product),
+            'stats'   => $stats->forProduct($product),
+            // La galería la borra/sube quien puede editar; para el resto no
+            // se construye el form (mismo criterio que 'can_edit' del twig).
+            'photo_form' => $canEdit ? $this->buildPhotoForm($product)->createView() : null,
         ]);
     }
 
@@ -70,23 +97,102 @@ class ConsumerGroupProductController extends AbstractController
             $em->flush();
             $this->addFlash('success', 'Producto actualizado.');
 
-            return $this->redirectToRoute('consumer_group_producer_show', ['id' => $product->getProducer()->getId()]);
+            return $this->redirectToRoute('consumer_group_product_show', ['id' => $product->getId()]);
         }
 
         return $this->render('consumer_group_product/edit.html.twig', [
-            'product'    => $product,
-            'form'       => $form->createView(),
-            'photo'      => $this->photoOf($product, $em),
-            'photo_form' => $this->buildPhotoForm($product)->createView(),
+            'product'      => $product,
+            'form'         => $form->createView(),
         ]);
     }
 
     /**
-     * Sube la foto del producto (media polimórfica, como el LAR).
+     * Activa/desactiva un producto con un solo click, sin pasar por el
+     * formulario completo — mismo patrón que togglePaid/togglePickedUp de
+     * ConsumerGroupController.
+     */
+    #[Route('/gestion/consumer-group/products/{id}/toggle-active', name: 'consumer_group_product_toggle_active', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function toggleActive(
+        Request $request,
+        ConsumerGroupProduct $product,
+        ConsumerGroupEventRecorder $recorder,
+        EntityManagerInterface $em,
+        ConsumerGroupRoundItemRepository $roundItemRepo,
+        ConsumerGroupOrderLineRepository $orderLines,
+        ItemsChangeNotifier $itemsChangeNotifier,
+    ): Response {
+        if (!$this->isCsrfTokenValid('consumer_group_product_toggle_active_'.$product->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('consumer_group_product_show', ['id' => $product->getId()]);
+        }
+
+        $activating = !$product->isActive();
+
+        // Desactivar (no activar) puede dejar sin producto pedidos REALES de
+        // socias en rondas todavía ABIERTAS: no se ha entregado nada, así que
+        // no hay vuelta atrás si se pierde sin avisar. Se lista y se pide
+        // confirmación explícita — mismo criterio que quitar un producto desde
+        // "Productos del pedido" (ConsumerGroupController::items()), solo que
+        // aquí puede afectar a varias rondas a la vez, no una.
+        $affected = [];
+        if (!$activating) {
+            foreach ($roundItemRepo->findHistoryForProduct($product) as $item) {
+                $round = $item->getRound();
+                if ($round === null || $round->getStatus() !== ConsumerGroupRound::STATUS_OPEN) {
+                    continue;
+                }
+                $lines = $orderLines->findWithQuantityForItem($item);
+                if ($lines !== []) {
+                    $affected[] = ['round' => $round, 'item' => $item, 'lines' => $lines];
+                }
+            }
+        }
+
+        if ($affected !== [] && '1' !== $request->request->get('confirm_deactivate')) {
+            return $this->render('consumer_group_product/confirm_deactivate.html.twig', [
+                'product' => $product,
+                'affected' => $affected,
+            ]);
+        }
+
+        foreach ($affected as $entry) {
+            $round = $entry['round'];
+            $partners = [];
+            foreach ($entry['lines'] as $line) {
+                $partner = $line->getOrder()?->getPartner();
+                if ($partner !== null) {
+                    $partners[$partner->getId()] = $partner;
+                }
+            }
+            $round->removeItem($entry['item']);
+            if ($partners !== []) {
+                $itemsChangeNotifier->notify(
+                    $round,
+                    array_values($partners),
+                    sprintf('Se ha quitado: %s (producto retirado del catálogo). Revisa tu pedido.', $product->getName()),
+                );
+            }
+        }
+
+        $product->setActive($activating);
+        $recorder->record(
+            ConsumerGroupEventLog::KIND_PRODUCT_UPDATED,
+            null,
+            $this->getUser(),
+            sprintf('Producto "%s" marcado como %s.', $product->getName(), $activating ? 'activo' : 'inactivo'),
+        );
+        $em->flush();
+        $this->addFlash('success', $activating ? 'Producto activado.' : 'Producto desactivado.');
+
+        return $this->redirectToRoute('consumer_group_product_show', ['id' => $product->getId()]);
+    }
+
+    /**
+     * Añade una foto a la galería del producto (media polimórfica, como el LAR).
      *
-     * UNA SOLA FOTO por producto: subir otra reemplaza la anterior. Es una ficha
-     * de catálogo, no una galería —lo que hace falta es reconocer el bote de un
-     * vistazo—, y con varias habría que decidir cuál manda en cada pantalla.
+     * VARIAS fotos por producto, no reemplaza: es la ficha la que se enseña a la
+     * socia, así que le vale una galería como al LAR, no una miniatura única.
      */
     #[Route('/gestion/consumer-group/products/{id}/photo', name: 'consumer_group_product_photo', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function uploadPhoto(Request $request, ConsumerGroupProduct $product, EntityManagerInterface $em): Response
@@ -96,65 +202,78 @@ class ConsumerGroupProductController extends AbstractController
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            // Fuera la anterior ANTES de guardar la nueva: si no, quedan las dos
-            // en la carpeta y la pantalla elige una al azar.
-            $previous = $this->photoOf($product, $em);
-            if ($previous !== null) {
-                $em->remove($previous);
-            }
-
             $image->setObjectClass(ConsumerGroupProduct::OBJECT_CLASS);
             $image->setForeignKey((string) $product->getId());
-            $image->setSingle(true);
+            $image->setSingle(false);
             if ((string) $image->getTitle() === '') {
                 $image->setTitle($product->getName());
             }
             $em->persist($image);
             $em->flush();
-            $this->addFlash('success', 'Foto del producto guardada.');
+            $this->addFlash('success', 'Foto añadida.');
         } else {
             foreach ($form->getErrors(true) as $error) {
                 $this->addFlash('warning', $error->getMessage());
             }
         }
 
-        return $this->redirectToRoute('consumer_group_product_edit', ['id' => $product->getId()]);
+        return $this->redirectToRoute('consumer_group_product_show', ['id' => $product->getId()]);
     }
 
     /**
-     * Quita la foto del producto.
+     * Quita una foto concreta de la galería del producto. Comprueba que la
+     * imagen pertenece de verdad a este producto (defensa ante ids manipulados).
      */
-    #[Route('/gestion/consumer-group/products/{id}/photo/delete', name: 'consumer_group_product_photo_delete', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function deletePhoto(Request $request, ConsumerGroupProduct $product, EntityManagerInterface $em): Response
+    #[Route('/gestion/consumer-group/products/{id}/photo/{imageId}', name: 'consumer_group_product_photo_delete', methods: ['POST'], requirements: ['id' => '\d+', 'imageId' => '\d+'])]
+    public function deletePhoto(Request $request, ConsumerGroupProduct $product, int $imageId, EntityManagerInterface $em): Response
     {
-        if (!$this->isCsrfTokenValid('consumer_group_product_photo_'.$product->getId(), (string) $request->request->get('_token'))) {
+        if (!$this->isCsrfTokenValid('consumer_group_product_photo_'.$imageId, (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
 
-            return $this->redirectToRoute('consumer_group_product_edit', ['id' => $product->getId()]);
+            return $this->redirectToRoute('consumer_group_product_show', ['id' => $product->getId()]);
         }
 
-        $photo = $this->photoOf($product, $em);
-        if ($photo !== null) {
-            $em->remove($photo);
-            $em->flush();
-            $this->addFlash('success', 'Foto quitada.');
+        $photo = $this->photoOf($product, $imageId, $em);
+        if ($photo === null) {
+            $this->addFlash('warning', 'La foto no existe o no pertenece a este producto.');
+
+            return $this->redirectToRoute('consumer_group_product_show', ['id' => $product->getId()]);
         }
 
-        return $this->redirectToRoute('consumer_group_product_edit', ['id' => $product->getId()]);
+        $em->remove($photo);
+        $em->flush();
+        $this->addFlash('success', 'Foto quitada.');
+
+        return $this->redirectToRoute('consumer_group_product_show', ['id' => $product->getId()]);
     }
 
     /**
-     * La foto de un producto, o null si no tiene.
+     * Todas las fotos de la galería del producto.
      *
      * La media es polimórfica (object_class + foreign_key), así que se consulta
      * por el discriminante del producto y su id.
+     *
+     * @return Image[]
      */
-    private function photoOf(ConsumerGroupProduct $product, EntityManagerInterface $em): ?Image
+    private function photosOf(ConsumerGroupProduct $product, EntityManagerInterface $em): array
     {
-        $photos = $em->getRepository(Image::class)
+        return $em->getRepository(Image::class)
             ->findForObject(ConsumerGroupProduct::OBJECT_CLASS, $product->getId());
+    }
 
-        return $photos[0] ?? null;
+    /**
+     * Una foto concreta del producto por id, o null si no existe o pertenece a
+     * otro producto.
+     */
+    private function photoOf(ConsumerGroupProduct $product, int $imageId, EntityManagerInterface $em): ?Image
+    {
+        foreach ($this->photosOf($product, $em) as $photo) {
+            if ($photo->getId() === $imageId) {
+                return $photo;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -185,11 +304,10 @@ class ConsumerGroupProductController extends AbstractController
         }
 
         try {
-            // La foto va con él: la media polimórfica no tiene clave ajena que la
-            // arrastre, así que sin esto quedaría el fichero y una fila apuntando
-            // a un producto que ya no existe.
-            $photo = $this->photoOf($product, $em);
-            if ($photo !== null) {
+            // Las fotos van con él: la media polimórfica no tiene clave ajena que
+            // las arrastre, así que sin esto quedarían los ficheros y filas
+            // apuntando a un producto que ya no existe.
+            foreach ($this->photosOf($product, $em) as $photo) {
                 $em->remove($photo);
             }
 

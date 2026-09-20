@@ -31,6 +31,7 @@ use Doctrine\ORM\Mapping as ORM;
 class ConsumerGroupEventLog
 {
     public const KIND_ROUND_CREATED = 'round_created';
+    public const KIND_ROUND_UPDATED = 'round_updated';
     public const KIND_ROUND_TRANSITIONED = 'round_transitioned';
     public const KIND_ROUND_CONFIRMED = 'round_confirmed';
     public const KIND_ITEMS_UPDATED = 'items_updated';
@@ -38,13 +39,17 @@ class ConsumerGroupEventLog
     public const KIND_ORDER_CREATED = 'order_created';
     public const KIND_ORDER_UPDATED = 'order_updated';
     public const KIND_ORDER_EMPTIED = 'order_emptied';
+    public const KIND_ORDER_PAYMENT_TOGGLED = 'order_payment_toggled';
+    public const KIND_ORDER_PICKUP_TOGGLED = 'order_pickup_toggled';
     public const KIND_PRODUCT_CREATED = 'product_created';
     public const KIND_PRODUCT_UPDATED = 'product_updated';
     public const KIND_PRODUCT_DELETED = 'product_deleted';
+    public const KIND_PRODUCER_LOGIN = 'producer_login';
 
     /** Etiquetas en español para pintar en la pestaña de actividad. */
     public const KIND_LABELS = [
         self::KIND_ROUND_CREATED => 'Pedido creado',
+        self::KIND_ROUND_UPDATED => 'Datos del pedido',
         self::KIND_ROUND_TRANSITIONED => 'Cambio de estado',
         self::KIND_ROUND_CONFIRMED => 'Pedido confirmado',
         self::KIND_ITEMS_UPDATED => 'Productos y precios',
@@ -52,9 +57,12 @@ class ConsumerGroupEventLog
         self::KIND_ORDER_CREATED => 'Pedido de socia',
         self::KIND_ORDER_UPDATED => 'Pedido de socia',
         self::KIND_ORDER_EMPTIED => 'Pedido de socia',
+        self::KIND_ORDER_PAYMENT_TOGGLED => 'Pago',
+        self::KIND_ORDER_PICKUP_TOGGLED => 'Recogida',
         self::KIND_PRODUCT_CREATED => 'Catálogo',
         self::KIND_PRODUCT_UPDATED => 'Catálogo',
         self::KIND_PRODUCT_DELETED => 'Catálogo',
+        self::KIND_PRODUCER_LOGIN => 'Acceso del productor',
     ];
 
     /**

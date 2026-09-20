@@ -29,7 +29,7 @@
             <div class="prl prl-table-wrap">
             <table class="prl-table">
                 <thead>
-                    <tr><th>Producto</th><th class="tight">Categoría</th><th class="tight">Unidad</th><th class="tight">Precio ref.</th><th class="tight">Estado</th><th class="actions"></th></tr>
+                    <tr><th>Producto</th><th class="tight">Categoría</th><th class="tight">Unidad</th><th class="tight">Estado</th><th class="actions"></th></tr>
                 </thead>
                 <tbody>
                     {% for product in producer.products %}
@@ -42,12 +42,11 @@
                                     {% else %}
                                         <span class="cg-cat-row__photo cg-cat-row__photo--empty" aria-hidden="true"><i class="fa fa-camera"></i></span>
                                     {% endif %}
-                                    <span>{{ product.name }}{% if product.description %} <span class="csa-muted">— {{ product.description }}</span>{% endif %}</span>
+                                    <span>{{ product.name }}{% if product.description %} <span class="csa-muted">— {{ product.description|striptags|u.truncate(80, '…', false) }}</span>{% endif %}</span>
                                 </div>
                             </td>
                             <td class="tight">{{ product.category ? product.category.name : '—' }}</td>
                             <td class="tight">{{ product.unit }}</td>
-                            <td class="tight">{{ product.referencePrice is not null ? product.referencePrice|number_format(2, ',', '.') ~ ' €' : '—' }}</td>
                             <td class="tight">{{ product.active ? 'Activo' : 'Inactivo' }}</td>
                             <td class="actions">
                                 <a href="{{ path('panel_producer_product_edit', { id: product.id }) }}" title="Editar"><i class="fa fa-pencil"></i></a>

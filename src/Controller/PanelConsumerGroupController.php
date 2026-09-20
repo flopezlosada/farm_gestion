@@ -11,6 +11,7 @@ use App\Repository\ConsumerGroupOrderRepository;
 use App\Repository\ConsumerGroupRoundRepository;
 use App\Service\AppSettings;
 use App\Service\ConsumerGroup\ConsumerGroupEventRecorder;
+use App\Service\ConsumerGroup\MinimumAutoConfirmer;
 use App\Service\ConsumerGroup\OrderEditor;
 use App\Service\ConsumerGroup\RepeatLastOrder;
 use Doctrine\ORM\EntityManagerInterface;
@@ -149,7 +150,7 @@ class PanelConsumerGroupController extends AbstractController
      * no existía y sincroniza las líneas con las cantidades enviadas.
      */
     #[Route('/{id}/order', name: 'panel_consumer_group_order', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function order(Request $request, ConsumerGroupRound $round, ConsumerGroupOrderRepository $orders, OrderEditor $editor, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
+    public function order(Request $request, ConsumerGroupRound $round, ConsumerGroupOrderRepository $orders, OrderEditor $editor, ConsumerGroupEventRecorder $recorder, MinimumAutoConfirmer $autoConfirmer, EntityManagerInterface $em): Response
     {
         $partner = $this->getUser()?->getPartner();
         if ($partner === null) {
@@ -195,6 +196,7 @@ class PanelConsumerGroupController extends AbstractController
             : ($order->isEmpty() ? ConsumerGroupEventLog::KIND_ORDER_EMPTIED : ConsumerGroupEventLog::KIND_ORDER_UPDATED);
         $recorder->record($kind, $round, $this->getUser(), sprintf('%s %s su pedido.', $partner, $existing === null ? 'apuntó' : ($order->isEmpty() ? 'vació' : 'actualizó')));
         $em->flush();
+        $autoConfirmer->checkAndConfirm($round);
         $this->addFlash('success', 'Pedido guardado. Podrás cambiarlo hasta que se cierre la ronda.');
 
         return $this->redirectToRoute('panel_consumer_group_show', ['id' => $round->getId()]);
@@ -207,7 +209,7 @@ class PanelConsumerGroupController extends AbstractController
      * para no dar a nadie un id de pedido ajeno con el que jugar.
      */
     #[Route('/{id}/pickup', name: 'panel_consumer_group_pickup', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function pickup(Request $request, ConsumerGroupRound $round, ConsumerGroupOrderRepository $orders, EntityManagerInterface $em): Response
+    public function pickup(Request $request, ConsumerGroupRound $round, ConsumerGroupOrderRepository $orders, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
         $partner = $this->getUser()?->getPartner();
         if ($partner === null) {
@@ -233,6 +235,12 @@ class PanelConsumerGroupController extends AbstractController
 
         $order->setPickedUp(!$order->isPickedUp());
         $order->setPickedUpAt($order->isPickedUp() ? new \DateTime() : null);
+        $recorder->record(
+            ConsumerGroupEventLog::KIND_ORDER_PICKUP_TOGGLED,
+            $round,
+            $this->getUser(),
+            sprintf('%s marcó su pedido como %s.', $partner, $order->isPickedUp() ? 'recogido' : 'pendiente de recoger'),
+        );
         $em->flush();
 
         return $this->redirectToRoute('panel_consumer_group_show', ['id' => $round->getId()]);

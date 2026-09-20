@@ -1,0 +1,17 @@
+{# ============================================================
+ # Tira compacta de datos ("hechos") del grupo de consumo: usada en la
+ # ficha del pedido, del productor y del producto. Depende de las variables
+ # --prt-* de _components/partner_card_styles.html.twig (inclúyelo antes).
+ # ============================================================ #}
+<style>
+    .cg-facts { display: flex; flex-wrap: wrap; gap: var(--csa-sp-5); margin-top: var(--csa-sp-4);
+        padding: var(--csa-sp-3) var(--csa-sp-4); background: var(--prt-bg, #fbfaf6); border: 1px solid var(--prt-line, #ebe7dd); border-radius: 10px; }
+    .cg-fact { display: flex; flex-direction: column; gap: 2px; }
+    .cg-fact__l { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--prt-ink-faint, #8d8773); font-weight: 600; }
+    .cg-fact__v { font-family: 'Fraunces', serif; font-weight: 600; font-size: 15px; color: var(--prt-ink, #1d1c17); }
+    .cg-fact__note { font-family: inherit; font-weight: 400; font-size: 12.5px; color: var(--prt-ink-faint, #8d8773); }
+    /* Fila de ancho completo para un texto largo (descripción...) dentro de la
+     * MISMA caja que el resto de hechos cortos, con su propio divisor. */
+    .cg-fact--full { flex-basis: 100%; padding-top: var(--csa-sp-3); margin-top: var(--csa-sp-1); border-top: 1px solid var(--prt-line, #ebe7dd); }
+    .cg-fact__v--text { font-family: inherit; font-weight: 400; font-size: 13px; line-height: 1.5; color: var(--prt-ink-soft, #5a564a); }
+</style>

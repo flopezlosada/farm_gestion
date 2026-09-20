@@ -66,7 +66,7 @@ class PanelProducerProductController extends AbstractController
         }
 
         return $this->render('Panel/producer/product_new.html.twig', [
-            'form' => $form->createView(),
+            'form'        => $form->createView(),
         ]);
     }
 
@@ -87,10 +87,10 @@ class PanelProducerProductController extends AbstractController
         }
 
         return $this->render('Panel/producer/product_edit.html.twig', [
-            'product'    => $product,
-            'form'       => $form->createView(),
-            'photo'      => $this->photoOf($product, $em),
-            'photo_form' => $this->buildPhotoForm($product)->createView(),
+            'product'     => $product,
+            'form'        => $form->createView(),
+            'photos'      => $this->photosOf($product, $em),
+            'photo_form'  => $this->buildPhotoForm($product)->createView(),
         ]);
     }
 
@@ -104,20 +104,15 @@ class PanelProducerProductController extends AbstractController
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $previous = $this->photoOf($product, $em);
-            if ($previous !== null) {
-                $em->remove($previous);
-            }
-
             $image->setObjectClass(ConsumerGroupProduct::OBJECT_CLASS);
             $image->setForeignKey((string) $product->getId());
-            $image->setSingle(true);
+            $image->setSingle(false);
             if ((string) $image->getTitle() === '') {
                 $image->setTitle($product->getName());
             }
             $em->persist($image);
             $em->flush();
-            $this->addFlash('success', 'Foto guardada.');
+            $this->addFlash('success', 'Foto añadida.');
         } else {
             foreach ($form->getErrors(true) as $error) {
                 $this->addFlash('warning', $error->getMessage());
@@ -127,23 +122,27 @@ class PanelProducerProductController extends AbstractController
         return $this->redirectToRoute('panel_producer_product_edit', ['id' => $product->getId()]);
     }
 
-    #[Route('/{id}/photo/delete', name: 'panel_producer_product_photo_delete', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function deletePhoto(Request $request, ConsumerGroupProduct $product, EntityManagerInterface $em): Response
+    #[Route('/{id}/photo/{imageId}', name: 'panel_producer_product_photo_delete', methods: ['POST'], requirements: ['id' => '\d+', 'imageId' => '\d+'])]
+    public function deletePhoto(Request $request, ConsumerGroupProduct $product, int $imageId, EntityManagerInterface $em): Response
     {
         $this->assertOwnProduct($product);
 
-        if (!$this->isCsrfTokenValid('panel_producer_product_photo_'.$product->getId(), (string) $request->request->get('_token'))) {
+        if (!$this->isCsrfTokenValid('panel_producer_product_photo_'.$imageId, (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
 
             return $this->redirectToRoute('panel_producer_product_edit', ['id' => $product->getId()]);
         }
 
-        $photo = $this->photoOf($product, $em);
-        if ($photo !== null) {
-            $em->remove($photo);
-            $em->flush();
-            $this->addFlash('success', 'Foto quitada.');
+        $photo = $this->photoOf($product, $imageId, $em);
+        if ($photo === null) {
+            $this->addFlash('warning', 'La foto no existe o no pertenece a este producto.');
+
+            return $this->redirectToRoute('panel_producer_product_edit', ['id' => $product->getId()]);
         }
+
+        $em->remove($photo);
+        $em->flush();
+        $this->addFlash('success', 'Foto quitada.');
 
         return $this->redirectToRoute('panel_producer_product_edit', ['id' => $product->getId()]);
     }
@@ -161,8 +160,7 @@ class PanelProducerProductController extends AbstractController
         }
 
         try {
-            $photo = $this->photoOf($product, $em);
-            if ($photo !== null) {
+            foreach ($this->photosOf($product, $em) as $photo) {
                 $em->remove($photo);
             }
 
@@ -188,12 +186,24 @@ class PanelProducerProductController extends AbstractController
         }
     }
 
-    private function photoOf(ConsumerGroupProduct $product, EntityManagerInterface $em): ?Image
+    /**
+     * @return Image[]
+     */
+    private function photosOf(ConsumerGroupProduct $product, EntityManagerInterface $em): array
     {
-        $photos = $em->getRepository(Image::class)
+        return $em->getRepository(Image::class)
             ->findForObject(ConsumerGroupProduct::OBJECT_CLASS, $product->getId());
+    }
 
-        return $photos[0] ?? null;
+    private function photoOf(ConsumerGroupProduct $product, int $imageId, EntityManagerInterface $em): ?Image
+    {
+        foreach ($this->photosOf($product, $em) as $photo) {
+            if ($photo->getId() === $imageId) {
+                return $photo;
+            }
+        }
+
+        return null;
     }
 
     private function buildPhotoForm(ConsumerGroupProduct $product, ?Image $image = null): FormInterface

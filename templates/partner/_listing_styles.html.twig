@@ -117,11 +117,14 @@
 .prl-filt-wrap { position: relative; }
 .prl-filt {
     display: inline-flex; align-items: center; gap: 7px;
-    padding: 7px 12px; border: 1px solid var(--prl-line);
+    height: 30px; padding: 0 12px; border: 1px solid var(--prl-line);
     background: var(--prl-surface); border-radius: 6px;
     cursor: pointer; font-size: 12px; font-weight: 500;
     color: var(--prl-ink-soft); font-family: inherit;
 }
+/* input[type=date] no respeta line-height como un botón: sin esto el
+ * navegador le da más alto que al resto de filtros de la barra. */
+input.prl-filt { line-height: 28px; }
 .prl-filt:hover { color: var(--prl-ink); border-color: var(--prl-line-2); }
 .prl-filt.has {
     background: var(--prl-sage-l); color: var(--prl-ink);

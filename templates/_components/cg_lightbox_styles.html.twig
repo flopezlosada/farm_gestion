@@ -1,0 +1,44 @@
+{# Estilos del visor grande de fotos (lightbox) usado por
+ # _components/cg_product_gallery.html.twig + cg_lightbox.html.twig. #}
+<style>
+    .cg-gallery__card img[data-cg-lightbox-trigger] { cursor: zoom-in; }
+
+    .cg-lightbox {
+        position: fixed; inset: 0; z-index: 2000;
+        background: rgba(20, 18, 12, 0.92);
+        display: flex; align-items: center; justify-content: center;
+        padding: env(safe-area-inset-top, 24px) 64px env(safe-area-inset-bottom, 24px);
+    }
+    /* [hidden] y .cg-lightbox empatan en especificidad (una clase cada uno):
+     * sin esto gana display:flex de arriba y el overlay se ve siempre, negro
+     * y sin foto, desde que carga la página — no solo al pinchar una foto. */
+    .cg-lightbox[hidden] { display: none; }
+    .cg-lightbox__img {
+        max-width: 100%; max-height: 78vh; object-fit: contain;
+        border-radius: 8px; box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+    }
+    .cg-lightbox__caption {
+        position: absolute; left: 0; right: 0; bottom: 20px;
+        text-align: center; color: #fff; font-size: 13px; opacity: 0.85;
+        padding: 0 64px;
+    }
+    .cg-lightbox__close, .cg-lightbox__nav {
+        position: absolute; background: rgba(255,255,255,0.12); color: #fff;
+        border: 0; border-radius: 50%; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        transition: background .15s ease;
+    }
+    .cg-lightbox__close:hover, .cg-lightbox__nav:hover { background: rgba(255,255,255,0.25); }
+    .cg-lightbox__close { top: 18px; right: 18px; width: 40px; height: 40px; font-size: 22px; line-height: 1; }
+    .cg-lightbox__nav { top: 50%; transform: translateY(-50%); width: 48px; height: 48px; font-size: 28px; }
+    .cg-lightbox__nav--prev { left: 12px; }
+    .cg-lightbox__nav--next { right: 12px; }
+
+    @media (max-width: 640px) {
+        .cg-lightbox { padding: env(safe-area-inset-top, 16px) 8px env(safe-area-inset-bottom, 16px); }
+        .cg-lightbox__nav { width: 40px; height: 40px; font-size: 22px; }
+        .cg-lightbox__nav--prev { left: 4px; }
+        .cg-lightbox__nav--next { right: 4px; }
+        .cg-lightbox__caption { padding: 0 8px; }
+    }
+</style>

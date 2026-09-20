@@ -21,6 +21,11 @@
  * caja heredaba el ancho del control —a menudo estrecho— y quedaba un cajón
  * donde no cabía ni el texto de ayuda.
  *
+ * Escape opt-in `data-csa-no-search`: fuerza SIEMPRE el modo botón+menú, venga
+ * el que venga UMBRAL_BUSCADOR. Para listas tipo "unidad de venta" (20-30
+ * palabras cortas, se ojean de un vistazo) donde el modo búsqueda —hay que
+ * escribir 3 letras antes de ver nada— parece que el control no responde.
+ *
  * Sincronización bidireccional: si el <select> cambia por código (p.ej. un
  * reset condicional), basta con disparar un evento 'change' nativo sobre él y
  * el dropdown refleja el nuevo valor.
@@ -56,7 +61,7 @@
 
         // El modo se fija al montar: una lista que crece a mitad de página no
         // cambia de control bajo los dedos de quien la está usando.
-        var searchable = select.options.length > UMBRAL_BUSCADOR;
+        var searchable = !select.hasAttribute('data-csa-no-search') && select.options.length > UMBRAL_BUSCADOR;
 
         var wrap = document.createElement('div');
         wrap.className = 'csa-dropdown' + (searchable ? ' csa-dropdown--search' : '');

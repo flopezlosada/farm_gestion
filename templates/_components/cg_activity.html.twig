@@ -1,0 +1,28 @@
+{# ============================================================
+ # Bitácora de actividad del grupo de consumo ({@see ConsumerGroupEventLog}).
+ # Requiere '_components/cg_activity_styles.html.twig' en more_css.
+ #   - activity  ConsumerGroupEventLog[]
+ #   - title     opcional, por defecto "Actividad"
+ #   - empty_text opcional, mensaje cuando no hay eventos
+ # ============================================================ #}
+<details class="prt-card cg-activity-card">
+    <summary class="prt-card__head cg-activity-summary">
+        <h2 class="prt-card__title"><span class="accent"></span>{{ title|default('Actividad') }}{% if activity is not empty %} <span class="csa-muted">({{ activity|length }})</span>{% endif %}</h2>
+    </summary>
+    <div class="prt-card__body">
+    {% if activity is empty %}
+        <p class="csa-muted">{{ empty_text|default('Sin actividad registrada todavía.') }}</p>
+    {% else %}
+        <ul class="cg-activity">
+            {% for event in activity %}
+                <li>
+                    <span class="csa-muted">{{ event.occurredAt|date('d/m/Y H:i') }}</span>
+                    <b>{{ event.kindLabel }}</b>
+                    — {{ event.summary }}
+                    <span class="csa-muted">({{ event.actorLabel }})</span>
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+    </div>
+</details>

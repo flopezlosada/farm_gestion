@@ -1,0 +1,72 @@
+{# ============================================================
+ # Visor grande de fotos (lightbox), compartido por cualquier pantalla que
+ # incluya _components/cg_product_gallery.html.twig. Un solo overlay para
+ # toda la página, aunque haya varias galerías — no cuesta nada más y evita
+ # duplicar el markup. Incluye también cg_lightbox_styles.html.twig en el
+ # more_css del que llame.
+ # ============================================================ #}
+<div class="cg-lightbox" data-cg-lightbox hidden>
+    <button type="button" class="cg-lightbox__close" data-cg-lightbox-close aria-label="Cerrar">&times;</button>
+    <button type="button" class="cg-lightbox__nav cg-lightbox__nav--prev" data-cg-lightbox-prev aria-label="Foto anterior">&#8249;</button>
+    <img class="cg-lightbox__img" data-cg-lightbox-img src="" alt="">
+    <button type="button" class="cg-lightbox__nav cg-lightbox__nav--next" data-cg-lightbox-next aria-label="Foto siguiente">&#8250;</button>
+    <div class="cg-lightbox__caption" data-cg-lightbox-caption></div>
+</div>
+
+<script>
+(function () {
+    var box = document.querySelector('[data-cg-lightbox]');
+    if (!box) { return; }
+
+    var imgEl = box.querySelector('[data-cg-lightbox-img]');
+    var captionEl = box.querySelector('[data-cg-lightbox-caption]');
+    var items = [];
+    var index = 0;
+
+    function show(i) {
+        if (!items.length) { return; }
+        index = (i + items.length) % items.length;
+        imgEl.src = items[index].getAttribute('data-full');
+        captionEl.textContent = items[index].getAttribute('data-caption') || '';
+    }
+
+    function open(gallery, trigger) {
+        items = Array.prototype.slice.call(gallery.querySelectorAll('[data-cg-lightbox-trigger]'));
+        show(items.indexOf(trigger));
+        box.hidden = false;
+        document.body.style.overflow = 'hidden';
+    }
+
+    function close() {
+        box.hidden = true;
+        document.body.style.overflow = '';
+    }
+
+    // Delegado en el documento: no hace falta enganchar cada foto una a una,
+    // y las galerías cargadas más tarde (subida de una foto nueva sin recargar,
+    // si algún día hay AJAX) funcionan igual sin volver a inicializar nada.
+    document.addEventListener('click', function (e) {
+        var trigger = e.target.closest('[data-cg-lightbox-trigger]');
+        if (trigger) {
+            var gallery = trigger.closest('[data-cg-lightbox-gallery]');
+            if (gallery) { open(gallery, trigger); }
+        }
+    });
+
+    box.querySelector('[data-cg-lightbox-close]').addEventListener('click', close);
+    box.querySelector('[data-cg-lightbox-prev]').addEventListener('click', function () { show(index - 1); });
+    box.querySelector('[data-cg-lightbox-next]').addEventListener('click', function () { show(index + 1); });
+
+    // Click en el fondo cierra; click en la foto o en las flechas, no.
+    box.addEventListener('click', function (e) {
+        if (e.target === box) { close(); }
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (box.hidden) { return; }
+        if (e.key === 'Escape') { close(); }
+        if (e.key === 'ArrowLeft') { show(index - 1); }
+        if (e.key === 'ArrowRight') { show(index + 1); }
+    });
+})();
+</script>

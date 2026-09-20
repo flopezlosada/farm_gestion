@@ -44,7 +44,7 @@
 
             <label class="cg-check" style="display: inline-flex; align-items: center; gap: var(--csa-sp-2); margin: var(--csa-sp-3) 0;">
                 <input type="checkbox" name="send_email" value="1" checked>
-                <span>Avisar por email a las {{ stats.withEmail }} socia{{ stats.withEmail == 1 ? '' : 's' }} con correo</span>
+                <span>Avisar por email a las {{ stats.withEmail }} socia{{ stats.withEmail == 1 ? '' : 's' }} con correo, y a {{ round.producer }} si tiene email</span>
             </label>
 
             <p class="csa-muted" style="margin-top: 0;">

@@ -5,6 +5,7 @@ namespace App\Tests\Service\ConsumerGroup;
 use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupOrderLine;
 use App\Entity\ConsumerGroupProduct;
+use App\Entity\ConsumerGroupUnit;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupRoundItem;
 use App\Entity\Partner;
@@ -43,7 +44,7 @@ class PartnerConsumerGroupDeliveriesTest extends TestCase
         $round->addOrder($order);
 
         if (!$empty) {
-            $product = (new ConsumerGroupProduct())->setName('AOVE 5 L')->setUnit('garrafa');
+            $product = (new ConsumerGroupProduct())->setName('AOVE 5 L')->setUnit((new ConsumerGroupUnit())->setName('garrafa'));
             $this->producer->addProduct($product);
             $item = new ConsumerGroupRoundItem($round, $product, '38.00');
             $round->addItem($item);

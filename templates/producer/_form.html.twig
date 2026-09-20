@@ -13,13 +13,12 @@
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
                 <div class="csa-form-grid">
-                    {{ csa.field(form.name, 'Nombre del productor', { full: true }) }}
+                    {{ csa.field(form.name, 'Nombre de la actividad o empresa', { full: true }) }}
+                    {{ csa.field(form.activityDescription, 'A qué se dedica', { full: true, widget_class: 'csa-textarea' }) }}
                     {{ csa.field(form.contactName, 'Persona de contacto') }}
                     {{ csa.field(form.email, 'Email') }}
                     {{ csa.field(form.phone, 'Teléfono') }}
                     {{ csa.field(form.web, 'Web') }}
-                    {{ csa.field(form.minimumNote, 'Pedido mínimo (por defecto)', { full: true }) }}
-                    {{ csa.field(form.notes, 'Notas internas', { full: true }) }}
                 </div>
                 <div class="csa-form-grid" style="margin-top: var(--csa-sp-4);">
                     <label class="cg-flag" style="display:inline-flex; align-items:center; gap: var(--csa-sp-2);">{{ form_widget(form.selfManaged) }} <span>Autogestiona sus pedidos</span></label>

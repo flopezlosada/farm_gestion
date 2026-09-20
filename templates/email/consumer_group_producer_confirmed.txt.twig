@@ -1,0 +1,9 @@
+Hola {{ round.producer }},
+
+El pedido «{{ round.title }}» ha alcanzado el mínimo y queda CONFIRMADO: puedes darlo por bueno.
+{% if round.deliveryDate %}
+Fecha de entrega prevista: {{ round.deliveryDate|format_date('full', locale='es') }}.
+{% endif %}
+Un abrazo,
+CSA Vega de Jarama
+https://csavegadejarama.org

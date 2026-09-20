@@ -5,6 +5,7 @@ namespace App\Service\Email;
 use App\Entity\ConsumerGroupProduct;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupRoundItem;
+use App\Entity\ConsumerGroupUnit;
 use App\Entity\Partner;
 use App\Entity\Producer;
 use App\Entity\User;
@@ -139,7 +140,7 @@ class EmailPreviewFactory
     private function consumerGroupOpenContext(): array
     {
         $producer = (new Producer())->setName('Almazara de la Sierra');
-        $product = (new ConsumerGroupProduct())->setName('Aceite de oliva virgen extra')->setUnit('garrafa de 5 L');
+        $product = (new ConsumerGroupProduct())->setName('Aceite de oliva virgen extra')->setUnit((new ConsumerGroupUnit())->setName('garrafa de 5 L'));
         $producer->addProduct($product);
 
         $round = (new ConsumerGroupRound())

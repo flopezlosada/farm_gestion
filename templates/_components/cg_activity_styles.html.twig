@@ -1,0 +1,9 @@
+{# Estilos del bloque de actividad ('_components/cg_activity.html.twig'). #}
+<style>
+    .cg-activity-summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; }
+    .cg-activity-summary::-webkit-details-marker { display: none; }
+    .cg-activity-summary::after {
+        content: '▸'; color: var(--prt-ink-faint, #8d8773); transition: transform .15s ease;
+    }
+    .cg-activity-card[open] .cg-activity-summary::after { transform: rotate(90deg); }
+</style>

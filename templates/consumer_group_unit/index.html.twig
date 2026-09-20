@@ -1,0 +1,61 @@
+{# Unidades de venta del grupo de consumo: listado + alta inline. Globales
+ # (no por productor), para poder comparar/sumar entre productos distintos. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Unidades · Grupo de consumo{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('consumer_group_index') }}">Grupo de consumo</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Unidades</span>
+{% endblock %}
+
+{% block more_css %}{{ parent() }}{% include 'partner/_listing_styles.html.twig' %}{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Grupo de consumo', 'Unidades de venta', 'kg, L, docena, garrafa de 5 L… Globales para todos los productores, así se puede comparar entre productos.') }}
+
+    <div class="csa-stack-lg">
+        {% if is_granted('ROLE_GESTION_GRUPO_CONSUMO_EDIT') %}
+            <div class="csa-card csa-form-narrow">
+                {{ form_start(form) }}
+                    <div class="csa-row" style="align-items: flex-end; gap: var(--csa-sp-3);">
+                        <div style="flex: 1;">{{ csa.field(form.name, 'Nueva unidad') }}</div>
+                        <label class="cg-flag" style="display:inline-flex; align-items:center; gap: var(--csa-sp-2);">{{ form_widget(form.active) }} <span>Activa</span></label>
+                        <button type="submit" class="csa-btn csa-btn--primary">Añadir</button>
+                    </div>
+                {{ form_end(form) }}
+            </div>
+        {% endif %}
+
+        <div class="prl prl-table-wrap">
+            {% if units is empty %}
+                <div class="prl-empty">Todavía no hay unidades.</div>
+            {% else %}
+                <table class="prl-table">
+                    <thead><tr><th>Unidad</th><th class="tight">Estado</th><th class="actions"></th></tr></thead>
+                    <tbody>
+                        {% for u in units %}
+                            <tr>
+                                <td>{{ u.name }}</td>
+                                <td class="tight">{{ u.active ? 'Activa' : 'Inactiva' }}</td>
+                                <td class="actions">
+                                    {% if is_granted('ROLE_GESTION_GRUPO_CONSUMO_EDIT') %}
+                                        <a href="{{ path('consumer_group_unit_edit', { id: u.id }) }}" title="Editar"><i class="fa fa-pencil"></i></a>
+                                        <form method="post" action="{{ path('consumer_group_unit_delete', { id: u.id }) }}" style="display:inline;" onsubmit="return confirm('¿Borrar la unidad “{{ u.name|e('js') }}”?')">
+                                            <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_unit_delete_' ~ u.id) }}">
+                                            <button type="submit" class="prl-btn prl-btn--sm" title="Borrar"><i class="fa fa-trash"></i></button>
+                                        </form>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

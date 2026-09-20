@@ -3,14 +3,18 @@
 namespace App\Tests\Service\ConsumerGroup;
 
 use App\Entity\ConsumerGroupProduct;
+use App\Entity\ConsumerGroupUnit;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\Producer;
+use App\Repository\ConsumerGroupRoundItemRepository;
 use App\Service\ConsumerGroup\RoundItemEditor;
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 /**
  * Unit test de la gestión de productos de una ronda: siembra desde el catálogo
- * (solo activos, a precio de referencia) y reconciliación de la selección.
+ * (solo activos, al precio de la última ronda que los llevó, o 0 si es la
+ * primera vez) y reconciliación de la selección.
  */
 class RoundItemEditorTest extends TestCase
 {
@@ -19,17 +23,20 @@ class RoundItemEditorTest extends TestCase
     private ConsumerGroupProduct $aceite;
     private ConsumerGroupProduct $retirado;
     private RoundItemEditor $editor;
+    private ConsumerGroupRoundItemRepository&MockObject $roundItems;
 
     protected function setUp(): void
     {
         $this->producer = new Producer();
-        $this->fruta = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit('kg')->setReferencePrice('2.50');
-        $this->aceite = (new ConsumerGroupProduct())->setName('Aceite')->setUnit('L')->setReferencePrice('8.00');
-        $this->retirado = (new ConsumerGroupProduct())->setName('Descatalogado')->setUnit('ud')->setActive(false);
+        $this->fruta = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit((new ConsumerGroupUnit())->setName('kg'));
+        $this->aceite = (new ConsumerGroupProduct())->setName('Aceite')->setUnit((new ConsumerGroupUnit())->setName('L'));
+        $this->retirado = (new ConsumerGroupProduct())->setName('Descatalogado')->setUnit((new ConsumerGroupUnit())->setName('ud'))->setActive(false);
         $this->producer->addProduct($this->fruta);
         $this->producer->addProduct($this->aceite);
         $this->producer->addProduct($this->retirado);
-        $this->editor = new RoundItemEditor();
+
+        $this->roundItems = $this->createMock(ConsumerGroupRoundItemRepository::class);
+        $this->editor = new RoundItemEditor($this->roundItems);
     }
 
     private function round(): ConsumerGroupRound
@@ -39,17 +46,25 @@ class RoundItemEditorTest extends TestCase
         return $round;
     }
 
-    public function testSiembraSoloActivosAlPrecioDeReferencia(): void
+    public function testSiembraSoloActivosAlPrecioDeLaUltimaRondaOCero(): void
     {
         $round = $this->round();
+
+        // La fruta ya se pidió antes (2.50 la última vez); el aceite es nuevo
+        // en el catálogo, sin ninguna ronda anterior que lo llevara.
+        $this->roundItems->method('findLastPriceForProduct')
+            ->willReturnCallback(fn (ConsumerGroupProduct $p): ?string => $p === $this->fruta ? '2.50' : null);
 
         $this->editor->seedFromCatalog($round);
 
         // El descatalogado (inactivo) no entra.
         self::assertCount(2, $round->getItems());
-        $first = $round->getItems()->first();
-        self::assertSame($this->fruta, $first->getProduct());
-        self::assertSame('2.50', $first->getPrice());
+        $precios = [];
+        foreach ($round->getItems() as $item) {
+            $precios[$item->getProduct()->getName()] = $item->getPrice();
+        }
+        self::assertSame('2.50', $precios['Naranjas'], 'Arranca con el precio de su última ronda');
+        self::assertSame('0', $precios['Aceite'], 'Sin ronda anterior, arranca a 0');
     }
 
     public function testApplyAnadeQuitaYActualizaPrecio(): void

@@ -86,13 +86,18 @@ class ConsumerGroupItemsRemovalConfirmationTest extends AbstractAuthenticatedTes
         $em = self::getContainer()->get('doctrine')->getManager();
 
         $producer = (new Producer())->setName('Huerta Test');
-        $naranjas = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit('kg')->setReferencePrice('2.50');
-        $aceite = (new ConsumerGroupProduct())->setName('Aceite')->setUnit('L')->setReferencePrice('8.00');
+        $naranjas = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit($this->unidadGlobal('kg'));
+        $aceite = (new ConsumerGroupProduct())->setName('Aceite')->setUnit($this->unidadGlobal('L'));
         $producer->addProduct($naranjas);
         $producer->addProduct($aceite);
 
         $round = new ConsumerGroupRound();
         $round->setTitle('Ronda de test')->setProducer($producer)->setOrdersCloseAt(new \DateTime('tomorrow'));
+        // Ya anunciada: si no, guardar productos en este pedido dispara TAMBIÉN
+        // el aviso de apertura de ronda ({@see ConsumerGroupAnnouncer}) y este
+        // test, que sólo quiere comprobar el aviso de cambio de items, ve el
+        // doble de notificaciones de las que espera.
+        $round->setAnnouncedAt(new \DateTime());
         $item = new ConsumerGroupRoundItem($round, $naranjas, '2.50');
         $round->addItem($item);
 

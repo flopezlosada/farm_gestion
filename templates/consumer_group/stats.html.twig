@@ -27,12 +27,9 @@
 
 {% block more_css %}
     {{ parent() }}
+    {% include '_components/cg_kpi_styles.html.twig' %}
     {% include 'partner/_listing_styles.html.twig' %}
     <style>
-        .cg-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--csa-sp-3); }
-        .cg-kpi { border: 1px solid var(--csa-rule); border-radius: 10px; padding: var(--csa-sp-4); background: #fff; }
-        .cg-kpi__v { font-size: 1.6rem; font-weight: 700; }
-        .cg-kpi__l { font-size: .8rem; color: var(--csa-muted); }
         .cg-bar { display: inline-block; width: 120px; height: 8px; background: var(--csa-rule); border-radius: 4px; overflow: hidden; vertical-align: middle; }
         .cg-bar__fill { display: block; height: 100%; background: var(--csa-accent, #5a8f3d); }
     </style>
@@ -125,7 +122,7 @@
                 <tbody>
                     {% for r in by_partner %}
                         <tr>
-                            <td>{{ r.name }}</td>
+                            <td><a href="{{ path('consumer_group_partner_show', { id: r.id }) }}">{{ r.name }}</a></td>
                             <td class="tight">{{ r.rounds }}</td>
                             <td class="tight">{{ r.money|number_format(2, ',', '.') }} €</td>
                             <td>{{ m.bar(r.money, max) }}</td>
