@@ -154,9 +154,9 @@ class WorkScheduleController extends AbstractController
             return $error;
         }
 
-        $times = $this->parseTimes((string) $request->request->get('times', ''));
+        $times = $this->parseTramos($request);
         if ($times === null) {
-            $this->addFlash('error', 'Revisa los tramos: formato "09:00-14:00, 15:30-18:00".');
+            $this->addFlash('error', 'Revisa los tramos: cada uno necesita hora de inicio y fin, el fin después del inicio, y el tramo 2 después del tramo 1.');
 
             return $this->redirectToSchedule($worker);
         }
@@ -232,36 +232,59 @@ class WorkScheduleController extends AbstractController
     }
 
     /**
-     * Parsea "09:00-14:00, 15:30-18:00" en `[["09:00","14:00"], ["15:30","18:00"]]`.
-     * Una cadena vacía es válida (sin tramos, día no laborable). Cualquier tramo
-     * mal formado, con horas fuera de rango o con fin antes que inicio invalida
-     * TODO el campo (se le pide al admin que lo revise entero, no se guarda a
-     * medias).
+     * Lee hasta 2 tramos de los `<input type="time">` del formulario (t1s/t1e,
+     * t2s/t2e) y los valida: cada tramo presente necesita inicio Y fin (no vale
+     * uno solo), el fin va después del inicio, el tramo 2 no puede empezar antes
+     * de que acabe el tramo 1 (evita solapes), y el tramo 2 no tiene sentido sin
+     * el tramo 1. Los dos vacíos son válidos: día no laborable.
      *
-     * @param string $raw
-     * @return list<array{0: string, 1: string}>|null
+     * @param Request $request
+     * @return list<array{0: string, 1: string}>|null Tramos, o null si algo no cuadra.
      */
-    private function parseTimes(string $raw): ?array
+    private function parseTramos(Request $request): ?array
     {
-        $raw = trim($raw);
-        if ($raw === '') {
-            return [];
+        $tramo1 = $this->readTramo($request, 't1s', 't1e');
+        $tramo2 = $this->readTramo($request, 't2s', 't2e');
+        if ($tramo1 === false || $tramo2 === false) {
+            return null;
         }
 
-        $times = [];
-        foreach (explode(',', $raw) as $chunk) {
-            $chunk = trim($chunk);
-            if (!preg_match('/^([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)$/', $chunk, $m)) {
-                return null;
-            }
-            $start = $m[1] . ':' . $m[2];
-            $end = $m[3] . ':' . $m[4];
-            if ($end <= $start) {
-                return null;
-            }
-            $times[] = [$start, $end];
+        if ($tramo1 === null) {
+            // Sin tramo 1 no puede haber tramo 2: sería un día "solo tarde" sin
+            // mañana, que no es un caso real de la asociación (YAGNI).
+            return $tramo2 === null ? [] : null;
         }
 
-        return $times;
+        if ($tramo2 === null) {
+            return [$tramo1];
+        }
+
+        return $tramo2[0] < $tramo1[1] ? null : [$tramo1, $tramo2];
+    }
+
+    /**
+     * Lee y valida un único tramo desde dos campos `H:i` del request.
+     *
+     * @param Request $request
+     * @param string  $startField
+     * @param string  $endField
+     * @return array{0: string, 1: string}|null|false El tramo, null si está vacío, false si es inválido.
+     */
+    private function readTramo(Request $request, string $startField, string $endField): array|null|false
+    {
+        $start = trim((string) $request->request->get($startField, ''));
+        $end = trim((string) $request->request->get($endField, ''));
+
+        if ($start === '' && $end === '') {
+            return null;
+        }
+        if (!preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $start) || !preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $end)) {
+            return false;
+        }
+        if ($end <= $start) {
+            return false;
+        }
+
+        return [$start, $end];
     }
 }
