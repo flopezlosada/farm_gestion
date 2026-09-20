@@ -1,0 +1,67 @@
+{# Horario habitual (módulo laboral): plantilla global o excepción de un trabajador. #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Personal · Horario{{ worker ? ' · ' ~ worker.name : '' }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('staff_index') }}">Personal</a>
+    {% if worker %}
+        <span class="csa-topbar__crumbs-sep">/</span>
+        <a href="{{ path('staff_show', { id: worker.id }) }}">{{ worker.name }}</a>
+    {% endif %}
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Horario</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    <style>
+        .sch-row { display: flex; gap: var(--csa-sp-4); align-items: center; flex-wrap: wrap;
+                   background: var(--csa-surface); border: 1px solid var(--csa-rule);
+                   border-radius: var(--csa-radius-lg); padding: var(--csa-sp-4) var(--csa-sp-5);
+                   margin-bottom: var(--csa-sp-3); }
+        .sch-row__day { width: 110px; font-weight: 600; }
+        .sch-row__inherited { color: var(--csa-ink-soft); font-size: var(--csa-fs-sm); font-style: italic; }
+        .sch-row form { display: flex; gap: var(--csa-sp-3); align-items: center; flex: 1; flex-wrap: wrap; }
+        .sch-row input[type="text"] { flex: 1; min-width: 220px; }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Personal', worker ? 'Horario de ' ~ worker.name : 'Horario habitual',
+        worker
+            ? 'Excepción de este trabajador: sobrescribe la plantilla global día a día. Un día vacío sigue el horario global.'
+            : 'Plantilla de toda la asociación. Cada trabajador puede tener su propia excepción desde su ficha.') }}
+
+    {{ csa.callout('Tramos por día en formato "09:00-14:00, 15:30-18:00" (separados por coma). Vacío = no se trabaja ese día.', 'info') }}
+
+    {% for day in 1..7 %}
+        {% set schedule = week[day] %}
+        {% set save_route = worker ? path('staff_schedule_worker_save', { workerId: worker.id, dayOfWeek: day }) : path('staff_schedule_save', { dayOfWeek: day }) %}
+        {% set clear_route = worker ? path('staff_schedule_worker_clear', { workerId: worker.id, dayOfWeek: day }) : path('staff_schedule_clear', { dayOfWeek: day }) %}
+        {% set token_id = 'staff_schedule' ~ (worker ? worker.id : '') %}
+        {% set current_text = schedule ? schedule.times|map(t => t[0] ~ '-' ~ t[1])|join(', ') : '' %}
+
+        <div class="sch-row">
+            <span class="sch-row__day">{{ day_names[day] }}</span>
+            <form method="post" action="{{ save_route }}">
+                <input type="hidden" name="_token" value="{{ csrf_token(token_id) }}">
+                <input type="text" name="times" class="csa-input" value="{{ current_text }}" placeholder="09:00-14:00, 15:30-18:00">
+                {{ csa.btn('Guardar', { variant: 'primary', type: 'submit' }) }}
+            </form>
+            {% if schedule %}
+                <form method="post" action="{{ clear_route }}" onsubmit="return confirm('¿Borrar el horario del {{ day_names[day]|lower }}?');">
+                    <input type="hidden" name="_token" value="{{ csrf_token(token_id) }}">
+                    {{ csa.btn('Borrar', { variant: 'ghost', type: 'submit' }) }}
+                </form>
+            {% elseif worker and global_week[day] %}
+                <span class="sch-row__inherited">
+                    Sigue la global: {{ global_week[day].times|map(t => t[0] ~ '-' ~ t[1])|join(', ') }}
+                </span>
+            {% endif %}
+        </div>
+    {% endfor %}
+{% endblock %}

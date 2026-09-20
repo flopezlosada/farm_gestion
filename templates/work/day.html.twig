@@ -47,6 +47,15 @@
         </div>
     </div>
 
+    {% if can_autofill %}
+        <form method="post" action="{{ path('work_day_autofill', { date: ymd }) }}" style="margin-bottom: var(--csa-sp-3, 1rem);">
+            <input type="hidden" name="_token" value="{{ csrf_token('work_entry') }}">
+            <button type="submit" class="csa-btn csa-btn--secondary">
+                <i class="fa fa-magic"></i> Rellenar con mi horario habitual
+            </button>
+        </form>
+    {% endif %}
+
     <details class="stf-add" open>
         <summary><i class="fa fa-plus-circle"></i> Añadir un registro a este día</summary>
         <form method="post" action="{{ path('work_entry_add') }}" class="stf-addrow">
