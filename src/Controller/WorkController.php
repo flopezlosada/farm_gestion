@@ -12,6 +12,7 @@ use App\Repository\TimeEntryRepository;
 use App\Service\Staff\MonthGridBuilder;
 use App\Service\Staff\MonthlyTimesheetReport;
 use App\Service\Staff\PunchSequenceException;
+use App\Service\Staff\ScheduleAutofill;
 use App\Service\Staff\TimeClock;
 use App\Service\Staff\TimesheetPdfRenderer;
 use App\Service\Staff\TimeEntryCorrector;
@@ -211,7 +212,7 @@ class WorkController extends AbstractController
      * @return Response
      */
     #[Route('/day/{date}', name: 'work_day', methods: ['GET'], requirements: ['date' => '\d{4}-\d{2}-\d{2}'])]
-    public function day(string $date, TimeEntryRepository $timeEntries, WorkdayBuilder $workdays): Response
+    public function day(string $date, TimeEntryRepository $timeEntries, WorkdayBuilder $workdays, ScheduleAutofill $autofill): Response
     {
         if (($redirect = $this->ensureWorker()) !== null) {
             return $redirect;
@@ -232,7 +233,42 @@ class WorkController extends AbstractController
             'total' => $days[0]['totalMinutes'] ?? 0,
             'open' => $days[0]['open'] ?? false,
             'anomaly' => $days[0]['anomaly'] ?? false,
+            'can_autofill' => $autofill->isAvailableFor($this->worker(), $dayStart),
         ]);
+    }
+
+    /**
+     * Rellena con el horario habitual los fichajes que falten este día (botón
+     * "rellenar con mi horario" del panel).
+     *
+     * @param Request         $request
+     * @param string          $date
+     * @param ScheduleAutofill $autofill
+     * @return Response
+     */
+    #[Route('/day/{date}/autofill', name: 'work_day_autofill', methods: ['POST'], requirements: ['date' => '\d{4}-\d{2}-\d{2}'])]
+    public function autofillDay(Request $request, string $date, ScheduleAutofill $autofill): Response
+    {
+        if (($redirect = $this->ensureWorker()) !== null) {
+            return $redirect;
+        }
+
+        if (!$this->isCsrfTokenValid('work_entry', (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+            return $this->redirectToRoute('work_day', ['date' => $date]);
+        }
+
+        $dayStart = \DateTimeImmutable::createFromFormat('!Y-m-d', $date, $this->madrid());
+        if ($dayStart === false) {
+            throw $this->createNotFoundException('Fecha no válida.');
+        }
+
+        $created = $autofill->fill($this->worker(), $dayStart, $this->getUser());
+        $this->addFlash($created !== [] ? 'success' : 'notice', $created !== []
+            ? sprintf('Se han añadido %d fichaje(s) con tu horario habitual.', count($created))
+            : 'No había nada que rellenar: revisa que la hora encaje con lo ya fichado.');
+
+        return $this->redirectToRoute('work_day', ['date' => $date]);
     }
 
     /**

@@ -23,10 +23,14 @@
 
     {{ csa.page_header('Personal', worker.name, worker.active ? 'Trabajador activo' : 'Trabajador inactivo') }}
 
-    <div class="csa-grid-kpi" style="margin-bottom: 1.4rem;">
+    <div class="csa-kpi-row" style="margin-bottom: 1.4rem;">
         {{ csa.kpi('Alta', worker.hireDate ? worker.hireDate|date('d/m/Y') : '—', null, null, null, 'sky', 'fa-calendar') }}
         {{ csa.kpi('Vacaciones ' ~ year, vacation_used ~ ' / ' ~ vacation_total, 'días', null, null, 'ochre', 'fa-umbrella') }}
     </div>
+
+    <p style="margin: 0 0 1.4rem;">
+        {{ csa.btn('Horario de ' ~ worker.name, { variant: 'secondary', icon: 'fa-clock-o', href: path('staff_schedule_worker', { workerId: worker.id }) }) }}
+    </p>
 
     {# ===== Acceso para fichar ===== #}
     <div class="stf-access" style="background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:1.1rem 1.2rem; margin-bottom:1.6rem;">

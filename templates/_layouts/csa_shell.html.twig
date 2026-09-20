@@ -417,6 +417,8 @@
                                    route == 'staff_gaps') }}
                                 {{ _self.nav_link('Festivos', path('staff_holidays'), 'fa-calendar-times-o',
                                    route starts with 'staff_holiday') }}
+                                {{ _self.nav_link('Horario habitual', path('staff_schedule'), 'fa-clock-o',
+                                   route starts with 'staff_schedule') }}
                             </div>
                         </div>
                     {% endif %}
