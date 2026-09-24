@@ -1187,9 +1187,9 @@ class PartnerController extends AbstractController
             }
 
             // Simetría con changeModality: el turno sólo se guarda donde se usa
-            // (quincenales y mensuales) y nunca en nodos de cadencia quincenal,
-            // que ya alternan por sí mismos.
-            if ($cohort['nodeIsBiweekly'] || $cohort['nodeIsMonthly'] || !$partnerBasketShare->getBasketShare()->usesDeliveryGroup()) {
+            // (quincenales, mensuales y huevos quincenales) y nunca en nodos de
+            // cadencia quincenal, que ya alternan por sí mismos.
+            if ($cohort['nodeIsBiweekly'] || $cohort['nodeIsMonthly'] || !$partnerBasketShare->keepsDeliveryGroup()) {
                 $partnerBasketShare->setDeliveryGroup(null);
             }
             $entityManager->persist($partnerBasketShare);

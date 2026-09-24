@@ -42,7 +42,7 @@
                     {% else %}
                         {{ csa.badge('Sin huevos', 'neutral', { no_dot: true }) }}
                     {% endif %}
-                    {% if partner_basket_share.basketShare.id == 2 and partner_basket_share.deliveryGroup %}
+                    {% if partner_basket_share.deliveryGroup %}
                         {{ csa.badge('Turno ' ~ partner_basket_share.deliveryGroup, 'plum', { no_dot: true }) }}
                     {% endif %}
                     {% if partner_basket_share.startDate %}

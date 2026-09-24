@@ -586,6 +586,8 @@ class PartnerBasketShare
      *     ({@see Node::offeredMonthOrders}).
      *  3. Una quincenal en un punto semanal necesita turno de viernes: sin él no
      *     entra en ninguna cohorte y cae de los listados igual que la anterior.
+     *     Lo mismo cualquier cesta con huevos quincenales: sin turno, los
+     *     huevos no salen en ningún reparto.
      *
      * Vive en la entidad, no en el formulario, para que valga igual al alta, a
      * la corrección de errata y al cambio de modalidad. El socio sin grupo de
@@ -616,14 +618,44 @@ class PartnerBasketShare
             $this->validateMonthOrder($context, $node);
         }
 
-        $needsTurn = $share->usesDeliveryGroup()
-            && !$share->isMonthly()
+        $needsTurn = ($share->usesBiweeklyCohort() || $this->hasBiweeklyEggs())
             && ($node === null || $node->getCadence() === Node::CADENCE_WEEKLY);
         if ($needsTurn && $this->delivery_group === null) {
-            $context->buildViolation('Indica el turno de viernes: una cesta quincenal sin turno no entra en ningún reparto.')
+            $context->buildViolation($share->usesBiweeklyCohort()
+                ? 'Indica el turno de viernes: una cesta quincenal sin turno no entra en ningún reparto.'
+                : 'Indica el turno de viernes: con huevos quincenales, sin turno no se reparten nunca.')
                 ->atPath('deliveryGroup')
                 ->addViolation();
         }
+    }
+
+    /**
+     * ¿Recibe huevos cada dos semanas? En un punto semanal el motor de huevos
+     * decide qué viernes le tocan por el turno A/B, sea cual sea la modalidad
+     * de la cesta ({@see \App\Service\Delivery\EggDeliveryResolver}).
+     *
+     * @return bool true si tiene huevos y su frecuencia es quincenal.
+     */
+    public function hasBiweeklyEggs(): bool
+    {
+        return $this->egg_amount !== null && ($this->egg_period?->isBiweekly() ?? false);
+    }
+
+    /**
+     * ¿Hay que conservar el turno A/B al guardar? Lo usa la modalidad de la
+     * cesta ({@see BasketShare::usesDeliveryGroup}: quincenales y mensuales)
+     * o, aunque la cesta no lo use, los huevos quincenales. Sin la segunda
+     * mitad, guardar un «Solo huevos» o un semanal con huevos quincenales
+     * borraba el turno y los huevos dejaban de salir en todos los repartos.
+     *
+     * No mira el punto de recogida: en nodos quincenales o mensuales el turno
+     * lo anula el llamante, porque allí el calendario lo marca el propio punto.
+     *
+     * @return bool true si el turno significa algo para esta cesta.
+     */
+    public function keepsDeliveryGroup(): bool
+    {
+        return ($this->basket_share?->usesDeliveryGroup() ?? false) || $this->hasBiweeklyEggs();
     }
 
     /**

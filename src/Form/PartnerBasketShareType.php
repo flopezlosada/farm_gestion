@@ -160,7 +160,7 @@ class PartnerBasketShareType extends AbstractType
             ))
             ->add('deliveryGroup', ChoiceType::class, [
                 'label' => 'Turno de viernes',
-                'help' => 'Sólo en puntos de reparto semanales. En quincenales decide qué viernes recoge; en mensuales, con qué turno coincide (su orden se cuenta sobre las entregas de ese turno). Cada opción muestra los viernes reales.',
+                'help' => 'Sólo en puntos de reparto semanales. En quincenales decide qué viernes recoge; con huevos quincenales, qué viernes van los huevos; en mensuales, con qué turno coincide (su orden se cuenta sobre las entregas de ese turno). Cada opción muestra los viernes reales.',
                 'choices' => $options['cohort_choices'],
                 // Sin opción vacía: el turno es obligatorio para las
                 // quincenales, y el JS del formulario añade "Sin turno" cuando

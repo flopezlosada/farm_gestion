@@ -3,6 +3,8 @@
 namespace App\Tests\Entity;
 
 use App\Entity\BasketShare;
+use App\Entity\EggAmount;
+use App\Entity\EggPeriod;
 use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
@@ -136,6 +138,70 @@ class PartnerBasketShareNodeOfferTest extends TestCase
         $this->assertSame([], $this->violationPaths($share));
     }
 
+    public function testSoloHuevosConHuevosQuincenalesSinTurnoViolaEnPuntoSemanal(): void
+    {
+        // El motor de huevos decide los viernes por el turno: sin él, los
+        // huevos no salen nunca, aunque la modalidad «Solo huevos» no use turno.
+        $share = $this->withEggs($this->share(BasketShare::ID_ONLY_EGG, $this->node(Node::CADENCE_WEEKLY)), EggPeriod::ID_BIWEEKLY);
+
+        $this->assertSame(['deliveryGroup'], $this->violationPaths($share));
+    }
+
+    public function testSoloHuevosConHuevosQuincenalesYTurnoEsValida(): void
+    {
+        $share = $this->withEggs($this->share(BasketShare::ID_ONLY_EGG, $this->node(Node::CADENCE_WEEKLY)), EggPeriod::ID_BIWEEKLY);
+        $share->setDeliveryGroup(PartnerBasketShare::DELIVERY_GROUP_A);
+
+        $this->assertSame([], $this->violationPaths($share));
+    }
+
+    public function testSoloHuevosConHuevosQuincenalesEnPuntoQuincenalNoPideTurno(): void
+    {
+        $share = $this->withEggs($this->share(BasketShare::ID_ONLY_EGG, $this->node(Node::CADENCE_BIWEEKLY)), EggPeriod::ID_BIWEEKLY);
+
+        $this->assertSame([], $this->violationPaths($share));
+    }
+
+    public function testSoloHuevosConHuevosSemanalesNoPideTurno(): void
+    {
+        $share = $this->withEggs($this->share(BasketShare::ID_ONLY_EGG, $this->node(Node::CADENCE_WEEKLY)), EggPeriod::ID_WEEKLY);
+
+        $this->assertSame([], $this->violationPaths($share));
+    }
+
+    public function testMensualConHuevosQuincenalesSinTurnoViola(): void
+    {
+        // En una mensual el turno es opcional… salvo que los huevos lo necesiten.
+        $share = $this->withEggs($this->share(BasketShare::ID_MONTHLY, $this->node(Node::CADENCE_WEEKLY)), EggPeriod::ID_BIWEEKLY);
+        $share->setDayMonthOrder(1);
+
+        $this->assertSame(['deliveryGroup'], $this->violationPaths($share));
+    }
+
+    public function testKeepsDeliveryGroupPorModalidadOPorHuevosQuincenales(): void
+    {
+        $node = $this->node(Node::CADENCE_WEEKLY);
+
+        $this->assertTrue($this->share(BasketShare::ID_BIWEEKLY, $node)->keepsDeliveryGroup());
+        $this->assertTrue($this->share(BasketShare::ID_MONTHLY, $node)->keepsDeliveryGroup());
+        $this->assertFalse($this->share(BasketShare::ID_ONLY_EGG, $node)->keepsDeliveryGroup());
+        $this->assertTrue($this->withEggs($this->share(BasketShare::ID_ONLY_EGG, $node), EggPeriod::ID_BIWEEKLY)->keepsDeliveryGroup());
+        $this->assertTrue($this->withEggs($this->share(BasketShare::IDS_WEEKLY[0], $node), EggPeriod::ID_BIWEEKLY)->keepsDeliveryGroup());
+        $this->assertFalse($this->withEggs($this->share(BasketShare::ID_ONLY_EGG, $node), EggPeriod::ID_MONTHLY)->keepsDeliveryGroup());
+    }
+
+    public function testFrecuenciaQuincenalSinCantidadDeHuevosNoCuenta(): void
+    {
+        // Una ficha puede arrastrar la frecuencia aunque ya no reciba huevos
+        // («No quiere huevos» deja egg_amount a null): no hay nada que repartir.
+        $share = $this->withEggs($this->share(BasketShare::ID_ONLY_EGG, $this->node(Node::CADENCE_WEEKLY)), EggPeriod::ID_BIWEEKLY);
+        $share->setEggAmount(null);
+
+        $this->assertFalse($share->hasBiweeklyEggs());
+        $this->assertFalse($share->keepsDeliveryGroup());
+        $this->assertSame([], $this->violationPaths($share));
+    }
+
     /**
      * Rutas de las violaciones que emite la regla bajo prueba, en orden. Se
      * filtran las del resto de constraints de la entidad (amount, etc.) para
@@ -194,6 +260,23 @@ class PartnerBasketShareNodeOfferTest extends TestCase
         $share->setPartner($partner);
         $share->setBasketShare($basketShare);
         $share->setAmount(1);
+
+        return $share;
+    }
+
+    /**
+     * Le pone huevos (una cantidad cualquiera) con la frecuencia dada.
+     *
+     * @param int $eggPeriodId Uno de EggPeriod::ID_*.
+     */
+    private function withEggs(PartnerBasketShare $share, int $eggPeriodId): PartnerBasketShare
+    {
+        $period = (new EggPeriod())->setName('Frecuencia ' . $eggPeriodId);
+        $ref = new \ReflectionProperty(EggPeriod::class, 'id');
+        $ref->setValue($period, $eggPeriodId);
+
+        $share->setEggAmount((new EggAmount())->setName('Una docena'));
+        $share->setEggPeriod($period);
 
         return $share;
     }

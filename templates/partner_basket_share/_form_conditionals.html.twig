@@ -10,8 +10,10 @@
       aplica con huevos MENSUALES y cesta NO mensual; en la cesta mensual los
       huevos van con la única cesta (el resolver lo ignora).
     - deliveryGroup    = turno de viernes. Obligatorio en las quincenales (decide
-      qué viernes recogen) y OPCIONAL en las mensuales (ancla su orden a las
-      entregas de ese turno en vez de a los viernes del mes). #}
+      qué viernes recogen) y con huevos quincenales en cualquier modalidad
+      (decide qué viernes van los huevos). OPCIONAL en las mensuales sin huevos
+      quincenales (ancla su orden a las entregas de ese turno en vez de a los
+      viernes del mes). #}
 <script>
     document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
         .forEach(function (el) { el.type = 'date'; });
@@ -21,6 +23,7 @@
     var SHARES_WITH_TURN = {{ constant('App\\Entity\\BasketShare::IDS_WITH_DELIVERY_GROUP')|json_encode|raw }};
     var SHARES_BIWEEKLY  = {{ constant('App\\Entity\\BasketShare::IDS_BIWEEKLY')|json_encode|raw }};
     var SHARES_MONTHLY   = {{ constant('App\\Entity\\BasketShare::IDS_MONTHLY')|json_encode|raw }};
+    var EGG_PERIOD_BIWEEKLY = {{ constant('App\\Entity\\EggPeriod::ID_BIWEEKLY') }};
 
     function inList(list, value) {
         return list.indexOf(parseInt(value, 10)) !== -1;
@@ -91,12 +94,12 @@
         orderSelect.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
-    // "Sin turno" sólo tiene sentido en las mensuales. En una quincenal el turno
-    // es obligatorio (sin él cae de los listados), así que se retira la opción y,
-    // si estaba elegida, pasa al primer turno real.
-    function syncTurnOptions(basketShare) {
+    // "Sin turno" sólo tiene sentido en las mensuales sin huevos quincenales. En
+    // una quincenal, o con huevos quincenales, el turno es obligatorio (sin él
+    // cae de los listados), así que se retira la opción y, si estaba elegida,
+    // pasa al primer turno real.
+    function syncTurnOptions(allowBlank) {
         if (!turnSelect) return;
-        var allowBlank = inList(SHARES_MONTHLY, basketShare);
         var current = turnSelect.value;
         turnSelect.innerHTML = '';
         turnOptions.forEach(function (opt) {
@@ -139,7 +142,8 @@
         var showCestaDayMonth = isMonthly;
         var showEggPeriod = hasEggs;
         var showEggDayMonth = hasEggs && (eggPeriod == 3) && !isMonthly;
-        var showDeliveryGroup = inList(SHARES_WITH_TURN, basketShare);
+        var biweeklyEggs = hasEggs && eggPeriod == EGG_PERIOD_BIWEEKLY;
+        var showDeliveryGroup = inList(SHARES_WITH_TURN, basketShare) || biweeklyEggs;
 
         $('#day_month_order').toggleClass('hidden', !showCestaDayMonth);
         $('#egg_period').toggleClass('hidden', !showEggPeriod);
@@ -147,7 +151,7 @@
         $('#delivery_group').toggleClass('hidden', !showDeliveryGroup);
 
         if (showDeliveryGroup) {
-            syncTurnOptions(basketShare);
+            syncTurnOptions(isMonthly && !biweeklyEggs);
 
             // Pasar a MENSUAL no arrastra el turno de la modalidad anterior. En
             // una quincenal el turno decide qué viernes recoge; en una mensual
@@ -158,9 +162,10 @@
             // Alcobendas) tiene que ser una decisión, no una herencia.
             //
             // Sólo al cambiar la modalidad a mano: al abrir la ficha de un
-            // mensual que YA está anclado a propósito, su turno se respeta.
-            if (turnSelect && lastModality !== null
-                && inList(SHARES_MONTHLY, basketShare) && !inList(SHARES_MONTHLY, lastModality)) {
+            // mensual que YA está anclado a propósito, su turno se respeta. Con
+            // huevos quincenales tampoco: ahí el turno es obligatorio.
+            if (turnSelect && lastModality !== null && !biweeklyEggs
+                && isMonthly && !inList(SHARES_MONTHLY, lastModality)) {
                 turnSelect.value = '';
                 turnSelect.dispatchEvent(new Event('change', { bubbles: true }));
             }

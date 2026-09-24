@@ -3,6 +3,7 @@
 namespace App\Service\Delivery;
 
 use App\Entity\Basket;
+use App\Entity\EggPeriod;
 use App\Entity\Node;
 use App\Entity\PartnerBasketShare;
 use App\Repository\NodeRepository;
@@ -29,10 +30,6 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 class EggDeliveryResolver
 {
-    private const EGG_PERIOD_ID_WEEKLY    = 1;
-    private const EGG_PERIOD_ID_BIWEEKLY  = 2;
-    private const EGG_PERIOD_ID_MONTHLY   = 3;
-
     /** Modalidades de basket_share, alineadas con WeeklyBasketGenerator. */
     private const SHARE_WEEKLY    = 1;
     private const SHARE_BIWEEKLY  = 2;
@@ -56,10 +53,10 @@ class EggDeliveryResolver
         }
 
         return match ($share->getEggPeriod()->getId()) {
-            self::EGG_PERIOD_ID_WEEKLY   => true,
-            self::EGG_PERIOD_ID_BIWEEKLY => $this->deliversBiweekly($share, $basket),
-            self::EGG_PERIOD_ID_MONTHLY  => $this->deliversMonthly($share, $basket),
-            default                      => false,
+            EggPeriod::ID_WEEKLY   => true,
+            EggPeriod::ID_BIWEEKLY => $this->deliversBiweekly($share, $basket),
+            EggPeriod::ID_MONTHLY  => $this->deliversMonthly($share, $basket),
+            default                => false,
         };
     }
 

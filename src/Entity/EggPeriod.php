@@ -24,6 +24,10 @@ use Gedmo\Mapping\Annotation as Gedmo;
  */
 class EggPeriod
 {
+    public const ID_WEEKLY = 1;
+    public const ID_BIWEEKLY = 2;
+    public const ID_MONTHLY = 3;
+
     /**
      * @var integer $id
      *
@@ -68,6 +72,17 @@ class EggPeriod
     public function getId(): ?int
     {
         return $this->id;
+    }
+
+    /**
+     * ¿Los huevos van cada dos semanas? En un punto de cadencia semanal eso
+     * exige turno A/B, sea cual sea la modalidad de la cesta.
+     *
+     * @return bool true si la frecuencia es quincenal.
+     */
+    public function isBiweekly(): bool
+    {
+        return $this->id === self::ID_BIWEEKLY;
     }
 
     public function getName(): ?string
