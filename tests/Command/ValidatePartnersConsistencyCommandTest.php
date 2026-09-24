@@ -4,6 +4,8 @@ namespace App\Tests\Command;
 
 use App\Command\ValidatePartnersConsistencyCommand;
 use App\Entity\BasketShare;
+use App\Entity\EggAmount;
+use App\Entity\EggPeriod;
 use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
@@ -68,6 +70,19 @@ class ValidatePartnersConsistencyCommandTest extends TestCase
         $tester = $this->runWith([$partner], [$share]);
 
         $this->assertSame(Command::FAILURE, $tester->getStatusCode());
+    }
+
+    public function testSemanalConHuevosQuincenalesYTurnoNoEsProblema(): void
+    {
+        // El turno decide qué viernes van sus huevos: quitárselo los dejaría sin repartir.
+        $partner = $this->partner(1, 'Semanal');
+        $share = $this->share($partner, self::MODALITY_WEEKLY, 'B');
+        $share->setEggAmount(new EggAmount());
+        $share->setEggPeriod($this->withId(new EggPeriod(), EggPeriod::ID_BIWEEKLY));
+
+        $tester = $this->runWith([$partner], [$share]);
+
+        $this->assertSame(Command::SUCCESS, $tester->getStatusCode(), $tester->getDisplay());
     }
 
     public function testDetectaMultiplesPbsActivosConRangosSolapados(): void

@@ -216,13 +216,12 @@ class PartnerBasketShareController extends AbstractController
                 return $this->redirectToRoute('partner_basket_share_change_modality', ['id' => $partnerBasketShare->getId()]);
             }
 
-            // El turno sólo se conserva en las modalidades que lo usan sobre
-            // nodo semanal: quincenales (decide qué viernes recogen) y
-            // mensuales (ancla su orden a las entregas de ese turno). Para el
-            // resto se anula. El criterio vive en BasketShare, no como literal
-            // disperso: tratar la quincenal compartida como no quincenal le
-            // borraba el turno y la sacaba de los listados.
-            if ($nodeIsBiweekly || $cohort['nodeIsMonthly'] || !($new->getBasketShare()?->usesDeliveryGroup() ?? false)) {
+            // El turno sólo se conserva donde se usa sobre nodo semanal:
+            // quincenales (decide qué viernes recogen), mensuales (ancla su
+            // orden a las entregas de ese turno) y huevos quincenales (decide
+            // qué viernes van los huevos). Para el resto se anula. El criterio
+            // vive en la entidad, no como literal disperso.
+            if ($nodeIsBiweekly || $cohort['nodeIsMonthly'] || !$new->keepsDeliveryGroup()) {
                 $new->setDeliveryGroup(null);
             }
 

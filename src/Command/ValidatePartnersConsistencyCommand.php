@@ -110,7 +110,8 @@ class ValidatePartnersConsistencyCommand extends Command
 
     /**
      * Una cesta SEMANAL con cohorte asignada es incoherente: recoge todos los
-     * viernes, el turno no significa nada.
+     * viernes, el turno no significa nada… salvo que sus huevos sean
+     * quincenales, porque entonces el turno decide qué viernes van los huevos.
      *
      * Una MENSUAL con cohorte SÍ es válida desde 2026-07-30: ancla su
      * `day_month_order` a las entregas de ese turno para coincidir con su grupo
@@ -130,7 +131,8 @@ class ValidatePartnersConsistencyCommand extends Command
         foreach ($shares as $share) {
             $modality = $share->getBasketShare()?->getId();
             if ($share->getDeliveryGroup() !== null
-                && in_array($modality, [self::SHARE_WEEKLY], true)) {
+                && in_array($modality, [self::SHARE_WEEKLY], true)
+                && !$share->hasBiweeklyEggs()) {
                 $problems[] = sprintf(
                     '%s (id %d): modalidad %s con cohorte "%s".',
                     $this->name($share->getPartner()),
