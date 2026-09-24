@@ -120,6 +120,8 @@ class PartnerBasketShareControllerTest extends AbstractAuthenticatedTest
         $share->setStartDate(new \DateTime('2026-01-02'));
         $share->setIsActive(true);
         $share->setAmount(1);
+        $share->setMonthPrice('0.00');
+        $share->setEggMonthPrice('10.00');
 
         foreach ([$node, $group, $partner, $share] as $entity) {
             $em->persist($entity);
