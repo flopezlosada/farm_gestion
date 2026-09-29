@@ -42,6 +42,13 @@ class Question
     public const TYPES_WITH_OPTIONS = [self::TYPE_SINGLE, self::TYPE_MULTIPLE];
 
     /**
+     * Mínimo de opciones de una pregunta que las usa. Con cero, la pregunta sale
+     * sin nada que marcar y, si es obligatoria, nadie puede enviar la encuesta;
+     * con una, no hay nada que elegir.
+     */
+    public const MIN_OPTIONS = 2;
+
+    /**
      * @ORM\Column(name="id", type="integer")
      * @ORM\Id
      * @ORM\GeneratedValue(strategy="AUTO")
@@ -133,6 +140,15 @@ class Question
     public function usesOptions(): bool
     {
         return in_array($this->type, self::TYPES_WITH_OPTIONS, true);
+    }
+
+    /**
+     * ¿Se puede responder tal y como está? Las de opciones necesitan al menos
+     * {@see MIN_OPTIONS}; las demás, siempre.
+     */
+    public function isAnswerable(): bool
+    {
+        return !$this->usesOptions() || $this->options->count() >= self::MIN_OPTIONS;
     }
 
     /**

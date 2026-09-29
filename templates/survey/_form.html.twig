@@ -48,6 +48,9 @@
                 {% endfor %}
             </div>
             <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm sv-add-option" style="margin-top: var(--csa-sp-2);">+ Añadir opción</button>
+            {% if q.options.vars.errors|length %}
+                <div class="csa-field__error">{{ form_errors(q.options) }}</div>
+            {% endif %}
         </div>
     </div>
 {% endmacro %}
@@ -56,13 +59,13 @@
 
     <div class="csa-stack-lg">
 
-        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Encuesta', subtitle: 'Título y, si quieres, una descripción y fecha de cierre orientativa.' } %}
+        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Encuesta', subtitle: 'Título y, si quieres, una descripción y el último día para responder. Pasado ese día deja de admitir respuestas sola.' } %}
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
                 <div class="csa-form-grid">
                     {{ csa.field(form.title, 'Título', { full: true }) }}
                     {{ csa.field(form.description, 'Descripción', { full: true }) }}
-                    {{ csa.field(form.closesAt, 'Fecha de cierre (informativa)') }}
+                    {{ csa.field(form.closesAt, 'Último día para responder') }}
                 </div>
             {% endblock %}
         {% endembed %}
@@ -177,6 +180,11 @@
         wrap.appendChild(item);
         wrap.dataset.index = index + 1;
         bindQuestion(item);
+
+        // Una pregunta de opciones necesita al menos dos (se valida al guardar):
+        // nace ya con dos huecos vacíos en vez de con ninguno.
+        var addOption = item.querySelector('.sv-add-option');
+        if (addOption) { addOption.click(); addOption.click(); }
 
         // El <select> de tipo de la pregunta recién añadida aún es nativo:
         // pásalo por el enhancer csa para que luzca como el resto.

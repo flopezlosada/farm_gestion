@@ -12,6 +12,9 @@ use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\FormEvent;
 use Symfony\Component\Form\FormEvents;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Validator\Constraints\Callback;
+use Symfony\Component\Validator\Constraints\NotBlank;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 /**
  * Form de una pregunta dentro de la {@see SurveyType}.
@@ -43,7 +46,10 @@ class QuestionType extends AbstractType
     {
         $builder
             ->add('text', TextType::class, [
-                'label' => 'Pregunta',
+                'label'       => 'Pregunta',
+                // Vacío llega como '' y no como null: el setter es `string`.
+                'empty_data'  => '',
+                'constraints' => [new NotBlank(message: 'Escribe la pregunta.')],
             ])
             ->add('type', ChoiceType::class, [
                 'label'   => 'Tipo',
@@ -78,7 +84,28 @@ class QuestionType extends AbstractType
     public function configureOptions(OptionsResolver $resolver): void
     {
         $resolver->setDefaults([
-            'data_class' => Question::class,
+            'data_class'  => Question::class,
+            // Una pregunta de opciones sin opciones sale sin nada que marcar y,
+            // si es obligatoria, bloquea el envío de toda la encuesta. Se para
+            // al guardar el borrador, no al abrirla con el aviso ya enviado.
+            'constraints' => [new Callback(self::validateOptions(...))],
         ]);
+    }
+
+    /**
+     * Exige {@see Question::MIN_OPTIONS} opciones a las preguntas que las usan.
+     * Corre después del POST_SUBMIT de arriba, así que las opciones que se
+     * quedaron en el DOM al cambiar a escala o texto ya no cuentan.
+     *
+     * @param mixed                     $question la pregunta enviada
+     * @param ExecutionContextInterface $context  contexto de validación
+     */
+    public static function validateOptions(mixed $question, ExecutionContextInterface $context): void
+    {
+        if ($question instanceof Question && !$question->isAnswerable()) {
+            $context->buildViolation(sprintf('Añade al menos %d opciones.', Question::MIN_OPTIONS))
+                ->atPath('options')
+                ->addViolation();
+        }
     }
 }
