@@ -124,6 +124,11 @@
                 <tbody>
                     {% for survey in surveys %}
                         {% set sc = status_chip[survey.status]|default({ label: survey.status, cls: 'baja' }) %}
+                        {# Abierta pero con el plazo vencido: en la base sigue `open`,
+                         # pero ya no admite respuestas. Se dice, para que nadie
+                         # espere más votos. #}
+                        {% set expired = survey.open and survey.isPastDeadline(now) %}
+                        {% if expired %}{% set sc = { label: 'Plazo cumplido', cls: 'baja' } %}{% endif %}
                         {% set votes = counts[survey.id] ?? 0 %}
                         {# Solo los borradores se borran; abiertas/cerradas se archivan. #}
                         {% set can_delete = survey.status == 'draft' %}
@@ -141,7 +146,12 @@
                                             <span class="prl-person__meta">{{ survey.description }}</span>
                                         {% endif %}
                                         {% if survey.closesAt %}
-                                            <span class="prl-person__meta">Cierre orientativo: {{ survey.closesAt|date('d/m/Y') }}</span>
+                                            <span class="prl-person__meta">Último día para responder: {{ survey.closesAt|date('d/m/Y') }}</span>
+                                        {% endif %}
+                                        {% if survey.status != 'draft' %}
+                                            <span class="prl-person__meta">
+                                                {{ survey.announcedAt ? 'Avisada el ' ~ survey.announcedAt|date('d/m/Y') : 'Sin aviso enviado' }}
+                                            </span>
                                         {% endif %}
                                     </div>
                                 </div>
@@ -186,13 +196,32 @@
                                                 variant: 'info',
                                                 eyebrow: 'Abrir a respuestas',
                                                 title: 'Abrir “' ~ survey.title ~ '”',
-                                                body: 'Lxs socixs podrán responder. Una vez abierta ya no podrás editar las preguntas.',
+                                                body: 'Lxs socixs podrán responder y se les avisará ahora mismo'
+                                                    ~ (audience ? ': ' ~ audience.email ~ ' por correo (con un enlace para responder sin entrar en la web), ' ~ audience.push ~ ' al móvil y todas las cuentas en su bandeja' : '')
+                                                    ~ '. Una vez abierta ya no podrás editar las preguntas.'
+                                                    ~ (audience and not audience.emailEnabled ? ' OJO: el envío de correos está apagado en la configuración.' : ''),
                                                 confirm_label: 'Abrir encuesta',
                                                 action: path('survey_open', { id: survey.id }),
                                                 csrf_name: '_token',
                                                 csrf_token: csrf_token('survey_open_' ~ survey.id)
                                             }) }}
                                         {% elseif survey.open %}
+                                            {% if not expired %}
+                                                {# --- Reintentar el aviso: sólo completa a quien le falte --- #}
+                                                <button type="button" class="prl-btn prl-btn--sm" title="Completar el aviso" onclick="document.getElementById('dlg-announce-{{ survey.id }}').showModal()">
+                                                    <i class="fa fa-bullhorn"></i> {{ survey.announcedAt ? 'Reintentar aviso' : 'Avisar' }}
+                                                </button>
+                                                {{ csa.confirm_dialog('dlg-announce-' ~ survey.id, {
+                                                    variant: 'info',
+                                                    eyebrow: 'Aviso',
+                                                    title: 'Avisar de “' ~ survey.title ~ '”',
+                                                    body: 'Manda el aviso a quien todavía no lo haya recibido (por ejemplo, si el envío se cortó). A quien ya lo tiene no se le repite.',
+                                                    confirm_label: 'Completar el aviso',
+                                                    action: path('survey_announce', { id: survey.id }),
+                                                    csrf_name: '_token',
+                                                    csrf_token: csrf_token('survey_announce_' ~ survey.id)
+                                                }) }}
+                                            {% endif %}
                                             {# --- Cerrar --- #}
                                             <button type="button" class="prl-btn prl-btn--warn prl-btn--sm" onclick="document.getElementById('dlg-close-{{ survey.id }}').showModal()">
                                                 <i class="fa fa-stop"></i> Cerrar

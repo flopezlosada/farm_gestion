@@ -40,6 +40,9 @@
     {% if is_granted('FEATURE_VOLUNTEERING') %}
         {% include '_components/volunteering_styles.html.twig' %}
     {% endif %}
+    {% if pending_surveys|default([]) is not empty %}
+        {{ include('panel_survey/_teaser_styles.html.twig') }}
+    {% endif %}
     <style>
         /* Papeleo: se abre cuando hace falta y no antes. */
         .prt-fold { margin-top: 18px; }
@@ -204,6 +207,24 @@
                 place: next_place,
                 delivery_date: next_delivery.date
             } only %}
+        {% endif %}
+
+        {# ============ LA ASOCIACIÓN TE PREGUNTA ============
+         # Sólo las encuestas que le QUEDAN por responder, y sólo si hay alguna:
+         # al responder desaparece sola, sin guardar ningún "visto". Va justo
+         # detrás de la cesta porque es una petición con fecha; al final de la
+         # página, como la de voluntariado antes, no la vería nadie. Sin contador
+         # en el menú: se descartó por ser un dato que haría falta en todas las
+         # pantallas del panel. #}
+        {% if pending_surveys|default([]) is not empty %}
+            <section class="pnl-block">
+                <h2 class="pnl-block__title">La asociación te pregunta</h2>
+                <div class="svy-teasers">
+                    {% for survey in pending_surveys %}
+                        {{ include('panel_survey/_teaser.html.twig', { survey: survey, answered: false }) }}
+                    {% endfor %}
+                </div>
+            </section>
         {% endif %}
 
         {# ============ 2. SOSTENER LA HUERTA ============

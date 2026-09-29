@@ -38,6 +38,33 @@ class SurveyParticipationRepository extends ServiceEntityRepository
     }
 
     /**
+     * De estas encuestas, cuáles ha respondido ya la socia. En una sola
+     * consulta: el panel y la portada lo preguntan para varias a la vez.
+     *
+     * @param Survey[] $surveys encuestas por las que se pregunta
+     * @param Partner  $partner la socia
+     *
+     * @return array<int, true> survey_id => true de las ya respondidas
+     */
+    public function answeredAmong(array $surveys, Partner $partner): array
+    {
+        if ([] === $surveys) {
+            return [];
+        }
+
+        $ids = $this->createQueryBuilder('p')
+            ->select('IDENTITY(p.survey) AS surveyId')
+            ->andWhere('p.survey IN (:surveys)')
+            ->andWhere('p.partner = :partner')
+            ->setParameter('surveys', $surveys)
+            ->setParameter('partner', $partner)
+            ->getQuery()
+            ->getSingleColumnResult();
+
+        return array_fill_keys(array_map('intval', $ids), true);
+    }
+
+    /**
      * Número de socixs que han participado en la encuesta. Es el denominador
      * natural de los porcentajes en los resultados.
      */

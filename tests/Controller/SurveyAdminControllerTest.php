@@ -73,6 +73,71 @@ class SurveyAdminControllerTest extends AbstractAuthenticatedTest
         $this->assertSame(Survey::STATUS_DRAFT, $reloaded->getStatus(), 'No debe abrirse sin preguntas.');
     }
 
+    /**
+     * Una pregunta de opción única sin opciones sale en la encuesta sin nada que
+     * marcar y, siendo obligatoria, nadie puede enviarla. Se para al guardar.
+     */
+    public function testCreateRejectsChoiceQuestionWithoutOptions(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableSurveys();
+
+        $crawler = $client->request('GET', '/gestion/surveys/new');
+        $token = $crawler->filter('input[name="survey[_token]"]')->attr('value');
+
+        $crawler = $client->request('POST', '/gestion/surveys/new', ['survey' => [
+            'title' => 'Sin opciones en test',
+            'questions' => [
+                ['text' => '¿Vienes?', 'type' => Question::TYPE_SINGLE, 'required' => '1'],
+            ],
+            '_token' => $token,
+        ]]);
+
+        // Vuelve a pintar el formulario (200: el controller pasa la vista, no el
+        // form, así que Symfony no pone el 422) con el error junto a la pregunta.
+        $this->assertResponseIsSuccessful();
+        $this->assertStringContainsString('Añade al menos 2 opciones', $crawler->text());
+        $this->assertNull(
+            $this->em()->getRepository(Survey::class)->findOneBy(['title' => 'Sin opciones en test']),
+            'No debe guardarse.'
+        );
+    }
+
+    /**
+     * Un borrador antiguo guardado antes de esa validación tampoco se abre: la
+     * comprobación se repite al abrir, que es cuando se avisa a todo el mundo.
+     */
+    public function testOpenRefusesChoiceQuestionWithoutOptions(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableSurveys();
+        $survey = $this->makeDraftWithEmptyChoice();
+
+        $crawler = $client->request('GET', '/gestion/surveys/');
+        $client->submit($crawler->filter('form[action="/gestion/surveys/'.$survey->getId().'/open"]')->form());
+
+        $this->em()->clear();
+        $reloaded = $this->em()->find(Survey::class, $survey->getId());
+        $this->assertSame(Survey::STATUS_DRAFT, $reloaded->getStatus());
+        $this->assertNull($reloaded->getAnnouncedAt(), 'Sin abrir no se avisa a nadie.');
+    }
+
+    public function testOpenAnnouncesToTheAssociation(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableSurveys();
+        $survey = $this->makeFullSurvey(Survey::STATUS_DRAFT, 'Se abre y se avisa');
+
+        $crawler = $client->request('GET', '/gestion/surveys/');
+        $client->submit($crawler->filter('form[action="/gestion/surveys/'.$survey->getId().'/open"]')->form());
+        $this->assertResponseRedirects('/gestion/surveys/');
+
+        $this->em()->clear();
+        $reloaded = $this->em()->find(Survey::class, $survey->getId());
+        $this->assertSame(Survey::STATUS_OPEN, $reloaded->getStatus());
+        $this->assertNotNull($reloaded->getAnnouncedAt(), 'Abrir tiene que dejar constancia del aviso.');
+    }
+
     public function testEditRedirectsWhenNotDraft(): void
     {
         $client = $this->createAuthenticatedClient();
@@ -197,6 +262,11 @@ class SurveyAdminControllerTest extends AbstractAuthenticatedTest
         $this->assertResponseIsSuccessful();
 
         $client->request('POST', '/gestion/surveys/new');
+        $this->assertResponseStatusCodeSame(403);
+
+        // Tampoco se le enseña el formulario: rellenarlo entero para chocar con
+        // un 403 al guardar era la peor forma de enterarse.
+        $client->request('GET', '/gestion/surveys/new');
         $this->assertResponseStatusCodeSame(403);
 
         $em = $this->em();

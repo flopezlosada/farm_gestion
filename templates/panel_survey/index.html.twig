@@ -1,5 +1,7 @@
 {# ============================================================
- # Encuestas abiertas para el socix — panel.
+ # Encuestas que admiten respuesta — panel de la socia.
+ # Primero las que le quedan por responder; debajo, las ya
+ # respondidas, más apagadas.
  # ============================================================ #}
 
 {% extends '_layouts/csa_panel.html.twig' %}
@@ -15,35 +17,24 @@
 
 {% block csa_main %}
 
-    {{ csa.page_header('Encuestas', 'Encuestas abiertas', 'Tu opinión nos ayuda a mejorar. Las respuestas son anónimas.') }}
+    {{ csa.page_header('Encuestas', 'Lo que la asociación te pregunta', 'Tu opinión nos ayuda a decidir. Las respuestas son anónimas.') }}
+
+    {% set pending = surveys|filter(s => answered[s.id] is not defined) %}
+    {% set done = surveys|filter(s => answered[s.id] is defined) %}
 
     {% if surveys is empty %}
         {{ csa.callout('Ahora mismo no hay ninguna encuesta abierta. ¡Gracias por pasarte!', 'info') }}
     {% else %}
-        <div class="csa-stack">
-            {% for survey in surveys %}
-                <div class="csa-card" style="padding: var(--csa-sp-4);">
-                    <div class="csa-row-between" style="align-items: center; gap: var(--csa-sp-3);">
-                        <div>
-                            <strong>{{ survey.title }}</strong>
-                            {% if survey.description %}
-                                <div class="csa-muted" style="margin-top: var(--csa-sp-1);">{{ survey.description }}</div>
-                            {% endif %}
-                            {% if survey.closesAt %}
-                                <div class="csa-muted" style="margin-top: var(--csa-sp-1);">Abierta hasta el {{ survey.closesAt|date('d/m/Y') }}.</div>
-                            {% endif %}
-                        </div>
-                        <div style="white-space: nowrap;">
-                            {% if answered[survey.id] %}
-                                {{ csa.badge('Ya respondida', 'success') }}
-                            {% else %}
-                                {{ csa.btn('Responder', { variant: 'primary', href: path('panel_survey_respond', { id: survey.id }) }) }}
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
+        <div class="svy-teasers">
+            {% for survey in pending|merge(done) %}
+                {{ include('panel_survey/_teaser.html.twig', { survey: survey, answered: answered[survey.id] is defined }) }}
             {% endfor %}
         </div>
     {% endif %}
 
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {{ include('panel_survey/_teaser_styles.html.twig') }}
 {% endblock %}

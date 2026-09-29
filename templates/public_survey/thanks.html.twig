@@ -1,0 +1,18 @@
+{# ============================================================
+ # Gracias — encuesta respondida desde el enlace del correo.
+ # Sin botones al panel: quien llega por aquí casi nunca tiene
+ # cuenta, y un botón a un login sería una puerta cerrada.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_public_survey.html.twig' %}
+
+{% block title %}Gracias{% endblock %}
+
+{% block csa_main %}
+    {{ include('panel_survey/_thanks.html.twig', {
+        survey: survey,
+        actions: [
+            { label: 'Ir a la web de la CSA', href: 'https://csavegadejarama.org', variant: 'ghost' }
+        ]
+    }) }}
+{% endblock %}

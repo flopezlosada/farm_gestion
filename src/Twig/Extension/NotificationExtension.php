@@ -54,6 +54,7 @@ class NotificationExtension extends AbstractExtension
         'news' => 'Novedades de la web',
         'magic_link' => 'Enlace de acceso',
         'consumer_group_confirmed' => 'Pedido del grupo de consumo',
+        'survey_open' => 'Encuesta abierta',
         'albergue_reminder' => 'Recordatorio del albergue',
         'closure_shift_cancelled' => 'Turno cancelado por cierre',
         'lar_contact' => 'Contacto desde el LAR',

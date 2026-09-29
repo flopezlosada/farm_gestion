@@ -1,0 +1,43 @@
+{# Estilos de la tarjeta de encuesta (_teaser.html.twig): listado y portada. #}
+<style>
+    .svy-teasers { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: var(--csa-sp-4); }
+
+    .svy-teaser {
+        display: grid; grid-template-columns: 40px 1fr; gap: var(--csa-sp-4);
+        padding: var(--csa-sp-5);
+        background: var(--csa-surface);
+        border: 1px solid var(--csa-rule-soft);
+        border-top: 2px solid var(--csa-green);
+        border-radius: var(--csa-radius-lg);
+        box-shadow: var(--csa-shadow-sm);
+    }
+    .svy-teaser--done { border-top-color: var(--csa-rule); box-shadow: none; }
+
+    /* El único elemento teñido de la tarjeta. */
+    .svy-teaser__icon {
+        width: 40px; height: 40px; border-radius: 50%;
+        display: inline-flex; align-items: center; justify-content: center;
+        background: var(--csa-green-soft); color: var(--csa-green); font-size: 17px;
+    }
+    .svy-teaser--done .svy-teaser__icon { background: var(--csa-surface-alt); color: var(--csa-ink-soft); }
+
+    .svy-teaser__body { min-width: 0; }
+    .svy-teaser__title {
+        margin: 6px 0 var(--csa-sp-1);
+        font-family: var(--csa-sans); font-size: var(--csa-fs-lg); font-weight: 600;
+        line-height: var(--csa-lh-snug); color: var(--csa-ink); text-wrap: pretty;
+    }
+    /* Dos líneas y basta: la descripción entera está dentro de la encuesta. */
+    .svy-teaser__desc {
+        margin: 0 0 var(--csa-sp-2);
+        font-size: var(--csa-fs-base); line-height: var(--csa-lh-normal); color: var(--csa-ink-soft);
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .svy-teaser__meta { margin: 0 0 var(--csa-sp-4); font-size: var(--csa-fs-sm); color: var(--csa-ink-soft); }
+    .svy-teaser__done { margin: 0; font-size: var(--csa-fs-base); font-weight: 500; color: var(--csa-green); }
+
+    @media (max-width: 520px) {
+        .svy-teaser { grid-template-columns: 1fr; gap: var(--csa-sp-3); padding: var(--csa-sp-4); }
+        .svy-teaser .csa-btn { width: 100%; justify-content: center; }
+    }
+</style>

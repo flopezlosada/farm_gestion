@@ -82,6 +82,10 @@ class NotificationLink
             // abierto después—. El correo, que sí conoce el pedido, sí apunta a
             // su ficha.
             str_starts_with($kind, 'consumer_group.') => $this->urlGenerator->generate('panel_consumer_group_index'),
+            // La encuesta, al listado de encuestas del panel, por lo mismo que el
+            // pedido: aquí no se sabe cuál era. Quien no tiene cuenta no llega
+            // por aquí sino por el enlace firmado de su correo.
+            str_starts_with($kind, 'survey.') => $this->urlGenerator->generate('panel_survey_index'),
             // "Faltan datos en tu ficha" lleva a la pantalla donde se rellenan, y
             // no a la bandeja: el aviso ya dice qué falta, así que lo único que
             // queda por hacer es el formulario. Un aviso que pide algo tiene que

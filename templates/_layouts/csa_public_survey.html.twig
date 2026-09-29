@@ -1,0 +1,62 @@
+{# ============================================================
+ # Layout de la encuesta abierta desde el enlace del correo.
+ #
+ # SIN SESIÓN Y SIN MENÚ. Quien llega aquí no ha entrado en la web
+ # (la mayoría no tiene cuenta), así que no hay panel que enseñar:
+ # sólo la marca de la CSA, para que sepa dónde está, y la encuesta.
+ #
+ # Como csa_auth, NO extiende base.html.twig: sólo el bundle Encore
+ # (sistema csa), sin Bootstrap 3 ni jQuery. Es la página que más
+ # se abrirá desde un móvil con mala cobertura.
+ # ============================================================ #}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#fbfbfa">
+    {# La URL es personal: no debe acabar en ningún buscador. #}
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="referrer" content="no-referrer">
+    <title>{% block title %}Encuesta{% endblock %} · CSA Vega de Jarama</title>
+
+    <link rel="icon" type="image/x-icon" href="{{ asset('favicon.ico') }}">
+    {{ encore_entry_link_tags('app') }}
+    {# Los iconos: el mismo kit que carga base.html.twig para el panel. #}
+    <script src="https://kit.fontawesome.com/95aa3a447a.js" crossorigin="anonymous"></script>
+
+    <style>
+        body.csa-app { background: var(--csa-bg); }
+        .svy-public {
+            max-width: 680px; margin: 0 auto;
+            padding: var(--csa-sp-6) var(--csa-sp-4) calc(var(--csa-sp-12) + env(safe-area-inset-bottom, 0px));
+        }
+        .svy-public__brand {
+            display: flex; align-items: center; gap: var(--csa-sp-3);
+            margin-bottom: var(--csa-sp-8); padding-bottom: var(--csa-sp-4);
+            border-bottom: 1px solid var(--csa-rule);
+            font-family: var(--csa-serif); font-size: var(--csa-fs-lg);
+            color: var(--csa-ink); text-decoration: none;
+        }
+        .svy-public__brand i { color: var(--csa-green); }
+        .svy-public__foot {
+            margin-top: var(--csa-sp-10);
+            font-size: var(--csa-fs-sm); color: var(--csa-ink-soft); text-align: center;
+        }
+    </style>
+    {{ include('panel_survey/_styles.html.twig') }}
+</head>
+<body class="csa-app">
+    <main class="svy-public">
+        <a class="svy-public__brand" href="https://csavegadejarama.org">
+            <i class="fa fa-leaf" aria-hidden="true"></i> CSA Vega de Jarama
+        </a>
+
+        {% block csa_main %}{% endblock %}
+
+        <p class="svy-public__foot">
+            ¿Dudas? Escríbenos a info@csavegadejarama.org
+        </p>
+    </main>
+</body>
+</html>
