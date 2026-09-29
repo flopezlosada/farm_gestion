@@ -1,0 +1,42 @@
+{# ============================================================
+ # Gracias por responder — panel de la socia.
+ # Cierra la tarea: confirma que la respuesta llegó y recuerda que
+ # es anónima. El ✓ se dibuja una vez al entrar (ver _styles).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_panel.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Gracias{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('panel') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('panel_survey_index') }}">Encuestas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Gracias</span>
+{% endblock %}
+
+{% block csa_main %}
+    <div class="svy-thanks">
+        <div class="svy-thanks__mark" aria-hidden="true">
+            <svg viewBox="0 0 44 44"><path d="M12 23.5l7 7 14-15"/></svg>
+        </div>
+
+        <h1>¡Gracias por responder!</h1>
+        <p class="svy-thanks__lead">
+            <span class="svy-thanks__survey">{{ survey.title }}</span>
+            Tu respuesta ya está guardada, sin tu nombre.
+        </p>
+
+        <div class="svy-thanks__actions">
+            {{ csa.btn('Volver a mi panel', { variant: 'primary', href: path('panel') }) }}
+            {{ csa.btn('Ver encuestas', { variant: 'ghost', href: path('panel_survey_index') }) }}
+        </div>
+    </div>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {{ include('panel_survey/_styles.html.twig') }}
+{% endblock %}

@@ -82,7 +82,7 @@ class SurveyResponseControllerTest extends AbstractPartnerAuthenticatedTest
         $partnerId = $this->socixPartner()->getId();
 
         $client->request('POST', '/panel/surveys/'.$surveyId, $payload);
-        $this->assertResponseRedirects('/panel/surveys');
+        $this->assertResponseRedirects('/panel/surveys/'.$surveyId.'/thanks');
 
         $this->em()->clear();
         $survey = $this->em()->find(Survey::class, $surveyId);
@@ -110,6 +110,30 @@ class SurveyResponseControllerTest extends AbstractPartnerAuthenticatedTest
         $client->request('GET', '/panel/surveys/'.$survey->getId());
 
         $this->assertResponseRedirects('/panel/surveys');
+    }
+
+    public function testThanksPageRendersAfterParticipating(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $this->enableSurveys();
+        $survey = $this->makeFullSurvey(Survey::STATUS_OPEN, 'Agradecida');
+        $this->addParticipation($survey, $this->socixPartner());
+
+        $client->request('GET', '/panel/surveys/'.$survey->getId().'/thanks');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorTextContains('h1', 'Gracias');
+    }
+
+    public function testThanksPageWithoutParticipatingSendsToTheForm(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $this->enableSurveys();
+        $survey = $this->makeFullSurvey(Survey::STATUS_OPEN, 'Sin responder');
+
+        $client->request('GET', '/panel/surveys/'.$survey->getId().'/thanks');
+
+        $this->assertResponseRedirects('/panel/surveys/'.$survey->getId());
     }
 
     public function testCannotRespondToClosedSurvey(): void

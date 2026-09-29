@@ -1,0 +1,247 @@
+{#
+ # Estilos de las encuestas del lado de la socia: responder y dar las gracias.
+ #
+ # PENSADO PARA EL MÓVIL Y PARA QUIEN NO SE MANEJA CON FORMULARIOS. La mayoría
+ # llegará desde un correo, con el pulgar, y hay que ponérselo fácil:
+ #   - Cada opción es una fila entera que se pulsa, no un circulito de 13px.
+ #   - Letra de 16px en todo lo que se toca o se escribe. Por debajo de 16, el
+ #     Safari del iPhone hace zoom al enfocar el campo de texto y descoloca la
+ #     página.
+ #   - Lo elegido se ve de un vistazo: borde verde y un tinte suave, y el número
+ #     de la pregunta se convierte en un ✓. Eso hace de barra de progreso sin
+ #     añadir una.
+ #
+ # Viven aparte, y no en la plantilla, porque la misma encuesta se pintará
+ # también fuera del panel (quien responde desde el enlace del correo, sin
+ # sesión), y tiene que verse igual en los dos sitios.
+ #}
+<style>
+    .svy { max-width: 680px; }
+
+    /* ---------- Cabecera: de qué va y cuánto es ---------- */
+    .svy-facts {
+        display: flex; flex-wrap: wrap; gap: var(--csa-sp-2) var(--csa-sp-4);
+        margin: calc(-1 * var(--csa-sp-2)) 0 var(--csa-sp-8);
+        padding: 0; list-style: none;
+        font-size: var(--csa-fs-sm); color: var(--csa-ink-soft);
+    }
+    .svy-facts li { display: inline-flex; align-items: center; gap: 6px; }
+    .svy-facts i { color: var(--csa-green); }
+
+    /* ---------- Una pregunta ---------- */
+    .svy-list { display: flex; flex-direction: column; gap: var(--csa-sp-5); }
+
+    .svy-q {
+        margin: 0; min-width: 0;
+        padding: var(--csa-sp-5) var(--csa-sp-5) var(--csa-sp-6);
+        background: var(--csa-surface);
+        border: 1px solid var(--csa-rule-soft);
+        border-radius: var(--csa-radius-lg);
+        box-shadow: var(--csa-shadow-sm);
+        transition: border-color var(--csa-t-normal);
+    }
+    .svy-q--error { border-color: var(--csa-terracotta); }
+
+    .svy-q__head {
+        display: grid; grid-template-columns: 32px 1fr; gap: var(--csa-sp-3);
+        align-items: start; margin-bottom: var(--csa-sp-4);
+        /* <legend> no se deja maquetar dentro de un fieldset en todos los
+           navegadores; flotarlo lo devuelve al flujo normal. */
+        float: left; width: 100%; padding: 0;
+    }
+    .svy-q__head + * { clear: both; }
+
+    /* El número, en el círculo teñido del panel. Al responder la pregunta se
+       rellena de verde y muestra un ✓: es el único movimiento de la pantalla. */
+    .svy-num {
+        position: relative;
+        width: 32px; height: 32px; border-radius: 50%;
+        display: inline-flex; align-items: center; justify-content: center;
+        background: var(--csa-green-soft); border: 1px solid var(--csa-green-soft);
+        color: var(--csa-green);
+        font-family: var(--csa-serif); font-variation-settings: "opsz" 30;
+        font-variant-numeric: lining-nums tabular-nums;
+        font-weight: 500; font-size: var(--csa-fs-md); line-height: 1;
+        transition: background-color 260ms cubic-bezier(.16, 1, .3, 1), color 260ms cubic-bezier(.16, 1, .3, 1);
+    }
+    .svy-num__n, .svy-num__ok { transition: opacity 200ms ease, transform 320ms cubic-bezier(.16, 1, .3, 1); }
+    .svy-num__ok {
+        position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 14px; opacity: 0; transform: scale(.4);
+    }
+    .svy-q--answered .svy-num { background: var(--csa-green); border-color: var(--csa-green); color: #fff; }
+    .svy-q--answered .svy-num__n { opacity: 0; transform: scale(.6); }
+    .svy-q--answered .svy-num__ok { opacity: 1; transform: scale(1); }
+
+    .svy-q__text {
+        display: block; padding-top: 4px;
+        font-size: var(--csa-fs-lg); font-weight: 600; line-height: var(--csa-lh-snug);
+        color: var(--csa-ink); text-wrap: pretty;
+    }
+    .svy-q__hint {
+        display: block; margin-top: 4px;
+        font-size: var(--csa-fs-sm); font-weight: 400; color: var(--csa-ink-soft);
+    }
+
+    /* ---------- Opciones (única y múltiple) ---------- */
+    .svy-opts { display: flex; flex-direction: column; gap: var(--csa-sp-2); }
+
+    .svy-opt {
+        position: relative;
+        display: flex; align-items: center; gap: var(--csa-sp-3);
+        min-height: 52px; margin: 0;
+        padding: var(--csa-sp-3) var(--csa-sp-4);
+        background: var(--csa-surface);
+        border: 1px solid var(--csa-rule);
+        border-radius: var(--csa-radius-md);
+        font-size: var(--csa-fs-md); font-weight: 400; line-height: var(--csa-lh-snug);
+        color: var(--csa-ink); cursor: pointer;
+        transition: border-color var(--csa-t-fast), background-color var(--csa-t-fast), box-shadow var(--csa-t-fast);
+    }
+    .svy-opt:hover { border-color: color-mix(in srgb, var(--csa-green) 55%, var(--csa-rule)); }
+
+    /* El input real queda invisible pero vivo: se enfoca con el teclado, lo
+       lee el lector de pantalla y el formulario lo envía. Lo que se ve es la
+       marca de al lado. */
+    .svy-input {
+        position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none;
+    }
+
+    .svy-mark {
+        flex-shrink: 0; width: 22px; height: 22px;
+        display: inline-flex; align-items: center; justify-content: center;
+        border: 2px solid var(--csa-ink-muted); border-radius: 50%;
+        background: var(--csa-surface);
+        transition: border-color var(--csa-t-fast), background-color var(--csa-t-fast);
+    }
+    .svy-mark::after {
+        content: ""; width: 10px; height: 10px; border-radius: 50%;
+        background: var(--csa-green); transform: scale(0);
+        transition: transform 180ms cubic-bezier(.16, 1, .3, 1);
+    }
+    .svy-opts--multiple .svy-mark { border-radius: 6px; }
+    .svy-opts--multiple .svy-mark::after {
+        width: 6px; height: 11px; border-radius: 0; background: none;
+        border: solid #fff; border-width: 0 2px 2px 0;
+        transform: translateY(-1px) rotate(45deg) scale(0);
+    }
+
+    /* Elegida: borde verde de 2px (el segundo píxel con una sombra interior, para
+       que la fila no salte) y el tinte suave. */
+    .svy-opt:has(.svy-input:checked) {
+        border-color: var(--csa-green);
+        box-shadow: inset 0 0 0 1px var(--csa-green);
+        background: color-mix(in srgb, var(--csa-green-soft) 45%, var(--csa-surface));
+    }
+    .svy-input:checked + .svy-mark { border-color: var(--csa-green); }
+    .svy-input:checked + .svy-mark::after { transform: scale(1); }
+    .svy-opts--multiple .svy-input:checked + .svy-mark { background: var(--csa-green); }
+    .svy-opts--multiple .svy-input:checked + .svy-mark::after { transform: translateY(-1px) rotate(45deg) scale(1); }
+
+    .svy-input:focus-visible + .svy-mark { outline: 3px solid color-mix(in srgb, var(--csa-green) 40%, transparent); outline-offset: 2px; }
+
+    /* ---------- Escala 1-5 ---------- */
+    .svy-scale { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--csa-sp-2); }
+    .svy-scale .svy-opt {
+        justify-content: center; min-height: 60px; padding: var(--csa-sp-2) 0;
+        font-family: var(--csa-serif); font-variation-settings: "opsz" 30;
+        font-variant-numeric: lining-nums tabular-nums;
+        font-size: var(--csa-fs-xl); font-weight: 500; letter-spacing: -0.02em;
+        color: var(--csa-ink-soft);
+    }
+    .svy-scale .svy-opt:has(.svy-input:checked) {
+        background: var(--csa-green); color: #fff;
+    }
+    .svy-scale__ends {
+        display: flex; justify-content: space-between;
+        margin-top: var(--csa-sp-2);
+        font-size: var(--csa-fs-sm); color: var(--csa-ink-soft);
+    }
+
+    /* ---------- Texto libre ---------- */
+    .svy-text {
+        display: block; width: 100%; box-sizing: border-box;
+        min-height: 112px; padding: var(--csa-sp-3) var(--csa-sp-4);
+        background: var(--csa-surface);
+        border: 1px solid var(--csa-rule); border-radius: var(--csa-radius-md);
+        font-family: var(--csa-sans); font-size: var(--csa-fs-md); line-height: var(--csa-lh-normal);
+        color: var(--csa-ink); resize: vertical;
+        transition: border-color var(--csa-t-fast), box-shadow var(--csa-t-fast);
+    }
+    .svy-text::placeholder { color: var(--csa-ink-muted); }
+    .svy-text:focus {
+        outline: none; border-color: var(--csa-green);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--csa-green) 18%, transparent);
+    }
+
+    /* ---------- Errores ---------- */
+    .svy-error, .svy-form-error {
+        display: flex; align-items: center; gap: 6px;
+        margin: var(--csa-sp-3) 0 0;
+        font-size: var(--csa-fs-sm); font-weight: 500; color: #a8471f;
+    }
+    .svy-error ul, .svy-form-error ul { list-style: none; margin: 0; padding: 0; }
+    .svy-form-error { margin: 0 0 var(--csa-sp-5); }
+    /* En cuanto la contesta, el aviso sobra. */
+    .svy-q--answered .svy-error { display: none; }
+
+    /* ---------- Envío ---------- */
+    .svy-send {
+        margin-top: var(--csa-sp-8); padding-top: var(--csa-sp-6);
+        border-top: 1px solid var(--csa-rule);
+    }
+    .svy-send__note {
+        display: flex; gap: var(--csa-sp-3); align-items: flex-start;
+        margin: 0 0 var(--csa-sp-5); max-width: 60ch;
+        font-size: var(--csa-fs-sm); line-height: var(--csa-lh-normal); color: var(--csa-ink-soft);
+    }
+    .svy-send__note i { color: var(--csa-green); margin-top: 3px; }
+    .svy-send__row { display: flex; align-items: center; gap: var(--csa-sp-4); flex-wrap: wrap; }
+    .svy-send__btn { min-height: 48px; padding-inline: var(--csa-sp-6); font-size: var(--csa-fs-md); }
+    .svy-send__later { font-size: var(--csa-fs-base); color: var(--csa-ink-soft); }
+
+    @media (max-width: 520px) {
+        .svy-q { padding: var(--csa-sp-4) var(--csa-sp-4) var(--csa-sp-5); }
+        .svy-q__text { font-size: var(--csa-fs-md); }
+        .svy-scale { gap: 6px; }
+        /* En el móvil el botón ocupa el ancho: es lo último que se hace y el
+           objetivo más importante de la pantalla. */
+        .svy-send__row { flex-direction: column-reverse; align-items: stretch; text-align: center; }
+        .svy-send__btn { width: 100%; justify-content: center; }
+    }
+
+    /* ---------- Gracias ---------- */
+    .svy-thanks {
+        max-width: 520px; margin: var(--csa-sp-10) auto; text-align: center;
+    }
+    .svy-thanks__mark {
+        width: 88px; height: 88px; margin: 0 auto var(--csa-sp-6);
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 50%; background: var(--csa-green-soft);
+    }
+    .svy-thanks__mark svg { width: 44px; height: 44px; }
+    .svy-thanks__mark path {
+        fill: none; stroke: var(--csa-green); stroke-width: 3.2;
+        stroke-linecap: round; stroke-linejoin: round;
+        stroke-dasharray: 40; stroke-dashoffset: 40;
+        animation: svy-draw 600ms 150ms cubic-bezier(.16, 1, .3, 1) forwards;
+    }
+    @keyframes svy-draw { to { stroke-dashoffset: 0; } }
+    .svy-thanks h1 {
+        margin: 0 0 var(--csa-sp-3);
+        font-size: var(--csa-fs-2xl); font-weight: 600; letter-spacing: -0.01em; color: var(--csa-ink);
+    }
+    .svy-thanks__lead {
+        margin: 0 auto var(--csa-sp-8); max-width: 44ch;
+        font-size: var(--csa-fs-md); line-height: var(--csa-lh-normal); color: var(--csa-ink-soft);
+        text-wrap: pretty;
+    }
+    .svy-thanks__survey { display: block; margin-bottom: var(--csa-sp-2); font-weight: 600; color: var(--csa-ink); }
+    .svy-thanks__actions { display: flex; gap: var(--csa-sp-3); justify-content: center; flex-wrap: wrap; }
+
+    @media (prefers-reduced-motion: reduce) {
+        .svy-num, .svy-num__n, .svy-num__ok, .svy-mark, .svy-mark::after, .svy-opt { transition: none; }
+        .svy-thanks__mark path { animation: none; stroke-dashoffset: 0; }
+    }
+</style>

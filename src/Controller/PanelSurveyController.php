@@ -102,14 +102,38 @@ class PanelSurveyController extends AbstractController
                 return $this->redirectToRoute('panel_survey_index');
             }
 
-            $this->addFlash('notice', '¡Gracias! Hemos guardado tu respuesta de forma anónima.');
-
-            return $this->redirectToRoute('panel_survey_index');
+            return $this->redirectToRoute('panel_survey_thanks', ['id' => $survey->getId()]);
         }
 
         return $this->render('panel_survey/respond.html.twig', [
             'survey' => $survey,
             'form'   => $form->createView(),
+        ]);
+    }
+
+    /**
+     * Pantalla de agradecimiento tras responder. Es una pantalla y no un flash
+     * sobre el listado porque cierra la tarea: la socia necesita ver que su
+     * respuesta ha llegado y que es anónima, no un aviso que se pierde encima de
+     * otra página.
+     *
+     * Sólo para quien ya participó: sin participación no hay nada que agradecer
+     * y se la manda al formulario.
+     */
+    #[Route('/{id}/thanks', name: 'panel_survey_thanks', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function thanks(Survey $survey, SurveyParticipationRepository $participations): Response
+    {
+        $partner = $this->requirePartner();
+        if (!$partner instanceof Partner) {
+            return $partner;
+        }
+
+        if (!$participations->hasParticipated($survey, $partner)) {
+            return $this->redirectToRoute('panel_survey_respond', ['id' => $survey->getId()]);
+        }
+
+        return $this->render('panel_survey/thanks.html.twig', [
+            'survey' => $survey,
         ]);
     }
 
