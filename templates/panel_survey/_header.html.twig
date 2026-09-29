@@ -1,0 +1,21 @@
+{#
+ # Cabecera de una encuesta tal y como la ve la socia: título, descripción y
+ # lo que cuesta responderla. Común al panel, al enlace del correo y a la vista
+ # previa de administración, para que las tres se vean igual.
+ #
+ # Recibe:
+ #   - survey  Survey
+ #   - kicker  texto pequeño de encima del título
+ #}
+{% import '_macros/csa.html.twig' as csa %}
+{% set n = survey.questions|length %}
+
+{{ csa.page_header(kicker, survey.title, survey.description) }}
+
+<ul class="svy-facts">
+    <li><i class="fa fa-list-ol" aria-hidden="true"></i> {{ n }} pregunta{{ n == 1 ? '' : 's' }}</li>
+    <li><i class="fa fa-lock" aria-hidden="true"></i> Anónima</li>
+    {% if survey.closesAt %}
+        <li><i class="fa fa-calendar-o" aria-hidden="true"></i> Hasta el {{ survey.closesAt|date('d/m/Y') }}</li>
+    {% endif %}
+</ul>

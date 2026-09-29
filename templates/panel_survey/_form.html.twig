@@ -5,6 +5,7 @@
  #   - survey   Survey
  #   - form     vista de SurveyResponseType
  #   - cancel   URL de «Ahora no» (null = no se ofrece)
+ #   - preview  true en la vista previa de administración: no se puede enviar
  #
  # Cada pregunta es un <fieldset> con su <legend>: así el lector de pantalla
  # anuncia la pregunta al llegar a cualquiera de sus opciones. El input real de
@@ -20,7 +21,7 @@
  # pregunta y con palabras. El globo nativo del navegador saldría pegado a un
  # input que no se ve.
  #}
-{{ form_start(form, { attr: { class: 'svy-form', novalidate: 'novalidate', 'data-svy-form': '1' } }) }}
+{{ form_start(form, { attr: { class: 'svy-form', novalidate: 'novalidate', 'data-svy-form': '1' }|merge(preview|default(false) ? { 'data-svy-preview': '1' } : {}) }) }}
 
     {% if form.vars.errors|length %}
         <div class="svy-form-error" role="alert">
@@ -103,11 +104,20 @@
             <span>Tus respuestas son anónimas. Se suman a las del resto de la asociación, pero nadie puede saber qué has contestado tú.</span>
         </p>
         <div class="svy-send__row">
-            <button type="submit" class="csa-btn csa-btn--primary svy-send__btn" data-svy-submit>
-                Enviar mis respuestas
-            </button>
-            {% if cancel|default(null) %}
-                <a class="svy-send__later" href="{{ cancel }}">Ahora no</a>
+            {% if preview|default(false) %}
+                {# Vista previa de administración: se ve y se toca igual, pero no
+                 # se puede enviar (botón desactivado y el submit se anula abajo). #}
+                <button type="button" class="csa-btn csa-btn--primary svy-send__btn" disabled>
+                    Enviar mis respuestas
+                </button>
+                <span class="svy-send__later">Vista previa: no se guarda nada.</span>
+            {% else %}
+                <button type="submit" class="csa-btn csa-btn--primary svy-send__btn" data-svy-submit>
+                    Enviar mis respuestas
+                </button>
+                {% if cancel|default(null) %}
+                    <a class="svy-send__later" href="{{ cancel }}">Ahora no</a>
+                {% endif %}
             {% endif %}
         </div>
     </div>
@@ -143,7 +153,9 @@
 
     // Un doble toque no manda dos veces (el servidor lo cortaría igual, pero la
     // socia vería un aviso raro en lugar del agradecimiento).
-    form.addEventListener('submit', function () {
+    form.addEventListener('submit', function (e) {
+        // En la vista previa no se envía nada, ni pulsando Intro en un campo.
+        if (form.hasAttribute('data-svy-preview')) { e.preventDefault(); return; }
         var btn = form.querySelector('[data-svy-submit]');
         if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
     });

@@ -102,6 +102,7 @@
                 <i class="fa fa-plus"></i> Nueva encuesta
             </a>
         {% endif %}
+        {{ csa.help('encuestas', null, 'Ayuda: cómo funcionan las encuestas') }}
     </div>
 
     {# ============ TABLA ============ #}
@@ -196,19 +197,7 @@
                                             <button type="button" class="prl-btn prl-btn--primary prl-btn--sm" onclick="document.getElementById('dlg-open-{{ survey.id }}').showModal()">
                                                 <i class="fa fa-play"></i> Abrir
                                             </button>
-                                            {{ csa.confirm_dialog('dlg-open-' ~ survey.id, {
-                                                variant: 'info',
-                                                eyebrow: 'Abrir a respuestas',
-                                                title: 'Abrir “' ~ survey.title ~ '”',
-                                                body: 'Lxs socixs podrán responder y se les avisará ahora mismo'
-                                                    ~ (audience ? ': ' ~ audience.email ~ ' por correo (con un enlace para responder sin entrar en la web), ' ~ audience.push ~ ' al móvil y todas las cuentas en su bandeja' : '')
-                                                    ~ '. Una vez abierta ya no podrás editar las preguntas.'
-                                                    ~ (audience and not audience.emailEnabled ? ' OJO: el envío de correos está apagado en la configuración.' : ''),
-                                                confirm_label: 'Abrir encuesta',
-                                                action: path('survey_open', { id: survey.id }),
-                                                csrf_name: '_token',
-                                                csrf_token: csrf_token('survey_open_' ~ survey.id)
-                                            }) }}
+                                            {{ include('survey/_open_dialog.html.twig', { survey: survey, audience: audience }) }}
                                         {% elseif survey.open %}
                                             {% if not expired and not survey.announcedAt %}
                                                 {# --- Avisar: SÓLO mientras no se haya avisado nunca (abierta
@@ -220,22 +209,13 @@
                                                 <button type="button" class="prl-btn prl-btn--sm" title="Avisar a las socias" aria-label="Avisar a las socias" onclick="document.getElementById('dlg-announce-{{ survey.id }}').showModal()">
                                                     <i class="fa fa-bullhorn"></i>
                                                 </button>
-                                                {{ csa.confirm_dialog('dlg-announce-' ~ survey.id, {
-                                                    variant: 'info',
-                                                    eyebrow: 'Aviso',
-                                                    title: 'Avisar de “' ~ survey.title ~ '”',
-                                                    body: 'Esta encuesta está abierta pero no se ha avisado. Se manda ahora a todas las socias: correo con su enlace para responder, móvil y bandeja. Sólo se puede hacer una vez; si a alguien no le llega, se le reenvía desde la ficha.',
-                                                    confirm_label: 'Avisar a todas',
-                                                    action: path('survey_announce', { id: survey.id }),
-                                                    csrf_name: '_token',
-                                                    csrf_token: csrf_token('survey_announce_' ~ survey.id)
-                                                }) }}
+                                                {{ include('survey/_announce_dialog.html.twig', { survey: survey }) }}
                                             {% elseif not expired %}
                                                 {# --- Ya avisada: el megáfono NO desaparece, cambia de estado.
                                                  # Que se esfumara hacía pensar que algo iba mal. En verde y
                                                  # llevando a la ficha, que es donde se reenvía a una socia. --- #}
                                                 {% set announced_label = 'Avisada el ' ~ survey.announcedAt|date('d/m/Y') ~ '. Pulsa para reenviarle el enlace a una socia.' %}
-                                                <a href="{{ path('survey_show', { id: survey.id }) }}#reenviar" class="sv-announced" title="{{ announced_label }}" aria-label="{{ announced_label }}">
+                                                <a href="{{ path('survey_show', { id: survey.id }) }}#reenviar-enlace" class="sv-announced" title="{{ announced_label }}" aria-label="{{ announced_label }}">
                                                     <i class="fa fa-bullhorn"></i>
                                                 </a>
                                             {% endif %}

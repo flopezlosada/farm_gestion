@@ -164,6 +164,37 @@ class SurveyAdminControllerTest extends AbstractAuthenticatedTest
         $this->assertSelectorTextContains('body', 'Enlace reenviado a');
     }
 
+    /**
+     * La vista previa es el formulario REAL de la socia (mismas clases que el
+     * enlace del correo), pero sin forma de enviarlo.
+     */
+    public function testPreviewShowsTheRealFormWithoutSubmit(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableSurveys();
+        $survey = $this->makeFullSurvey(Survey::STATUS_DRAFT, 'Para previsualizar');
+
+        $crawler = $client->request('GET', '/gestion/surveys/'.$survey->getId().'/preview');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorExists('form[data-svy-form][data-svy-preview]');
+        $this->assertCount(4, $crawler->filter('fieldset.svy-q'), 'Una por pregunta, como la ve la socia.');
+        $this->assertCount(0, $crawler->filter('button[type="submit"]'), 'En la vista previa no se puede enviar.');
+    }
+
+    public function testShowOffersOpenForADraft(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableSurveys();
+        $survey = $this->makeFullSurvey(Survey::STATUS_DRAFT, 'Borrador en ficha');
+
+        $crawler = $client->request('GET', '/gestion/surveys/'.$survey->getId());
+
+        $this->assertResponseIsSuccessful();
+        $this->assertCount(1, $crawler->filter('form[action="/gestion/surveys/'.$survey->getId().'/open"]'));
+        $this->assertCount(1, $crawler->filter('a[href="/gestion/surveys/'.$survey->getId().'/preview"]'));
+    }
+
     public function testEditRedirectsWhenNotDraft(): void
     {
         $client = $this->createAuthenticatedClient();

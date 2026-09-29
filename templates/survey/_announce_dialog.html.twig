@@ -1,0 +1,18 @@
+{#
+ # Diálogo de «Avisar a todas» para una encuesta abierta que NUNCA se ha
+ # avisado, común al listado y a la ficha. Su id es dlg-announce-{id}.
+ #
+ # Recibe:
+ #   - survey  Survey abierta sin announcedAt
+ #}
+{% import '_macros/csa.html.twig' as csa %}
+{{ csa.confirm_dialog('dlg-announce-' ~ survey.id, {
+    variant: 'info',
+    eyebrow: 'Aviso',
+    title: 'Avisar de “' ~ survey.title ~ '”',
+    body: 'Esta encuesta está abierta pero no se ha avisado. Se manda ahora a todas las socias: correo con su enlace para responder, móvil y bandeja. Sólo se puede hacer una vez; si a alguien no le llega, se le reenvía desde la ficha.',
+    confirm_label: 'Avisar a todas',
+    action: path('survey_announce', { id: survey.id }),
+    csrf_name: '_token',
+    csrf_token: csrf_token('survey_announce_' ~ survey.id)
+}) }}

@@ -1,0 +1,106 @@
+{# Contenido de ayuda · Encuestas. Cada tarea en su tarjeta; el id de cada una
+ # es el ancla a la que apuntan los «?» de las pantallas de encuestas. #}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'crear', title: 'Preparar una encuesta nueva' } %}
+    {% block body %}
+        {% import '_macros/csa.html.twig' as csa %}
+        <ol class="help-steps">
+            <li>En el menú, entra en <strong>Encuestas → Encuestas</strong> y pulsa <strong>«Nueva encuesta»</strong>.</li>
+            <li>Ponle un <strong>título</strong> que se entienda solo: es lo que las socias leen en el asunto del correo. La <strong>descripción</strong> es opcional y sirve para contar por qué preguntáis.</li>
+            <li>Si quieres un plazo, rellena el <strong>último día para responder</strong>. Ese día cuenta entero; al día siguiente la encuesta deja de admitir respuestas sola.</li>
+            <li>Añade las <strong>preguntas</strong> con «+ Añadir pregunta». En cada una eliges el tipo (tarjeta siguiente) y si es <strong>obligatoria</strong>.</li>
+            <li>Pulsa <strong>«Crear encuesta»</strong>.</li>
+        </ol>
+        {{ csa.callout(
+            'La encuesta nace en BORRADOR: nadie la ve ni recibe nada. Puedes editarla y revisarla con calma antes de abrirla. En su ficha (el ojo del listado), el botón «Vista previa» te enseña la encuesta EXACTAMENTE como la verá cada socia; puedes marcar respuestas para probarla, pero no se guarda nada.',
+            'info'
+        ) }}
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'tipos', title: 'Qué tipo de pregunta elegir' } %}
+    {% block body %}
+        <ol class="help-steps">
+            <li><strong>Opción única</strong>: se elige una sola respuesta de una lista (por ejemplo, «¿Qué día prefieres?»). Para un sí/no, pon dos opciones: «Sí» y «No».</li>
+            <li><strong>Opción múltiple</strong>: se pueden marcar varias (por ejemplo, «¿Qué productos te gustaría?»).</li>
+            <li><strong>Escala 1-5</strong>: para valorar algo. La socia ve cinco botones con «Nada» en el 1 y «Mucho» en el 5; en los resultados sale la media.</li>
+            <li><strong>Texto libre</strong>: para opiniones y sugerencias. No se puede resumir en números: en los resultados se leen una a una.</li>
+        </ol>
+        {% import '_macros/csa.html.twig' as csa %}
+        {{ csa.callout(
+            'Las de opción única y múltiple necesitan al menos DOS opciones, cada una en su campo. Si guardas con menos, el formulario te lo dice junto a las opciones.',
+            'info'
+        ) }}
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'abrir', title: 'Abrir la encuesta y avisar a las socias' } %}
+    {% block body %}
+        {% import '_macros/csa.html.twig' as csa %}
+        <ol class="help-steps">
+            <li>Pulsa <strong>«Abrir»</strong> en la fila de la encuesta del listado, o <strong>«Abrir y avisar»</strong> en su ficha (lo mejor: justo después de mirar la vista previa).</li>
+            <li>El aviso te dice <strong>a cuánta gente le va a llegar</strong> por correo y al móvil. Revísalo y pulsa <strong>«Abrir encuesta»</strong>.</li>
+            <li>En ese momento se avisa a <strong>todas las socias activas</strong>: un correo a cada una con <strong>su propio enlace</strong> para responder sin contraseña, un aviso al móvil a quien lo tenga activado y una nota en su bandeja del panel.</li>
+            <li>El megáfono de la fila se pone <strong>en verde</strong> y debajo del título pone «Avisada el…».</li>
+        </ol>
+        {{ csa.callout(
+            'Revisa bien antes de abrir: una vez abierta YA NO SE PUEDEN CAMBIAR las preguntas, las opciones ni el último día. Tampoco se puede borrar (sólo archivar).',
+            'warning'
+        ) }}
+        {{ csa.callout(
+            'El aviso a todas sale UNA sola vez por encuesta, para no llenar de correos a nadie. Si a alguien no le llega, se le reenvía a ella sola (tarjeta siguiente).',
+            'info'
+        ) }}
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'reenviar', title: 'A alguien no le ha llegado el correo' } %}
+    {% block body %}
+        {% import '_macros/csa.html.twig' as csa %}
+        <ol class="help-steps">
+            <li>En el listado, pulsa el <strong>ojo</strong> de la encuesta (o el megáfono verde): se abre su ficha.</li>
+            <li>En la caja <strong>«¿A alguien no le llegó el correo?»</strong>, elige a la socia en el desplegable.</li>
+            <li>Pulsa <strong>«Reenviar su enlace»</strong>. Le llega sólo a ella, aunque hubiera apagado los avisos de encuestas.</li>
+        </ol>
+        {{ csa.callout(
+            'Que no le llegue suele ser la carpeta de spam: díselo antes de reenviar. Y si ya había respondido, el enlace sólo le dará las gracias: no puede responder dos veces.',
+            'info'
+        ) }}
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'sin-correo', title: 'Socias sin correo o que no usan la web' } %}
+    {% block body %}
+        <ol class="help-steps">
+            <li>El aviso sólo llega a quien tiene correo en su ficha. A quien no lo tiene <strong>no le llega nada</strong>: hay que contárselo en el reparto o por el grupo de mensajería.</li>
+            <li>Para responder <strong>no hace falta cuenta</strong> en la web: basta con el botón del correo. Quien sí entra en su panel ve además la encuesta en la portada, en «La asociación te pregunta».</li>
+        </ol>
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'resultados', title: 'Ver los resultados' } %}
+    {% block body %}
+        {% import '_macros/csa.html.twig' as csa %}
+        <ol class="help-steps">
+            <li>En el listado, pulsa el icono de la <strong>gráfica</strong>. Se pueden mirar mientras la encuesta sigue abierta; se van actualizando.</li>
+            <li>Arriba pone <strong>cuántas socias han respondido</strong>. Los porcentajes se calculan sobre ellas, no sobre toda la asociación.</li>
+            <li>En opción única y múltiple, la opción más votada sale destacada con una estrella. En la escala sale la <strong>media</strong> (y, si la despliegas, cuántos votos tuvo cada número). El texto libre se lee respuesta a respuesta.</li>
+        </ol>
+        {{ csa.callout(
+            'Es ANÓNIMA de verdad: nadie, tampoco administración, puede ver qué ha contestado cada socia. Sólo se sabe cuántas han respondido.',
+            'info'
+        ) }}
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'cerrar', title: 'Cerrar, archivar o borrar' } %}
+    {% block body %}
+        <ol class="help-steps">
+            <li><strong>Con plazo</strong>: no hace falta hacer nada. Pasado el último día deja de admitir respuestas y en el listado pone «Plazo cumplido».</li>
+            <li><strong>Cerrar antes de tiempo</strong>: pulsa <strong>«Cerrar»</strong> en su fila. Deja de admitir respuestas y los resultados se quedan.</li>
+            <li><strong>Archivar</strong>: la quita del listado sin perder nada (preguntas y respuestas). Las archivadas se ven pulsando el contador «archivadas» y se pueden <strong>desarchivar</strong>.</li>
+            <li><strong>Borrar</strong> (la papelera) sólo se puede en borrador, cuando todavía no tiene respuestas. Una vez abierta, se archiva.</li>
+        </ol>
+    {% endblock %}
+{% endembed %}

@@ -139,6 +139,7 @@
     <div class="svr-meta">
         {{ csa.badge(sm.label, sm.tone) }}
         <span class="csa-muted"><strong>{{ participants }}</strong> socix{{ participants == 1 ? '' : 's' }} {{ participants == 1 ? 'ha' : 'han' }} respondido</span>
+        {{ csa.help('encuestas', 'resultados', 'Ayuda: cómo leer los resultados') }}
     </div>
 
     {% if participants == 0 %}

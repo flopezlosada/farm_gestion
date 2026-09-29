@@ -1,0 +1,39 @@
+{# ============================================================
+ # Vista previa de una encuesta para administración.
+ #
+ # ES LA MISMA PÁGINA QUE ABRE LA SOCIA desde su correo: el mismo
+ # layout, la misma cabecera y el mismo formulario (parciales de
+ # panel_survey). Si fuera una maqueta aparte, tarde o temprano
+ # enseñaría algo distinto de lo que ven ellas. Lo único propio es la
+ # franja de arriba y que no se puede enviar.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_public_survey.html.twig' %}
+
+{% block title %}Vista previa · {{ survey.title }}{% endblock %}
+
+{% block csa_main %}
+    <style>
+        .svy-preview-bar {
+            display: flex; gap: var(--csa-sp-3); align-items: flex-start; flex-wrap: wrap;
+            margin: 0 0 var(--csa-sp-8); padding: var(--csa-sp-3) var(--csa-sp-4);
+            background: var(--csa-plum-soft); color: var(--csa-plum);
+            border-radius: var(--csa-radius-md);
+            font-size: var(--csa-fs-sm); line-height: var(--csa-lh-normal);
+        }
+        .svy-preview-bar i { margin-top: 3px; }
+        .svy-preview-bar span { flex: 1; min-width: 220px; }
+        .svy-preview-bar a { color: var(--csa-plum); font-weight: 600; white-space: nowrap; }
+    </style>
+
+    <div class="svy-preview-bar" role="note">
+        <i class="fa fa-eye" aria-hidden="true"></i>
+        <span><strong>Vista previa.</strong> Así la verá cada socia al abrir el enlace de su correo (o desde su panel). Puedes marcar respuestas para probarla, pero no se envía ni se guarda nada.</span>
+        <a href="{{ path('survey_show', { id: survey.id }) }}">Volver a la ficha</a>
+    </div>
+
+    <div class="svy">
+        {{ include('panel_survey/_header.html.twig', { survey: survey, kicker: 'Encuesta para (nombre de la socia)' }) }}
+        {{ include('panel_survey/_form.html.twig', { cancel: null, preview: true }) }}
+    </div>
+{% endblock %}
