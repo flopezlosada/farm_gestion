@@ -49,6 +49,8 @@
         .sv-actions > form { margin: 0; display: inline-flex; }
         .prl-table .actions .sv-actions a { display: inline-flex; }
         .prl-table .actions .sv-actions .prl-btn { white-space: nowrap; }
+        /* Megáfono de una encuesta ya avisada: mismo sitio, en verde. */
+        .prl-table .actions .sv-actions a.sv-announced { color: var(--csa-green); }
     </style>
 {% endblock %}
 
@@ -228,6 +230,14 @@
                                                     csrf_name: '_token',
                                                     csrf_token: csrf_token('survey_announce_' ~ survey.id)
                                                 }) }}
+                                            {% elseif not expired %}
+                                                {# --- Ya avisada: el megáfono NO desaparece, cambia de estado.
+                                                 # Que se esfumara hacía pensar que algo iba mal. En verde y
+                                                 # llevando a la ficha, que es donde se reenvía a una socia. --- #}
+                                                {% set announced_label = 'Avisada el ' ~ survey.announcedAt|date('d/m/Y') ~ '. Pulsa para reenviarle el enlace a una socia.' %}
+                                                <a href="{{ path('survey_show', { id: survey.id }) }}#reenviar" class="sv-announced" title="{{ announced_label }}" aria-label="{{ announced_label }}">
+                                                    <i class="fa fa-bullhorn"></i>
+                                                </a>
                                             {% endif %}
                                             {# --- Cerrar --- #}
                                             <button type="button" class="prl-btn prl-btn--warn prl-btn--sm" onclick="document.getElementById('dlg-close-{{ survey.id }}').showModal()">

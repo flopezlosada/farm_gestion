@@ -52,7 +52,7 @@
      # «no me llegó». El aviso a toda la asociación no se repite nunca. Sólo
      # nombres en el desplegable: este rol no ve fichas ni correos. #}
     {% if resend_partners is not empty %}
-        <form method="post" action="{{ path('survey_resend', { id: survey.id }) }}" class="csa-card sv-resend">
+        <form id="reenviar" method="post" action="{{ path('survey_resend', { id: survey.id }) }}" class="csa-card sv-resend">
             <div class="sv-resend__text">
                 <strong>¿A alguien no le llegó el correo?</strong>
                 <span class="csa-muted">Le reenviamos a ella sola su enlace para responder. No se le avisa a nadie más.</span>
