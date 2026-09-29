@@ -138,6 +138,32 @@ class SurveyAdminControllerTest extends AbstractAuthenticatedTest
         $this->assertNotNull($reloaded->getAnnouncedAt(), 'Abrir tiene que dejar constancia del aviso.');
     }
 
+    /**
+     * Desde la ficha se reenvía el enlace a UNA socia; el aviso general de una
+     * encuesta ya avisada no se ofrece.
+     */
+    public function testResendFromShowGoesToOnePartner(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableSurveys();
+        $survey = $this->makeFullSurvey(Survey::STATUS_OPEN, 'Para reenviar');
+        $survey->setAnnouncedAt(new \DateTime('-1 day'));
+        $this->em()->flush();
+
+        $listing = $client->request('GET', '/gestion/surveys/');
+        $this->assertCount(0, $listing->filter('form[action="/gestion/surveys/'.$survey->getId().'/announce"]'), 'Ya avisada: no se ofrece repetir el aviso a todas.');
+
+        $crawler = $client->request('GET', '/gestion/surveys/'.$survey->getId());
+        $form = $crawler->filter('form[action="/gestion/surveys/'.$survey->getId().'/resend"]')->form();
+        $partnerId = $form['partner']->availableOptionValues()[1];
+        $form['partner']->select($partnerId);
+        $client->submit($form);
+
+        $this->assertResponseRedirects('/gestion/surveys/'.$survey->getId());
+        $client->followRedirect();
+        $this->assertSelectorTextContains('body', 'Enlace reenviado a');
+    }
+
     public function testEditRedirectsWhenNotDraft(): void
     {
         $client = $this->createAuthenticatedClient();

@@ -2,8 +2,10 @@
 
 namespace App\Controller;
 
+use App\Entity\Partner;
 use App\Entity\Question;
 use App\Entity\Survey;
+use App\Repository\PartnerRepository;
 use App\Form\SurveyType;
 use App\Repository\SurveyAnswerRepository;
 use App\Repository\SurveyParticipationRepository;
@@ -80,11 +82,18 @@ class SurveyController extends AbstractController
      * o cerrada, que no se editan.
      */
     #[Route('/{id}', name: 'survey_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(Survey $survey, SurveyParticipationRepository $participations): Response
+    public function show(Survey $survey, SurveyParticipationRepository $participations, PartnerRepository $partners): Response
     {
+        // A quién se le puede reenviar el enlace: sólo mientras admite
+        // respuestas y a quien puede escribir. Nombres, nada más: este rol no
+        // ve fichas ni correos de socias.
+        $canResend = $survey->acceptsResponses(new \DateTimeImmutable())
+            && $this->isGranted('ROLE_GESTION_ENCUESTAS_EDIT');
+
         return $this->render('survey/show.html.twig', [
-            'survey'        => $survey,
-            'participants'  => $participations->countForSurvey($survey),
+            'survey'          => $survey,
+            'participants'    => $participations->countForSurvey($survey),
+            'resend_partners' => $canResend ? $partners->findActiveWithEmail() : [],
         ]);
     }
 
@@ -252,9 +261,10 @@ class SurveyController extends AbstractController
     }
 
     /**
-     * Reintentar el aviso de una encuesta abierta. Sólo completa a quien se
-     * quedó sin él (un envío cortado, o el correo apagado cuando se abrió): el
-     * registro de efectos impide repetir a nadie.
+     * Avisar de una encuesta abierta que TODAVÍA NO SE HA AVISADO: la que se
+     * abrió antes de que existiera el aviso, o un envío que se cortó antes de
+     * terminar (la marca se pone al final). Una vez avisada no se repite: el
+     * reenvío es a una socia concreta, desde la ficha ({@see self::resend()}).
      */
     #[Route('/{id}/announce', name: 'survey_announce', methods: ['POST'])]
     public function announce(Request $request, Survey $survey, SurveyAnnouncer $announcer): Response
@@ -271,13 +281,58 @@ class SurveyController extends AbstractController
             return $this->redirectToRoute('survey_index');
         }
 
+        if (null !== $survey->getAnnouncedAt()) {
+            $this->addFlash('warning', 'Esta encuesta ya se avisó a la asociación. Si a alguien no le llegó, reenvíale su enlace desde la ficha de la encuesta.');
+
+            return $this->redirectToRoute('survey_index');
+        }
+
         $sent = $announcer->announce($survey);
         $this->addFlash('success', sprintf(
-            'Aviso completado: %d correos nuevos. A quien ya lo tenía no se le ha repetido.',
+            'Aviso enviado: %d por correo, %d al móvil y en la bandeja de %d cuentas.',
             $sent['email'],
+            $sent['push'],
+            $sent['inbox'],
         ));
 
         return $this->redirectToRoute('survey_index');
+    }
+
+    /**
+     * Reenviar el correo, con su enlace personal, a UNA socia que dice que no
+     * le llegó. No dice si ya había respondido: el equipo de encuestas no debe
+     * saber quién ha participado. Si ya respondió, el enlace le dará las gracias.
+     */
+    #[Route('/{id}/resend', name: 'survey_resend', methods: ['POST'])]
+    public function resend(Request $request, Survey $survey, PartnerRepository $partners, SurveyAnnouncer $announcer): Response
+    {
+        $back = $this->redirectToRoute('survey_show', ['id' => $survey->getId()]);
+
+        if (!$this->isCsrfTokenValid('survey_resend_'.$survey->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $back;
+        }
+
+        if (!$survey->acceptsResponses(new \DateTimeImmutable())) {
+            $this->addFlash('warning', 'Esta encuesta ya no admite respuestas: el enlace no le serviría.');
+
+            return $back;
+        }
+
+        $partner = $partners->find($request->request->getInt('partner'));
+        if (!$partner instanceof Partner || Partner::STATUS_ACTIVO !== $partner->getStatus() || '' === trim((string) $partner->getEmail())) {
+            $this->addFlash('warning', 'Elige una socia activa con correo.');
+
+            return $back;
+        }
+
+        $name = trim(mb_convert_case((string) $partner->getName(), MB_CASE_TITLE) . ' ' . mb_convert_case((string) $partner->getSurname(), MB_CASE_TITLE));
+        $announcer->resendTo($survey, $partner)
+            ? $this->addFlash('success', sprintf('Enlace reenviado a %s.', $name))
+            : $this->addFlash('warning', sprintf('No se pudo enviar el correo a %s. Revisa que el envío de correos esté encendido y mira el registro de avisos.', $name));
+
+        return $back;
     }
 
     /**

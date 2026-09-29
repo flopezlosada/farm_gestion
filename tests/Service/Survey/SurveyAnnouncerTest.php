@@ -119,6 +119,48 @@ class SurveyAnnouncerTest extends TestCase
         self::assertSame(0, $result['email']);
     }
 
+    /**
+     * El reenvío a una socia sale sólo a ella, con su enlace, aunque hubiera
+     * silenciado el tema (lo pide ella), y aunque ya constara enviado.
+     */
+    public function testReenviarAUnaSociaLeLlegaSoloAElla(): void
+    {
+        $preferences = $this->createMock(NotificationPreferences::class);
+        $preferences->method('filter')->willReturn([]);
+
+        $resends = [];
+        $ledger = $this->createMock(EffectLedger::class);
+        $ledger->method('once')->willReturnCallback(
+            function (string $kind, string $reference, \DateTimeInterface $on, callable $effect, ?string $target = null, bool $resend = false) use (&$resends): bool {
+                $resends[] = $resend;
+                $effect();
+
+                return true;
+            }
+        );
+
+        $sent = [];
+        $mailer = $this->createMock(MailerInterface::class);
+        $mailer->expects(self::once())->method('send')->willReturnCallback(function (TemplatedEmail $email) use (&$sent): void {
+            $sent[] = [$email->getTo()[0]->getAddress(), $email->getContext()['url']];
+        });
+
+        $ok = $this->announcer(mailer: $mailer, preferences: $preferences, ledger: $ledger)
+            ->resendTo($this->survey, $this->active[1]);
+
+        self::assertTrue($ok);
+        self::assertSame([['otra@example.com', 'https://csa.example/surveys/7/respond/2?_hash=x']], $sent);
+        self::assertSame([true], $resends, 'Tiene que salir aunque ya constara enviado.');
+    }
+
+    public function testReenviarConElCorreoApagadoNoMandaNada(): void
+    {
+        $mailer = $this->createMock(MailerInterface::class);
+        $mailer->expects(self::never())->method('send');
+
+        self::assertFalse($this->announcer(mailer: $mailer, emailEnabled: false)->resendTo($this->survey, $this->active[0]));
+    }
+
     public function testUnCorreoQueFallaNoAbortaElResto(): void
     {
         $mailer = $this->createMock(MailerInterface::class);

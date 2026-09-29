@@ -208,20 +208,22 @@
                                                 csrf_token: csrf_token('survey_open_' ~ survey.id)
                                             }) }}
                                         {% elseif survey.open %}
-                                            {% if not expired %}
-                                                {# --- Reintentar el aviso: sólo completa a quien le falte --- #}
+                                            {% if not expired and not survey.announcedAt %}
+                                                {# --- Avisar: SÓLO mientras no se haya avisado nunca (abierta
+                                                 # antes de existir el aviso, o un envío que se cortó antes de
+                                                 # terminar). Una vez avisada, el aviso general no se repite:
+                                                 # el reenvío es a una socia concreta, desde la ficha. --- #}
                                                 {# Sólo icono, como Ver y Resultados: con texto, la celda de
                                                  # acciones se comía la columna de respuestas. #}
-                                                {% set announce_label = survey.announcedAt ? 'Reintentar el aviso' : 'Avisar a las socias' %}
-                                                <button type="button" class="prl-btn prl-btn--sm" title="{{ announce_label }}" aria-label="{{ announce_label }}" onclick="document.getElementById('dlg-announce-{{ survey.id }}').showModal()">
+                                                <button type="button" class="prl-btn prl-btn--sm" title="Avisar a las socias" aria-label="Avisar a las socias" onclick="document.getElementById('dlg-announce-{{ survey.id }}').showModal()">
                                                     <i class="fa fa-bullhorn"></i>
                                                 </button>
                                                 {{ csa.confirm_dialog('dlg-announce-' ~ survey.id, {
                                                     variant: 'info',
                                                     eyebrow: 'Aviso',
                                                     title: 'Avisar de “' ~ survey.title ~ '”',
-                                                    body: 'Manda el aviso a quien todavía no lo haya recibido (por ejemplo, si el envío se cortó). A quien ya lo tiene no se le repite.',
-                                                    confirm_label: 'Completar el aviso',
+                                                    body: 'Esta encuesta está abierta pero no se ha avisado. Se manda ahora a todas las socias: correo con su enlace para responder, móvil y bandeja. Sólo se puede hacer una vez; si a alguien no le llega, se le reenvía desde la ficha.',
+                                                    confirm_label: 'Avisar a todas',
                                                     action: path('survey_announce', { id: survey.id }),
                                                     csrf_name: '_token',
                                                     csrf_token: csrf_token('survey_announce_' ~ survey.id)

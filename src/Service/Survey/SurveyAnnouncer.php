@@ -41,7 +41,8 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
  * querer: {@see Survey::getAnnouncedAt()} es la memoria visible y
  * {@see EffectLedger} la garantía técnica, con un apunte por persona. Volver a
  * llamar a {@see announce()} sólo completa a quien se quedó sin correo en un
- * envío cortado; no repite a nadie.
+ * envío cortado; no repite a nadie. El único reenvío es a UNA socia que lo
+ * pide ({@see resendTo()}): el aviso a toda la asociación no se repite.
  *
  * Mismo esquema que {@see \App\Service\ConsumerGroup\ConsumerGroupAnnouncer} y
  * {@see \App\Service\News\NewsAnnouncer}, con la diferencia del enlace
@@ -166,41 +167,75 @@ class SurveyAnnouncer
             return 0;
         }
 
-        $preferencesUrl = $this->urls->generate('panel_notifications', [], UrlGeneratorInterface::ABSOLUTE_URL);
-
         $sent = 0;
         foreach ($this->emailRecipients() as $partner) {
-            $address = trim((string) $partner->getEmail());
-            if ('' === $address) {
-                continue;
-            }
-
-            $done = $this->onceOrLog(
-                self::EFFECT_EMAIL,
-                $survey->getId() . ':' . $partner->getId(),
-                $survey,
-                fn () => $this->mailer->send(
-                    (new TemplatedEmail())
-                        ->to($address)
-                        ->subject($this->subject($survey))
-                        ->htmlTemplate('email/survey_open.html.twig')
-                        ->textTemplate('email/survey_open.txt.twig')
-                        ->context([
-                            'partner' => $partner,
-                            'survey' => $survey,
-                            'url' => $this->surveyLink->forPartner($survey, $partner),
-                            'preferences_url' => $preferencesUrl,
-                        ])
-                ),
-                $address,
-            );
-
-            if ($done) {
+            if ($this->sendEmailTo($survey, $partner, false)) {
                 ++$sent;
             }
         }
 
         return $sent;
+    }
+
+    /**
+     * Reenvía el correo, con su enlace personal, a UNA socia concreta.
+     *
+     * Es la respuesta a «no me llegó» o «lo borré sin querer», que es el único
+     * reenvío que tiene sentido: el aviso general no se repite nunca a nadie.
+     * Sale aunque ella hubiera silenciado el tema, porque lo pide ella a través
+     * del equipo. Queda apuntado en el registro de envíos como cualquier otro.
+     *
+     * @param Survey  $survey  la encuesta
+     * @param Partner $partner la socia
+     *
+     * @return bool true si el correo salió; false con el correo apagado, sin
+     *              dirección o si el envío falló (queda en el log)
+     */
+    public function resendTo(Survey $survey, Partner $partner): bool
+    {
+        if (!$this->settings->getBool(AppSettings::EMAIL_ENABLED)) {
+            return false;
+        }
+
+        return $this->sendEmailTo($survey, $partner, true);
+    }
+
+    /**
+     * El correo de una socia, con su propio apunte en el registro de efectos.
+     *
+     * @param Survey  $survey  la encuesta
+     * @param Partner $partner la destinataria
+     * @param bool    $resend  sale aunque ya constara enviado
+     *
+     * @return bool true si salió en esta pasada
+     */
+    private function sendEmailTo(Survey $survey, Partner $partner, bool $resend): bool
+    {
+        $address = trim((string) $partner->getEmail());
+        if ('' === $address) {
+            return false;
+        }
+
+        return $this->onceOrLog(
+            self::EFFECT_EMAIL,
+            $survey->getId() . ':' . $partner->getId(),
+            $survey,
+            fn () => $this->mailer->send(
+                (new TemplatedEmail())
+                    ->to($address)
+                    ->subject($this->subject($survey))
+                    ->htmlTemplate('email/survey_open.html.twig')
+                    ->textTemplate('email/survey_open.txt.twig')
+                    ->context([
+                        'partner' => $partner,
+                        'survey' => $survey,
+                        'url' => $this->surveyLink->forPartner($survey, $partner),
+                        'preferences_url' => $this->urls->generate('panel_notifications', [], UrlGeneratorInterface::ABSOLUTE_URL),
+                    ])
+            ),
+            $address,
+            $resend,
+        );
     }
 
     /**
@@ -288,13 +323,14 @@ class SurveyAnnouncer
      * @param Survey      $survey    la encuesta, de donde sale la fecha de negocio
      * @param callable    $effect    lo que hay que hacer
      * @param string|null $target    destino, para el registro
+     * @param bool        $resend    lo produce aunque ya constara emitido
      *
      * @return bool true si el efecto se produjo en esta pasada
      */
-    private function onceOrLog(string $kind, string $reference, Survey $survey, callable $effect, ?string $target = null): bool
+    private function onceOrLog(string $kind, string $reference, Survey $survey, callable $effect, ?string $target = null, bool $resend = false): bool
     {
         try {
-            return $this->ledger->once($kind, $reference, $survey->getCreatedAt(), $effect, $target);
+            return $this->ledger->once($kind, $reference, $survey->getCreatedAt(), $effect, $target, $resend);
         } catch (\Throwable $e) {
             $this->logger->error('No se pudo entregar el aviso de encuesta abierta', [
                 'survey' => $survey->getId(),
