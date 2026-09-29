@@ -236,7 +236,7 @@
                                                  # Que se esfumara hacía pensar que algo iba mal. En verde y
                                                  # llevando a la ficha, que es donde se reenvía a una socia. --- #}
                                                 {% set announced_label = 'Avisada el ' ~ survey.announcedAt|date('d/m/Y') ~ '. Pulsa para reenviarle el enlace a una socia.' %}
-                                                <a href="{{ path('survey_show', { id: survey.id }) }}#reenviar" class="sv-announced" title="{{ announced_label }}" aria-label="{{ announced_label }}">
+                                                <a href="{{ path('survey_show', { id: survey.id }) }}#reenviar-enlace" class="sv-announced" title="{{ announced_label }}" aria-label="{{ announced_label }}">
                                                     <i class="fa fa-bullhorn"></i>
                                                 </a>
                                             {% endif %}
