@@ -27,7 +27,7 @@ class HelpController extends AbstractController
      * alimenta tanto las tarjetas de la portada como las pestañas y la
      * cabecera de cada página de área. La clave es el slug de la URL.
      *
-     * @var array<string, array{label: string, icon: string, accent: string, lead: string}>
+     * @var array<string, array{label: string, icon: string, accent: string, lead: string, feature?: string}>
      */
     private const SECTIONS = [
         'socios' => [
@@ -48,13 +48,28 @@ class HelpController extends AbstractController
             'accent' => 'ochre',
             'lead' => 'Registrar y consultar las puestas de huevos.',
         ],
+        'encuestas' => [
+            'label' => 'Encuestas',
+            'icon' => 'fa-poll',
+            'accent' => 'plum',
+            'lead' => 'Preparar una encuesta, abrirla y avisar, y leer los resultados.',
+            // Sólo con el módulo encendido: una guía de algo que no aparece
+            // en el menú confunde más que ayuda.
+            'feature' => 'FEATURE_SURVEYS',
+        ],
     ];
+
+    /**
+     * Los slugs válidos, para el `requirements` de las rutas. Tiene que casar
+     * con las claves de {@see SECTIONS}: un atributo PHP no puede leerlas.
+     */
+    private const SLUGS = 'socios|reparto|cosechas|encuestas';
 
     #[Route('/gestion/help', name: 'help_index', methods: ['GET'])]
     public function index(): Response
     {
         return $this->render('help/index.html.twig', [
-            'sections' => self::SECTIONS,
+            'sections' => $this->visibleSections(),
         ]);
     }
 
@@ -62,11 +77,13 @@ class HelpController extends AbstractController
      * Página de un área concreta. El slug se valida en el propio routing
      * (requirements), así que un valor fuera de la lista devuelve 404.
      */
-    #[Route('/gestion/help/{section}', name: 'help_section', methods: ['GET'], requirements: ['section' => 'socios|reparto|cosechas'])]
+    #[Route('/gestion/help/{section}', name: 'help_section', methods: ['GET'], requirements: ['section' => self::SLUGS])]
     public function section(string $section): Response
     {
+        $this->denyUnlessVisible($section);
+
         return $this->render('help/section.html.twig', [
-            'sections' => self::SECTIONS,
+            'sections' => $this->visibleSections(),
             'current' => $section,
         ]);
     }
@@ -77,9 +94,35 @@ class HelpController extends AbstractController
      * {@see section()}, así que el contenido vive en un único sitio: la guía y
      * el modal nunca se desincronizan.
      */
-    #[Route('/gestion/help/{section}/fragment', name: 'help_fragment', methods: ['GET'], requirements: ['section' => 'socios|reparto|cosechas'])]
+    #[Route('/gestion/help/{section}/fragment', name: 'help_fragment', methods: ['GET'], requirements: ['section' => self::SLUGS])]
     public function fragment(string $section): Response
     {
+        $this->denyUnlessVisible($section);
+
         return $this->render('help/_' . $section . '.html.twig');
+    }
+
+    /**
+     * Las áreas que se enseñan a quien mira: todas menos las de un módulo
+     * apagado.
+     *
+     * @return array<string, array<string, string>>
+     */
+    private function visibleSections(): array
+    {
+        return array_filter(
+            self::SECTIONS,
+            fn (array $meta): bool => !isset($meta['feature']) || $this->isGranted($meta['feature'])
+        );
+    }
+
+    /**
+     * 404 para el área de un módulo apagado, igual que un slug que no existe.
+     */
+    private function denyUnlessVisible(string $section): void
+    {
+        if (!isset($this->visibleSections()[$section])) {
+            throw $this->createNotFoundException();
+        }
     }
 }

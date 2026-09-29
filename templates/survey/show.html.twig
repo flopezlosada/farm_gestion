@@ -54,7 +54,7 @@
     {% if resend_partners is not empty %}
         <form id="reenviar" method="post" action="{{ path('survey_resend', { id: survey.id }) }}" class="csa-card sv-resend">
             <div class="sv-resend__text">
-                <strong>¿A alguien no le llegó el correo?</strong>
+                <strong>¿A alguien no le llegó el correo? {{ csa.help('encuestas', 'reenviar', 'Ayuda: reenviar el enlace a una socia') }}</strong>
                 <span class="csa-muted">Le reenviamos a ella sola su enlace para responder. No se le avisa a nadie más.</span>
             </div>
             <div class="sv-resend__row">
