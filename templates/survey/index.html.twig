@@ -44,7 +44,9 @@
         /* Acciones en UNA sola fila (nowrap): sin esto, en la celda estrecha
          * (width:1%) los botones envuelven y disparan la altura de la fila. */
         .sv-actions { display: flex; align-items: center; gap: 6px; justify-content: flex-end; flex-wrap: nowrap; }
-        .sv-actions form { margin: 0; display: inline-flex; }
+        /* Sólo los forms sueltos de la fila (`>`): sin él alcanzaba también al
+           form de dentro de cada diálogo y lo descuadraba. */
+        .sv-actions > form { margin: 0; display: inline-flex; }
         .prl-table .actions .sv-actions a { display: inline-flex; }
         .prl-table .actions .sv-actions .prl-btn { white-space: nowrap; }
     </style>

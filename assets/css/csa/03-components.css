@@ -3153,11 +3153,24 @@ table.csa-table thead th.sorting_desc::after { content: " ↓"; color: var(--csa
   color: var(--csa-ink);
   font-family: var(--csa-sans);
   overflow: hidden;
+  /* El diálogo se pinta encima de todo, pero en el DOM sigue donde se
+   * declaró —a menudo dentro de la celda de acciones de una tabla— y HEREDA
+   * de ella. Las celdas de acciones van con nowrap y alineadas a la derecha
+   * (.prl-table .actions), y el texto del modal salía en una sola línea,
+   * cortado por los lados. Se corta la herencia aquí, en el componente, y
+   * no en cada tabla. */
+  white-space: normal;
+  text-align: left;
 }
 .csa-modal:not([open]) { display: none; }
 /* El <form> envuelve toda la estructura interna del modal — forzamos
- * box model limpio para que no herede paddings/márgenes de resets legacy. */
-.csa-modal > form {
+ * box model limpio para que no herede paddings/márgenes de resets legacy.
+ *
+ * `dialog.` delante para ganar en especificidad a reglas de página del tipo
+ * `.acciones form { display: inline-flex }`, pensadas para los botones de la
+ * fila y que alcanzaban también a este form: ponían cabecera, texto y
+ * botones en fila. */
+dialog.csa-modal > form {
   display: block;
   margin: 0;
   padding: 0;
