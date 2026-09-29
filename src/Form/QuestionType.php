@@ -67,6 +67,11 @@ class QuestionType extends AbstractType
                 'label'          => false,
                 'prototype'      => true,
                 'prototype_name' => '__option__',
+                // Un form compuesto sube sus errores al padre por defecto, y el
+                // «Añade al menos 2 opciones» acababa en la pregunta, donde no
+                // se pinta: el formulario volvía sin decir por qué. Se queda
+                // aquí, junto a las opciones, que es donde se arregla.
+                'error_bubbling' => false,
             ]);
 
         // Si el tipo no usa opciones (escala / texto), descartar las que pudieran
