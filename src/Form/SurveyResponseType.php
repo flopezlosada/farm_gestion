@@ -124,6 +124,11 @@ class SurveyResponseType extends AbstractType
         $resolver->setDefaults([
             // No mapea a entidad: devuelve un array que el controlador traduce.
             'data_class' => null,
+            // El de Symfony sale en inglés ("The CSRF token is invalid…"), y es
+            // un caso normal aquí: se abre la encuesta desde el correo, se deja a
+            // medias y se envía horas después. Lo marcado se conserva al volver
+            // a pintar el formulario, así que basta con decir qué hacer.
+            'csrf_message' => 'La página llevaba mucho rato abierta. Revisa tus respuestas y pulsa otra vez «Enviar mis respuestas».',
         ]);
         $resolver->setRequired('survey');
         $resolver->setAllowedTypes('survey', Survey::class);
