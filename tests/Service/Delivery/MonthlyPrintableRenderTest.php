@@ -21,7 +21,8 @@ class MonthlyPrintableRenderTest extends KernelTestCase
     {
         $crawler = $this->render();
 
-        $this->assertCount(2, $crawler->filter('.node-page > table'), 'Una tabla por nodo.');
+        // La hoja de resumen del final también es un .node-page, con su propia tabla.
+        $this->assertCount(2, $crawler->filter('.node-page > table:not(.summary)'), 'Una tabla por nodo.');
         $this->assertCount(2, $crawler->filter('.node-page > table > thead'));
 
         $thead = $crawler->filter('.node-page > table > thead')->first();
