@@ -7,11 +7,12 @@
  # Matriz: socios en filas (nodo → grupo → modalidad), viernes del mes en columnas.
  # Por semana: CESTAS / cantidad / huevos(spec) / huevos(nº). Un nodo por hoja.
  #
- # No partir grupos entre páginas: cada GRUPO es su propia <table> con
- # page-break-inside:avoid (dompdf 2.x lo honra en <table>, NO en <tbody>). Para
- # que las columnas sigan alineadas entre tablas, todas comparten table-layout:fixed
- # y el mismo <colgroup>. La cabecera de columnas va en su propia tabla al inicio
- # de cada nodo (no se repite en páginas de continuación de un nodo grande).
+ # Cada nodo es UNA tabla: su <thead> (título, fechas y CESTA/HUEVOS) lo repite
+ # dompdf en cada página por la que se extienda el nodo, que es lo único que
+ # repite. Cada grupo es un <tbody>, y no se parte entre páginas porque todas sus
+ # filas menos la última llevan page-break-after:avoid: dompdf 2.x ignora
+ # page-break-inside en <tbody>, pero sí mira el avoid de la fila anterior antes
+ # de cortar entre dos filas.
  # ============================================================ #}
 {% macro qty(c) %}
     {%- if c == 0 -%}{%- elseif c == 0.5 -%}½{%- elseif c == c|round -%}{{ c|number_format(0) }}{%- else -%}{{ c|number_format(1, ',', '.') }}{%- endif -%}
@@ -40,7 +41,8 @@
     table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     td { border: 0.5px solid #b7b7b7; padding: 1px 3px; vertical-align: middle; overflow: hidden; }
 
-    /* Cabecera de columnas (una tabla aparte al inicio del nodo) */
+    /* Cabecera del nodo (<thead>: se repite en cada página del nodo) */
+    .hd-title td { border: 0; padding-bottom: 4px; }
     .hd-mail { font-weight: bold; font-size: 8px; border: 0; text-align: left; }
     .hd-week { background: #d9d9d9; font-weight: bold; font-size: 8px; text-align: center; letter-spacing: .02em; }
     .hd-c, .hd-h { background: #9bbb59; color: #fff; font-weight: bold; text-align: center; font-size: 7px; letter-spacing: .03em; }
@@ -83,8 +85,9 @@
     /* Fila invisible de fijación de anchos (no debe verse). */
     .wdef td { padding: 0; height: 0; line-height: 0; font-size: 0; border: 0; }
 
-    /* Cada grupo es su propia tabla; dompdf NO la parte entre páginas. */
-    .grp-block { page-break-inside: avoid; }
+    /* Filas que no pueden quedar separadas de la siguiente: todas las de un
+       grupo menos su subtotal. Así el corte de página sólo cae entre grupos. */
+    .keep { page-break-after: avoid; }
 
     /* Un nodo por hoja, como el listado semanal. */
     .node-page { page-break-after: always; }
@@ -94,10 +97,10 @@
 <body>
 {% for node in matrix.nodes %}
 <div class="node-page">
-    <div class="title">REPARTO {{ _month_es[month] }} {{ year }} · {{ node.name }}</div>
-
-    <table class="mhead">
+    <table>
+        <thead>
         {{ widthrow }}
+        <tr class="hd-title"><td colspan="{{ ncols }}"><div class="title">REPARTO {{ _month_es[month] }} {{ year }} · {{ node.name }}</div></td></tr>
         <tr>
             <td class="hd-mail" colspan="3">csa@csavegadejarama.org</td>
             {% for w in weeks %}<td class="hd-week" colspan="4">{{ _dow_es[w.date|date('w')] }} {{ w.date|date('j') }} {{ _month_es[w.date|date('n')] }}</td>{% endfor %}
@@ -106,23 +109,22 @@
             <td style="border:0;" colspan="3"></td>
             {% for w in weeks %}<td class="hd-c" colspan="2">CESTA</td><td class="hd-h" colspan="2">HUEVOS</td>{% endfor %}
         </tr>
-    </table>
+        </thead>
 
     {% for group in node.groups %}
-        <table class="grp-block">
-            {{ widthrow }}
+        <tbody>
             {% if group.shared %}
-                <tr class="shared-hd"><td colspan="{{ ncols }}">Compartidas</td></tr>
+                <tr class="shared-hd keep"><td colspan="{{ ncols }}">Compartidas</td></tr>
             {% elseif group.name != node.name %}
-                <tr class="grp"><td class="g-name" colspan="{{ ncols }}">{{ group.name }}</td></tr>
+                <tr class="grp keep"><td class="g-name" colspan="{{ ncols }}">{{ group.name }}</td></tr>
             {% endif %}
 
             {% for mod in group.modalities %}
                 {% if group.multi_mod and mod.label %}
-                    <tr class="modsub"><td colspan="{{ ncols }}">{{ mod.label }}</td></tr>
+                    <tr class="modsub keep"><td colspan="{{ ncols }}">{{ mod.label }}</td></tr>
                 {% endif %}
                 {% for row in mod.rows %}
-                    <tr class="{{ group.shared and row.pair_end ? 'pair-end' : '' }}">
+                    <tr class="keep {{ group.shared and row.pair_end ? 'pair-end' : '' }}">
                         <td class="t-loc" style="background: {{ row.color }};">{{ row.locality }}</td>
                         <td>{{ row.name }}</td>
                         <td class="t-code">{{ row.code }}</td>
@@ -153,12 +155,11 @@
                     {% endif %}
                 {% endfor %}
             </tr>
-        </table>
+        </tbody>
     {% endfor %}
 
     {# Total del nodo por semana: cestas físicas y docenas de huevos (base del pedido). #}
-    <table class="grp-block">
-        {{ widthrow }}
+        <tbody>
         <tr class="total">
             <td class="t-lbl" colspan="3">Total {{ node.name }}</td>
             {% for t in node.totals %}
@@ -170,6 +171,7 @@
                 {% endif %}
             {% endfor %}
         </tr>
+        </tbody>
     </table>
 </div>
 {% else %}
