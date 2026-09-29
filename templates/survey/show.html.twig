@@ -48,6 +48,32 @@
         {% endif %}
     </div>
 
+    {# Lo que se hace con la encuesta, arriba y a la vista. La vista previa es la
+     # página real de la socia (en otra pestaña): la estructura de abajo es sólo
+     # un resumen y no intenta parecerse. #}
+    <div class="sv-actions-bar">
+        {{ csa.btn('Vista previa', { variant: 'secondary', href: path('survey_preview', { id: survey.id }), icon: 'fa-eye', attr: { target: '_blank', rel: 'noopener' } }) }}
+        {% if survey.editable and is_granted('ROLE_GESTION_ENCUESTAS_EDIT') %}
+            {{ csa.btn('Editar', { variant: 'secondary', href: path('survey_edit', { id: survey.id }), icon: 'fa-pencil' }) }}
+        {% endif %}
+        {% if can_open %}
+            <button type="button" class="csa-btn csa-btn--primary" onclick="document.getElementById('dlg-open-{{ survey.id }}').showModal()">
+                <i class="fa fa-play" aria-hidden="true"></i> Abrir y avisar
+            </button>
+            {{ include('survey/_open_dialog.html.twig', { survey: survey, audience: audience }) }}
+        {% endif %}
+        {% if can_announce %}
+            <button type="button" class="csa-btn csa-btn--primary" onclick="document.getElementById('dlg-announce-{{ survey.id }}').showModal()">
+                <i class="fa fa-bullhorn" aria-hidden="true"></i> Avisar a todas
+            </button>
+            {{ include('survey/_announce_dialog.html.twig', { survey: survey }) }}
+        {% endif %}
+        {% if survey.status != 'draft' %}
+            {{ csa.btn('Ver resultados', { variant: 'secondary', href: path('survey_results', { id: survey.id }), icon: 'fa-bar-chart' }) }}
+        {% endif %}
+        {{ csa.help('encuestas', 'abrir', 'Ayuda: abrir la encuesta y avisar') }}
+    </div>
+
     {# Reenviar a UNA socia su correo con el enlace personal: la respuesta a
      # «no me llegó». El aviso a toda la asociación no se repite nunca. Sólo
      # nombres en el desplegable: este rol no ve fichas ni correos. #}
@@ -82,24 +108,20 @@
                     {% endif %}
                 </div>
 
-                {# Vista previa fiel del widget con que responderá el socix (deshabilitada). #}
+                {# Resumen en texto, sin imitar el formulario: para ver cómo
+                 # queda de verdad está la «Vista previa». #}
                 {% if question.usesOptions %}
-                    <div class="sv-preview">
+                    <ul class="sv-summary">
                         {% for option in question.options %}
-                            <label class="sv-opt">
-                                <input type="{{ question.type == 'multiple' ? 'checkbox' : 'radio' }}" disabled>
-                                <span>{{ option.label }}</span>
-                            </label>
+                            <li>{{ option.label }}</li>
+                        {% else %}
+                            <li class="sv-summary__warn">Sin opciones: hay que añadir al menos dos antes de abrirla.</li>
                         {% endfor %}
-                    </div>
+                    </ul>
                 {% elseif question.type == 'scale' %}
-                    <div class="sv-preview sv-scale">
-                        {% for n in 1..5 %}
-                            <label class="sv-opt"><input type="radio" disabled> <span>{{ n }}</span></label>
-                        {% endfor %}
-                    </div>
+                    <p class="sv-summary__note">De 1 (Nada) a 5 (Mucho).</p>
                 {% else %}
-                    <textarea class="csa-input" rows="2" disabled placeholder="Respuesta de texto libre…" style="width:100%; margin-top: var(--csa-sp-2);"></textarea>
+                    <p class="sv-summary__note">Cada socia escribe lo que quiera.</p>
                 {% endif %}
             </div>
         {% else %}
@@ -111,12 +133,6 @@
 
     <div class="csa-row" style="gap: var(--csa-sp-2); margin-top: var(--csa-sp-4);">
         {{ csa.btn('Volver al listado', { variant: 'secondary', href: path('survey_index'), icon: 'fa-arrow-left' }) }}
-        {% if survey.status != 'draft' %}
-            {{ csa.btn('Ver resultados', { variant: 'primary', href: path('survey_results', { id: survey.id }), icon: 'fa-bar-chart' }) }}
-        {% endif %}
-        {% if survey.editable and is_granted('ROLE_GESTION_ENCUESTAS_EDIT') %}
-            {{ csa.btn('Editar', { variant: 'primary', href: path('survey_edit', { id: survey.id }), icon: 'fa-pencil' }) }}
-        {% endif %}
     </div>
 
 {% endblock %}
@@ -128,14 +144,10 @@
         .sv-resend__text { display: flex; flex-direction: column; gap: 2px; }
         .sv-resend__row { display: flex; gap: var(--csa-sp-2); flex-wrap: wrap; align-items: center; }
         .sv-resend__row select { flex: 1 1 260px; max-width: 420px; }
-        .sv-preview { display: flex; flex-direction: column; gap: var(--csa-sp-2); margin-top: var(--csa-sp-3); }
-        .sv-preview .sv-opt { display: inline-flex; align-items: center; gap: var(--csa-sp-2); font-weight: 400; }
-        .sv-preview .sv-opt input { width: auto; height: auto; margin: 0; }
-        .sv-preview.sv-scale { flex-direction: row; flex-wrap: wrap; gap: var(--csa-sp-3); }
-        .sv-preview.sv-scale .sv-opt {
-            flex-direction: column; gap: var(--csa-sp-1);
-            border: 1px solid var(--csa-rule); border-radius: 8px;
-            padding: var(--csa-sp-2) var(--csa-sp-3); min-width: 3rem; text-align: center;
-        }
+        .sv-actions-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--csa-sp-2); margin-bottom: var(--csa-sp-5); }
+        .sv-summary { margin: var(--csa-sp-2) 0 0; padding-left: 1.2em; color: var(--csa-ink-soft); }
+        .sv-summary li { margin: 2px 0; }
+        .sv-summary__warn { color: #a8471f; list-style: none; margin-left: -1.2em; }
+        .sv-summary__note { margin: var(--csa-sp-2) 0 0; color: var(--csa-ink-soft); }
     </style>
 {% endblock %}

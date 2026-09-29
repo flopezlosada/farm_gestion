@@ -6,6 +6,7 @@ use App\Entity\Partner;
 use App\Entity\Question;
 use App\Entity\Survey;
 use App\Repository\PartnerRepository;
+use App\Form\SurveyResponseType;
 use App\Form\SurveyType;
 use App\Repository\SurveyAnswerRepository;
 use App\Repository\SurveyParticipationRepository;
@@ -82,18 +83,44 @@ class SurveyController extends AbstractController
      * o cerrada, que no se editan.
      */
     #[Route('/{id}', name: 'survey_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(Survey $survey, SurveyParticipationRepository $participations, PartnerRepository $partners): Response
-    {
-        // A quién se le puede reenviar el enlace: sólo mientras admite
-        // respuestas y a quien puede escribir. Nombres, nada más: este rol no
-        // ve fichas ni correos de socias.
-        $canResend = $survey->acceptsResponses(new \DateTimeImmutable())
-            && $this->isGranted('ROLE_GESTION_ENCUESTAS_EDIT');
+    public function show(
+        Survey $survey,
+        SurveyParticipationRepository $participations,
+        PartnerRepository $partners,
+        SurveyAnnouncer $announcer,
+    ): Response {
+        $now = new \DateTimeImmutable();
+        $canWrite = $this->isGranted('ROLE_GESTION_ENCUESTAS_EDIT');
 
         return $this->render('survey/show.html.twig', [
             'survey'          => $survey,
             'participants'    => $participations->countForSurvey($survey),
-            'resend_partners' => $canResend ? $partners->findActiveWithEmail() : [],
+            // A quién se le puede reenviar el enlace: sólo mientras admite
+            // respuestas y a quien puede escribir. Nombres, nada más: este rol
+            // no ve fichas ni correos de socias.
+            'resend_partners' => $canWrite && $survey->acceptsResponses($now) ? $partners->findActiveWithEmail() : [],
+            // Abrir desde la ficha: es donde se revisa antes. El diálogo dice a
+            // cuánta gente llegará el aviso.
+            'can_open'        => $canWrite && $survey->isEditable(),
+            'audience'        => $canWrite && $survey->isEditable() ? $announcer->audience() : null,
+            // Avisar a todas: sólo si está abierta y NUNCA se avisó.
+            'can_announce'    => $canWrite && $survey->acceptsResponses($now) && null === $survey->getAnnouncedAt(),
+        ]);
+    }
+
+    /**
+     * Vista previa: la encuesta EXACTAMENTE como la ve la socia, con el mismo
+     * layout, cabecera y formulario que el enlace del correo. No se puede
+     * enviar. Vale con el rol de lectura: sólo se mira.
+     */
+    #[Route('/{id}/preview', name: 'survey_preview', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function preview(Survey $survey): Response
+    {
+        $form = $this->createForm(SurveyResponseType::class, null, ['survey' => $survey]);
+
+        return $this->render('survey/preview.html.twig', [
+            'survey' => $survey,
+            'form'   => $form->createView(),
         ]);
     }
 

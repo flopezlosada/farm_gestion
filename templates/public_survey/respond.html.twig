@@ -9,22 +9,8 @@
 {% block title %}{{ survey.title }}{% endblock %}
 
 {% block csa_main %}
-    {% set n = survey.questions|length %}
-
     <div class="svy">
-        {# Con su nombre de pila: quien llega sin haber entrado tiene que saber
-         # que esta encuesta es para ella, y que responde como ella. #}
-        {# |lower|title: en la base los nombres están en mayúsculas. #}
-        {{ csa.page_header(partner.name ? 'Encuesta para ' ~ partner.name|lower|title : 'Encuesta', survey.title, survey.description) }}
-
-        <ul class="svy-facts">
-            <li><i class="fa fa-list-ol" aria-hidden="true"></i> {{ n }} pregunta{{ n == 1 ? '' : 's' }}</li>
-            <li><i class="fa fa-lock" aria-hidden="true"></i> Anónima</li>
-            {% if survey.closesAt %}
-                <li><i class="fa fa-calendar-o" aria-hidden="true"></i> Hasta el {{ survey.closesAt|date('d/m/Y') }}</li>
-            {% endif %}
-        </ul>
-
+        {{ include('panel_survey/_header.html.twig', { survey: survey, kicker: partner.name ? 'Encuesta para ' ~ partner.name|lower|title : 'Encuesta' }) }}
         {{ include('panel_survey/_form.html.twig', { cancel: null }) }}
     </div>
 {% endblock %}

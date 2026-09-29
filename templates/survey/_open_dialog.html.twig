@@ -1,0 +1,22 @@
+{#
+ # Diálogo de «Abrir encuesta», común al listado y a la ficha. Su id es
+ # dlg-open-{id}: el botón que lo abre llama a showModal() sobre él.
+ #
+ # Recibe:
+ #   - survey    Survey en borrador
+ #   - audience  a cuánta gente llegará el aviso (SurveyAnnouncer::audience), o null
+ #}
+{% import '_macros/csa.html.twig' as csa %}
+{{ csa.confirm_dialog('dlg-open-' ~ survey.id, {
+    variant: 'info',
+    eyebrow: 'Abrir a respuestas',
+    title: 'Abrir “' ~ survey.title ~ '”',
+    body: 'Lxs socixs podrán responder y se les avisará ahora mismo'
+        ~ (audience ? ': ' ~ audience.email ~ ' por correo (con un enlace para responder sin entrar en la web), ' ~ audience.push ~ ' al móvil y todas las cuentas en su bandeja' : '')
+        ~ '. Una vez abierta ya no podrás editar las preguntas.'
+        ~ (audience and not audience.emailEnabled ? ' OJO: el envío de correos está apagado en la configuración.' : ''),
+    confirm_label: 'Abrir encuesta',
+    action: path('survey_open', { id: survey.id }),
+    csrf_name: '_token',
+    csrf_token: csrf_token('survey_open_' ~ survey.id)
+}) }}
