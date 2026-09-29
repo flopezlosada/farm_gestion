@@ -11,6 +11,11 @@
  # cada opción sigue ahí (invisible, enfocable); lo que se ve es la fila entera,
  # que es lo que se pulsa. Ver _styles.html.twig.
  #
+ # El input va JUSTO ANTES de `.svy-face` y tiene que seguir así: el estado
+ # «elegida» se pinta con `input:checked + .svy-face`, que funciona en cualquier
+ # navegador. Con `:has()` era más corto, pero hay móviles que no lo entienden y
+ # la socia no vería qué ha marcado.
+ #
  # `novalidate`: la validación la hace el servidor y la pinta aquí, junto a cada
  # pregunta y con palabras. El globo nativo del navegador saldría pegado a un
  # input que no se ve.
@@ -59,7 +64,7 @@
                         {% for opt in field %}
                             <label class="svy-opt">
                                 {{ form_widget(opt, { attr: { class: 'svy-input' } }) }}
-                                <span>{{ opt.vars.label }}</span>
+                                <span class="svy-face">{{ opt.vars.label }}</span>
                             </label>
                         {% endfor %}
                     </div>
@@ -73,8 +78,10 @@
                         {% for opt in field %}
                             <label class="svy-opt">
                                 {{ form_widget(opt, { attr: { class: 'svy-input' } }) }}
-                                <span class="svy-mark" aria-hidden="true"></span>
-                                <span>{{ opt.vars.label }}</span>
+                                <span class="svy-face">
+                                    <span class="svy-mark" aria-hidden="true"></span>
+                                    <span>{{ opt.vars.label }}</span>
+                                </span>
                             </label>
                         {% endfor %}
                     </div>

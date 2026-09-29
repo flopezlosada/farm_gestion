@@ -48,6 +48,8 @@
         /* <legend> no se deja maquetar dentro de un fieldset en todos los
            navegadores; flotarlo lo devuelve al flujo normal. */
         float: left; width: 100%; padding: 0;
+        /* Bootstrap 3 le pone a todo <legend> una raya, letra de 21px y margen. */
+        border: 0; font-size: inherit; line-height: inherit;
     }
     .svy-q__head + * { clear: both; }
 
@@ -87,23 +89,27 @@
     /* ---------- Opciones (única y múltiple) ---------- */
     .svy-opts { display: flex; flex-direction: column; gap: var(--csa-sp-2); }
 
-    .svy-opt {
-        position: relative;
+    /* La <label> sólo envuelve; lo que se ve es `.svy-face`, que va justo
+       detrás del input para poder pintar su estado con `input:checked + …`
+       (sin `:has()` ni `color-mix()`: hay móviles que no los entienden, y ahí
+       la socia no vería qué ha marcado). */
+    .svy-opt { position: relative; display: block; margin: 0; font-weight: 400; cursor: pointer; }
+
+    .svy-face {
         display: flex; align-items: center; gap: var(--csa-sp-3);
-        min-height: 52px; margin: 0;
+        min-height: 52px; box-sizing: border-box;
         padding: var(--csa-sp-3) var(--csa-sp-4);
         background: var(--csa-surface);
         border: 1px solid var(--csa-rule);
         border-radius: var(--csa-radius-md);
-        font-size: var(--csa-fs-md); font-weight: 400; line-height: var(--csa-lh-snug);
-        color: var(--csa-ink); cursor: pointer;
-        transition: border-color var(--csa-t-fast), background-color var(--csa-t-fast), box-shadow var(--csa-t-fast);
+        font-size: var(--csa-fs-md); line-height: var(--csa-lh-snug);
+        color: var(--csa-ink);
+        transition: border-color var(--csa-t-fast), background-color var(--csa-t-fast), box-shadow var(--csa-t-fast), color var(--csa-t-fast);
     }
-    .svy-opt:hover { border-color: color-mix(in srgb, var(--csa-green) 55%, var(--csa-rule)); }
+    .svy-opt:hover .svy-face { border-color: #90a97e; /* verde al 55% sobre la regla */ }
 
     /* El input real queda invisible pero vivo: se enfoca con el teclado, lo
-       lee el lector de pantalla y el formulario lo envía. Lo que se ve es la
-       marca de al lado. */
+       lee el lector de pantalla y el formulario lo envía. */
     .svy-input {
         position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none;
     }
@@ -129,30 +135,28 @@
 
     /* Elegida: borde verde de 2px (el segundo píxel con una sombra interior, para
        que la fila no salte) y el tinte suave. */
-    .svy-opt:has(.svy-input:checked) {
+    .svy-input:checked + .svy-face {
         border-color: var(--csa-green);
         box-shadow: inset 0 0 0 1px var(--csa-green);
-        background: color-mix(in srgb, var(--csa-green-soft) 45%, var(--csa-surface));
+        background: #eff6e5; /* green-soft al 45% sobre blanco */
     }
-    .svy-input:checked + .svy-mark { border-color: var(--csa-green); }
-    .svy-input:checked + .svy-mark::after { transform: scale(1); }
-    .svy-opts--multiple .svy-input:checked + .svy-mark { background: var(--csa-green); }
-    .svy-opts--multiple .svy-input:checked + .svy-mark::after { transform: translateY(-1px) rotate(45deg) scale(1); }
+    .svy-input:checked + .svy-face .svy-mark { border-color: var(--csa-green); }
+    .svy-input:checked + .svy-face .svy-mark::after { transform: scale(1); }
+    .svy-opts--multiple .svy-input:checked + .svy-face .svy-mark { background: var(--csa-green); }
+    .svy-opts--multiple .svy-input:checked + .svy-face .svy-mark::after { transform: translateY(-1px) rotate(45deg) scale(1); }
 
-    .svy-input:focus-visible + .svy-mark { outline: 3px solid color-mix(in srgb, var(--csa-green) 40%, transparent); outline-offset: 2px; }
+    .svy-input:focus-visible + .svy-face { outline: 3px solid rgba(74, 124, 58, .4); outline-offset: 2px; }
 
     /* ---------- Escala 1-5 ---------- */
     .svy-scale { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--csa-sp-2); }
-    .svy-scale .svy-opt {
+    .svy-scale .svy-face {
         justify-content: center; min-height: 60px; padding: var(--csa-sp-2) 0;
         font-family: var(--csa-serif); font-variation-settings: "opsz" 30;
         font-variant-numeric: lining-nums tabular-nums;
         font-size: var(--csa-fs-xl); font-weight: 500; letter-spacing: -0.02em;
         color: var(--csa-ink-soft);
     }
-    .svy-scale .svy-opt:has(.svy-input:checked) {
-        background: var(--csa-green); color: #fff;
-    }
+    .svy-scale .svy-input:checked + .svy-face { background: var(--csa-green); color: #fff; }
     .svy-scale__ends {
         display: flex; justify-content: space-between;
         margin-top: var(--csa-sp-2);
@@ -172,7 +176,7 @@
     .svy-text::placeholder { color: var(--csa-ink-muted); }
     .svy-text:focus {
         outline: none; border-color: var(--csa-green);
-        box-shadow: 0 0 0 3px color-mix(in srgb, var(--csa-green) 18%, transparent);
+        box-shadow: 0 0 0 3px rgba(74, 124, 58, .18);
     }
 
     /* ---------- Errores ---------- */
@@ -207,7 +211,7 @@
         .svy-scale { gap: 6px; }
         /* En el móvil el botón ocupa el ancho: es lo último que se hace y el
            objetivo más importante de la pantalla. */
-        .svy-send__row { flex-direction: column-reverse; align-items: stretch; text-align: center; }
+        .svy-send__row { flex-direction: column; align-items: stretch; text-align: center; }
         .svy-send__btn { width: 100%; justify-content: center; }
     }
 
@@ -241,7 +245,7 @@
     .svy-thanks__actions { display: flex; gap: var(--csa-sp-3); justify-content: center; flex-wrap: wrap; }
 
     @media (prefers-reduced-motion: reduce) {
-        .svy-num, .svy-num__n, .svy-num__ok, .svy-mark, .svy-mark::after, .svy-opt { transition: none; }
+        .svy-num, .svy-num__n, .svy-num__ok, .svy-mark, .svy-mark::after, .svy-face { transition: none; }
         .svy-thanks__mark path { animation: none; stroke-dashoffset: 0; }
     }
 </style>
