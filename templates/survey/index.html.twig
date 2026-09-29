@@ -148,7 +148,7 @@
                                         {% if survey.closesAt %}
                                             <span class="prl-person__meta">Último día para responder: {{ survey.closesAt|date('d/m/Y') }}</span>
                                         {% endif %}
-                                        {% if survey.status != 'draft' %}
+                                        {% if survey.open %}
                                             <span class="prl-person__meta">
                                                 {{ survey.announcedAt ? 'Avisada el ' ~ survey.announcedAt|date('d/m/Y') : 'Sin aviso enviado' }}
                                             </span>
@@ -208,8 +208,11 @@
                                         {% elseif survey.open %}
                                             {% if not expired %}
                                                 {# --- Reintentar el aviso: sólo completa a quien le falte --- #}
-                                                <button type="button" class="prl-btn prl-btn--sm" title="Completar el aviso" onclick="document.getElementById('dlg-announce-{{ survey.id }}').showModal()">
-                                                    <i class="fa fa-bullhorn"></i> {{ survey.announcedAt ? 'Reintentar aviso' : 'Avisar' }}
+                                                {# Sólo icono, como Ver y Resultados: con texto, la celda de
+                                                 # acciones se comía la columna de respuestas. #}
+                                                {% set announce_label = survey.announcedAt ? 'Reintentar el aviso' : 'Avisar a las socias' %}
+                                                <button type="button" class="prl-btn prl-btn--sm" title="{{ announce_label }}" aria-label="{{ announce_label }}" onclick="document.getElementById('dlg-announce-{{ survey.id }}').showModal()">
+                                                    <i class="fa fa-bullhorn"></i>
                                                 </button>
                                                 {{ csa.confirm_dialog('dlg-announce-' ~ survey.id, {
                                                     variant: 'info',
