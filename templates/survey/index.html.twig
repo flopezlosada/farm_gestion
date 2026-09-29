@@ -44,9 +44,13 @@
         /* Acciones en UNA sola fila (nowrap): sin esto, en la celda estrecha
          * (width:1%) los botones envuelven y disparan la altura de la fila. */
         .sv-actions { display: flex; align-items: center; gap: 6px; justify-content: flex-end; flex-wrap: nowrap; }
-        .sv-actions form { margin: 0; display: inline-flex; }
+        /* Sólo los forms sueltos de la fila (`>`): sin él alcanzaba también al
+           form de dentro de cada diálogo y lo descuadraba. */
+        .sv-actions > form { margin: 0; display: inline-flex; }
         .prl-table .actions .sv-actions a { display: inline-flex; }
         .prl-table .actions .sv-actions .prl-btn { white-space: nowrap; }
+        /* Megáfono de una encuesta ya avisada: mismo sitio, en verde. */
+        .prl-table .actions .sv-actions a.sv-announced { color: var(--csa-green); }
     </style>
 {% endblock %}
 
@@ -124,6 +128,11 @@
                 <tbody>
                     {% for survey in surveys %}
                         {% set sc = status_chip[survey.status]|default({ label: survey.status, cls: 'baja' }) %}
+                        {# Abierta pero con el plazo vencido: en la base sigue `open`,
+                         # pero ya no admite respuestas. Se dice, para que nadie
+                         # espere más votos. #}
+                        {% set expired = survey.open and survey.isPastDeadline(now) %}
+                        {% if expired %}{% set sc = { label: 'Plazo cumplido', cls: 'baja' } %}{% endif %}
                         {% set votes = counts[survey.id] ?? 0 %}
                         {# Solo los borradores se borran; abiertas/cerradas se archivan. #}
                         {% set can_delete = survey.status == 'draft' %}
@@ -141,7 +150,12 @@
                                             <span class="prl-person__meta">{{ survey.description }}</span>
                                         {% endif %}
                                         {% if survey.closesAt %}
-                                            <span class="prl-person__meta">Cierre orientativo: {{ survey.closesAt|date('d/m/Y') }}</span>
+                                            <span class="prl-person__meta">Último día para responder: {{ survey.closesAt|date('d/m/Y') }}</span>
+                                        {% endif %}
+                                        {% if survey.open %}
+                                            <span class="prl-person__meta">
+                                                {{ survey.announcedAt ? 'Avisada el ' ~ survey.announcedAt|date('d/m/Y') : 'Sin aviso enviado' }}
+                                            </span>
                                         {% endif %}
                                     </div>
                                 </div>
@@ -186,13 +200,45 @@
                                                 variant: 'info',
                                                 eyebrow: 'Abrir a respuestas',
                                                 title: 'Abrir “' ~ survey.title ~ '”',
-                                                body: 'Lxs socixs podrán responder. Una vez abierta ya no podrás editar las preguntas.',
+                                                body: 'Lxs socixs podrán responder y se les avisará ahora mismo'
+                                                    ~ (audience ? ': ' ~ audience.email ~ ' por correo (con un enlace para responder sin entrar en la web), ' ~ audience.push ~ ' al móvil y todas las cuentas en su bandeja' : '')
+                                                    ~ '. Una vez abierta ya no podrás editar las preguntas.'
+                                                    ~ (audience and not audience.emailEnabled ? ' OJO: el envío de correos está apagado en la configuración.' : ''),
                                                 confirm_label: 'Abrir encuesta',
                                                 action: path('survey_open', { id: survey.id }),
                                                 csrf_name: '_token',
                                                 csrf_token: csrf_token('survey_open_' ~ survey.id)
                                             }) }}
                                         {% elseif survey.open %}
+                                            {% if not expired and not survey.announcedAt %}
+                                                {# --- Avisar: SÓLO mientras no se haya avisado nunca (abierta
+                                                 # antes de existir el aviso, o un envío que se cortó antes de
+                                                 # terminar). Una vez avisada, el aviso general no se repite:
+                                                 # el reenvío es a una socia concreta, desde la ficha. --- #}
+                                                {# Sólo icono, como Ver y Resultados: con texto, la celda de
+                                                 # acciones se comía la columna de respuestas. #}
+                                                <button type="button" class="prl-btn prl-btn--sm" title="Avisar a las socias" aria-label="Avisar a las socias" onclick="document.getElementById('dlg-announce-{{ survey.id }}').showModal()">
+                                                    <i class="fa fa-bullhorn"></i>
+                                                </button>
+                                                {{ csa.confirm_dialog('dlg-announce-' ~ survey.id, {
+                                                    variant: 'info',
+                                                    eyebrow: 'Aviso',
+                                                    title: 'Avisar de “' ~ survey.title ~ '”',
+                                                    body: 'Esta encuesta está abierta pero no se ha avisado. Se manda ahora a todas las socias: correo con su enlace para responder, móvil y bandeja. Sólo se puede hacer una vez; si a alguien no le llega, se le reenvía desde la ficha.',
+                                                    confirm_label: 'Avisar a todas',
+                                                    action: path('survey_announce', { id: survey.id }),
+                                                    csrf_name: '_token',
+                                                    csrf_token: csrf_token('survey_announce_' ~ survey.id)
+                                                }) }}
+                                            {% elseif not expired %}
+                                                {# --- Ya avisada: el megáfono NO desaparece, cambia de estado.
+                                                 # Que se esfumara hacía pensar que algo iba mal. En verde y
+                                                 # llevando a la ficha, que es donde se reenvía a una socia. --- #}
+                                                {% set announced_label = 'Avisada el ' ~ survey.announcedAt|date('d/m/Y') ~ '. Pulsa para reenviarle el enlace a una socia.' %}
+                                                <a href="{{ path('survey_show', { id: survey.id }) }}#reenviar" class="sv-announced" title="{{ announced_label }}" aria-label="{{ announced_label }}">
+                                                    <i class="fa fa-bullhorn"></i>
+                                                </a>
+                                            {% endif %}
                                             {# --- Cerrar --- #}
                                             <button type="button" class="prl-btn prl-btn--warn prl-btn--sm" onclick="document.getElementById('dlg-close-{{ survey.id }}').showModal()">
                                                 <i class="fa fa-stop"></i> Cerrar

@@ -10,6 +10,7 @@ use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Validator\Constraints\NotBlank;
 
 /**
  * Form de creación/edición de una encuesta, en una sola pantalla: cabecera
@@ -23,7 +24,10 @@ class SurveyType extends AbstractType
     {
         $builder
             ->add('title', TextType::class, [
-                'label' => 'Título',
+                'label'       => 'Título',
+                // Vacío llega como '' y no como null: el setter es `string`.
+                'empty_data'  => '',
+                'constraints' => [new NotBlank(message: 'Ponle un título a la encuesta.')],
             ])
             ->add('description', TextareaType::class, [
                 'label'    => 'Descripción',
@@ -31,7 +35,7 @@ class SurveyType extends AbstractType
                 'attr'     => ['rows' => 3],
             ])
             ->add('closesAt', DateType::class, [
-                'label'    => 'Fecha de cierre (informativa)',
+                'label'    => 'Último día para responder',
                 'required' => false,
                 'widget'   => 'single_text',
                 'html5'    => true,

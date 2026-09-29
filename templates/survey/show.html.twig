@@ -41,9 +41,35 @@
         {{ csa.badge(meta.label, meta.tone) }}
         <span class="csa-muted">{{ survey.questions|length }} pregunta(s) · {{ participants }} respuesta(s)</span>
         {% if survey.closesAt %}
-            <span class="csa-muted">· Cierre orientativo: {{ survey.closesAt|date('d/m/Y') }}</span>
+            <span class="csa-muted">· Último día para responder: {{ survey.closesAt|date('d/m/Y') }}</span>
+        {% endif %}
+        {% if survey.open %}
+            <span class="csa-muted">· {{ survey.announcedAt ? 'Avisada el ' ~ survey.announcedAt|date('d/m/Y') : 'Sin aviso enviado' }}</span>
         {% endif %}
     </div>
+
+    {# Reenviar a UNA socia su correo con el enlace personal: la respuesta a
+     # «no me llegó». El aviso a toda la asociación no se repite nunca. Sólo
+     # nombres en el desplegable: este rol no ve fichas ni correos. #}
+    {% if resend_partners is not empty %}
+        <form id="reenviar" method="post" action="{{ path('survey_resend', { id: survey.id }) }}" class="csa-card sv-resend">
+            <div class="sv-resend__text">
+                <strong>¿A alguien no le llegó el correo?</strong>
+                <span class="csa-muted">Le reenviamos a ella sola su enlace para responder. No se le avisa a nadie más.</span>
+            </div>
+            <div class="sv-resend__row">
+                <label class="sr-only" for="sv-resend-partner">Socia</label>
+                <select id="sv-resend-partner" name="partner" class="csa-input" required>
+                    <option value="">Elige una socia…</option>
+                    {% for partner in resend_partners %}
+                        <option value="{{ partner.id }}">{{ (partner.name ~ ' ' ~ partner.surname)|lower|title }}</option>
+                    {% endfor %}
+                </select>
+                <input type="hidden" name="_token" value="{{ csrf_token('survey_resend_' ~ survey.id) }}">
+                <button type="submit" class="csa-btn csa-btn--secondary"><i class="fa fa-paper-plane-o" aria-hidden="true"></i> Reenviar su enlace</button>
+            </div>
+        </form>
+    {% endif %}
 
     <div class="csa-card" style="padding: 0; overflow: hidden;">
         {% for question in survey.questions %}
@@ -98,6 +124,10 @@
 {% block more_css %}
     {{ parent() }}
     <style>
+        .sv-resend { padding: var(--csa-sp-4); margin-bottom: var(--csa-sp-4); display: flex; flex-direction: column; gap: var(--csa-sp-3); }
+        .sv-resend__text { display: flex; flex-direction: column; gap: 2px; }
+        .sv-resend__row { display: flex; gap: var(--csa-sp-2); flex-wrap: wrap; align-items: center; }
+        .sv-resend__row select { flex: 1 1 260px; max-width: 420px; }
         .sv-preview { display: flex; flex-direction: column; gap: var(--csa-sp-2); margin-top: var(--csa-sp-3); }
         .sv-preview .sv-opt { display: inline-flex; align-items: center; gap: var(--csa-sp-2); font-weight: 400; }
         .sv-preview .sv-opt input { width: auto; height: auto; margin: 0; }

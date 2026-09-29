@@ -19,6 +19,7 @@ use App\Repository\BasketRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Repository\SharedBasketChangeRequestRepository;
+use App\Repository\SurveyRepository;
 use App\Repository\VolunteerCategoryRepository;
 use App\Repository\VolunteerShiftRepository;
 use App\Repository\VolunteerSignupRepository;
@@ -78,12 +79,21 @@ class PanelController extends AbstractController
         VolunteerSignupRepository $volunteerSignups,
         VolunteerContributions $contributions,
         DeliveryCalendarProjector $projector,
+        SurveyRepository $surveys,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
         }
 
         $partner = $this->getUser()->getPartner();
+
+        // Las encuestas que le quedan por responder. De la socia y no del dueño
+        // de la cesta: en una familia responde cada cual. Sin esto, la única
+        // entrada era el menú —y en el móvil, escondida en «Más»—, así que una
+        // encuesta abierta podía pasar semanas sin que nadie la viera.
+        $pendingSurveys = $this->isGranted('FEATURE_SURVEYS')
+            ? $surveys->findPendingFor($partner, new \DateTimeImmutable())
+            : [];
 
         // El traslado de nodo opera sobre la cesta de la FAMILIA (el principal), igual que
         // el calendario: un secundario tramita el traslado de la cesta de su hogar.
@@ -144,6 +154,7 @@ class PanelController extends AbstractController
             // abrir el calendario para saber qué día toca, y el sitio se anunciaba
             // en un banner que repetía el nodo tres veces en la misma pantalla.
             'next_delivery' => $nextDelivery,
+            'pending_surveys' => $pendingSurveys,
             // Quién le está montando la cesta de esa semana en su punto de recogida.
             // Es la cara amable del voluntariado —gente con nombre, no un contador— y
             // a la vez el sitio donde más barato sale pedir ayuda: a quien va a ir de

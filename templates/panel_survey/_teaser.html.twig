@@ -1,0 +1,32 @@
+{#
+ # Una encuesta en pequeño, para el listado del panel y la portada.
+ #
+ # EL BOTÓN VA DEBAJO DEL TEXTO, no a la derecha: en una fila ancha el ojo tiene
+ # que cruzar la pantalla para relacionar el título con su acción. Estilos en
+ # _teaser_styles.html.twig.
+ #
+ # Recibe:
+ #   - survey    Survey
+ #   - answered  si esta socia ya la respondió
+ #}
+{% import '_macros/csa.html.twig' as csa %}
+{% set n = survey.questions|length %}
+<article class="svy-teaser{{ answered ? ' svy-teaser--done' : '' }}">
+    <span class="svy-teaser__icon" aria-hidden="true">
+        <i class="fa {{ answered ? 'fa-check' : 'fa-comments-o' }}"></i>
+    </span>
+    <div class="svy-teaser__body">
+        <h3 class="svy-teaser__title">{{ survey.title }}</h3>
+        {% if survey.description %}
+            <p class="svy-teaser__desc">{{ survey.description }}</p>
+        {% endif %}
+        <p class="svy-teaser__meta">
+            {{ n }} pregunta{{ n == 1 ? '' : 's' }} · anónima{% if survey.closesAt %} · hasta el {{ survey.closesAt|format_date(pattern="d 'de' MMMM", locale='es') }}{% endif %}
+        </p>
+        {% if answered %}
+            <p class="svy-teaser__done">Ya la respondiste. ¡Gracias!</p>
+        {% else %}
+            {{ csa.btn('Responder', { variant: 'primary', href: path('panel_survey_respond', { id: survey.id }) }) }}
+        {% endif %}
+    </div>
+</article>

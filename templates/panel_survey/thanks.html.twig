@@ -1,0 +1,32 @@
+{# ============================================================
+ # Gracias por responder — panel de la socia.
+ # Cierra la tarea: confirma que la respuesta llegó y recuerda que
+ # es anónima. El cuerpo se comparte con el enlace del correo.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_panel.html.twig' %}
+
+{% block title %}Gracias{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('panel') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('panel_survey_index') }}">Encuestas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Gracias</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ include('panel_survey/_thanks.html.twig', {
+        survey: survey,
+        actions: [
+            { label: 'Volver a mi panel', href: path('panel') },
+            { label: 'Ver encuestas', href: path('panel_survey_index'), variant: 'ghost' }
+        ]
+    }) }}
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {{ include('panel_survey/_styles.html.twig') }}
+{% endblock %}

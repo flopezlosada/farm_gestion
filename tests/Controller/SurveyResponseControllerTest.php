@@ -82,7 +82,7 @@ class SurveyResponseControllerTest extends AbstractPartnerAuthenticatedTest
         $partnerId = $this->socixPartner()->getId();
 
         $client->request('POST', '/panel/surveys/'.$surveyId, $payload);
-        $this->assertResponseRedirects('/panel/surveys');
+        $this->assertResponseRedirects('/panel/surveys/'.$surveyId.'/thanks');
 
         $this->em()->clear();
         $survey = $this->em()->find(Survey::class, $surveyId);
@@ -110,6 +110,68 @@ class SurveyResponseControllerTest extends AbstractPartnerAuthenticatedTest
         $client->request('GET', '/panel/surveys/'.$survey->getId());
 
         $this->assertResponseRedirects('/panel/surveys');
+    }
+
+    public function testThanksPageRendersAfterParticipating(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $this->enableSurveys();
+        $survey = $this->makeFullSurvey(Survey::STATUS_OPEN, 'Agradecida');
+        $this->addParticipation($survey, $this->socixPartner());
+
+        $client->request('GET', '/panel/surveys/'.$survey->getId().'/thanks');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorTextContains('h1', 'Gracias');
+    }
+
+    public function testThanksPageWithoutParticipatingSendsToTheForm(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $this->enableSurveys();
+        $survey = $this->makeFullSurvey(Survey::STATUS_OPEN, 'Sin responder');
+
+        $client->request('GET', '/panel/surveys/'.$survey->getId().'/thanks');
+
+        $this->assertResponseRedirects('/panel/surveys/'.$survey->getId());
+    }
+
+    /**
+     * Pasado el último día sigue `open` en la base, pero ya no admite
+     * respuestas: el plazo no depende de que alguien se acuerde de cerrarla.
+     */
+    public function testCannotRespondOnceTheDeadlineHasPassed(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $this->enableSurveys();
+        $survey = $this->makeFullSurvey(Survey::STATUS_OPEN, 'Plazo vencido');
+        $survey->setClosesAt(new \DateTime('-2 days'));
+        $this->em()->flush();
+
+        $client->request('GET', '/panel/surveys/'.$survey->getId());
+
+        $this->assertResponseRedirects('/panel/surveys');
+    }
+
+    /**
+     * La portada del panel pide las encuestas pendientes, y la tarjeta se va
+     * sola al responder, sin guardar ningún «visto».
+     */
+    public function testHomeShowsPendingSurveyUntilAnswered(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $this->enableSurveys();
+        $survey = $this->makeFullSurvey(Survey::STATUS_OPEN, 'Pendiente en portada');
+
+        $crawler = $client->request('GET', '/panel');
+        $this->assertResponseIsSuccessful();
+        $this->assertStringContainsString('Pendiente en portada', $crawler->filter('.svy-teasers')->text());
+
+        $this->addParticipation($survey, $this->socixPartner());
+
+        $crawler = $client->request('GET', '/panel');
+        $this->assertResponseIsSuccessful();
+        $this->assertStringNotContainsString('Pendiente en portada', $crawler->text());
     }
 
     public function testCannotRespondToClosedSurvey(): void

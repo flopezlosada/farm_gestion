@@ -1,0 +1,15 @@
+{# ============================================================
+ # Aviso sin formulario para el enlace del correo: encuesta cerrada
+ # o enlace que no funciona. Recibe `title` y `text`.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_public_survey.html.twig' %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block csa_main %}
+    <div class="svy-thanks">
+        <h1>{{ title }}</h1>
+        <p class="svy-thanks__lead">{{ text }}</p>
+    </div>
+{% endblock %}

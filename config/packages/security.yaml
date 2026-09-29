@@ -248,6 +248,11 @@ security:
         # si no cuadra (o si no hay token configurado). /cron/health es de sólo
         # lectura, no ejecuta nada y no expone datos personales.
         - { path: ^/cron/, roles: PUBLIC_ACCESS }
+        # Encuesta respondida desde el enlace del correo, sin sesión: la mayoría
+        # de socias no tiene cuenta. No es una puerta abierta: sin una firma
+        # válida de la URL (encuesta + socia) no enseña nada, y con ella sólo
+        # deja responder esa encuesta como esa socia. Ver PublicSurveyController.
+        - { path: ^/surveys/, roles: PUBLIC_ACCESS }
         # Socixs (modelo lectura/escritura por sección): la lectura la da
         # ROLE_GESTION_SOCIXS (vía el #[IsGranted] de clase y la regla
         # ^/gestion de abajo); la ESCRITURA se exige aquí por método HTTP.

@@ -2,12 +2,15 @@
 
 namespace App\Controller;
 
+use App\Entity\Partner;
 use App\Entity\Question;
 use App\Entity\Survey;
+use App\Repository\PartnerRepository;
 use App\Form\SurveyType;
 use App\Repository\SurveyAnswerRepository;
 use App\Repository\SurveyParticipationRepository;
 use App\Repository\SurveyRepository;
+use App\Service\Survey\SurveyAnnouncer;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -32,8 +35,12 @@ class SurveyController extends AbstractController
      * Listado de encuestas con el número de participantes de cada una.
      */
     #[Route('/', name: 'survey_index', methods: ['GET'])]
-    public function index(Request $request, SurveyRepository $surveys, SurveyParticipationRepository $participations): Response
-    {
+    public function index(
+        Request $request,
+        SurveyRepository $surveys,
+        SurveyParticipationRepository $participations,
+        SurveyAnnouncer $announcer,
+    ): Response {
         $showArchived = $request->query->getBoolean('archived');
 
         // Pocas encuestas: cargar ambos conjuntos es trivial y simplifica los
@@ -61,6 +68,10 @@ class SurveyController extends AbstractController
             'total'          => count($active),
             'archived_count' => count($archived),
             'show_archived'  => $showArchived,
+            // A cuánta gente llegará el aviso al abrir: se enseña en el diálogo
+            // ANTES de pulsar. Sólo si hay algún borrador que abrir.
+            'audience'       => $statusCounts[Survey::STATUS_DRAFT] > 0 ? $announcer->audience() : null,
+            'now'            => new \DateTimeImmutable(),
         ]);
     }
 
@@ -71,11 +82,18 @@ class SurveyController extends AbstractController
      * o cerrada, que no se editan.
      */
     #[Route('/{id}', name: 'survey_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(Survey $survey, SurveyParticipationRepository $participations): Response
+    public function show(Survey $survey, SurveyParticipationRepository $participations, PartnerRepository $partners): Response
     {
+        // A quién se le puede reenviar el enlace: sólo mientras admite
+        // respuestas y a quien puede escribir. Nombres, nada más: este rol no
+        // ve fichas ni correos de socias.
+        $canResend = $survey->acceptsResponses(new \DateTimeImmutable())
+            && $this->isGranted('ROLE_GESTION_ENCUESTAS_EDIT');
+
         return $this->render('survey/show.html.twig', [
-            'survey'        => $survey,
-            'participants'  => $participations->countForSurvey($survey),
+            'survey'          => $survey,
+            'participants'    => $participations->countForSurvey($survey),
+            'resend_partners' => $canResend ? $partners->findActiveWithEmail() : [],
         ]);
     }
 
@@ -150,6 +168,7 @@ class SurveyController extends AbstractController
      * Crear una encuesta nueva. Nace en borrador.
      */
     #[Route('/new', name: 'survey_new', methods: ['GET', 'POST'])]
+    #[IsGranted('ROLE_GESTION_ENCUESTAS_EDIT')]
     public function new(Request $request, EntityManagerInterface $em): Response
     {
         $survey = new Survey();
@@ -175,6 +194,7 @@ class SurveyController extends AbstractController
      * preguntas invalidaría las respuestas ya recogidas.
      */
     #[Route('/{id}/edit', name: 'survey_edit', methods: ['GET', 'POST'])]
+    #[IsGranted('ROLE_GESTION_ENCUESTAS_EDIT')]
     public function edit(Request $request, Survey $survey, EntityManagerInterface $em): Response
     {
         if (!$survey->isEditable()) {
@@ -201,10 +221,15 @@ class SurveyController extends AbstractController
     }
 
     /**
-     * Abrir la encuesta a respuestas. A partir de aquí ya no se edita.
+     * Abrir la encuesta a respuestas y avisar a la asociación. A partir de aquí
+     * ya no se edita.
+     *
+     * El aviso sale en la misma petición, como el del grupo de consumo. Si el
+     * envío se corta a mitad, {@see self::announce()} lo completa sin repetir a
+     * nadie.
      */
     #[Route('/{id}/open', name: 'survey_open', methods: ['POST'])]
-    public function open(Request $request, Survey $survey, EntityManagerInterface $em): Response
+    public function open(Request $request, Survey $survey, EntityManagerInterface $em, SurveyAnnouncer $announcer): Response
     {
         if (!$this->isCsrfTokenValid('survey_open_'.$survey->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
@@ -212,27 +237,119 @@ class SurveyController extends AbstractController
             return $this->redirectToRoute('survey_index');
         }
 
-        if ($survey->getQuestions()->isEmpty()) {
-            $this->addFlash('warning', 'No se puede abrir una encuesta sin preguntas.');
+        $problem = $survey->whyCannotOpen(new \DateTimeImmutable());
+        if (null !== $problem) {
+            $this->addFlash('warning', $problem);
 
             return $this->redirectToRoute('survey_index');
         }
 
+        // Primero abrirla, luego avisar: un aviso de una encuesta que aún no
+        // admite respuestas mandaría a la gente a un «ya no está abierta».
         $survey->setStatus(Survey::STATUS_OPEN);
         $em->flush();
-        $this->addFlash('success', 'Encuesta abierta: lxs socixs ya pueden responder.');
+
+        $sent = $announcer->announce($survey);
+        $this->addFlash('success', sprintf(
+            'Encuesta abierta. Aviso enviado: %d por correo, %d al móvil y en la bandeja de %d cuentas.',
+            $sent['email'],
+            $sent['push'],
+            $sent['inbox'],
+        ));
 
         return $this->redirectToRoute('survey_index');
     }
 
     /**
-     * Cerrar la encuesta. Deja de admitir respuestas; sólo quedan resultados.
+     * Avisar de una encuesta abierta que TODAVÍA NO SE HA AVISADO: la que se
+     * abrió antes de que existiera el aviso, o un envío que se cortó antes de
+     * terminar (la marca se pone al final). Una vez avisada no se repite: el
+     * reenvío es a una socia concreta, desde la ficha ({@see self::resend()}).
+     */
+    #[Route('/{id}/announce', name: 'survey_announce', methods: ['POST'])]
+    public function announce(Request $request, Survey $survey, SurveyAnnouncer $announcer): Response
+    {
+        if (!$this->isCsrfTokenValid('survey_announce_'.$survey->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('survey_index');
+        }
+
+        if (!$survey->acceptsResponses(new \DateTimeImmutable())) {
+            $this->addFlash('warning', 'Esta encuesta ya no admite respuestas: no tiene sentido avisar.');
+
+            return $this->redirectToRoute('survey_index');
+        }
+
+        if (null !== $survey->getAnnouncedAt()) {
+            $this->addFlash('warning', 'Esta encuesta ya se avisó a la asociación. Si a alguien no le llegó, reenvíale su enlace desde la ficha de la encuesta.');
+
+            return $this->redirectToRoute('survey_index');
+        }
+
+        $sent = $announcer->announce($survey);
+        $this->addFlash('success', sprintf(
+            'Aviso enviado: %d por correo, %d al móvil y en la bandeja de %d cuentas.',
+            $sent['email'],
+            $sent['push'],
+            $sent['inbox'],
+        ));
+
+        return $this->redirectToRoute('survey_index');
+    }
+
+    /**
+     * Reenviar el correo, con su enlace personal, a UNA socia que dice que no
+     * le llegó. No dice si ya había respondido: el equipo de encuestas no debe
+     * saber quién ha participado. Si ya respondió, el enlace le dará las gracias.
+     */
+    #[Route('/{id}/resend', name: 'survey_resend', methods: ['POST'])]
+    public function resend(Request $request, Survey $survey, PartnerRepository $partners, SurveyAnnouncer $announcer): Response
+    {
+        $back = $this->redirectToRoute('survey_show', ['id' => $survey->getId()]);
+
+        if (!$this->isCsrfTokenValid('survey_resend_'.$survey->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $back;
+        }
+
+        if (!$survey->acceptsResponses(new \DateTimeImmutable())) {
+            $this->addFlash('warning', 'Esta encuesta ya no admite respuestas: el enlace no le serviría.');
+
+            return $back;
+        }
+
+        $partner = $partners->find($request->request->getInt('partner'));
+        if (!$partner instanceof Partner || Partner::STATUS_ACTIVO !== $partner->getStatus() || '' === trim((string) $partner->getEmail())) {
+            $this->addFlash('warning', 'Elige una socia activa con correo.');
+
+            return $back;
+        }
+
+        $name = trim(mb_convert_case((string) $partner->getName(), MB_CASE_TITLE) . ' ' . mb_convert_case((string) $partner->getSurname(), MB_CASE_TITLE));
+        $announcer->resendTo($survey, $partner)
+            ? $this->addFlash('success', sprintf('Enlace reenviado a %s.', $name))
+            : $this->addFlash('warning', sprintf('No se pudo enviar el correo a %s. Revisa que el envío de correos esté encendido y mira el registro de avisos.', $name));
+
+        return $back;
+    }
+
+    /**
+     * Cerrar la encuesta antes de su plazo. Deja de admitir respuestas; sólo
+     * quedan resultados. Sólo desde abierta: un borrador se borra, no se cierra.
      */
     #[Route('/{id}/close', name: 'survey_close', methods: ['POST'])]
     public function close(Request $request, Survey $survey, EntityManagerInterface $em): Response
     {
         if (!$this->isCsrfTokenValid('survey_close_'.$survey->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('survey_index');
+        }
+
+        if (!$survey->isOpen()) {
+            $this->addFlash('warning', 'Sólo se puede cerrar una encuesta abierta.');
 
             return $this->redirectToRoute('survey_index');
         }

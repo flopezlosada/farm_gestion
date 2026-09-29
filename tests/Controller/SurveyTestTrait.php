@@ -76,6 +76,23 @@ trait SurveyTestTrait
     }
 
     /**
+     * Crea un borrador con una única pregunta de opción única SIN opciones: el
+     * caso que no se puede abrir porque nadie podría enviarla.
+     */
+    private function makeDraftWithEmptyChoice(): Survey
+    {
+        $survey = (new Survey())->setTitle('Borrador cojo')->setStatus(Survey::STATUS_DRAFT);
+        $survey->addQuestion((new Question())->setText('¿Sin opciones?')->setType(Question::TYPE_SINGLE)->setPosition(0)->setRequired(true));
+
+        $em = $this->em();
+        $em->persist($survey);
+        $em->flush();
+        $this->createdSurveyIds[] = $survey->getId();
+
+        return $survey;
+    }
+
+    /**
      * Crea una encuesta mínima (sin preguntas) en el estado dado.
      */
     private function makeEmptySurvey(string $status = Survey::STATUS_DRAFT, string $title = 'Encuesta vacía'): Survey
@@ -131,6 +148,13 @@ trait SurveyTestTrait
             );
             $this->createdSurveyIds = [];
         }
+
+        // Lo que deja el aviso al abrir una encuesta: copias en la bandeja,
+        // apuntes del registro de efectos y del de envíos. Sin esto se acumulan
+        // en db_test de una ejecución a otra.
+        $conn->executeStatement("DELETE FROM notification WHERE kind = 'survey.open'");
+        $conn->executeStatement("DELETE FROM emitted_effect WHERE kind LIKE 'survey\\_open\\_%'");
+        $conn->executeStatement("DELETE FROM notification_log WHERE kind = 'survey_open'");
 
         foreach ($em->getRepository(Setting::class)->findAll() as $setting) {
             $em->remove($setting);

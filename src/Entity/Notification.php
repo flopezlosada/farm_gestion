@@ -67,6 +67,9 @@ class Notification
     /** Han cambiado los productos de un pedido del grupo de consumo al que ya estabas apuntada. */
     public const KIND_CONSUMER_GROUP_ITEMS_CHANGED = 'consumer_group.items_changed';
 
+    /** Se ha abierto una encuesta de la asociación que puedes responder. */
+    public const KIND_SURVEY_OPEN = 'survey.open';
+
     /**
      * La cesta que compartes con otro hogar ha cambiado de día o de punto.
      *

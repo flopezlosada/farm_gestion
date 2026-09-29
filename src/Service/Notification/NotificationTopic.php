@@ -42,6 +42,9 @@ final class NotificationTopic
     /** Grupo de consumo: se ha abierto un pedido colectivo al que apuntarse. */
     public const CONSUMER_GROUP = 'consumer_group';
 
+    /** Encuestas: la asociación pregunta algo y se puede responder. */
+    public const SURVEYS = 'surveys';
+
     /**
      * El catálogo. Clave => etiqueta, ayuda, feature que lo habilita (o null) y
      * canales por los que se manda de verdad.
@@ -86,6 +89,15 @@ final class NotificationTopic
             // la asociación, así que el aviso también. Quien no consuma nada de
             // esto lo apaga aquí y no vuelve a enterarse, sin tener que renunciar
             // al aviso de su cesta.
+            'channels' => [self::CHANNEL_EMAIL, self::CHANNEL_PUSH],
+        ],
+        self::SURVEYS => [
+            'label' => 'Encuestas',
+            'help' => 'Cuando la asociación pregunta vuestra opinión sobre algo. Unas pocas al año, y el correo trae un enlace para responder sin entrar en la web.',
+            'feature' => AppSettings::FEATURE_SURVEYS,
+            // Encendido por defecto, como todos: una encuesta a la que no llega
+            // el aviso no la responde nadie. Quien no quiera, lo apaga aquí sin
+            // renunciar al aviso de su cesta.
             'channels' => [self::CHANNEL_EMAIL, self::CHANNEL_PUSH],
         ],
     ];

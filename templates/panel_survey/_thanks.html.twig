@@ -1,0 +1,28 @@
+{#
+ # Cuerpo del agradecimiento tras responder, común al panel y al enlace del
+ # correo. El ✓ se dibuja una vez al entrar (ver _styles.html.twig).
+ #
+ # Recibe:
+ #   - survey   Survey respondida
+ #   - actions  lista de { label, href, variant } para los botones del pie
+ #}
+{% import '_macros/csa.html.twig' as csa %}
+<div class="svy-thanks">
+    <div class="svy-thanks__mark" aria-hidden="true">
+        <svg viewBox="0 0 44 44"><path d="M12 23.5l7 7 14-15"/></svg>
+    </div>
+
+    <h1>¡Gracias por responder!</h1>
+    <p class="svy-thanks__lead">
+        <span class="svy-thanks__survey">{{ survey.title }}</span>
+        Tu respuesta ya está guardada, sin tu nombre.
+    </p>
+
+    {% if actions|default([]) is not empty %}
+        <div class="svy-thanks__actions">
+            {% for action in actions %}
+                {{ csa.btn(action.label, { variant: action.variant|default('primary'), href: action.href }) }}
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>

@@ -64,13 +64,32 @@ class Survey
     private bool $archived = false;
 
     /**
-     * Cierre opcional anunciado. NO cierra la encuesta por sí solo (el cambio
-     * de estado es explícito); sirve para informar a lxs socixs de la fecha
-     * límite. NULL = sin fecha anunciada.
+     * Último día en que se admiten respuestas, incluido. NULL = sin plazo:
+     * abierta hasta que alguien la cierre.
+     *
+     * NO CAMBIA EL ESTADO. Pasada la fecha la encuesta sigue `open` en la base y
+     * es {@see acceptsResponses()} quien deja de admitir respuestas. Así no hace
+     * falta ninguna tarea programada que la cierre a su hora, y ampliar el plazo
+     * es cambiar una fecha, no reabrir nada. El estado `closed` queda para el
+     * cierre manual, antes de tiempo.
+     *
+     * Se guarda como fecha a las 00:00 (el formulario sólo pide el día), así que
+     * la comparación se hace contra el final de ese día.
      *
      * @ORM\Column(name="closes_at", type="datetime", nullable=true)
      */
     private ?\DateTimeInterface $closesAt = null;
+
+    /**
+     * Cuándo se avisó a la asociación de que está abierta. NULL = no se ha avisado.
+     *
+     * Es la memoria VISIBLE del aviso, la que lee el equipo en el listado. Que no
+     * salga dos veces lo garantiza el registro de efectos de
+     * {@see \App\Service\Survey\SurveyAnnouncer}, no esta columna.
+     *
+     * @ORM\Column(name="announced_at", type="datetime", nullable=true)
+     */
+    private ?\DateTimeInterface $announcedAt = null;
 
     /**
      * @var Collection<int, Question>
@@ -168,6 +187,92 @@ class Survey
     public function setClosesAt(?\DateTimeInterface $closesAt): self
     {
         $this->closesAt = $closesAt;
+
+        return $this;
+    }
+
+    /**
+     * Por qué no se puede abrir todavía, o null si está lista.
+     *
+     * Abrir avisa a toda la asociación y ya no se puede editar: una encuesta
+     * que nadie puede enviar (una pregunta de opciones sin opciones) o que ya ha
+     * vencido tiene que pararse aquí, no descubrirse con el aviso enviado.
+     *
+     * @param \DateTimeInterface $now el momento de referencia
+     *
+     * @return string|null el motivo, en palabras para el equipo
+     */
+    public function whyCannotOpen(\DateTimeInterface $now): ?string
+    {
+        if (!$this->isEditable()) {
+            return 'Sólo se puede abrir una encuesta en borrador.';
+        }
+
+        if ($this->questions->isEmpty()) {
+            return 'No se puede abrir una encuesta sin preguntas.';
+        }
+
+        foreach ($this->questions as $question) {
+            if (!$question->isAnswerable()) {
+                return sprintf('La pregunta «%s» necesita al menos %d opciones.', $question->getText(), Question::MIN_OPTIONS);
+            }
+        }
+
+        if ($this->isPastDeadline($now)) {
+            return 'La fecha de cierre ya ha pasado: cámbiala antes de abrirla.';
+        }
+
+        return null;
+    }
+
+    /**
+     * ¿Admite respuestas en este momento? Abierta, sin archivar y sin haber
+     * pasado su plazo.
+     *
+     * Es LA pregunta que se hacen el panel, el enlace del correo y la tarjeta de
+     * la portada. {@see isOpen()} a secas no basta: una encuesta abierta con el
+     * plazo vencido seguiría pidiendo respuestas que ya no deberían contar. Y
+     * archivar es quitarla de en medio: si el equipo la archiva abierta, a la
+     * socia tampoco debe seguir apareciéndole.
+     *
+     * La consulta equivalente es {@see \App\Repository\SurveyRepository::findAcceptingResponses()};
+     * si cambia una, cambia la otra.
+     *
+     * @param \DateTimeInterface $now el momento de referencia
+     *
+     * @return bool true si una socia puede responderla ahora
+     */
+    public function acceptsResponses(\DateTimeInterface $now): bool
+    {
+        return $this->isOpen() && !$this->archived && !$this->isPastDeadline($now);
+    }
+
+    /**
+     * ¿Ha pasado ya su último día? Sin plazo, nunca.
+     *
+     * @param \DateTimeInterface $now el momento de referencia
+     *
+     * @return bool true si `$now` es posterior al final del día de cierre
+     */
+    public function isPastDeadline(\DateTimeInterface $now): bool
+    {
+        if (null === $this->closesAt) {
+            return false;
+        }
+
+        $lastMoment = \DateTimeImmutable::createFromInterface($this->closesAt)->setTime(23, 59, 59);
+
+        return $now > $lastMoment;
+    }
+
+    public function getAnnouncedAt(): ?\DateTimeInterface
+    {
+        return $this->announcedAt;
+    }
+
+    public function setAnnouncedAt(?\DateTimeInterface $announcedAt): self
+    {
+        $this->announcedAt = $announcedAt;
 
         return $this;
     }

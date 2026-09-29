@@ -1,0 +1,151 @@
+{#
+ # El formulario de una encuesta, tal y como lo ve la socia.
+ #
+ # Recibe:
+ #   - survey   Survey
+ #   - form     vista de SurveyResponseType
+ #   - cancel   URL de «Ahora no» (null = no se ofrece)
+ #
+ # Cada pregunta es un <fieldset> con su <legend>: así el lector de pantalla
+ # anuncia la pregunta al llegar a cualquiera de sus opciones. El input real de
+ # cada opción sigue ahí (invisible, enfocable); lo que se ve es la fila entera,
+ # que es lo que se pulsa. Ver _styles.html.twig.
+ #
+ # El input va JUSTO ANTES de `.svy-face` y tiene que seguir así: el estado
+ # «elegida» se pinta con `input:checked + .svy-face`, que funciona en cualquier
+ # navegador. Con `:has()` era más corto, pero hay móviles que no lo entienden y
+ # la socia no vería qué ha marcado.
+ #
+ # `novalidate`: la validación la hace el servidor y la pinta aquí, junto a cada
+ # pregunta y con palabras. El globo nativo del navegador saldría pegado a un
+ # input que no se ve.
+ #}
+{{ form_start(form, { attr: { class: 'svy-form', novalidate: 'novalidate', 'data-svy-form': '1' } }) }}
+
+    {% if form.vars.errors|length %}
+        <div class="svy-form-error" role="alert">
+            <i class="fa fa-exclamation-circle" aria-hidden="true"></i>
+            <ul>{% for error in form.vars.errors %}<li>{{ error.message }}</li>{% endfor %}</ul>
+        </div>
+    {% endif %}
+
+    <div class="svy-list">
+        {% for question in survey.questions %}
+            {% set field = attribute(form, 'q' ~ question.id) %}
+            {% set has_error = field.vars.errors|length > 0 %}
+            {% set legend_id = 'svy-q-' ~ question.id %}
+
+            <fieldset class="svy-q{{ has_error ? ' svy-q--error' : '' }}" data-svy-q>
+                <legend class="svy-q__head" id="{{ legend_id }}">
+                    <span class="svy-num" aria-hidden="true">
+                        <span class="svy-num__n">{{ loop.index }}</span>
+                        <span class="svy-num__ok"><i class="fa fa-check"></i></span>
+                    </span>
+                    <span>
+                        <span class="svy-q__text">{{ question.text }}</span>
+                        {% if question.type == 'multiple' %}
+                            <span class="svy-q__hint">Puedes marcar varias.{{ question.required ? '' : ' Es opcional.' }}</span>
+                        {% elseif not question.required %}
+                            <span class="svy-q__hint">Opcional.</span>
+                        {% endif %}
+                    </span>
+                </legend>
+
+                {% if question.type == 'text' %}
+                    {{ form_widget(field, { attr: {
+                        class: 'svy-text',
+                        rows: 4,
+                        placeholder: 'Escribe aquí lo que quieras contarnos',
+                        'aria-labelledby': legend_id
+                    } }) }}
+
+                {% elseif question.type == 'scale' %}
+                    <div class="svy-scale">
+                        {% for opt in field %}
+                            <label class="svy-opt">
+                                {{ form_widget(opt, { attr: { class: 'svy-input' } }) }}
+                                <span class="svy-face">{{ opt.vars.label }}</span>
+                            </label>
+                        {% endfor %}
+                    </div>
+                    <div class="svy-scale__ends" aria-hidden="true">
+                        <span>1 · Nada</span>
+                        <span>5 · Mucho</span>
+                    </div>
+
+                {% else %}
+                    <div class="svy-opts svy-opts--{{ question.type }}">
+                        {% for opt in field %}
+                            <label class="svy-opt">
+                                {{ form_widget(opt, { attr: { class: 'svy-input' } }) }}
+                                <span class="svy-face">
+                                    <span class="svy-mark" aria-hidden="true"></span>
+                                    <span>{{ opt.vars.label }}</span>
+                                </span>
+                            </label>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                {% if has_error %}
+                    <div class="svy-error" role="alert">
+                        <i class="fa fa-exclamation-circle" aria-hidden="true"></i>
+                        <ul>{% for error in field.vars.errors %}<li>{{ error.message }}</li>{% endfor %}</ul>
+                    </div>
+                {% endif %}
+            </fieldset>
+        {% endfor %}
+    </div>
+
+    <div class="svy-send">
+        <p class="svy-send__note">
+            <i class="fa fa-lock" aria-hidden="true"></i>
+            <span>Tus respuestas son anónimas. Se suman a las del resto de la asociación, pero nadie puede saber qué has contestado tú.</span>
+        </p>
+        <div class="svy-send__row">
+            <button type="submit" class="csa-btn csa-btn--primary svy-send__btn" data-svy-submit>
+                Enviar mis respuestas
+            </button>
+            {% if cancel|default(null) %}
+                <a class="svy-send__later" href="{{ cancel }}">Ahora no</a>
+            {% endif %}
+        </div>
+    </div>
+
+    {{ form_rest(form) }}
+{{ form_end(form, { render_rest: false }) }}
+
+<script>
+(function () {
+    var form = document.querySelector('[data-svy-form]');
+    if (!form) { return; }
+
+    // Una pregunta está respondida si tiene algo marcado o algo escrito. El
+    // número pasa a ✓: es la forma de ver cuánto falta sin barra de progreso.
+    function sync(q) {
+        var answered = q.querySelector('input:checked') !== null;
+        var text = q.querySelector('textarea');
+        if (text) { answered = text.value.trim() !== ''; }
+        q.classList.toggle('svy-q--answered', answered);
+        if (answered) { q.classList.remove('svy-q--error'); }
+    }
+
+    Array.prototype.forEach.call(form.querySelectorAll('[data-svy-q]'), function (q) {
+        sync(q);
+        q.addEventListener('change', function () { sync(q); });
+        q.addEventListener('input', function () { sync(q); });
+    });
+
+    // Tras un error del servidor, llevar a la primera pregunta que falta: en el
+    // móvil el aviso puede quedar tres pantallas más arriba.
+    var firstError = form.querySelector('.svy-q--error');
+    if (firstError) { firstError.scrollIntoView({ block: 'center' }); }
+
+    // Un doble toque no manda dos veces (el servidor lo cortaría igual, pero la
+    // socia vería un aviso raro en lugar del agradecimiento).
+    form.addEventListener('submit', function () {
+        var btn = form.querySelector('[data-svy-submit]');
+        if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+    });
+})();
+</script>

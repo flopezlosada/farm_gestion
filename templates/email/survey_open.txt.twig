@@ -1,0 +1,22 @@
+{% set n = survey.questions|length %}Hola {{ partner.name|lower|title }},
+
+Desde la asociación queremos saber qué opinas: «{{ survey.title }}».
+{% if survey.description %}
+{{ survey.description }}
+{% endif %}
+Son {{ n }} pregunta{{ n == 1 ? '' : 's' }}{% if survey.closesAt %} y puedes responder hasta el {{ survey.closesAt|format_date(pattern="EEEE d 'de' MMMM", locale='es') }}{% endif %}.
+
+Responde aquí: {{ url }}
+
+No necesitas contraseña: el enlace te lleva directamente a la encuesta. Es anónima:
+tus respuestas se suman a las del resto de la asociación, pero nadie puede saber
+qué has contestado tú.
+
+El enlace es sólo para ti; si reenvías este correo, quien lo reciba podría
+responder en tu nombre.
+
+Un abrazo,
+CSA Vega de Jarama
+https://csavegadejarama.org
+
+¿No quieres estos avisos? Puedes apagarlos en {{ preferences_url }} sin perder el de tu cesta.
