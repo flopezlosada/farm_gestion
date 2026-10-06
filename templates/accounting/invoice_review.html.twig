@@ -1,0 +1,168 @@
+{# ============================================================
+ # Revisar una factura y convertirla en apunte.
+ #
+ # El documento a un lado y el formulario de apunte de siempre al otro, ya relleno
+ # con lo leído. Si está bien, se guarda tal cual; si no, se corrige mirando el
+ # documento. Es la misma pantalla para una factura leída y para una que no se pudo
+ # leer: en ésta los campos llegan vacíos.
+ #
+ # El controller pasa: invoice, twin (otra ya anotada con el mismo número, o null),
+ # form (entry + providerTaxId), suggestions.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Revisar factura · Contabilidad{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_invoices') }}">Facturas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Revisar</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'accounting/_styles.html.twig' %}
+    <style>
+        .inv-review { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--csa-sp-6, 32px); align-items: start; }
+        .inv-doc { position: sticky; top: var(--csa-sp-4, 16px); border: 1px solid var(--csa-rule, #ddd); border-radius: 6px; overflow: hidden; background: #fafafa; }
+        .inv-doc img { display: block; width: 100%; height: auto; }
+        .inv-doc iframe { display: block; width: 100%; height: 80vh; border: 0; }
+        .inv-doc__bar { display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; font-size: 12px; border-bottom: 1px solid var(--csa-rule, #ddd); background: #fff; }
+        .inv-facts { font-size: 12px; margin: 0 0 var(--csa-sp-4, 16px); }
+        .inv-facts dt { float: left; clear: left; width: 120px; color: var(--csa-ink-soft, #6b6b6b); }
+        .inv-facts dd { margin: 0 0 4px 120px; }
+        @media (max-width: 900px) {
+            .inv-review { grid-template-columns: 1fr; }
+            .inv-doc { position: static; }
+            .inv-doc iframe { height: 60vh; }
+        }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+    {% set e = form.entry %}
+    {% set editable = is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+
+    {{ csa.page_header(
+        'Contabilidad · Facturas',
+        invoice.providerName ?? invoice.originalName,
+        invoice.status == 'read'
+            ? 'Revisa lo leído mirando el documento. Si está bien, guarda: se crea el apunte.'
+            : 'Esta factura no se ha leído sola. Complétala mirando el documento y guarda.'
+    ) }}
+
+    {% if twin %}
+        {{ csa.callout('Ojo: ya hay una factura anotada de este proveedor con el número ' ~ twin.invoiceNumber ~ (twin.accountEntry ? ' (apunte del ' ~ twin.accountEntry.date|date('d/m/Y') ~ ', ' ~ twin.accountEntry.amount|number_format(2, ',', '.') ~ ' €)' : '') ~ '. Si es la misma, descártala: anotarla otra vez contaría el gasto doble.', 'danger', 'files-o') }}
+    {% endif %}
+
+    {% if invoice.status == 'unreadable' %}
+        {{ csa.callout(invoice.lastError ?? 'No se ha podido leer.', 'warning', 'exclamation-triangle') }}
+    {% elseif invoice.status == 'pending' %}
+        {{ csa.callout('Todavía no se ha leído' ~ (invoice.lastError ? ': ' ~ invoice.lastError|trim('.') : '') ~ '. Puedes esperar o completarla ya a mano.', 'info', 'clock-o') }}
+    {% elseif invoice.confidence == 'baja' %}
+        {{ csa.callout('La lectura no está segura de estos datos: compáralos con el documento antes de guardar.', 'warning', 'eye') }}
+    {% endif %}
+
+    <div class="inv-review">
+
+        {# ============ EL DOCUMENTO ============ #}
+        <div class="inv-doc">
+            <div class="inv-doc__bar">
+                <span class="acc-muted">{{ invoice.originalName }}</span>
+                <a href="{{ path('accounting_invoice_file', { id: invoice.id }) }}" target="_blank" rel="noopener">Abrir aparte <i class="fa fa-external-link"></i></a>
+            </div>
+            {% if invoice.image %}
+                <img src="{{ path('accounting_invoice_file', { id: invoice.id }) }}" alt="Factura {{ invoice.originalName }}">
+            {% elseif invoice.mimeType == 'application/pdf' %}
+                <iframe src="{{ path('accounting_invoice_file', { id: invoice.id }) }}" title="Factura {{ invoice.originalName }}"></iframe>
+            {% else %}
+                <div class="prl-empty">Este formato no se puede enseñar aquí: ábrelo aparte.</div>
+            {% endif %}
+        </div>
+
+        {# ============ EL APUNTE ============ #}
+        <div>
+            {% if invoice.status == 'read' %}
+                <dl class="inv-facts">
+                    <dt>Leída</dt>
+                    <dd>{{ invoice.readAt|date('d/m/Y H:i') }}{% if invoice.confidence %} · confianza {{ invoice.confidence }}{% endif %}</dd>
+                    <dt>Forma de pago</dt>
+                    <dd>{{ invoice.paymentLabel }} <span class="acc-muted">(según la factura)</span></dd>
+                    {% for line in invoice.taxLines %}
+                        <dt>{{ loop.first ? 'Base e IVA' : '' }}</dt>
+                        <dd>
+                            {{ line.base is not null ? line.base|number_format(2, ',', '.') ~ ' €' : '—' }}
+                            al {{ line.tipo_iva is not null ? line.tipo_iva|number_format(0, ',', '.') ~ ' %' : '—' }}
+                            = {{ line.cuota is not null ? line.cuota|number_format(2, ',', '.') ~ ' €' : '—' }}
+                        </dd>
+                    {% endfor %}
+                </dl>
+            {% endif %}
+
+            {{ form_start(form, { attr: { 'data-csa-dropdowns': '1' } }) }}
+                {{ form_errors(form) }}
+                {{ form_errors(e) }}
+
+                <div class="csa-stack-lg">
+                    {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'El apunte', subtitle: 'Lo que entrará en el libro.' } %}
+                        {% block body %}
+                            {% import '_macros/csa.html.twig' as csa %}
+                            <div class="csa-form-grid">
+                                {{ csa.field(e.date, 'Fecha', { hint: 'cuándo se pagó' }) }}
+                                {{ csa.field(e.account, 'Cuenta', { widget_class: 'csa-select' }) }}
+                                {{ csa.field(e.concept, 'Concepto', { full: true }) }}
+                                {{ csa.field(e.category, 'Partida', { full: true, widget_class: 'csa-select' }) }}
+                                {{ csa.field(e.direction, '¿Entra o sale?', { widget_class: 'csa-select' }) }}
+                                {{ csa.field(e.magnitude, 'Importe', { hint: 'total con IVA' }) }}
+                            </div>
+                        {% endblock %}
+                    {% endembed %}
+
+                    {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'La factura', subtitle: 'Para la gestoría.' } %}
+                        {% block body %}
+                            {% import '_macros/csa.html.twig' as csa %}
+                            <div class="csa-form-grid">
+                                {{ csa.field(e.providerName, 'Proveedor') }}
+                                {{ csa.field(form.providerTaxId, 'CIF / NIF') }}
+                                {{ csa.field(e.invoiceNumber, 'Nº de factura') }}
+                                {{ csa.field(e.notes, 'Notas', { full: true, widget_class: 'csa-textarea' }) }}
+                            </div>
+                        {% endblock %}
+                    {% endembed %}
+
+                    {% do e.submit.setRendered %}
+                    {% do e.submitAndNew.setRendered %}
+
+                    {% if editable %}
+                        <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                            <div></div>
+                            <div class="csa-row">
+                                {{ csa.btn('Volver', { variant: 'ghost', href: path('accounting_invoices') }) }}
+                                {{ csa.btn('Guardar el apunte', { variant: 'primary', type: 'submit', icon: 'fa-check' }) }}
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            {{ form_end(form) }}
+
+            {% if editable %}
+                <form method="post" action="{{ path('accounting_invoice_discard', { id: invoice.id }) }}" style="margin-top: var(--csa-sp-6, 32px);"
+                      onsubmit="return confirm('¿Descartar esta factura? No se anota nada; el documento se conserva.');">
+                    <input type="hidden" name="_token" value="{{ csrf_token('discard-invoice-' ~ invoice.id) }}">
+                    <button type="submit" class="csa-btn csa-btn--ghost"><i class="fa fa-ban"></i> <span>Descartar: está repetida o no es una factura</span></button>
+                </form>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {% include 'accounting/_direction_suggest.html.twig' with { category: form.entry.category, direction: form.entry.direction } %}
+{% endblock %}

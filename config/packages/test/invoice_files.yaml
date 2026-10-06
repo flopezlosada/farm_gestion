@@ -1,0 +1,4 @@
+# Las facturas que suben los tests no van al archivo de verdad: colgando del
+# cache_dir se las lleva el primer `cache:clear`.
+parameters:
+    app.invoice_files_dir: '%kernel.cache_dir%/documentos-facturas'

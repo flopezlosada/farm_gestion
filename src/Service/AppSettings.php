@@ -341,6 +341,15 @@ class AppSettings
     public const CRON_VOLUNTEER_SHIFTS = 'cron.volunteer_shifts';
 
     /**
+     * Lee las facturas recibidas que siguen en cola.
+     *
+     * Casi todas se leen solas en el momento de subirlas; esta tarea recoge las
+     * que fallaron porque el servicio de lectura estaba saturado o sin cupo. No
+     * manda nada a nadie.
+     */
+    public const CRON_READ_INVOICES = 'cron.read_invoices';
+
+    /**
      * Manda las novedades de la web que administración ha pedido contar.
      *
      * A diferencia del resto, no vigila una fecha ni un estado del dominio:
@@ -642,6 +651,22 @@ class AppSettings
             'requires' => [self::FEATURE_VOLUNTEERING],
             'depends_on' => [],
         ],
+        // Por intervalo: es el reintento de las facturas que no se pudieron leer al
+        // subirlas, y una factura que espera un día entero a ser leída es la que
+        // acaba tecleándose a mano.
+        self::CRON_READ_INVOICES => [
+            'command' => 'app:read-received-invoices',
+            // Ningún canal: no entrega nada a nadie, deja las facturas leídas en la
+            // bandeja de contabilidad.
+            'channels' => [],
+            'needs_recipient' => false,
+            'confirm' => false,
+            'dry' => true,
+            'schedule' => ['freq' => 'interval', 'minutes' => 60],
+            'max_delay_hours' => 6,
+            'requires' => [self::FEATURE_CONTABILIDAD],
+            'depends_on' => [],
+        ],
         self::CRON_VOLUNTEER_CALLS => [
             'command' => 'app:send-volunteer-calls',
             // Multicanal desde que el aviso también sale por correo. Por eso NO
@@ -842,6 +867,12 @@ class AppSettings
             'group' => 'Tareas programadas',
             'label' => 'Abrir turnos de voluntariado',
             'help' => 'Cada madrugada abre los turnos que les toca a las tareas que se repiten, y retira los que su repetición ya no dicta (app:sync-volunteer-shifts). No manda nada a nadie. APAGADA, las tareas repetitivas se quedan sin turnos a los cuatro meses y no hay a qué apuntarse: déjala encendida.',
+            'default' => true,
+        ],
+        self::CRON_READ_INVOICES => [
+            'group' => 'Tareas programadas',
+            'label' => 'Leer las facturas en cola',
+            'help' => 'Cada hora vuelve a intentar leer las facturas recibidas que no se pudieron leer al subirlas, porque el servicio de lectura estaba saturado o sin cupo (app:read-received-invoices). No manda nada a nadie. Apagada, esas facturas se quedan en cola hasta que alguien suba otra. Requiere la contabilidad encendida.',
             'default' => true,
         ],
         self::CRON_VOLUNTEER_CALLS => [

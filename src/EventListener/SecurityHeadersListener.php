@@ -12,7 +12,9 @@ use Symfony\Component\HttpKernel\KernelEvents;
  *   X-Frame-Options: DENY
  *     - Impide que cualquier dominio embeba el sitio en un iframe.
  *       Defensa contra clickjacking (engañar al usuario para que
- *       haga clic en algo dentro de un iframe disfrazado).
+ *       haga clic en algo dentro de un iframe disfrazado). Salvo que
+ *       la respuesta traiga ya la suya (SAMEORIGIN para enseñar un
+ *       documento propio dentro de una página propia).
  *
  *   X-Content-Type-Options: nosniff
  *     - Le dice al navegador que respete el Content-Type declarado y
@@ -43,7 +45,12 @@ class SecurityHeadersListener
         }
 
         $headers = $event->getResponse()->headers;
-        $headers->set('X-Frame-Options', 'DENY');
+        // Una respuesta que declara su propia política de marcos la conserva: el
+        // documento de una factura se enseña dentro de la página de revisión, en
+        // un marco del MISMO sitio, y con DENY el navegador lo dejaría en blanco.
+        if (!$headers->has('X-Frame-Options')) {
+            $headers->set('X-Frame-Options', 'DENY');
+        }
         $headers->set('X-Content-Type-Options', 'nosniff');
         $headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
     }

@@ -1,0 +1,25 @@
+{# ============================================================
+ # Al elegir partida, propone si el dinero entra o sale: una partida de gastos sale
+ # y una de ingresos entra. Es una propuesta, no una imposición —una devolución es un
+ # gasto que entra—, así que sólo toca el desplegable, no lo bloquea.
+ #
+ # Lo comparten el formulario de apunte y la revisión de facturas.
+ # Recibe: suggestions (id de partida => 'in'|'out'), category y direction (campos).
+ # ============================================================ #}
+<script>
+    (function () {
+        var suggestions = {{ suggestions|json_encode|raw }};
+        var category = document.getElementById('{{ category.vars.id }}');
+        var direction = document.getElementById('{{ direction.vars.id }}');
+        if (!category || !direction) { return; }
+
+        category.addEventListener('change', function () {
+            var proposed = suggestions[category.value];
+            if (!proposed || direction.value === proposed) { return; }
+            direction.value = proposed;
+            // El dropdown con estética csa envuelve el select nativo: sin este
+            // evento se queda enseñando la etiqueta vieja.
+            direction.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    })();
+</script>
