@@ -6,6 +6,7 @@ use App\Entity\AccountEntry;
 use App\Entity\BudgetCategory;
 use App\Entity\BudgetCategoryGroup;
 use App\Entity\FinancialAccount;
+use App\Entity\Provider;
 use App\Entity\ReceivedInvoice;
 use App\Entity\Setting;
 use App\Service\AppSettings;
@@ -16,12 +17,16 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
  * La bandeja de facturas por HTTP, sin lectura automática (en los tests no hay
  * clave): que el módulo está detrás de su flag, que una factura subida se guarda y
  * espera, que se puede completar a mano y queda convertida en un apunte de gasto, y
- * que el documento sólo se sirve con permiso.
+ * que el documento sólo se sirve con permiso. Al confirmar, el proveedor se
+ * reconoce por su CIF (o se da de alta) y el desglose de IVA queda en sus líneas.
  *
  * La lectura con Gemini se prueba aparte, sin red ({@see \App\Tests\Service\Accounting\Invoice\InvoiceReadQueueTest}).
  */
 class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
 {
+    /** CIF de la ferretería de las pruebas; tearDown borra el proveedor que cree. */
+    private const TAX_ID = '51454945N';
+
     private ?FinancialAccount $account = null;
     private ?BudgetCategoryGroup $group = null;
     private ?BudgetCategory $category = null;
@@ -37,6 +42,11 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
             if ($entry !== null) {
                 $em->remove($entry);
             }
+        }
+        $em->flush();
+
+        foreach ($em->getRepository(Provider::class)->findBy(['taxId' => self::TAX_ID]) as $provider) {
+            $em->remove($provider);
         }
         $em->flush();
 
@@ -112,11 +122,126 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $this->assertInstanceOf(AccountEntry::class, $entry);
         $this->assertSame('-26.75', $entry->getAmount(), 'Una factura recibida es dinero que sale.');
         $this->assertSame('2232', $invoice->getInvoiceNumber());
-        $this->assertSame('51454945-n', $invoice->getProviderTaxId(), 'El CIF tecleado se guarda en la factura.');
+        $this->assertSame(self::TAX_ID, $invoice->getProviderTaxId(), 'El CIF tecleado se guarda normalizado: así se compara.');
+        $this->assertNotNull($invoice->getProvider(), 'Con CIF, la factura queda enlazada a su proveedor.');
+        $this->assertSame('Ferretería Torrelaguna', $invoice->getProvider()->getName(), 'Un proveedor nuevo nace con el nombre del apunte.');
+        $this->assertSame(self::TAX_ID, $invoice->getProvider()->getTaxId());
 
         // Ya anotada, no vuelve a abrirse para crear un segundo apunte.
         $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
         $this->assertResponseRedirects('/gestion/accounting/invoices');
+    }
+
+    /**
+     * Una factura de profesional: dos tipos de IVA y retención. Las líneas y la
+     * retención se guardan, y el proveedor nuevo toma la dirección de la factura.
+     */
+    public function testConfirmarGuardaElDesgloseLaRetencionYLaDireccionDelProveedor(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->createCatalogue();
+        $invoice = $this->uploadOne($client);
+
+        $this->confirm($client, $invoice, [
+            'providerAddress' => 'C/ Mayor 12',
+            'providerPostalCode' => '28180',
+            'providerTown' => 'Torrelaguna',
+            'providerProvince' => 'Madrid',
+            'taxLines' => [
+                ['base' => '300.00', 'rate' => '21', 'taxAmount' => '63.00'],
+                ['base' => '100.00', 'rate' => '10', 'taxAmount' => '10.00'],
+            ],
+            'withholding' => '45.00',
+            'withholdingRate' => '15',
+        ], '428.00');
+        $this->assertResponseRedirects();
+
+        $invoice = $this->findInvoice('factura-prueba.pdf');
+        $this->assertSame(ReceivedInvoice::STATUS_CONFIRMED, $invoice->getStatus());
+        $this->assertCount(2, $invoice->getTaxLines());
+        $this->assertSame('63.00', $invoice->getTaxLines()->first()->getTaxAmount());
+        $this->assertSame('45.00', $invoice->getWithholding());
+        $this->assertSame(428.0, $invoice->totalFromBreakdown(), '300 + 63 + 100 + 10 − 45 de retención.');
+        $this->assertSame('C/ Mayor 12', $invoice->getProvider()?->getAddress());
+        $this->assertSame('28180', $invoice->getProvider()?->getPostalCode());
+        $this->assertSame('Madrid', $invoice->getProvider()?->getProvince());
+    }
+
+    /**
+     * Un proveedor que ya existe se reconoce por el CIF y sólo se le completan los
+     * huecos: lo que tenga su ficha no lo pisa una factura (que puede traer la
+     * dirección de una sucursal).
+     */
+    public function testUnProveedorConocidoSoloSeCompletaNuncaSePisa(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->createCatalogue();
+
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $known = (new Provider())->setName('Ferretería de siempre')->setTaxId(self::TAX_ID)->setAddress('Plaza Mayor 1');
+        $em->persist($known);
+        $em->flush();
+
+        $invoice = $this->uploadOne($client);
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
+        $this->assertSame(0, $crawler->filter('body:contains("Proveedor conocido")')->count(), 'Sin CIF leído todavía no se sabe quién es.');
+
+        $this->confirm($client, $invoice, [
+            'providerAddress' => 'Polígono Sur, nave 3',
+            'providerTown' => 'Torrelaguna',
+        ], '26.75');
+        $this->assertResponseRedirects();
+
+        $em->clear();
+        $providers = $em->getRepository(Provider::class)->findBy(['taxId' => self::TAX_ID]);
+        $this->assertCount(1, $providers, 'El mismo CIF no da de alta un segundo proveedor.');
+        $this->assertSame('Ferretería de siempre', $providers[0]->getName(), 'El nombre de la ficha no se pisa.');
+        $this->assertSame('Plaza Mayor 1', $providers[0]->getAddress(), 'La dirección de la ficha no se pisa.');
+        $this->assertSame('Torrelaguna', $providers[0]->getTown(), 'Lo que faltaba sí se completa.');
+    }
+
+    /** Una línea de IVA a medias no deja confirmar: la gestoría la necesita entera. */
+    public function testUnaLineaDeIvaIncompletaNoSeConfirma(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->createCatalogue();
+        $invoice = $this->uploadOne($client);
+
+        $this->confirm($client, $invoice, ['taxLines' => [['base' => '22.11', 'rate' => '', 'taxAmount' => '4.64']]], '26.75');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSame(ReceivedInvoice::STATUS_PENDING, $this->findInvoice('factura-prueba.pdf')->getStatus());
+    }
+
+    /**
+     * El apunte de una factura enseña el documento en su ficha y lleva el clip en el
+     * libro. Si se borra, la factura no se pierde: vuelve a la bandeja.
+     */
+    public function testElApunteEnseñaSuFacturaYAlBorrarloVuelveALaBandeja(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->createCatalogue();
+        $invoice = $this->uploadOne($client);
+        $this->confirm($client, $invoice, [], '26.75');
+
+        $entry = $this->findInvoice('factura-prueba.pdf')->getAccountEntry();
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/entry/%d', $entry->getId()));
+        $this->assertResponseIsSuccessful();
+        $this->assertCount(1, $crawler->filter(sprintf('iframe[src$="/invoices/%d/file"]', $invoice->getId())), 'La ficha del apunte enseña la factura.');
+
+        $crawler = $client->request('GET', '/gestion/accounting/ledger?account=' . $this->account->getId());
+        $this->assertCount(1, $crawler->filter('.fa-paperclip'), 'En el libro, el apunte con factura lleva el clip.');
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/entry/%d', $entry->getId()));
+        $client->submit($crawler->filter(sprintf('form[action$="/entry/%d/delete"]', $entry->getId()))->form());
+
+        $invoice = $this->findInvoice('factura-prueba.pdf');
+        $this->assertNull($invoice->getAccountEntry());
+        $this->assertTrue($invoice->isOpen(), 'Sin apunte, la factura vuelve a la bandeja en vez de quedarse confirmada y escondida.');
     }
 
     /** Descartar aparta la factura sin anotar nada, y sin borrar el documento. */
@@ -192,6 +317,38 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $client->submit($form);
 
         return $this->findInvoice('factura-prueba.pdf');
+    }
+
+    /**
+     * Confirma una factura enviando el formulario de revisión con un apunte de gasto
+     * válido y los campos de factura que se pidan. Va por petición directa y no por
+     * el formulario del crawler porque las líneas de IVA nuevas las añade el
+     * JavaScript y el crawler sólo conoce los campos pintados.
+     *
+     * @param array<string, mixed> $invoiceFields Campos de la factura (taxLines, withholding…).
+     * @param string               $amount        Importe pagado.
+     */
+    private function confirm($client, ReceivedInvoice $invoice, array $invoiceFields, string $amount): void
+    {
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
+        $form = $crawler->filter('form[name="received_invoice_confirm"]')->form();
+        $values = $form->getPhpValues();
+
+        $values['received_invoice_confirm'] = array_replace($values['received_invoice_confirm'], [
+            'providerTaxId' => self::TAX_ID,
+        ], $invoiceFields);
+        $values['received_invoice_confirm']['entry'] = array_replace($values['received_invoice_confirm']['entry'], [
+            'date' => '2026-03-05',
+            'account' => (string) $this->account->getId(),
+            'category' => (string) $this->category->getId(),
+            'concept' => 'Ferretería Torrelaguna · tornillería',
+            'direction' => 'out',
+            'magnitude' => $amount,
+            'providerName' => 'Ferretería Torrelaguna',
+            'invoiceNumber' => '2232',
+        ]);
+
+        $client->request('POST', $form->getUri(), $values);
     }
 
     private function createCatalogue(): void

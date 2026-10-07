@@ -1,0 +1,16 @@
+{# Piezas de la revisión de facturas. Van aparte porque una macro definida dentro de
+ # un bloque no queda registrada. #}
+
+{# Una línea del desglose de IVA. La misma macro pinta las que hay y el molde de una
+ # nueva (data-prototype de csa-collection). #}
+{% macro tax_line(line) %}
+    {% import '_macros/csa.html.twig' as csa %}
+    <div class="inv-taxline" data-csa-collection-item data-inv-line>
+        {{ csa.field(line.base, 'Base') }}
+        {{ csa.field(line.rate, '% IVA') }}
+        {{ csa.field(line.taxAmount, 'Cuota') }}
+        <button type="button" class="csa-btn csa-btn--ghost inv-taxline__remove" data-csa-collection-remove hidden aria-label="Quitar esta línea">
+            <i class="fa fa-times"></i>
+        </button>
+    </div>
+{% endmacro %}

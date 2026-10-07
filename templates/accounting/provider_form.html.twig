@@ -1,0 +1,78 @@
+{# ============================================================
+ # Cambiar los datos de un proveedor.
+ #
+ # El controller pasa: form, provider.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}{{ provider.name }} · Proveedores{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_providers') }}">Proveedores</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Cambiar</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Contabilidad · Proveedores', provider.name, 'Lo que hace falta para reconocerle en una factura, pagarle y declararle.') }}
+
+    {{ form_start(form, { attr: { class: 'csa-form-narrow' } }) }}
+
+        {{ form_errors(form) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Quién es', subtitle: 'Por el CIF se le reconoce en las facturas.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.name, 'Nombre', { full: true }) }}
+                        {{ csa.field(form.taxId, 'CIF / NIF') }}
+                        {{ csa.field(form.iban, 'IBAN', { hint: 'para pagarle por transferencia' }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Dónde está', subtitle: 'El modelo 347 pide la provincia.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.address, 'Dirección', { full: true }) }}
+                        {{ csa.field(form.postal_code, 'Código postal') }}
+                        {{ csa.field(form.town, 'Municipio') }}
+                        {{ csa.field(form.province, 'Provincia') }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Contacto', subtitle: 'Opcional.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.contact, 'Persona de contacto') }}
+                        {{ csa.field(form.phone, 'Teléfono') }}
+                        {{ csa.field(form.email, 'Correo') }}
+                        {{ csa.field(form.web, 'Web') }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('accounting_provider_show', { id: provider.id }) }) }}
+                    {{ form_widget(form.submit, { attr: { class: 'csa-btn csa-btn--primary' } }) }}
+                </div>
+            </div>
+
+        </div>
+
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
+{% endblock %}

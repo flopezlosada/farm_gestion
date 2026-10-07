@@ -163,7 +163,7 @@ class InvoiceReadQueueTest extends KernelTestCase
 
         $first = $this->newInvoice();
         $first->markRead($read, 'modelo-a', null, new \DateTimeImmutable());
-        $first->confirm($entry);
+        $first->confirm($entry, null);
         $second = $this->newInvoice();
         $second->markRead($read, 'modelo-a', null, new \DateTimeImmutable());
         $this->em->flush();

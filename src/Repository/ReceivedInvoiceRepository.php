@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\AccountEntry;
 use App\Entity\BudgetCategory;
+use App\Entity\Provider;
 use App\Entity\ReceivedInvoice;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -100,6 +101,52 @@ class ReceivedInvoiceRepository extends ServiceEntityRepository
             ->setParameter('confirmed', ReceivedInvoice::STATUS_CONFIRMED)
             ->orderBy('i.updatedAt', 'DESC')
             ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Qué apuntes de una lista vienen de una factura, para marcarlos en el libro sin
+     * preguntar apunte por apunte.
+     *
+     * @param list<int> $entryIds Apuntes de la página.
+     *
+     * @return array<int, int> id del apunte => id de la factura.
+     */
+    public function invoiceIdsByEntry(array $entryIds): array
+    {
+        if ($entryIds === []) {
+            return [];
+        }
+
+        $rows = $this->createQueryBuilder('i')
+            ->select('IDENTITY(i.accountEntry) AS entry', 'i.id AS invoice')
+            ->andWhere('i.accountEntry IN (:ids)')
+            ->setParameter('ids', $entryIds)
+            ->getQuery()
+            ->getArrayResult();
+
+        return array_column($rows, 'invoice', 'entry');
+    }
+
+    /**
+     * Las facturas anotadas de un proveedor, las más recientes primero.
+     *
+     * @param Provider $provider El proveedor.
+     *
+     * @return list<ReceivedInvoice>
+     */
+    public function findConfirmedByProvider(Provider $provider): array
+    {
+        return $this->createQueryBuilder('i')
+            ->leftJoin('i.accountEntry', 'e')->addSelect('e')
+            ->leftJoin('e.category', 'c')->addSelect('c')
+            ->andWhere('i.provider = :provider')
+            ->andWhere('i.status = :confirmed')
+            ->setParameter('provider', $provider)
+            ->setParameter('confirmed', ReceivedInvoice::STATUS_CONFIRMED)
+            ->orderBy('i.invoiceDate', 'DESC')
+            ->addOrderBy('i.id', 'DESC')
             ->getQuery()
             ->getResult();
     }

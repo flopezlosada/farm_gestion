@@ -2,6 +2,7 @@
 
 namespace App\Service\Accounting\Invoice;
 
+use App\Entity\Provider;
 use App\Entity\ReceivedInvoice;
 
 /**
@@ -19,7 +20,7 @@ final class ExtractedInvoice
     private const CONFIDENCES = ['alta', 'media', 'baja'];
 
     /**
-     * @param list<array{base: float|null, tipo_iva: float|null, cuota: float|null}> $taxLines
+     * @param list<array{base: string|null, rate: string|null, taxAmount: string|null}> $taxLines
      */
     public function __construct(
         public readonly ?string $documentType,
@@ -29,6 +30,12 @@ final class ExtractedInvoice
         public readonly ?string $invoiceNumber,
         public readonly ?string $total,
         public readonly array $taxLines,
+        public readonly ?string $withholding,
+        public readonly ?string $withholdingRate,
+        public readonly ?string $providerAddress,
+        public readonly ?string $providerPostalCode,
+        public readonly ?string $providerTown,
+        public readonly ?string $providerProvince,
         public readonly ?string $concept,
         public readonly string $paymentMethod,
         public readonly ?string $confidence,
@@ -51,6 +58,12 @@ final class ExtractedInvoice
             self::text($raw['numero_factura'] ?? null, 50),
             self::money($raw['total'] ?? null),
             self::taxLines($raw['lineas_iva'] ?? null),
+            self::positiveMoney($raw['retencion_irpf'] ?? null),
+            self::positiveMoney($raw['tipo_retencion'] ?? null),
+            self::text($raw['direccion_proveedor'] ?? null, 255),
+            self::postalCode($raw['cp_proveedor'] ?? null),
+            self::text($raw['municipio_proveedor'] ?? null, 100),
+            self::text($raw['provincia_proveedor'] ?? null, 100),
             self::text($raw['concepto'] ?? null, 255),
             self::oneOf($raw['forma_pago'] ?? null, array_keys(ReceivedInvoice::PAYMENT_LABELS)) ?? ReceivedInvoice::PAYMENT_UNKNOWN,
             self::oneOf($raw['confianza'] ?? null, self::CONFIDENCES),
@@ -81,13 +94,7 @@ final class ExtractedInvoice
     /** CIF/NIF en mayúsculas y sin espacios ni guiones, que es como se compara. */
     private static function taxId(mixed $value): ?string
     {
-        $text = self::text($value, 30);
-        if ($text === null) {
-            return null;
-        }
-        $clean = strtoupper((string) preg_replace('/[^A-Za-z0-9]/', '', $text));
-
-        return $clean === '' ? null : mb_substr($clean, 0, 20);
+        return Provider::normalizeTaxId(self::text($value, 30));
     }
 
     /** Fecha en formato AAAA-MM-DD, y sólo si existe en el calendario. */
@@ -108,7 +115,29 @@ final class ExtractedInvoice
     }
 
     /**
-     * @return list<array{base: float|null, tipo_iva: float|null, cuota: float|null}>
+     * Una retención o su tipo: se guardan en positivo aunque la factura la imprima
+     * restando. Un cero es «no lleva», igual que no traerla.
+     */
+    private static function positiveMoney(mixed $value): ?string
+    {
+        $money = self::money(is_numeric($value) ? abs((float) $value) : null);
+
+        return $money === null || (float) $money === 0.0 ? null : $money;
+    }
+
+    /** Sólo un código postal español con forma de serlo: cinco cifras. */
+    private static function postalCode(mixed $value): ?string
+    {
+        $text = \is_int($value) ? sprintf('%05d', $value) : self::text($value, 10);
+
+        return $text !== null && preg_match('/^\d{5}$/', $text) === 1 ? $text : null;
+    }
+
+    /**
+     * Las líneas de IVA. Una línea sin ninguna cifra no dice nada y se descarta; una
+     * a medias se queda, para que quien revisa complete lo que falta.
+     *
+     * @return list<array{base: string|null, rate: string|null, taxAmount: string|null}>
      */
     private static function taxLines(mixed $value): array
     {
@@ -116,17 +145,19 @@ final class ExtractedInvoice
             return [];
         }
 
-        $number = static fn (mixed $v): ?float => is_numeric($v) ? round((float) $v, 2) : null;
         $lines = [];
         foreach ($value as $line) {
             if (!\is_array($line)) {
                 continue;
             }
-            $lines[] = [
-                'base' => $number($line['base'] ?? null),
-                'tipo_iva' => $number($line['tipo_iva'] ?? null),
-                'cuota' => $number($line['cuota'] ?? null),
+            $read = [
+                'base' => self::money($line['base'] ?? null),
+                'rate' => self::money($line['tipo_iva'] ?? null),
+                'taxAmount' => self::money($line['cuota'] ?? null),
             ];
+            if (array_filter($read, static fn (?string $v): bool => $v !== null) !== []) {
+                $lines[] = $read;
+            }
         }
 
         return $lines;

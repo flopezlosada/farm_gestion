@@ -7,11 +7,13 @@
  # leer: en ésta los campos llegan vacíos.
  #
  # El controller pasa: invoice, twin (otra ya anotada con el mismo número, o null),
- # form (entry + providerTaxId), suggestions.
+ # known (el proveedor que ya existe con ese CIF, o null), form (la factura + su
+ # apunte en form.entry), suggestions.
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_invoice_macros.html.twig' as invm %}
 
 {% block title %}Revisar factura · Contabilidad{% endblock %}
 
@@ -37,6 +39,11 @@
         .inv-facts { font-size: 12px; margin: 0 0 var(--csa-sp-4, 16px); }
         .inv-facts dt { float: left; clear: left; width: 120px; color: var(--csa-ink-soft, #6b6b6b); }
         .inv-facts dd { margin: 0 0 4px 120px; }
+        .inv-taxline { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: var(--csa-sp-3, 12px); align-items: end; margin-bottom: var(--csa-sp-3, 12px); }
+        .inv-taxline__remove { margin-bottom: 2px; }
+        .inv-check { font-size: 13px; padding: 8px 12px; border-radius: 6px; margin-top: var(--csa-sp-3, 12px); }
+        .inv-check--ok { background: #eef6ee; color: #2f6b34; }
+        .inv-check--ko { background: #fdf3e6; color: #8a5300; }
         @media (max-width: 900px) {
             .inv-review { grid-template-columns: 1fr; }
             .inv-doc { position: static; }
@@ -94,20 +101,16 @@
                     <dd>{{ invoice.readAt|date('d/m/Y H:i') }}{% if invoice.confidence %} · confianza {{ invoice.confidence }}{% endif %}</dd>
                     <dt>Forma de pago</dt>
                     <dd>{{ invoice.paymentLabel }} <span class="acc-muted">(según la factura)</span></dd>
-                    {% for line in invoice.taxLines %}
-                        <dt>{{ loop.first ? 'Base e IVA' : '' }}</dt>
-                        <dd>
-                            {{ line.base is not null ? line.base|number_format(2, ',', '.') ~ ' €' : '—' }}
-                            al {{ line.tipo_iva is not null ? line.tipo_iva|number_format(0, ',', '.') ~ ' %' : '—' }}
-                            = {{ line.cuota is not null ? line.cuota|number_format(2, ',', '.') ~ ' €' : '—' }}
-                        </dd>
-                    {% endfor %}
                 </dl>
             {% endif %}
 
             {{ form_start(form, { attr: { 'data-csa-dropdowns': '1' } }) }}
                 {{ form_errors(form) }}
                 {{ form_errors(e) }}
+
+                {% if known %}
+                    {{ csa.callout('Proveedor conocido: ' ~ known.name ~ '. Lo que falte en su ficha se completa con esta factura; lo que ya tenga no se toca.', 'info', 'address-card-o') }}
+                {% endif %}
 
                 <div class="csa-stack-lg">
                     {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'El apunte', subtitle: 'Lo que entrará en el libro.' } %}
@@ -119,20 +122,50 @@
                                 {{ csa.field(e.concept, 'Concepto', { full: true }) }}
                                 {{ csa.field(e.category, 'Partida', { full: true, widget_class: 'csa-select' }) }}
                                 {{ csa.field(e.direction, '¿Entra o sale?', { widget_class: 'csa-select' }) }}
-                                {{ csa.field(e.magnitude, 'Importe', { hint: 'total con IVA' }) }}
+                                {{ csa.field(e.magnitude, 'Importe', { hint: 'lo que se pagó: total con IVA y menos la retención' }) }}
                             </div>
                         {% endblock %}
                     {% endembed %}
 
-                    {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'La factura', subtitle: 'Para la gestoría.' } %}
+                    {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Quién la emite', subtitle: 'Por el CIF se reconoce al proveedor; si es nuevo, se le da de alta con estos datos.' } %}
                         {% block body %}
                             {% import '_macros/csa.html.twig' as csa %}
                             <div class="csa-form-grid">
                                 {{ csa.field(e.providerName, 'Proveedor') }}
-                                {{ csa.field(form.providerTaxId, 'CIF / NIF') }}
+                                {{ csa.field(form.providerTaxId, 'CIF / NIF', { hint: 'sin CIF no se enlaza a ningún proveedor' }) }}
                                 {{ csa.field(e.invoiceNumber, 'Nº de factura') }}
+                                {{ csa.field(form.providerAddress, 'Dirección') }}
+                                {{ csa.field(form.providerPostalCode, 'Código postal') }}
+                                {{ csa.field(form.providerTown, 'Municipio') }}
+                                {{ csa.field(form.providerProvince, 'Provincia') }}
                                 {{ csa.field(e.notes, 'Notas', { full: true, widget_class: 'csa-textarea' }) }}
                             </div>
+                        {% endblock %}
+                    {% endembed %}
+
+                    {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Bases e IVA', subtitle: 'Una línea por cada tipo de IVA que mezcle la factura. Para la gestoría.' } %}
+                        {% block body %}
+                            {% import '_macros/csa.html.twig' as csa %}
+                            {% import 'accounting/_invoice_macros.html.twig' as invm %}
+                            <div data-csa-collection data-prototype="{{ invm.tax_line(form.taxLines.vars.prototype)|e('html_attr') }}">
+                                <div data-csa-collection-items data-inv-lines>
+                                    {% for line in form.taxLines %}
+                                        {{ invm.tax_line(line) }}
+                                    {% endfor %}
+                                </div>
+                                {% do form.taxLines.setRendered %}
+                                {% if not form.taxLines.vars.valid %}
+                                    <div class="csa-field__error">{{ form_errors(form.taxLines) }}</div>
+                                {% endif %}
+                                <button type="button" class="csa-btn csa-btn--ghost" data-csa-collection-add hidden>
+                                    <i class="fa fa-plus"></i> Añadir un tipo de IVA
+                                </button>
+                            </div>
+                            <div class="csa-form-grid" style="margin-top: var(--csa-sp-4, 16px);">
+                                {{ csa.field(form.withholding, 'Retención IRPF', { hint: 'en positivo; vacío si no lleva' }) }}
+                                {{ csa.field(form.withholdingRate, '% de retención', { hint: 'si lo dice' }) }}
+                            </div>
+                            <div class="inv-check" data-inv-check hidden></div>
                         {% endblock %}
                     {% endembed %}
 
@@ -165,4 +198,59 @@
 {% block more_js %}
     {{ parent() }}
     {% include 'accounting/_direction_suggest.html.twig' with { category: form.entry.category, direction: form.entry.direction } %}
+    <script>
+    /*
+     * Comprueba en vivo que el desglose cuadra con el importe: bases más cuotas menos
+     * la retención tiene que dar lo que se pagó. Sólo avisa: hay facturas con
+     * redondeos o recargos raros, y quien revisa decide.
+     *
+     * Además, al escribir base y tipo propone la cuota, si la casilla está vacía o la
+     * había propuesto ya esta misma cuenta (no se pisa una cifra tecleada a mano).
+     */
+    (function () {
+        var form = document.querySelector('[data-inv-lines]').closest('form');
+        var total = document.getElementById('{{ form.entry.magnitude.vars.id }}');
+        var withholding = form.querySelector('[data-inv-withholding]');
+        var box = form.querySelector('[data-inv-check]');
+        var euro = function (n) { return n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; };
+        var num = function (input) { var v = parseFloat(String(input && input.value || '').replace(',', '.')); return isNaN(v) ? 0 : v; };
+
+        function check() {
+            var lines = form.querySelectorAll('[data-inv-line]');
+            if (!lines.length) { box.hidden = true; return; }
+            var sum = 0;
+            lines.forEach(function (line) {
+                sum += num(line.querySelector('[data-inv-base]')) + num(line.querySelector('[data-inv-tax]'));
+            });
+            sum = Math.round((sum - num(withholding)) * 100) / 100;
+            var paid = num(total);
+            var diff = Math.round((paid - sum) * 100) / 100;
+            box.hidden = false;
+            box.className = 'inv-check ' + (diff === 0 ? 'inv-check--ok' : 'inv-check--ko');
+            box.textContent = diff === 0
+                ? 'Cuadra: el desglose suma ' + euro(sum) + ', lo mismo que el importe.'
+                : 'No cuadra: el desglose suma ' + euro(sum) + ' y el importe es ' + euro(paid) + ' (diferencia ' + euro(diff) + '). Revísalo antes de guardar.';
+        }
+
+        function proposeTax(line) {
+            var tax = line.querySelector('[data-inv-tax]');
+            var base = line.querySelector('[data-inv-base]');
+            var rate = line.querySelector('[data-inv-rate]');
+            if (base.value === '' || rate.value === '' || (tax.value !== '' && tax.dataset.invAuto !== tax.value)) { return; }
+            tax.value = (Math.round(num(base) * num(rate)) / 100).toFixed(2);
+            tax.dataset.invAuto = tax.value;
+        }
+
+        form.addEventListener('input', function (event) {
+            var line = event.target.closest('[data-inv-line]');
+            if (line && (event.target.matches('[data-inv-base]') || event.target.matches('[data-inv-rate]'))) { proposeTax(line); }
+            check();
+        });
+        // Quitar una línea no dispara «input»: se escucha el clic y se recalcula después.
+        form.addEventListener('click', function (event) {
+            if (event.target.closest('[data-csa-collection-remove]')) { setTimeout(check, 0); }
+        });
+        check();
+    })();
+    </script>
 {% endblock %}

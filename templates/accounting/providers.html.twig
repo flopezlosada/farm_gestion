@@ -1,0 +1,97 @@
+{# ============================================================
+ # Los proveedores con lo que se les ha facturado en el año.
+ #
+ # El total es la suma de sus facturas anotadas, con IVA, por fecha de factura: la
+ # misma cuenta que pide el modelo 347, que obliga a declarar a quien pase de
+ # 3.005,06 € en el año. Los que no tienen facturas salen al final, a cero.
+ #
+ # El controller pasa: rows (provider, invoices, total), year, threshold.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
+
+{% block title %}Contabilidad · Proveedores{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Proveedores</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+{% set over = rows|filter(r => r.total >= threshold) %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Contabilidad',
+        'Proveedores',
+        'A quién se le compra y cuánto en ' ~ year ~ '. Se dan de alta solos al confirmar una factura con CIF.'
+    ) }}
+
+    <div class="prl-stats">
+        <div class="prl-stat">
+            <b>{{ rows|filter(r => r.invoices > 0)|length }}</b>
+            <span>con facturas en {{ year }}</span>
+        </div>
+        <div class="prl-stat">
+            <b>{{ over|length }}</b>
+            <span>pasan de {{ threshold|number_format(2, ',', '.') }} € (modelo 347)</span>
+        </div>
+    </div>
+
+    <div class="prl-toolbar">
+        <div class="counters">
+            <a href="{{ path('accounting_providers', { year: year - 1 }) }}" class="prl-btn" title="Año anterior"><i class="fa fa-chevron-left"></i></a>
+            <b>{{ year }}</b>
+            <a href="{{ path('accounting_providers', { year: year + 1 }) }}" class="prl-btn" title="Año siguiente"><i class="fa fa-chevron-right"></i></a>
+        </div>
+        <div class="spacer"></div>
+        <a href="{{ path('accounting_invoices') }}" class="prl-btn"><i class="fa fa-file-text-o"></i> Facturas</a>
+    </div>
+
+    <div class="prl-table-wrap">
+        {% if rows is empty %}
+            <div class="prl-empty">Todavía no hay proveedores. Aparecen al confirmar la primera factura con CIF.</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th>Proveedor</th>
+                        <th class="tight">CIF</th>
+                        <th class="tight">Municipio</th>
+                        <th class="tight acc-num">Facturas</th>
+                        <th class="tight acc-num">Total {{ year }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                        <tr>
+                            <td>
+                                <a href="{{ path('accounting_provider_show', { id: row.provider.id }) }}">{{ row.provider.name }}</a>
+                                {% if row.total >= threshold %}
+                                    <span class="prl-chip prl-chip--pausado" title="Pasa de {{ threshold|number_format(2, ',', '.') }} € en el año: va en el modelo 347"><span class="dot"></span>347</span>
+                                {% endif %}
+                            </td>
+                            <td class="tight">{{ row.provider.taxId ?? '—' }}</td>
+                            <td class="tight">{{ row.provider.town ?? '—' }}</td>
+                            <td class="acc-num">{{ row.invoices }}</td>
+                            <td class="acc-num">{{ row.invoices > 0 ? fmt.money(row.total) : '—' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

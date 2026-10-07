@@ -3,8 +3,11 @@
 namespace App\Entity;
 
 use App\Service\Accounting\Invoice\ExtractedInvoice;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Gedmo\Mapping\Annotation as Gedmo;
+use Symfony\Component\Validator\Constraints as Assert;
 
 /**
  * Una factura o un ticket que alguien ha entregado a la asociación: el fichero y lo
@@ -16,7 +19,7 @@ use Gedmo\Mapping\Annotation as Gedmo;
  * muchos intentos, se queda como no leída y se completa a mano: el fichero nunca se
  * pierde por un fallo de lectura.
  *
- * Los datos fiscales (CIF, número, bases e IVA) viven aquí y no en el apunte porque
+ * Los datos fiscales (CIF, número, bases, IVA y retención) viven aquí y no en el apunte porque
  * son de la factura, no del movimiento de dinero: un apunte de banco puede no tener
  * factura, y es esta tabla la que se entrega a la gestoría.
  *
@@ -157,6 +160,44 @@ class ReceivedInvoice
     private ?string $providerTaxId = null;
 
     /**
+     * Dirección del proveedor tal como la imprime la factura. Se guarda aquí, y no
+     * sólo en su ficha, porque es lo que dice ESTE papel; al confirmar completa los
+     * huecos de la ficha.
+     *
+     * @ORM\Column(name="provider_address", type="string", length=255, nullable=true)
+     */
+    #[Assert\Length(max: 255)]
+    private ?string $providerAddress = null;
+
+    /**
+     * @ORM\Column(name="provider_postal_code", type="string", length=10, nullable=true)
+     */
+    #[Assert\Regex(pattern: '/^\d{5}$/', message: 'El código postal son 5 cifras.')]
+    private ?string $providerPostalCode = null;
+
+    /**
+     * @ORM\Column(name="provider_town", type="string", length=100, nullable=true)
+     */
+    #[Assert\Length(max: 100)]
+    private ?string $providerTown = null;
+
+    /**
+     * @ORM\Column(name="provider_province", type="string", length=100, nullable=true)
+     */
+    #[Assert\Length(max: 100)]
+    private ?string $providerProvince = null;
+
+    /**
+     * El proveedor reconocido por su CIF, al confirmar. Null mientras está en la
+     * bandeja y en las que no traen CIF (un ticket de gasolinera): sin CIF no hay
+     * forma fiable de saber quién es.
+     *
+     * @ORM\ManyToOne(targetEntity="Provider")
+     * @ORM\JoinColumn(name="provider_id", nullable=true, onDelete="SET NULL")
+     */
+    private ?Provider $provider = null;
+
+    /**
      * @ORM\Column(name="invoice_number", type="string", length=50, nullable=true)
      */
     private ?string $invoiceNumber = null;
@@ -168,11 +209,32 @@ class ReceivedInvoice
     private ?string $total = null;
 
     /**
-     * Desglose por tipo de IVA: lista de {base, tipo_iva, cuota}. Una factura puede
-     * llevar varios tipos (pienso al 10 % y herramienta al 21 %).
-     * @ORM\Column(name="tax_lines", type="json", nullable=true)
+     * Desglose por tipo de IVA.
+     *
+     * @var Collection<int, ReceivedInvoiceTaxLine>
+     *
+     * @ORM\OneToMany(targetEntity="ReceivedInvoiceTaxLine", mappedBy="invoice", cascade={"persist"}, orphanRemoval=true)
+     * @ORM\OrderBy({"id" = "ASC"})
      */
-    private ?array $taxLines = null;
+    #[Assert\Valid]
+    private Collection $taxLines;
+
+    /**
+     * Retención de IRPF, en positivo: lo que se descuenta del total porque se paga a
+     * Hacienda en nombre del proveedor (un profesional, un alquiler). Null = no lleva.
+     *
+     * @ORM\Column(type="decimal", precision=10, scale=2, nullable=true)
+     */
+    #[Assert\PositiveOrZero]
+    private ?string $withholding = null;
+
+    /**
+     * Tipo de la retención en %, si la factura lo dice (15, 19, 7…).
+     *
+     * @ORM\Column(name="withholding_rate", type="decimal", precision=5, scale=2, nullable=true)
+     */
+    #[Assert\Range(min: 0, max: 100)]
+    private ?string $withholdingRate = null;
 
     /**
      * Qué se compró, en pocas palabras.
@@ -238,6 +300,7 @@ class ReceivedInvoice
         $this->mimeType = $mimeType;
         $this->source = $source;
         $this->uploadedBy = $uploadedBy;
+        $this->taxLines = new ArrayCollection();
     }
 
     /**
@@ -256,7 +319,16 @@ class ReceivedInvoice
         $this->providerTaxId = $data->providerTaxId;
         $this->invoiceNumber = $data->invoiceNumber;
         $this->total = $data->total;
-        $this->taxLines = $data->taxLines;
+        $this->providerAddress = $data->providerAddress;
+        $this->providerPostalCode = $data->providerPostalCode;
+        $this->providerTown = $data->providerTown;
+        $this->providerProvince = $data->providerProvince;
+        $this->withholding = $data->withholding;
+        $this->withholdingRate = $data->withholdingRate;
+        $this->taxLines->clear();
+        foreach ($data->taxLines as $line) {
+            $this->addTaxLine(new ReceivedInvoiceTaxLine($line['base'], $line['rate'], $line['taxAmount']));
+        }
         $this->concept = $data->concept;
         $this->paymentMethod = $data->paymentMethod;
         $this->confidence = $data->confidence;
@@ -297,14 +369,27 @@ class ReceivedInvoice
      * La factura ya es un apunte. Lo que se corrigió al confirmar (proveedor, número)
      * se queda también aquí, que es lo que verá la gestoría.
      *
-     * @param AccountEntry $entry Apunte creado a partir de ella.
+     * @param AccountEntry  $entry    Apunte creado a partir de ella.
+     * @param Provider|null $provider Proveedor reconocido por el CIF, si lo trae.
      */
-    public function confirm(AccountEntry $entry): void
+    public function confirm(AccountEntry $entry, ?Provider $provider): void
     {
         $this->accountEntry = $entry;
+        $this->provider = $provider;
         $this->providerName = $entry->getProviderName() ?? $this->providerName;
         $this->invoiceNumber = $entry->getInvoiceNumber() ?? $this->invoiceNumber;
         $this->status = self::STATUS_CONFIRMED;
+    }
+
+    /**
+     * Su apunte se ha borrado: vuelve a la bandeja para anotarla otra vez (o
+     * descartarla), con lo que se corrigió al confirmar. Si nunca llegó a leerse, se
+     * queda como no leída, que es lo que es.
+     */
+    public function reopen(): void
+    {
+        $this->accountEntry = null;
+        $this->status = $this->readAt !== null ? self::STATUS_READ : self::STATUS_UNREADABLE;
     }
 
     /** Se aparta sin anotar: duplicada, equivocada o no era una factura. */
@@ -408,9 +493,62 @@ class ReceivedInvoice
 
     public function setProviderTaxId(?string $providerTaxId): self
     {
-        $this->providerTaxId = $providerTaxId !== null ? mb_substr(trim($providerTaxId), 0, 20) : null;
+        $this->providerTaxId = Provider::normalizeTaxId($providerTaxId);
 
         return $this;
+    }
+
+    public function getProviderAddress(): ?string
+    {
+        return $this->providerAddress;
+    }
+
+    public function setProviderAddress(?string $providerAddress): self
+    {
+        $this->providerAddress = $providerAddress;
+
+        return $this;
+    }
+
+    public function getProviderPostalCode(): ?string
+    {
+        return $this->providerPostalCode;
+    }
+
+    public function setProviderPostalCode(?string $providerPostalCode): self
+    {
+        $this->providerPostalCode = $providerPostalCode;
+
+        return $this;
+    }
+
+    public function getProviderTown(): ?string
+    {
+        return $this->providerTown;
+    }
+
+    public function setProviderTown(?string $providerTown): self
+    {
+        $this->providerTown = $providerTown;
+
+        return $this;
+    }
+
+    public function getProviderProvince(): ?string
+    {
+        return $this->providerProvince;
+    }
+
+    public function setProviderProvince(?string $providerProvince): self
+    {
+        $this->providerProvince = $providerProvince;
+
+        return $this;
+    }
+
+    public function getProvider(): ?Provider
+    {
+        return $this->provider;
     }
 
     public function getInvoiceNumber(): ?string
@@ -423,10 +561,66 @@ class ReceivedInvoice
         return $this->total;
     }
 
-    /** @return list<array{base: float|null, tipo_iva: float|null, cuota: float|null}> */
-    public function getTaxLines(): array
+    /** @return Collection<int, ReceivedInvoiceTaxLine> */
+    public function getTaxLines(): Collection
     {
-        return $this->taxLines ?? [];
+        return $this->taxLines;
+    }
+
+    public function addTaxLine(ReceivedInvoiceTaxLine $line): self
+    {
+        if (!$this->taxLines->contains($line)) {
+            $line->setInvoice($this);
+            $this->taxLines->add($line);
+        }
+
+        return $this;
+    }
+
+    public function removeTaxLine(ReceivedInvoiceTaxLine $line): self
+    {
+        $this->taxLines->removeElement($line);
+
+        return $this;
+    }
+
+    public function getWithholding(): ?string
+    {
+        return $this->withholding;
+    }
+
+    public function setWithholding(?string $withholding): self
+    {
+        $this->withholding = $withholding;
+
+        return $this;
+    }
+
+    public function getWithholdingRate(): ?string
+    {
+        return $this->withholdingRate;
+    }
+
+    public function setWithholdingRate(?string $withholdingRate): self
+    {
+        $this->withholdingRate = $withholdingRate;
+
+        return $this;
+    }
+
+    /**
+     * Lo que debería sumar la factura según su desglose: bases más cuotas, menos la
+     * retención. Null si no hay desglose con que comprobarlo.
+     */
+    public function totalFromBreakdown(): ?float
+    {
+        if ($this->taxLines->isEmpty()) {
+            return null;
+        }
+
+        $gross = array_sum($this->taxLines->map(static fn (ReceivedInvoiceTaxLine $l): float => $l->gross())->toArray());
+
+        return round($gross - (float) $this->withholding, 2);
     }
 
     public function getConcept(): ?string

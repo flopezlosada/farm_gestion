@@ -1,0 +1,94 @@
+{# ============================================================
+ # La ficha de un proveedor: sus datos y sus facturas anotadas, cada una con el
+ # apunte en que se convirtió.
+ #
+ # El controller pasa: provider, invoices.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
+
+{% block title %}{{ provider.name }} · Proveedores{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_providers') }}">Proveedores</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ provider.name }}</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+    <style>
+        .acc-facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 24px; margin: 0 0 var(--csa-sp-6, 32px); font-size: 14px; }
+        .acc-facts dt { color: var(--csa-ink-soft, #6b6b6b); }
+        .acc-facts dd { margin: 0; }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+{% set place = [provider.postalCode, provider.town]|filter(v => v)|join(' ') %}
+<div class="prl">
+
+    {{ csa.page_header('Contabilidad · Proveedores', provider.name, provider.taxId ? 'CIF ' ~ provider.taxId : 'Sin CIF: no se le pueden enlazar facturas hasta que lo tenga.') }}
+
+    <div class="prl-toolbar">
+        <div class="spacer"></div>
+        {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+            <a href="{{ path('accounting_provider_edit', { id: provider.id }) }}" class="prl-btn prl-btn--primary"><i class="fa fa-pencil"></i> Cambiar datos</a>
+        {% endif %}
+    </div>
+
+    <dl class="acc-facts">
+        <dt>Dirección</dt>
+        <dd>{{ [provider.address, place, provider.province]|filter(v => v)|join(' · ') ?: '—' }}</dd>
+        <dt>IBAN</dt>
+        <dd>{{ provider.iban ?? '—' }}</dd>
+        <dt>Contacto</dt>
+        <dd>{{ [provider.contact, provider.phone, provider.email]|filter(v => v)|join(' · ') ?: '—' }}</dd>
+    </dl>
+
+    <div class="prl-table-wrap">
+        {% if invoices is empty %}
+            <div class="prl-empty">No tiene facturas anotadas.</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th class="tight">Fecha</th>
+                        <th class="tight">Nº</th>
+                        <th>Concepto</th>
+                        <th class="tight">Partida</th>
+                        <th class="tight acc-num">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for invoice in invoices %}
+                        {% set entry = invoice.accountEntry %}
+                        <tr>
+                            <td class="tight">{{ invoice.invoiceDate ? invoice.invoiceDate|date('d/m/Y') : '—' }}</td>
+                            <td class="tight">{{ invoice.invoiceNumber ?? '—' }}</td>
+                            <td>
+                                {% if entry %}
+                                    <a href="{{ path('accounting_entry_show', { id: entry.id }) }}">{{ entry.concept }}</a>
+                                {% else %}
+                                    {{ invoice.concept ?? invoice.originalName }}
+                                {% endif %}
+                            </td>
+                            <td class="tight">{{ entry and entry.category ? entry.category.name : '—' }}</td>
+                            <td class="acc-num">{{ invoice.total is not null ? fmt.money(invoice.total) : '—' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

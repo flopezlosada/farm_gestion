@@ -152,6 +152,8 @@ class GeminiInvoiceReader
             Extrae los datos de esta factura o ticket que ha recibido la asociación CSA Vega de Jarama.
             El cliente es la asociación; el proveedor es quien emite el documento.
             Importes en euros, con punto decimal. Si un dato no aparece, devuélvelo como null: no lo inventes.
+            La dirección, el código postal, el municipio y la provincia son los del PROVEEDOR, nunca los de la asociación.
+            "retencion_irpf" es el importe de la retención de IRPF que se descuenta del total (facturas de profesionales o alquileres), en positivo; null si no lleva.
             En "partida_id" elige el número de la partida de gasto que mejor encaje con lo comprado, de esta lista:
             {$catalogue}
             TXT;
@@ -186,6 +188,12 @@ class GeminiInvoiceReader
                                 ],
                             ],
                         ],
+                        'retencion_irpf' => ['type' => 'NUMBER', 'nullable' => true],
+                        'tipo_retencion' => ['type' => 'NUMBER', 'nullable' => true, 'description' => 'Tipo de la retención en %'],
+                        'direccion_proveedor' => ['type' => 'STRING', 'nullable' => true, 'description' => 'Calle y número del proveedor'],
+                        'cp_proveedor' => ['type' => 'STRING', 'nullable' => true, 'description' => 'Código postal del proveedor, 5 cifras'],
+                        'municipio_proveedor' => $nullableString,
+                        'provincia_proveedor' => $nullableString,
                         'total' => ['type' => 'NUMBER', 'nullable' => true],
                         'forma_pago' => ['type' => 'STRING', 'enum' => ['tarjeta', 'efectivo', 'transferencia', 'domiciliacion', 'desconocida']],
                         'concepto' => ['type' => 'STRING', 'nullable' => true, 'description' => 'Qué se compró, en pocas palabras'],

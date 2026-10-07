@@ -12,6 +12,7 @@ namespace App\Entity;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
 use Gedmo\Mapping\Annotation as Gedmo;
 
@@ -21,6 +22,7 @@ use Gedmo\Mapping\Annotation as Gedmo;
  * @ORM\Table(name="provider")
  * @ORM\Entity(repositoryClass="App\Repository\ProviderRepository")
  */
+#[UniqueEntity(fields: ['taxId'], message: 'Ya hay un proveedor con ese CIF.')]
 class Provider
 {
 
@@ -42,47 +44,82 @@ class Provider
     private $name;
 
     /**
+     * CIF o NIF. Es lo que identifica a un proveedor: el nombre se escribe de mil
+     * maneras, el CIF no. Opcional porque los proveedores antiguos del comercio de la
+     * granja se dieron de alta sin él.
+     *
+     * @ORM\Column(name="tax_id", type="string", length=20, nullable=true, unique=true)
+     */
+    #[Assert\Length(max: 20)]
+    private ?string $taxId = null;
+
+    /**
+     * Cuenta a la que se le paga, para las transferencias.
+     *
+     * @ORM\Column(type="string", length=34, nullable=true)
+     */
+    #[Assert\Iban]
+    private ?string $iban = null;
+
+    /**
      * @var string $contact
      * @ORM\Column(name="contact", type="string", length=255, nullable=true)
      */
-    #[Assert\NotBlank]
     private $contact;
 
     /**
-     * @var string address
-     * @ORM\Column(name="address", type="string", length=255)
+     * Opcional: un proveedor que nace de una factura trae la dirección que ésta
+     * imprima, y un ticket no imprime ninguna.
+     *
+     * @var string|null address
+     * @ORM\Column(name="address", type="string", length=255, nullable=true)
      */
-    #[Assert\NotBlank]
     private $address;
 
+    /**
+     * Municipio como texto, tal como viene en la factura. Las relaciones con las
+     * tablas geográficas de abajo son del comercio de la granja y casi todas
+     * apuntan a un municipio de relleno.
+     *
+     * @ORM\Column(type="string", length=100, nullable=true)
+     */
+    #[Assert\Length(max: 100)]
+    private ?string $town = null;
+
+    /**
+     * Provincia como texto, por lo mismo que el municipio. La pide el modelo 347.
+     *
+     * @ORM\Column(type="string", length=100, nullable=true)
+     */
+    #[Assert\Length(max: 100)]
+    private ?string $province = null;
 
     /**
      * @var smallint $state
      * @ORM\ManyToOne(targetEntity="State", inversedBy="providers")
      */
-    #[Assert\NotBlank]
     private $state;
 
     /**
      * @var smallint $city
      * @ORM\ManyToOne(targetEntity="City", inversedBy="providers")
      */
-    #[Assert\NotBlank]
     private $city;
 
     /**
      * @var smallint $country
      * @ORM\ManyToOne(targetEntity="Country", inversedBy="providers")
      */
-    #[Assert\NotBlank]
     private $country;
 
     /**
+     * Texto y no número: un código postal de Barcelona o de Albacete empieza por
+     * cero y como número lo perdería.
      *
-     * @var integer postal_code
-     * @ORM\Column(name="postal_code", type="integer", length=5,nullable=true)
+     * @var string|null postal_code
+     * @ORM\Column(name="postal_code", type="string", length=10, nullable=true)
      */
-    #[Assert\Length(min: 5, minMessage: 'El código postal debe tener al menos {{limit}} caracteres', max: 5, maxMessage: 'El código postal debe tener como máximo {{limit}} caracteres')]
+    #[Assert\Regex(pattern: '/^\d{5}$/', message: 'El código postal son 5 cifras.')]
     private $postal_code;
 
     /**
@@ -467,8 +504,105 @@ class Provider
 
    public function __toString()
    {
-       return $this->getName();
+       return (string) $this->getName();
    }
+
+    public function getTaxId(): ?string
+    {
+        return $this->taxId;
+    }
+
+    /**
+     * Guarda el CIF normalizado (mayúsculas, sin espacios ni guiones), que es como
+     * se compara al reconocer al proveedor de una factura.
+     *
+     * @param string|null $taxId CIF o NIF tal como se escriba.
+     */
+    public function setTaxId(?string $taxId): self
+    {
+        $this->taxId = self::normalizeTaxId($taxId);
+
+        return $this;
+    }
+
+    /**
+     * Un CIF en la forma en que se compara: mayúsculas, sólo letras y cifras, y sin el
+     * prefijo «ES» del NIF-IVA intracomunitario, con el que muchas facturas escriben el
+     * mismo CIF (ESB84283902 = B84283902). Si no se quitara, el mismo proveedor quedaría
+     * dado de alta dos veces.
+     *
+     * @param string|null $taxId CIF o NIF tal como venga.
+     */
+    public static function normalizeTaxId(?string $taxId): ?string
+    {
+        $clean = strtoupper((string) preg_replace('/[^A-Za-z0-9]/', '', (string) $taxId));
+        $clean = (string) preg_replace('/^ES([0-9A-Z]\d{7}[0-9A-Z])$/', '$1', $clean);
+
+        return $clean === '' ? null : mb_substr($clean, 0, 20);
+    }
+
+    public function getIban(): ?string
+    {
+        return $this->iban;
+    }
+
+    /**
+     * @param string|null $iban IBAN, se guarda sin espacios y en mayúsculas.
+     */
+    public function setIban(?string $iban): self
+    {
+        $clean = strtoupper((string) preg_replace('/\s+/', '', (string) $iban));
+        $this->iban = $clean === '' ? null : $clean;
+
+        return $this;
+    }
+
+    public function getTown(): ?string
+    {
+        return $this->town;
+    }
+
+    public function setTown(?string $town): self
+    {
+        $this->town = $town;
+
+        return $this;
+    }
+
+    public function getProvince(): ?string
+    {
+        return $this->province;
+    }
+
+    public function setProvince(?string $province): self
+    {
+        $this->province = $province;
+
+        return $this;
+    }
+
+    /**
+     * Completa los datos que falten con los de una factura, sin pisar nada de lo que
+     * ya haya: lo que se escribió a mano en la ficha vale más que lo que imprima una
+     * factura cualquiera (que puede traer la dirección de una sucursal).
+     *
+     * @param string|null $address    Dirección.
+     * @param string|null $postalCode Código postal.
+     * @param string|null $town       Municipio.
+     * @param string|null $province   Provincia.
+     */
+    public function fillBlanks(?string $address, ?string $postalCode, ?string $town, ?string $province): void
+    {
+        $this->address = self::blank($this->address) ? $address : $this->address;
+        $this->postal_code = self::blank($this->postal_code) ? $postalCode : $this->postal_code;
+        $this->town = self::blank($this->town) ? $town : $this->town;
+        $this->province = self::blank($this->province) ? $province : $this->province;
+    }
+
+    private static function blank(mixed $value): bool
+    {
+        return $value === null || trim((string) $value) === '';
+    }
 
     /**
      * Set email
