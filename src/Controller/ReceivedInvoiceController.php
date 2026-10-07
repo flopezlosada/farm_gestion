@@ -125,6 +125,7 @@ class ReceivedInvoiceController extends AbstractController
         BudgetCategoryRepository $categories,
         ReceivedInvoiceRepository $invoices,
         InvoiceProviderResolver $providers,
+        InvoiceFileStore $files,
     ): Response {
         if (!$invoice->isOpen()) {
             $this->addFlash('warning', 'Esta factura ya no está en la bandeja.');
@@ -168,6 +169,7 @@ class ReceivedInvoiceController extends AbstractController
         return $this->render('accounting/invoice_review.html.twig', [
             'invoice' => $invoice,
             'twin' => $invoices->findAlreadyConfirmedTwin($invoice),
+            'hasDocument' => $files->pathTo($invoice->getFileName()) !== null,
             'form' => $form->createView(),
             'suggestions' => AccountEntryType::suggestedDirections($categories->findActive()),
         ]);

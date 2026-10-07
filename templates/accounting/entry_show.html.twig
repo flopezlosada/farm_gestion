@@ -4,12 +4,14 @@
  # El documento se enseña igual que en la revisión de la bandeja (imagen o PDF
  # dentro de la página). Sin factura, la ficha ocupa todo el ancho.
  #
- # El controller pasa: entry, invoice (la factura de la que salió, o null).
+ # El controller pasa: entry, invoice (la factura de la que salió, o null),
+ # hasDocument (si el fichero de esa factura está en el servidor).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 {% import 'accounting/_money.html.twig' as fmt %}
+{% import 'accounting/_invoice_macros.html.twig' as invm %}
 
 {% block title %}Apunte · Contabilidad{% endblock %}
 
@@ -58,17 +60,7 @@
 
         {% if invoice %}
             <div class="ent-doc">
-                <div class="ent-doc__bar">
-                    <span class="acc-muted">{{ invoice.originalName }}</span>
-                    <a href="{{ path('accounting_invoice_file', { id: invoice.id }) }}" target="_blank" rel="noopener">Abrir aparte <i class="fa fa-external-link"></i></a>
-                </div>
-                {% if invoice.image %}
-                    <img src="{{ path('accounting_invoice_file', { id: invoice.id }) }}" alt="Factura {{ invoice.originalName }}">
-                {% elseif invoice.mimeType == 'application/pdf' %}
-                    <iframe src="{{ path('accounting_invoice_file', { id: invoice.id }) }}" title="Factura {{ invoice.originalName }}"></iframe>
-                {% else %}
-                    <div class="prl-empty">Este formato no se puede enseñar aquí: ábrelo aparte.</div>
-                {% endif %}
+                {{ invm.document(invoice, hasDocument, 'ent-doc') }}
             </div>
         {% endif %}
 
