@@ -45,7 +45,7 @@ class ReceivedInvoiceConfirmType extends AbstractType
                 'mapped' => false,
                 'required' => false,
                 'data' => $options['provider'],
-                'placeholder' => 'Nuevo proveedor',
+                'placeholder' => 'Elige uno…',
                 'query_builder' => static fn (EntityRepository $r) => $r->createQueryBuilder('p')->orderBy('p.name', 'ASC'),
                 'choice_label' => static fn (Provider $p) => $p->getTaxId() ? sprintf('%s · %s', $p->getName(), $p->getTaxId()) : $p->getName(),
                 // Lo que la pantalla enseña de la ficha elegida, sin otra petición.

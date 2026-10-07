@@ -41,6 +41,14 @@
         .inv-doc__bar { display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; font-size: 12px; border-bottom: 1px solid var(--csa-rule, #ddd); background: #fff; }
         .inv-provider { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: var(--csa-sp-3, 12px) 0 var(--csa-sp-4, 16px); padding: 12px 16px; border: 1px solid var(--csa-rule, #ddd); border-radius: 6px; font-size: 14px; }
         .inv-provider[hidden] { display: none; }
+        .inv-who__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        .inv-who__head .csa-badge[hidden] { display: none; }
+        .inv-who__fix { background: none; border: 0; padding: 4px 0; font-size: 13px; color: var(--csa-ink-soft, #6b6b6b); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+        .inv-who__fix:hover { color: var(--csa-ink, #222); }
+        /* El menú del buscador tiene que poder salirse del modal. */
+        dialog.inv-who-modal { overflow: visible; }
+        .inv-who-modal__option { display: flex; align-items: center; gap: 8px; margin: 0 0 var(--csa-sp-3, 12px); font-weight: 500; cursor: pointer; }
+        .inv-who-modal [data-inv-who-pick] { margin: 0 0 var(--csa-sp-4, 16px) 24px; }
         .inv-provider dt { color: var(--csa-ink-soft, #6b6b6b); }
         .inv-provider dd { margin: 0; }
         .inv-provider__note { grid-column: 1 / -1; font-size: 12px; color: var(--csa-ink-soft, #6b6b6b); }
@@ -131,15 +139,20 @@
                         {% endblock %}
                     {% endembed %}
 
-                    {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Quién la emite', subtitle: 'Si ya es proveedor, elígelo; si no, «Nuevo proveedor» y se da de alta con estos datos.' } %}
+                    {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Quién la emite', subtitle: 'Lo ha reconocido la lectura por el CIF. Si no es así, corrígelo.' } %}
                         {% block body %}
                             {% import '_macros/csa.html.twig' as csa %}
-                            <div class="csa-form-grid">
-                                {{ csa.field(form.provider, 'Proveedor', { full: true, widget_class: 'csa-select', hint: 'escribe para buscar' }) }}
+                            <div class="inv-who__head">
+                                <span class="csa-badge csa-badge--green" data-inv-when-known hidden>Proveedor conocido</span>
+                                <span class="csa-badge csa-badge--ochre" data-inv-when-new hidden>Proveedor nuevo: se dará de alta con estos datos</span>
+                                <button type="button" class="inv-who__fix" data-inv-who-fix>
+                                    <i class="fa fa-exclamation-circle"></i> ¿No es correcto?
+                                </button>
                             </div>
 
-                            {# La ficha del elegido, de sólo lectura: la rellena el script con los data-* de la opción. #}
-                            <dl class="inv-provider" data-inv-provider-card hidden>
+                            {# El conocido, de sólo lectura: lo rellena el script con los data-* de su opción. #}
+                            <dl class="inv-provider" data-inv-when-known hidden>
+                                <dt>Proveedor</dt><dd data-inv-provider-name></dd>
                                 <dt>CIF</dt><dd data-inv-provider-tax-id></dd>
                                 <dt>Dirección</dt><dd data-inv-provider-place></dd>
                                 <dd class="inv-provider__note">
@@ -159,6 +172,35 @@
                                 {{ csa.field(e.invoiceNumber, 'Nº de factura') }}
                                 {{ csa.field(e.notes, 'Notas', { full: true, widget_class: 'csa-textarea' }) }}
                             </div>
+
+                            {# Corregir quién la emite. Va DENTRO del formulario y sin <form> propio:
+                             # el desplegable es el campo `provider` y tiene que enviarse con todo lo demás. #}
+                            <dialog class="csa-modal csa-modal--info inv-who-modal" aria-labelledby="inv-who-title" data-inv-who-modal>
+                                <header class="csa-modal__header">
+                                    <div class="csa-modal__heading">
+                                        <span class="csa-modal__eyebrow">Corregir la lectura</span>
+                                        <h2 class="csa-modal__title" id="inv-who-title">¿Quién emite esta factura?</h2>
+                                    </div>
+                                </header>
+                                <div class="csa-modal__body">
+                                    <label class="inv-who-modal__option">
+                                        <input type="radio" name="inv_who_kind" value="known" data-inv-who-kind>
+                                        Un proveedor que ya tenemos
+                                    </label>
+                                    <div data-inv-who-pick hidden>
+                                        {{ csa.field(form.provider, 'Proveedor', { widget_class: 'csa-select', hint: 'escribe para buscar' }) }}
+                                    </div>
+                                    <label class="inv-who-modal__option">
+                                        <input type="radio" name="inv_who_kind" value="new" data-inv-who-kind>
+                                        Un proveedor nuevo
+                                    </label>
+                                    <p class="acc-muted acc-small" data-inv-who-new-hint hidden>Se cierra y corriges sus datos en el formulario.</p>
+                                </div>
+                                <footer class="csa-modal__footer">
+                                    <button type="button" class="csa-modal__btn csa-modal__btn--ghost" data-inv-who-cancel>Cancelar</button>
+                                    <button type="button" class="csa-modal__btn csa-modal__btn--primary" data-inv-who-apply>Aplicar</button>
+                                </footer>
+                            </dialog>
                         {% endblock %}
                     {% endembed %}
 
@@ -219,24 +261,81 @@
     {% include 'accounting/_direction_suggest.html.twig' with { category: form.entry.category, direction: form.entry.direction } %}
     <script>
     /*
-     * La ficha del proveedor elegido, de sólo lectura, con lo que trae su opción.
-     * Con «Nuevo proveedor» se esconde y csa-reveal enseña los campos de alta.
+     * Quién emite la factura. Lo normal es que la lectura acierte: con un proveedor
+     * conocido se enseña su ficha de sólo lectura; si no lo conoce, los campos de alta
+     * (los enseña csa-reveal cuando el desplegable está vacío).
+     *
+     * Si la lectura se equivoca, el modal deja decir si es uno que ya tenemos (y
+     * cuál) o uno nuevo. El desplegable es el campo `provider` del formulario: el
+     * modal sólo lo cambia. Cancelar (o Escape) lo deja como estaba.
      */
     (function () {
         var select = document.getElementById('{{ form.provider.vars.id }}');
-        var card = document.querySelector('[data-inv-provider-card]');
+        var modal = document.querySelector('[data-inv-who-modal]');
+        var pick = modal.querySelector('[data-inv-who-pick]');
+        var newHint = modal.querySelector('[data-inv-who-new-hint]');
+        var apply = modal.querySelector('[data-inv-who-apply]');
+        var kinds = modal.querySelectorAll('[data-inv-who-kind]');
         var showUrl = '{{ path('accounting_provider_show', { id: 0 }) }}';
+        var before = select.value;
+
+        function setValue(value) {
+            select.value = value;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        function kind() {
+            var checked = modal.querySelector('[data-inv-who-kind]:checked');
+            return checked ? checked.value : null;
+        }
 
         function paint() {
             var option = select.options[select.selectedIndex];
-            card.hidden = !option || option.value === '';
-            if (card.hidden) { return; }
-            card.querySelector('[data-inv-provider-tax-id]').textContent = option.dataset.taxId || 'sin CIF: se le pone el de esta factura';
-            card.querySelector('[data-inv-provider-place]').textContent = option.dataset.place || '—';
-            card.querySelector('[data-inv-provider-link]').href = showUrl.replace(/0$/, option.dataset.id);
+            var known = !!option && option.value !== '';
+            document.querySelectorAll('[data-inv-when-known]').forEach(function (el) { el.hidden = !known; });
+            document.querySelectorAll('[data-inv-when-new]').forEach(function (el) { el.hidden = known; });
+            if (!known) { return; }
+            document.querySelector('[data-inv-provider-name]').textContent = option.dataset.name;
+            document.querySelector('[data-inv-provider-tax-id]').textContent = option.dataset.taxId || 'sin CIF: se le pone el de esta factura';
+            document.querySelector('[data-inv-provider-place]').textContent = option.dataset.place || '—';
+            document.querySelector('[data-inv-provider-link]').href = showUrl.replace(/0$/, option.dataset.id);
         }
 
-        select.addEventListener('change', paint);
+        function paintModal() {
+            pick.hidden = kind() !== 'known';
+            newHint.hidden = kind() !== 'new';
+            apply.disabled = kind() === null || (kind() === 'known' && select.value === '');
+        }
+
+        document.querySelector('[data-inv-who-fix]').addEventListener('click', function () {
+            before = select.value;
+            kinds.forEach(function (radio) { radio.checked = radio.value === (before === '' ? 'new' : 'known'); });
+            paintModal();
+            modal.showModal();
+        });
+
+        kinds.forEach(function (radio) {
+            radio.addEventListener('change', function () {
+                // «Ya lo tenemos» empieza sin elegir si venía como nuevo: obliga a buscarlo.
+                if (kind() === 'known' && before === '') { setValue(''); }
+                paintModal();
+            });
+        });
+
+        select.addEventListener('change', function () { paint(); paintModal(); });
+
+        apply.addEventListener('click', function () {
+            if (kind() === 'new') { setValue(''); }
+            before = select.value;
+            modal.close();
+        });
+
+        modal.querySelector('[data-inv-who-cancel]').addEventListener('click', function () { modal.close(); });
+        // Cerrar sin aplicar (Cancelar o Escape) devuelve lo que había.
+        modal.addEventListener('close', function () {
+            if (select.value !== before) { setValue(before); }
+        });
+
         paint();
     })();
     </script>

@@ -143,7 +143,7 @@ class ReceivedInvoiceController extends AbstractController
         $clash = $form->isSubmitted() && $chosen === null ? $providers->knownFor($invoice) : null;
         if ($clash !== null) {
             $form->get('providerTaxId')->addError(new FormError(sprintf(
-                'Ese CIF ya es de «%s»: elígelo arriba, en la lista de proveedores.',
+                'Ese CIF ya es de «%s»: pulsa «¿No es correcto?» y elígelo entre los que ya tenemos.',
                 $clash->getName(),
             )));
         }
