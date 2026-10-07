@@ -1,0 +1,124 @@
+{# ============================================================
+ # La entrega trimestral a la gestoría.
+ #
+ # Antes de descargar se ve qué va a ir, con lo que la gestoría tiene que saber
+ # (desglose que no cuadra, documento que falta) y si queda algo en la bandeja sin
+ # anotar, que entonces no iría. La descarga es un ZIP con el libro de facturas
+ # recibidas y los documentos renombrados.
+ #
+ # El controller pasa: quarter, rows (invoice + warnings), names (nombre de cada
+ # fichero en el ZIP, por id), total, withWarnings, open, years.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Para la gestoría · Contabilidad{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_invoices') }}">Facturas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Para la gestoría</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Contabilidad · Facturas',
+        'Para la gestoría · ' ~ quarter.label,
+        'Las facturas recibidas del trimestre, renombradas, y su libro en una hoja de cálculo. Se descarga en un ZIP para subirlo a la carpeta de la gestoría.'
+    ) }}
+
+    <div class="prl-toolbar">
+        <form method="get" class="acc-filters">
+            <select name="quarter" class="csa-input">
+                {% for q in 1..4 %}
+                    <option value="{{ q }}" {{ q == quarter.quarter ? 'selected' : '' }}>{{ q }}.º trimestre</option>
+                {% endfor %}
+            </select>
+            <select name="year" class="csa-input">
+                {% for y in years %}
+                    <option value="{{ y }}" {{ y == quarter.year ? 'selected' : '' }}>{{ y }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="prl-btn"><i class="fa fa-calendar"></i> Ver</button>
+        </form>
+        <div class="spacer"></div>
+        {% if rows is not empty %}
+            <a href="{{ path('accounting_accountant_export_download', { year: quarter.year, quarter: quarter.quarter }) }}" class="prl-btn prl-btn--primary">
+                <i class="fa fa-download"></i> Descargar el ZIP
+            </a>
+        {% endif %}
+    </div>
+
+    {% if open > 0 %}
+        {{ csa.callout(open ~ (open == 1 ? ' factura sigue' : ' facturas siguen') ~ ' en la bandeja sin anotar. Si alguna es de este trimestre, no irá en el ZIP hasta que se confirme.', 'warning', 'inbox') }}
+    {% endif %}
+    {% if withWarnings > 0 %}
+        {{ csa.callout(withWarnings ~ (withWarnings == 1 ? ' factura lleva' : ' facturas llevan') ~ ' una observación (abajo). Va igual en el ZIP, con la observación en el libro, para que la gestoría lo sepa.', 'info', 'info-circle') }}
+    {% endif %}
+
+    <div class="prl-toolbar">
+        <div class="counters">
+            <b>{{ rows|length }}</b> {{ rows|length == 1 ? 'factura' : 'facturas' }} · <b>{{ total|number_format(2, ',', '.') }} €</b>
+        </div>
+    </div>
+
+    <div class="prl-table-wrap">
+        {% if rows is empty %}
+            <div class="prl-empty">No hay facturas anotadas con fecha de este trimestre.</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th class="tight">Fecha</th>
+                        <th>Proveedor</th>
+                        <th>Fichero en el ZIP</th>
+                        <th class="tight acc-num">Total</th>
+                        <th>Observaciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                        {% set invoice = row.invoice %}
+                        {% set entry = invoice.accountEntry %}
+                        {% set date = invoice.invoiceDate ?? (entry ? entry.date : null) %}
+                        <tr>
+                            <td class="tight">{{ date ? date|date('d/m/Y') : '—' }}</td>
+                            <td>
+                                {% if entry %}
+                                    <a href="{{ path('accounting_entry_show', { id: entry.id }) }}">{{ invoice.provider ? invoice.provider.name : (invoice.providerName ?? '—') }}</a>
+                                {% else %}
+                                    {{ invoice.provider ? invoice.provider.name : (invoice.providerName ?? '—') }}
+                                {% endif %}
+                                {% if invoice.invoiceNumber %}<br><span class="acc-muted acc-small">fra. {{ invoice.invoiceNumber }}</span>{% endif %}
+                            </td>
+                            <td class="acc-small">{{ names[invoice.id] }}</td>
+                            <td class="acc-num">{{ invoice.total is not null ? invoice.total|number_format(2, ',', '.') ~ ' €' : '—' }}</td>
+                            <td class="acc-small">
+                                {% for warning in row.warnings %}
+                                    {{ csa.badge(warning, 'ochre') }}
+                                {% else %}
+                                    <span class="acc-muted">—</span>
+                                {% endfor %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}
