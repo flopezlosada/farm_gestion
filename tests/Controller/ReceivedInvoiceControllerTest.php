@@ -31,6 +31,9 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
     private ?BudgetCategoryGroup $group = null;
     private ?BudgetCategory $category = null;
 
+    /** @var list<int> Proveedores creados a mano, también los que no llevan CIF. */
+    private array $providersToRemove = [];
+
     protected function tearDown(): void
     {
         $em = static::getContainer()->get(EntityManagerInterface::class);
@@ -47,6 +50,11 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
 
         foreach ($em->getRepository(Provider::class)->findBy(['taxId' => self::TAX_ID]) as $provider) {
             $em->remove($provider);
+        }
+        foreach ($this->providersToRemove as $id) {
+            if (($provider = $em->find(Provider::class, $id)) !== null) {
+                $em->remove($provider);
+            }
         }
         $em->flush();
 
@@ -169,37 +177,99 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
-     * Un proveedor que ya existe se reconoce por el CIF y sólo se le completan los
-     * huecos: lo que tenga su ficha no lo pisa una factura (que puede traer la
-     * dirección de una sucursal).
+     * Un proveedor que ya existe se elige en la lista y su ficha sólo se completa:
+     * lo que tenga no lo pisa una factura (que puede traer la dirección de una
+     * sucursal), y el apunte toma el nombre de la ficha, no el tecleado.
      */
-    public function testUnProveedorConocidoSoloSeCompletaNuncaSePisa(): void
+    public function testUnProveedorElegidoSoloSeCompletaNuncaSePisa(): void
     {
         $client = $this->createAuthenticatedClient();
         $this->enableModule();
         $this->createCatalogue();
-
-        $em = static::getContainer()->get(EntityManagerInterface::class);
-        $known = (new Provider())->setName('Ferretería de siempre')->setTaxId(self::TAX_ID)->setAddress('Plaza Mayor 1');
-        $em->persist($known);
-        $em->flush();
+        $known = $this->createProvider('Ferretería de siempre', self::TAX_ID, 'Plaza Mayor 1');
 
         $invoice = $this->uploadOne($client);
-        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
-        $this->assertSame(0, $crawler->filter('body:contains("Proveedor conocido")')->count(), 'Sin CIF leído todavía no se sabe quién es.');
-
         $this->confirm($client, $invoice, [
+            'provider' => (string) $known->getId(),
             'providerAddress' => 'Polígono Sur, nave 3',
             'providerTown' => 'Torrelaguna',
         ], '26.75');
         $this->assertResponseRedirects();
 
-        $em->clear();
-        $providers = $em->getRepository(Provider::class)->findBy(['taxId' => self::TAX_ID]);
+        $providers = $this->findProviders(self::TAX_ID);
         $this->assertCount(1, $providers, 'El mismo CIF no da de alta un segundo proveedor.');
         $this->assertSame('Ferretería de siempre', $providers[0]->getName(), 'El nombre de la ficha no se pisa.');
         $this->assertSame('Plaza Mayor 1', $providers[0]->getAddress(), 'La dirección de la ficha no se pisa.');
         $this->assertSame('Torrelaguna', $providers[0]->getTown(), 'Lo que faltaba sí se completa.');
+        $invoice = $this->findInvoice('factura-prueba.pdf');
+        $this->assertSame($providers[0]->getId(), $invoice->getProvider()?->getId());
+        $this->assertSame('Ferretería de siempre', $invoice->getAccountEntry()?->getProviderName(), 'El apunte lleva el nombre de la ficha elegida.');
+    }
+
+    /**
+     * Si el CIF leído es de un proveedor conocido, la revisión llega con él ya
+     * elegido: lo normal es que baste con guardar.
+     */
+    public function testElProveedorDelCifLeidoLlegaElegido(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->createCatalogue();
+        $known = $this->createProvider('Ferretería de siempre', self::TAX_ID, null);
+
+        $invoice = $this->uploadOne($client);
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $invoice = $em->find(ReceivedInvoice::class, $invoice->getId());
+        $invoice->setProviderTaxId('ES' . self::TAX_ID);
+        $em->flush();
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
+        $this->assertResponseIsSuccessful();
+        $this->assertSame(
+            (string) $known->getId(),
+            $crawler->filter('select[name="received_invoice_confirm[provider]"] option[selected]')->attr('value'),
+            'Leído con el prefijo ES del NIF-IVA, tiene que reconocerse igual.',
+        );
+    }
+
+    /**
+     * «Nuevo proveedor» con un CIF que ya es de otro no se guarda: ni duplica el
+     * proveedor ni se enlaza a escondidas al que existe. Se pide elegirlo.
+     */
+    public function testUnNuevoConElCifDeOtroNoSeConfirma(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->createCatalogue();
+        $this->createProvider('Ferretería de siempre', self::TAX_ID, null);
+
+        $invoice = $this->uploadOne($client);
+        $this->confirm($client, $invoice, ['provider' => ''], '26.75');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorTextContains('.csa-field__error', 'Ferretería de siempre');
+        $this->assertSame(ReceivedInvoice::STATUS_PENDING, $this->findInvoice('factura-prueba.pdf')->getStatus());
+        $this->assertCount(1, $this->findProviders(self::TAX_ID));
+    }
+
+    /**
+     * Un proveedor antiguo sin CIF (los del comercio de la granja) recibe el de la
+     * factura al elegirlo: así la siguiente ya se le reconoce sola.
+     */
+    public function testElegirUnProveedorSinCifLePoneElDeLaFactura(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->createCatalogue();
+        $old = $this->createProvider('Ferretería antigua', null, null);
+
+        $invoice = $this->uploadOne($client);
+        $this->confirm($client, $invoice, ['provider' => (string) $old->getId()], '26.75');
+        $this->assertResponseRedirects();
+
+        $providers = $this->findProviders(self::TAX_ID);
+        $this->assertCount(1, $providers);
+        $this->assertSame($old->getId(), $providers[0]->getId());
     }
 
     /** Una línea de IVA a medias no deja confirmar: la gestoría la necesita entera. */
@@ -349,6 +419,28 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         ]);
 
         $client->request('POST', $form->getUri(), $values);
+    }
+
+    private function createProvider(string $name, ?string $taxId, ?string $address): Provider
+    {
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $provider = (new Provider())->setName($name)->setTaxId($taxId)->setAddress($address);
+        $em->persist($provider);
+        $em->flush();
+        $this->providersToRemove[] = $provider->getId();
+
+        return $provider;
+    }
+
+    /**
+     * @return list<Provider>
+     */
+    private function findProviders(string $taxId): array
+    {
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $em->clear();
+
+        return $em->getRepository(Provider::class)->findBy(['taxId' => $taxId]);
     }
 
     private function createCatalogue(): void

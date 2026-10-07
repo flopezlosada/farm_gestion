@@ -7,8 +7,11 @@
  # leer: en ésta los campos llegan vacíos.
  #
  # El controller pasa: invoice, twin (otra ya anotada con el mismo número, o null),
- # known (el proveedor que ya existe con ese CIF, o null), form (la factura + su
- # apunte en form.entry), suggestions.
+ # form (la factura + su apunte en form.entry), suggestions.
+ #
+ # Quién la emite: un proveedor que ya existe se elige en la lista y su ficha se
+ # enseña sin poder tocarla (se cambia en su propia pantalla); los campos de alta
+ # sólo aparecen con «Nuevo proveedor».
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -36,6 +39,11 @@
         .inv-doc img { display: block; width: 100%; height: auto; }
         .inv-doc iframe { display: block; width: 100%; height: 80vh; border: 0; }
         .inv-doc__bar { display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; font-size: 12px; border-bottom: 1px solid var(--csa-rule, #ddd); background: #fff; }
+        .inv-provider { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: var(--csa-sp-3, 12px) 0 var(--csa-sp-4, 16px); padding: 12px 16px; border: 1px solid var(--csa-rule, #ddd); border-radius: 6px; font-size: 14px; }
+        .inv-provider[hidden] { display: none; }
+        .inv-provider dt { color: var(--csa-ink-soft, #6b6b6b); }
+        .inv-provider dd { margin: 0; }
+        .inv-provider__note { grid-column: 1 / -1; font-size: 12px; color: var(--csa-ink-soft, #6b6b6b); }
         .inv-facts { font-size: 12px; margin: 0 0 var(--csa-sp-4, 16px); }
         .inv-facts dt { float: left; clear: left; width: 120px; color: var(--csa-ink-soft, #6b6b6b); }
         .inv-facts dd { margin: 0 0 4px 120px; }
@@ -108,10 +116,6 @@
                 {{ form_errors(form) }}
                 {{ form_errors(e) }}
 
-                {% if known %}
-                    {{ csa.callout('Proveedor conocido: ' ~ known.name ~ '. Lo que falte en su ficha se completa con esta factura; lo que ya tenga no se toca.', 'info', 'address-card-o') }}
-                {% endif %}
-
                 <div class="csa-stack-lg">
                     {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'El apunte', subtitle: 'Lo que entrará en el libro.' } %}
                         {% block body %}
@@ -127,17 +131,32 @@
                         {% endblock %}
                     {% endembed %}
 
-                    {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Quién la emite', subtitle: 'Por el CIF se reconoce al proveedor; si es nuevo, se le da de alta con estos datos.' } %}
+                    {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Quién la emite', subtitle: 'Si ya es proveedor, elígelo; si no, «Nuevo proveedor» y se da de alta con estos datos.' } %}
                         {% block body %}
                             {% import '_macros/csa.html.twig' as csa %}
                             <div class="csa-form-grid">
-                                {{ csa.field(e.providerName, 'Proveedor') }}
-                                {{ csa.field(form.providerTaxId, 'CIF / NIF', { hint: 'sin CIF no se enlaza a ningún proveedor' }) }}
+                                {{ csa.field(form.provider, 'Proveedor', { full: true, widget_class: 'csa-select', hint: 'escribe para buscar' }) }}
+                            </div>
+
+                            {# La ficha del elegido, de sólo lectura: la rellena el script con los data-* de la opción. #}
+                            <dl class="inv-provider" data-inv-provider-card hidden>
+                                <dt>CIF</dt><dd data-inv-provider-tax-id></dd>
+                                <dt>Dirección</dt><dd data-inv-provider-place></dd>
+                                <dd class="inv-provider__note">
+                                    Lo que le falte a su ficha se completa con esta factura; lo que ya tiene no se toca.
+                                    <a href="#" data-inv-provider-link target="_blank" rel="noopener">Cambiar su ficha</a>
+                                </dd>
+                            </dl>
+
+                            {% set if_new = { show_when: form.provider.vars.full_name ~ '=' } %}
+                            <div class="csa-form-grid">
+                                {{ csa.field(e.providerName, 'Nombre', if_new) }}
+                                {{ csa.field(form.providerTaxId, 'CIF / NIF', if_new|merge({ hint: 'sin CIF no se da de alta' })) }}
+                                {{ csa.field(form.providerAddress, 'Dirección', if_new|merge({ full: true })) }}
+                                {{ csa.field(form.providerPostalCode, 'Código postal', if_new) }}
+                                {{ csa.field(form.providerTown, 'Municipio', if_new) }}
+                                {{ csa.field(form.providerProvince, 'Provincia', if_new) }}
                                 {{ csa.field(e.invoiceNumber, 'Nº de factura') }}
-                                {{ csa.field(form.providerAddress, 'Dirección') }}
-                                {{ csa.field(form.providerPostalCode, 'Código postal') }}
-                                {{ csa.field(form.providerTown, 'Municipio') }}
-                                {{ csa.field(form.providerProvince, 'Provincia') }}
                                 {{ csa.field(e.notes, 'Notas', { full: true, widget_class: 'csa-textarea' }) }}
                             </div>
                         {% endblock %}
@@ -198,6 +217,29 @@
 {% block more_js %}
     {{ parent() }}
     {% include 'accounting/_direction_suggest.html.twig' with { category: form.entry.category, direction: form.entry.direction } %}
+    <script>
+    /*
+     * La ficha del proveedor elegido, de sólo lectura, con lo que trae su opción.
+     * Con «Nuevo proveedor» se esconde y csa-reveal enseña los campos de alta.
+     */
+    (function () {
+        var select = document.getElementById('{{ form.provider.vars.id }}');
+        var card = document.querySelector('[data-inv-provider-card]');
+        var showUrl = '{{ path('accounting_provider_show', { id: 0 }) }}';
+
+        function paint() {
+            var option = select.options[select.selectedIndex];
+            card.hidden = !option || option.value === '';
+            if (card.hidden) { return; }
+            card.querySelector('[data-inv-provider-tax-id]').textContent = option.dataset.taxId || 'sin CIF: se le pone el de esta factura';
+            card.querySelector('[data-inv-provider-place]').textContent = option.dataset.place || '—';
+            card.querySelector('[data-inv-provider-link]').href = showUrl.replace(/0$/, option.dataset.id);
+        }
+
+        select.addEventListener('change', paint);
+        paint();
+    })();
+    </script>
     <script>
     /*
      * Comprueba en vivo que el desglose cuadra con el importe: bases más cuotas menos

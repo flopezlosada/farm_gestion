@@ -9,7 +9,6 @@ use App\Form\AccountEntryType;
 use App\Form\ReceivedInvoiceConfirmType;
 use App\Form\ReceivedInvoiceUploadType;
 use App\Repository\BudgetCategoryRepository;
-use App\Repository\ProviderRepository;
 use App\Repository\ReceivedInvoiceRepository;
 use App\Service\Accounting\Invoice\InvoiceEntryDraft;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
@@ -17,6 +16,7 @@ use App\Service\Accounting\Invoice\InvoiceProviderResolver;
 use App\Service\Accounting\Invoice\InvoiceReadQueue;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\FormError;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\Request;
@@ -125,7 +125,6 @@ class ReceivedInvoiceController extends AbstractController
         BudgetCategoryRepository $categories,
         ReceivedInvoiceRepository $invoices,
         InvoiceProviderResolver $providers,
-        ProviderRepository $knownProviders,
     ): Response {
         if (!$invoice->isOpen()) {
             $this->addFlash('warning', 'Esta factura ya no está en la bandeja.');
@@ -134,12 +133,24 @@ class ReceivedInvoiceController extends AbstractController
         }
 
         $entry = $drafts->for($invoice);
-        $form = $this->createForm(ReceivedInvoiceConfirmType::class, $invoice, ['entry' => $entry]);
+        $form = $this->createForm(ReceivedInvoiceConfirmType::class, $invoice, [
+            'entry' => $entry,
+            'provider' => $providers->knownFor($invoice),
+        ]);
         $form->handleRequest($request);
+
+        $chosen = $form->isSubmitted() ? $form->get('provider')->getData() : null;
+        $clash = $form->isSubmitted() && $chosen === null ? $providers->knownFor($invoice) : null;
+        if ($clash !== null) {
+            $form->get('providerTaxId')->addError(new FormError(sprintf(
+                'Ese CIF ya es de «%s»: elígelo arriba, en la lista de proveedores.',
+                $clash->getName(),
+            )));
+        }
 
         if ($form->isSubmitted() && $form->isValid()) {
             $entry->setCreatedBy($this->currentUser());
-            $invoice->confirm($entry, $providers->resolve($invoice, $entry->getProviderName()));
+            $invoice->confirm($entry, $providers->resolve($invoice, $entry, $chosen));
             $em->persist($entry);
             $em->flush();
             $this->addFlash('success', sprintf('Anotado: %s.', $entry->getConcept()));
@@ -157,7 +168,6 @@ class ReceivedInvoiceController extends AbstractController
         return $this->render('accounting/invoice_review.html.twig', [
             'invoice' => $invoice,
             'twin' => $invoices->findAlreadyConfirmedTwin($invoice),
-            'known' => $knownProviders->findOneByTaxId($invoice->getProviderTaxId()),
             'form' => $form->createView(),
             'suggestions' => AccountEntryType::suggestedDirections($categories->findActive()),
         ]);
