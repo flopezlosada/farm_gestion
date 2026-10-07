@@ -117,15 +117,26 @@ class BudgetTracker
     }
 
     /**
-     * Cómo va la caja mes a mes: lo que entra menos lo que sale, y el acumulado
-     * partiendo del saldo con el que arrancó el año.
+     * Cómo va la caja mes a mes: lo que había al cerrar cada mes, y la proyección a
+     * fin de año.
      *
-     * La proyección es deliberadamente simple: para los meses ya cerrados, lo real;
-     * para los que faltan, lo presupuestado. Es exactamente lo que se hace a mano al
-     * rehacer el presupuesto a mitad de año, y no pretende adivinar nada más.
+     * Para los meses ya anotados, el acumulado es el saldo REAL de las cuentas, no una
+     * suma de partidas: así cuenta todo lo que movió el banco (también lo que aún no
+     * tiene partida) y arranca del dinero que de verdad había el 1 de enero. Partir del
+     * saldo que apunta el presupuesto fallaba en cuanto éste se calculaba con otro
+     * criterio: en 2026 deja fuera una subvención cobrada en diciembre, y la portada
+     * daba el año por cerrado con un agujero de veinte mil euros que no existe.
+     *
+     * Para los meses que faltan, lo presupuestado. Es exactamente lo que se hace a mano
+     * al rehacer el presupuesto a mitad de año, y no pretende adivinar nada más.
+     *
+     * Si en el año no había ninguna cuenta abierta (un año anterior a llevar las
+     * cuentas en la aplicación), no hay saldo real: se parte del del presupuesto.
      *
      * @return array{
      *     months: array<int, array{month: int, net: float, cumulative: float, projected: bool}>,
+     *     opening: float,
+     *     fromAccounts: bool,
      *     endOfYear: float,
      *     lowest: array{month: int, cumulative: float}
      * }
@@ -144,17 +155,23 @@ class BudgetTracker
             }
         }
 
-        $cumulative = $budget !== null ? (float) $budget->getOpeningCash() : 0.0;
+        $real = $this->entries->cashByMonthEnd($year);
+        $opening = $real !== null ? $real[0] : ($budget !== null ? (float) $budget->getOpeningCash() : 0.0);
+        $cumulative = $opening;
         $months = [];
         $lowest = ['month' => 1, 'cumulative' => \PHP_FLOAT_MAX];
 
         for ($m = 1; $m <= 12; ++$m) {
             $projected = $m > $throughMonth;
-            $net = $projected ? $planned[$m] : $actual[$m];
-            $cumulative += $net;
+            $previous = $cumulative;
+            $cumulative = match (true) {
+                $projected => $cumulative + $planned[$m],
+                $real !== null => $real[$m],
+                default => $cumulative + $actual[$m],
+            };
             $months[$m] = [
                 'month' => $m,
-                'net' => round($net, 2),
+                'net' => round($cumulative - $previous, 2),
                 'cumulative' => round($cumulative, 2),
                 'projected' => $projected,
             ];
@@ -165,6 +182,8 @@ class BudgetTracker
 
         return [
             'months' => $months,
+            'opening' => round($opening, 2),
+            'fromAccounts' => $real !== null,
             'endOfYear' => round($cumulative, 2),
             'lowest' => $lowest,
         ];
@@ -217,6 +236,7 @@ class BudgetTracker
     /**
      * Última mensualidad con apuntes. Es el corte natural del «hasta la fecha»: no
      * tiene sentido contar como ejecutado un mes del que aún no se ha anotado nada.
+     * Sin apuntes, el mes en curso; o ninguno, si el año aún no ha empezado.
      */
     private function lastMonthWithData(int $year): int
     {
@@ -227,7 +247,12 @@ class BudgetTracker
             }
         }
 
-        return $last > 0 ? $last : (int) date('n');
+        if ($last > 0) {
+            return $last;
+        }
+
+        // Un año futuro todavía no tiene nada ejecutado: todo él es previsión.
+        return $year > (int) date('Y') ? 0 : (int) date('n');
     }
 
     /**
