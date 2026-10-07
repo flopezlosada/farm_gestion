@@ -73,6 +73,31 @@ class ReceivedInvoiceRepository extends ServiceEntityRepository
     }
 
     /**
+     * Pasa la factura a confirmada sólo si sigue abierta, en una sola sentencia.
+     * Dentro de una transacción, InnoDB bloquea la fila: de dos confirmaciones a la
+     * vez (un doble clic en «Guardar») la segunda espera, ve la factura ya
+     * confirmada y no crea un segundo apunte.
+     *
+     * @param ReceivedInvoice $invoice La que se va a confirmar.
+     *
+     * @return bool Si era suya: false si otra petición se adelantó.
+     */
+    public function reserveForConfirmation(ReceivedInvoice $invoice): bool
+    {
+        $updated = $this->getEntityManager()->createQuery(
+            'UPDATE ' . ReceivedInvoice::class . ' i
+                SET i.status = :confirmed
+              WHERE i.id = :id AND i.status IN (:open)'
+        )
+            ->setParameter('confirmed', ReceivedInvoice::STATUS_CONFIRMED)
+            ->setParameter('id', $invoice->getId())
+            ->setParameter('open', ReceivedInvoice::OPEN_STATUSES)
+            ->execute();
+
+        return $updated === 1;
+    }
+
+    /**
      * Lo que está por resolver en la bandeja: en cola, leídas y no leídas.
      *
      * @return list<ReceivedInvoice>

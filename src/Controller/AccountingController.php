@@ -14,6 +14,7 @@ use App\Repository\FinancialAccountRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Repository\ReceivedInvoiceRepository;
 use App\Service\Accounting\BudgetTracker;
+use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\MonthNames;
 use App\Service\Accounting\TransferRecorder;
 use Doctrine\ORM\EntityManagerInterface;
@@ -258,11 +259,14 @@ class AccountingController extends AbstractController
      * al lado: para comprobar un gasto no hace falta ir a buscar el papel.
      */
     #[Route('/entry/{id}', name: 'accounting_entry_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function entryShow(AccountEntry $entry, ReceivedInvoiceRepository $invoices): Response
+    public function entryShow(AccountEntry $entry, ReceivedInvoiceRepository $invoices, InvoiceFileStore $files): Response
     {
+        $invoice = $invoices->findOneBy(['accountEntry' => $entry]);
+
         return $this->render('accounting/entry_show.html.twig', [
             'entry' => $entry,
-            'invoice' => $invoices->findOneBy(['accountEntry' => $entry]),
+            'invoice' => $invoice,
+            'hasDocument' => $invoice !== null && $files->pathTo($invoice->getFileName()) !== null,
         ]);
     }
 
