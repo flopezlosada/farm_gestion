@@ -45,11 +45,19 @@ class ProviderRepository extends ServiceEntityRepository
     public function findWithYearTotals(int $year): array
     {
         $rows = $this->createQueryBuilder('p')
-            ->select('p AS provider', 'COUNT(i.id) AS invoices', 'COALESCE(SUM(i.total), 0) AS total')
-            ->leftJoin(ReceivedInvoice::class, 'i', 'WITH', 'i.provider = p AND i.status = :confirmed AND i.invoiceDate >= :from AND i.invoiceDate < :to')
+            // La fecha es la de la factura o, si no se leyó, la del apunte: el mismo
+            // criterio que la entrega a la gestoría. Va dentro de la suma y no en el
+            // WHERE para que los proveedores sin facturas en el año sigan saliendo.
+            ->select(
+                'p AS provider',
+                'SUM(CASE WHEN COALESCE(i.invoiceDate, e.date) BETWEEN :from AND :to THEN 1 ELSE 0 END) AS invoices',
+                'SUM(CASE WHEN COALESCE(i.invoiceDate, e.date) BETWEEN :from AND :to THEN i.total ELSE 0 END) AS total',
+            )
+            ->leftJoin(ReceivedInvoice::class, 'i', 'WITH', 'i.provider = p AND i.status = :confirmed')
+            ->leftJoin('i.accountEntry', 'e')
             ->setParameter('confirmed', ReceivedInvoice::STATUS_CONFIRMED)
-            ->setParameter('from', new \DateTimeImmutable(sprintf('%d-01-01', $year)))
-            ->setParameter('to', new \DateTimeImmutable(sprintf('%d-01-01', $year + 1)))
+            ->setParameter('from', sprintf('%d-01-01', $year))
+            ->setParameter('to', sprintf('%d-12-31', $year))
             ->groupBy('p.id')
             ->orderBy('total', 'DESC')
             ->addOrderBy('p.name', 'ASC')

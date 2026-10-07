@@ -125,6 +125,7 @@ class ReceivedInvoiceController extends AbstractController
         BudgetCategoryRepository $categories,
         ReceivedInvoiceRepository $invoices,
         InvoiceProviderResolver $providers,
+        InvoiceFileStore $files,
     ): Response {
         if (!$invoice->isOpen()) {
             $this->addFlash('warning', 'Esta factura ya no está en la bandeja.');
@@ -150,9 +151,15 @@ class ReceivedInvoiceController extends AbstractController
 
         if ($form->isSubmitted() && $form->isValid()) {
             $entry->setCreatedBy($this->currentUser());
-            $invoice->confirm($entry, $providers->resolve($invoice, $entry, $chosen));
-            $em->persist($entry);
-            $em->flush();
+            $confirmed = $this->confirmOnce($em, $invoices, $invoice, static function () use ($em, $invoice, $entry, $providers, $chosen): void {
+                $invoice->confirm($entry, $providers->resolve($invoice, $entry, $chosen));
+                $em->persist($entry);
+            });
+            if (!$confirmed) {
+                $this->addFlash('warning', 'Esta factura ya estaba anotada: no se ha creado otro apunte.');
+
+                return $this->redirectToRoute('accounting_invoices');
+            }
             $this->addFlash('success', sprintf('Anotado: %s.', $entry->getConcept()));
 
             // Quien confirma suele ir una tras otra: la siguiente lista para revisar.
@@ -168,6 +175,7 @@ class ReceivedInvoiceController extends AbstractController
         return $this->render('accounting/invoice_review.html.twig', [
             'invoice' => $invoice,
             'twin' => $invoices->findAlreadyConfirmedTwin($invoice),
+            'hasDocument' => $files->pathTo($invoice->getFileName()) !== null,
             'form' => $form->createView(),
             'suggestions' => AccountEntryType::suggestedDirections($categories->findActive()),
         ]);
@@ -255,6 +263,43 @@ class ReceivedInvoiceController extends AbstractController
             'lastError' => $lastError,
             'nextAttempt' => $nextAttempt,
         ];
+    }
+
+    /**
+     * Confirma la factura y guarda su apunte, una sola vez aunque lleguen dos
+     * peticiones a la vez. Si otra se adelantó, deshace y no guarda nada: tampoco los
+     * cambios del formulario, que pisarían la factura ya confirmada.
+     *
+     * Transacción a mano y no wrapInTransaction(), que hace flush() siempre al
+     * terminar, también cuando no hay que guardar.
+     *
+     * @param \Closure $write Lo que convierte la factura en apunte; el flush va aquí.
+     *
+     * @return bool False si la factura ya no estaba abierta.
+     */
+    private function confirmOnce(EntityManagerInterface $em, ReceivedInvoiceRepository $invoices, ReceivedInvoice $invoice, \Closure $write): bool
+    {
+        $connection = $em->getConnection();
+        $connection->beginTransaction();
+        try {
+            if (!$invoices->reserveForConfirmation($invoice)) {
+                $connection->rollBack();
+                $em->clear();
+
+                return false;
+            }
+            $write();
+            $em->flush();
+            $connection->commit();
+
+            return true;
+        } catch (\Throwable $e) {
+            if ($connection->isTransactionActive()) {
+                $connection->rollBack();
+            }
+
+            throw $e;
+        }
     }
 
     private function currentUser(): ?User

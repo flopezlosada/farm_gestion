@@ -1,0 +1,9 @@
+# Los documentos que suben los tests no van al archivo de verdad: colgando del
+# cache_dir se los lleva el primer `cache:clear`, y no se confunden con uno real.
+#
+# Va aquí y no en config/packages/test/: el Kernel carga services.yaml DESPUÉS de
+# packages/<entorno>/, así que ahí sus valores quedaban pisados por los de
+# services.yaml. Este fichero se carga el último.
+parameters:
+    app.obligation_documents_dir: '%kernel.cache_dir%/documentos-vencimientos'
+    app.invoice_files_dir: '%kernel.cache_dir%/documentos-facturas'

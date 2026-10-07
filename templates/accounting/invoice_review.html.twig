@@ -7,7 +7,8 @@
  # leer: en ésta los campos llegan vacíos.
  #
  # El controller pasa: invoice, twin (otra ya anotada con el mismo número, o null),
- # form (la factura + su apunte en form.entry), suggestions.
+ # form (la factura + su apunte en form.entry), suggestions, hasDocument (si el
+ # fichero está en el servidor).
  #
  # Quién la emite: un proveedor que ya existe se elige en la lista y su ficha se
  # enseña sin poder tocarla (se cambia en su propia pantalla); los campos de alta
@@ -96,17 +97,7 @@
 
         {# ============ EL DOCUMENTO ============ #}
         <div class="inv-doc">
-            <div class="inv-doc__bar">
-                <span class="acc-muted">{{ invoice.originalName }}</span>
-                <a href="{{ path('accounting_invoice_file', { id: invoice.id }) }}" target="_blank" rel="noopener">Abrir aparte <i class="fa fa-external-link"></i></a>
-            </div>
-            {% if invoice.image %}
-                <img src="{{ path('accounting_invoice_file', { id: invoice.id }) }}" alt="Factura {{ invoice.originalName }}">
-            {% elseif invoice.mimeType == 'application/pdf' %}
-                <iframe src="{{ path('accounting_invoice_file', { id: invoice.id }) }}" title="Factura {{ invoice.originalName }}"></iframe>
-            {% else %}
-                <div class="prl-empty">Este formato no se puede enseñar aquí: ábrelo aparte.</div>
-            {% endif %}
+            {{ invm.document(invoice, hasDocument, 'inv-doc') }}
         </div>
 
         {# ============ EL APUNTE ============ #}

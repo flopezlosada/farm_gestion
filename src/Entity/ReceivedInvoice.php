@@ -46,6 +46,9 @@ class ReceivedInvoice
     /** Descartada: duplicada, equivocada o no era una factura. */
     public const STATUS_DISCARDED = 'discarded';
 
+    /** Los estados de lo que sigue en la bandeja, por resolver. */
+    public const OPEN_STATUSES = [self::STATUS_PENDING, self::STATUS_READ, self::STATUS_UNREADABLE];
+
     /** Subida desde la web. */
     public const SOURCE_WEB = 'web';
 
@@ -402,7 +405,7 @@ class ReceivedInvoice
     /** Si todavía se puede confirmar o descartar. */
     public function isOpen(): bool
     {
-        return \in_array($this->status, [self::STATUS_PENDING, self::STATUS_READ, self::STATUS_UNREADABLE], true);
+        return \in_array($this->status, self::OPEN_STATUSES, true);
     }
 
     public function getId(): ?int
