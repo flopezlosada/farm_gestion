@@ -78,7 +78,7 @@
                         </tr>
                         {% for cat in group.categories %}
                             <tr class="acc-cat-row">
-                                <td class="acc-muted">{{ cat.name }}</td>
+                                <td class="acc-muted"><a href="{{ path('accounting_category_show', { id: cat.id, year: year }) }}">{{ cat.name }}</a></td>
                                 {% for n in 1..12 %}
                                     {% set v = cat.actual[n] %}
                                     <td class="acc-num {{ v < 0 ? 'acc-neg' : '' }} {{ v == 0 ? 'zero' : '' }}">

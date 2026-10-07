@@ -35,4 +35,11 @@
         .acc-grid.prl-table tbody td { display: table-cell; padding: 6px 8px; border-bottom: 0; }
         .acc-grid.prl-table tbody td::before { content: none; }
     }
+    /* Tira de doce meses (caja de la portada, saldo de una cuenta). */
+    .acc-months { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 4px; }
+    .acc-months .m { text-align: center; font-size: 11px; padding: 6px 2px; border-radius: 6px; background: rgba(0, 0, 0, 0.03); }
+    .acc-months .m.proj { border: 1px dashed rgba(0, 0, 0, 0.18); background: transparent; }
+    .acc-months .m .v { display: block; font-weight: 600; font-size: 12px; }
+    .acc-months .m.low { background: rgba(179, 38, 30, 0.1); }
+    @media (max-width: 900px) { .acc-months { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 </style>

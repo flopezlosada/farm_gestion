@@ -8,7 +8,11 @@ use App\Form\BudgetCategoryType;
 use App\Form\FinancialAccountType;
 use App\Repository\AccountEntryRepository;
 use App\Repository\BudgetCategoryGroupRepository;
+use App\Repository\BudgetLineRepository;
+use App\Repository\BudgetRepository;
 use App\Repository\FinancialAccountRepository;
+use App\Repository\ReceivedInvoiceRepository;
+use App\Service\Accounting\MonthNames;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -30,6 +34,9 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_GESTION_CONTABILIDAD')]
 class AccountingSetupController extends AbstractController
 {
+    /** Cuántos apuntes recientes enseña una ficha; el resto, en el libro filtrado. */
+    private const RECENT = 15;
+
     /**
      * Las cuentas con su saldo de hoy y cuántos apuntes llevan.
      */
@@ -84,6 +91,41 @@ class AccountingSetupController extends AbstractController
             'account' => null,
             'entryCount' => 0,
             'heading' => 'Nueva cuenta',
+        ]);
+    }
+
+    /**
+     * La ficha de una cuenta: su saldo de hoy, lo que tenía al cerrar cada mes del año
+     * y sus últimos apuntes. El listado completo es el libro filtrado por la cuenta.
+     */
+    #[Route('/accounts/{id}', name: 'accounting_account_show', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function accountShow(
+        Request $request,
+        FinancialAccount $account,
+        AccountEntryRepository $entries,
+        ReceivedInvoiceRepository $invoices,
+    ): Response {
+        $year = $request->query->getInt('year') ?: (int) date('Y');
+
+        // Una consulta por mes de una sola cuenta: doce como mucho, y balanceFor() ya
+        // sabe que antes de abrirse la cuenta no tenía saldo.
+        $months = [];
+        $lastMonth = $year < (int) date('Y') ? 12 : ($year > (int) date('Y') ? 0 : (int) date('n'));
+        for ($m = 1; $m <= $lastMonth; ++$m) {
+            $end = (new \DateTimeImmutable(sprintf('%d-%02d-01', $year, $m)))->modify('last day of this month');
+            $months[$m] = $end < $account->getOpeningDate() ? null : (float) $entries->balanceFor($account, $end);
+        }
+
+        $recent = $entries->listingQueryBuilder(['account' => $account->getId()])->setMaxResults(self::RECENT)->getQuery()->getResult();
+
+        return $this->render('accounting/account_show.html.twig', [
+            'account' => $account,
+            'balance' => $entries->balanceFor($account),
+            'count' => $entries->countByAccount()[(int) $account->getId()] ?? 0,
+            'year' => $year,
+            'months' => $months,
+            'recent' => $recent,
+            'invoices' => $invoices->invoiceIdsByEntry(array_map(static fn ($e) => (int) $e->getId(), $recent)),
         ]);
     }
 
@@ -155,6 +197,41 @@ class AccountingSetupController extends AbstractController
             'category' => null,
             'entryCount' => 0,
             'heading' => 'Nueva partida',
+        ]);
+    }
+
+    /**
+     * La ficha de una partida: lo previsto en el presupuesto aprobado del año frente a
+     * lo real, mes a mes, y sus últimos apuntes.
+     */
+    #[Route('/categories/{id}', name: 'accounting_category_show', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function categoryShow(
+        Request $request,
+        BudgetCategory $category,
+        AccountEntryRepository $entries,
+        BudgetRepository $budgets,
+        BudgetLineRepository $lines,
+        ReceivedInvoiceRepository $invoices,
+    ): Response {
+        $year = $request->query->getInt('year') ?: (int) date('Y');
+        $budget = $budgets->findApprovedForYear($year);
+        $id = (int) $category->getId();
+
+        $actual = array_map('floatval', $entries->totalsByCategoryAndMonth($year)[$id] ?? []);
+        $planned = $budget !== null ? array_map('floatval', $lines->totalsByCategoryAndMonth($budget)[$id] ?? []) : [];
+
+        $recent = $entries->listingQueryBuilder(['category' => $id])->setMaxResults(self::RECENT)->getQuery()->getResult();
+
+        return $this->render('accounting/category_show.html.twig', [
+            'category' => $category,
+            'year' => $year,
+            'budget' => $budget,
+            'actual' => $actual,
+            'planned' => $planned,
+            'count' => $entries->countByCategory()[$id] ?? 0,
+            'recent' => $recent,
+            'invoices' => $invoices->invoiceIdsByEntry(array_map(static fn ($e) => (int) $e->getId(), $recent)),
+            'months' => MonthNames::LONG,
         ]);
     }
 

@@ -85,7 +85,7 @@
                         </tr>
                         {% for cat in block.categories %}
                             <tr class="acc-cat-row">
-                                <td colspan="3">{{ cat.category.name }}</td>
+                                <td colspan="3"><a href="{{ path('accounting_category_show', { id: cat.category.id, year: year }) }}">{{ cat.category.name }}</a></td>
                                 <td class="acc-num {{ cat.total < 0 ? 'acc-neg' : '' }}">
                                     {{ cat.total|number_format(2, ',', '.') }} €
                                 </td>
@@ -93,13 +93,13 @@
                             {% for entry in cat.entries %}
                                 <tr class="acc-entry-row">
                                     <td>
-                                        {{ entry.concept }}
+                                        <a href="{{ path('accounting_entry_show', { id: entry.id }) }}">{{ entry.concept }}</a>
                                         {% if entry.providerName %}
                                             <span class="acc-muted acc-small">· {{ entry.providerName }}</span>
                                         {% endif %}
                                     </td>
                                     <td class="tight">{{ entry.date ? entry.date|date('d/m') : '—' }}</td>
-                                    <td class="tight acc-muted">{{ entry.account.name }}</td>
+                                    <td class="tight acc-muted"><a href="{{ path('accounting_account_show', { id: entry.account.id }) }}">{{ entry.account.name }}</a></td>
                                     <td class="acc-num {{ entry.incoming ? '' : 'acc-neg' }}">
                                         {{ entry.amount|number_format(2, ',', '.') }} €
                                     </td>

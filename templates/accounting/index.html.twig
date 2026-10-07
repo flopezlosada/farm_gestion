@@ -42,12 +42,6 @@
         .acc-bar > i { display: block; height: 100%; background: var(--csa-sage, #6a8f6b); }
         .acc-bar > i.over { background: #b3261e; }
         .acc-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 18px 0; }
-        .acc-months { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 4px; }
-        .acc-months .m { text-align: center; font-size: 11px; padding: 6px 2px; border-radius: 6px; background: rgba(0, 0, 0, 0.03); }
-        .acc-months .m.proj { border: 1px dashed rgba(0, 0, 0, 0.18); background: transparent; }
-        .acc-months .m .v { display: block; font-weight: 600; font-size: 12px; }
-        .acc-months .m.low { background: rgba(179, 38, 30, 0.1); }
-        @media (max-width: 900px) { .acc-months { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
     </style>
 {% endblock %}
 
@@ -161,7 +155,7 @@
                     </tr>
                     {% for cat in group.categories %}
                         <tr class="acc-cat-row">
-                            <td class="acc-muted">{{ cat.name }}</td>
+                            <td class="acc-muted"><a href="{{ path('accounting_category_show', { id: cat.id, year: year }) }}">{{ cat.name }}</a></td>
                             <td class="acc-num acc-muted">{{ fmt.money(cat.budgetToDate, false) }}</td>
                             <td class="acc-num">{{ fmt.money(cat.actualToDate, false) }}</td>
                             <td class="acc-num">{{ fmt.money(cat.deviation, true) }}</td>
@@ -244,7 +238,7 @@
                     <tbody>
                         {% for row in balances %}
                             <tr>
-                                <td>{{ row.account.name }}<br><span class="acc-muted acc-small">{{ row.account.kindLabel }}</span></td>
+                                <td><a href="{{ path('accounting_account_show', { id: row.account.id }) }}">{{ row.account.name }}</a><br><span class="acc-muted acc-small">{{ row.account.kindLabel }}</span></td>
                                 <td class="acc-num">{{ row.balance|number_format(2, ',', '.') }} €</td>
                             </tr>
                         {% endfor %}
@@ -271,7 +265,7 @@
                         <tr>
                             <td class="tight">{{ entry.date ? entry.date|date('d/m/Y') : '—' }}</td>
                             <td>{{ entry.account.name }}</td>
-                            <td>{{ entry.concept }}</td>
+                            <td><a href="{{ path('accounting_entry_show', { id: entry.id }) }}">{{ entry.concept }}</a></td>
                             <td class="acc-num">{{ fmt.money(entry.amount, false) }}</td>
                         </tr>
                     {% endfor %}

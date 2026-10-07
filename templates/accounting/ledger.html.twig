@@ -10,6 +10,7 @@
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
+{% import 'accounting/_entries.html.twig' as rows %}
 {% import '_macros/csa.html.twig' as csa %}
 
 {% block title %}Contabilidad · Libro{% endblock %}
@@ -99,26 +100,7 @@
                 <tbody>
                     {% for entry in pagination %}
                         <tr>
-                            <td class="tight">{{ entry.date ? entry.date|date('d/m/Y') : '—' }}</td>
-                            <td>
-                                <a href="{{ path('accounting_entry_show', { id: entry.id }) }}">{{ entry.concept }}</a>
-                                {% if invoices[entry.id] is defined %}
-                                    <i class="fa fa-paperclip acc-muted" title="Tiene la factura adjunta"></i>
-                                {% endif %}
-                                {% if entry.providerName or entry.invoiceNumber %}
-                                    <br><span class="acc-muted acc-small">
-                                        {{ entry.providerName }}{% if entry.invoiceNumber %} · fra. {{ entry.invoiceNumber }}{% endif %}
-                                    </span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <span class="acc-muted acc-small">{{ entry.category.group.name }}</span><br>
-                                {{ entry.category.name }}
-                            </td>
-                            <td class="tight">{{ entry.account.name }}</td>
-                            <td class="acc-num {{ entry.incoming ? '' : 'acc-neg' }}">
-                                {{ entry.amount|number_format(2, ',', '.') }} €
-                            </td>
+                            {{ rows.cells(entry, invoices) }}
                             {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
                                 <td class="tight">
                                     {# Un traspaso no se corrige por mitades: o se borra entero o se
