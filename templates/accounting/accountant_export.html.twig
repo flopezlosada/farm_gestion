@@ -104,7 +104,7 @@
                                 {% endif %}
                                 {% if invoice.invoiceNumber %}<br><span class="acc-muted acc-small">fra. {{ invoice.invoiceNumber }}</span>{% endif %}
                             </td>
-                            <td class="acc-small">{{ names[invoice.id] }}</td>
+                            <td class="acc-small"><a href="{{ path('accounting_invoice_review', { id: invoice.id }) }}">{{ names[invoice.id] }}</a></td>
                             <td class="acc-num">{{ invoice.total is not null ? invoice.total|number_format(2, ',', '.') ~ ' €' : '—' }}</td>
                             <td class="acc-small">
                                 {% for warning in row.warnings %}

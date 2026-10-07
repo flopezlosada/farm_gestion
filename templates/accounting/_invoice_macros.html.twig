@@ -37,3 +37,28 @@
         <div class="prl-empty">Este formato no se puede enseñar aquí: ábrelo aparte.</div>
     {% endif %}
 {% endmacro %}
+
+{# Los datos fiscales de una factura: fecha, CIF, desglose de IVA, retención y total.
+ # Igual en la ficha del apunte y en la de la factura. #}
+{% macro facts(invoice) %}
+    {% import 'accounting/_money.html.twig' as fmt %}
+    <dl class="ent-facts">
+        <dt>Fecha</dt>
+        <dd>{{ invoice.invoiceDate ? invoice.invoiceDate|date('d/m/Y') : '—' }}</dd>
+        <dt>CIF</dt>
+        <dd>{{ invoice.providerTaxId ?? '—' }}</dd>
+        {% for line in invoice.taxLines %}
+            <dt>{{ loop.first ? 'Bases e IVA' : '' }}</dt>
+            <dd>{{ fmt.money(line.base) }} al {{ line.rate|number_format(0, ',', '.') }} % = {{ fmt.money(line.taxAmount) }}</dd>
+        {% else %}
+            <dt>Bases e IVA</dt>
+            <dd class="acc-muted">sin desglose</dd>
+        {% endfor %}
+        {% if invoice.withholding %}
+            <dt>Retención IRPF</dt>
+            <dd>{{ fmt.money(invoice.withholding) }}{% if invoice.withholdingRate %} ({{ invoice.withholdingRate|number_format(0, ',', '.') }} %){% endif %}</dd>
+        {% endif %}
+        <dt>Total</dt>
+        <dd>{{ invoice.total is not null ? fmt.money(invoice.total) : '—' }}</dd>
+    </dl>
+{% endmacro %}

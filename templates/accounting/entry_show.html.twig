@@ -28,23 +28,6 @@
 {% block more_css %}
     {{ parent() }}
     {% include 'accounting/_styles.html.twig' %}
-    <style>
-        .ent-show { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--csa-sp-6, 32px); align-items: start; }
-        .ent-show--solo { grid-template-columns: minmax(0, 720px); }
-        .ent-doc { position: sticky; top: var(--csa-sp-4, 16px); border: 1px solid var(--csa-rule, #ddd); border-radius: 6px; overflow: hidden; background: #fafafa; }
-        .ent-doc img { display: block; width: 100%; height: auto; }
-        .ent-doc iframe { display: block; width: 100%; height: 80vh; border: 0; }
-        .ent-doc__bar { display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; font-size: 12px; border-bottom: 1px solid var(--csa-rule, #ddd); background: #fff; }
-        .ent-facts { display: grid; grid-template-columns: max-content 1fr; gap: 8px 24px; margin: 0 0 var(--csa-sp-5, 24px); font-size: 14px; }
-        .ent-facts dt { color: var(--csa-ink-soft, #6b6b6b); }
-        .ent-facts dd { margin: 0; }
-        .ent-h { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--csa-ink-soft, #6b6b6b); margin: var(--csa-sp-5, 24px) 0 var(--csa-sp-3, 12px); }
-        @media (max-width: 900px) {
-            .ent-show { grid-template-columns: 1fr; }
-            .ent-doc { position: static; }
-            .ent-doc iframe { height: 60vh; }
-        }
-    </style>
 {% endblock %}
 
 {% block csa_main %}
@@ -99,26 +82,8 @@
             </dl>
 
             {% if invoice %}
-                <h2 class="ent-h">La factura</h2>
-                <dl class="ent-facts">
-                    <dt>Fecha</dt>
-                    <dd>{{ invoice.invoiceDate ? invoice.invoiceDate|date('d/m/Y') : '—' }}</dd>
-                    <dt>CIF</dt>
-                    <dd>{{ invoice.providerTaxId ?? '—' }}</dd>
-                    {% for line in invoice.taxLines %}
-                        <dt>{{ loop.first ? 'Bases e IVA' : '' }}</dt>
-                        <dd>{{ fmt.money(line.base) }} al {{ line.rate|number_format(0, ',', '.') }} % = {{ fmt.money(line.taxAmount) }}</dd>
-                    {% else %}
-                        <dt>Bases e IVA</dt>
-                        <dd class="acc-muted">sin desglose</dd>
-                    {% endfor %}
-                    {% if invoice.withholding %}
-                        <dt>Retención IRPF</dt>
-                        <dd>{{ fmt.money(invoice.withholding) }}{% if invoice.withholdingRate %} ({{ invoice.withholdingRate|number_format(0, ',', '.') }} %){% endif %}</dd>
-                    {% endif %}
-                    <dt>Total</dt>
-                    <dd>{{ invoice.total is not null ? fmt.money(invoice.total) : '—' }}</dd>
-                </dl>
+                <h2 class="ent-h"><a href="{{ path('accounting_invoice_review', { id: invoice.id }) }}">La factura</a></h2>
+                {{ invm.facts(invoice) }}
             {% endif %}
 
             {% if editable %}

@@ -135,9 +135,16 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $this->assertSame('Ferretería Torrelaguna', $invoice->getProvider()->getName(), 'Un proveedor nuevo nace con el nombre del apunte.');
         $this->assertSame(self::TAX_ID, $invoice->getProvider()->getTaxId());
 
-        // Ya anotada, no vuelve a abrirse para crear un segundo apunte.
-        $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
+        // Ya anotada se enseña tal como quedó, sin formulario con que crear otro apunte.
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
+        $this->assertResponseIsSuccessful();
+        $this->assertSame(0, $crawler->filter('form[name="received_invoice_confirm"]')->count(), 'Una factura anotada no se vuelve a confirmar.');
+        $this->assertSelectorTextContains('body', 'Anotada en el libro');
+
+        // Y un envío del formulario a destiempo no crea nada.
+        $client->request('POST', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()), ['received_invoice_confirm' => []]);
         $this->assertResponseRedirects('/gestion/accounting/invoices');
+        $this->assertSame($entry->getId(), $this->findInvoice('factura-prueba.pdf')->getAccountEntry()?->getId());
     }
 
     /**
@@ -330,6 +337,13 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
 
         $client->request('GET', sprintf('/gestion/accounting/invoices/%d/file', $invoice->getId()));
         $this->assertResponseIsSuccessful();
+
+        // Descartada no desaparece: sale entre las últimas resueltas y tiene su ficha.
+        $crawler = $client->request('GET', '/gestion/accounting/invoices');
+        $this->assertSame(1, $crawler->filter(sprintf('a[href$="/invoices/%d"]', $invoice->getId()))->count());
+        $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorTextContains('body', 'Descartada');
     }
 
     /**

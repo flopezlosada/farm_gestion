@@ -56,7 +56,7 @@ class ReceivedInvoiceController extends AbstractController
             ])->createView(),
             'open' => $open,
             'queue' => $this->queueStatus($pending, $queue->isEnabled()),
-            'recent' => $invoices->findRecentlyConfirmed(self::RECENT),
+            'recent' => $invoices->findRecentlyResolved(self::RECENT),
         ]);
     }
 

@@ -6,7 +6,7 @@
  # veces la misma factura pensando que se ha perdido.
  #
  # El controller pasa: upload (formulario de subida), open (facturas por resolver),
- # queue (estado de la cola), recent (últimas anotadas).
+ # queue (estado de la cola), recent (últimas resueltas: anotadas o descartadas).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -147,20 +147,23 @@
 
     {# ============ ÚLTIMAS ANOTADAS ============ #}
     {% if recent is not empty %}
-        <h3 class="acc-muted" style="margin-top: var(--csa-sp-6, 32px); font-size: 14px;">Últimas anotadas</h3>
+        <h3 class="acc-muted" style="margin-top: var(--csa-sp-6, 32px); font-size: 14px;">Últimas resueltas</h3>
         <div class="prl-table-wrap">
             <table class="prl-table">
                 <tbody>
                     {% for invoice in recent %}
+                        {% set entry = invoice.accountEntry %}
                         <tr>
-                            <td>{{ invoice.providerName ?? invoice.originalName }}</td>
-                            <td class="tight">{{ invoice.accountEntry ? invoice.accountEntry.date|date('d/m/Y') : '—' }}</td>
-                            <td class="acc-num">{{ invoice.accountEntry ? invoice.accountEntry.amount|number_format(2, ',', '.') ~ ' €' : '—' }}</td>
+                            <td>
+                                <a href="{{ path('accounting_invoice_review', { id: invoice.id }) }}">{{ invoice.providerName ?? invoice.originalName }}</a>
+                                {% if invoice.status == 'discarded' %}{{ csa.badge('Descartada', 'neutral') }}{% endif %}
+                            </td>
+                            <td class="tight">{{ entry ? entry.date|date('d/m/Y') : '—' }}</td>
+                            <td class="acc-num">{{ entry ? entry.amount|number_format(2, ',', '.') ~ ' €' : '—' }}</td>
                             <td class="tight">
-                                {% if invoice.accountEntry %}
-                                    <a href="{{ path('accounting_entry_edit', { id: invoice.accountEntry.id }) }}" class="prl-btn" title="Ver el apunte"><i class="fa fa-pencil"></i></a>
+                                {% if entry %}
+                                    <a href="{{ path('accounting_entry_show', { id: entry.id }) }}" class="prl-btn" title="Ver el apunte"><i class="fa fa-list"></i></a>
                                 {% endif %}
-                                <a href="{{ path('accounting_invoice_file', { id: invoice.id }) }}" class="prl-btn" target="_blank" rel="noopener" title="Ver la factura"><i class="fa fa-file-o"></i></a>
                             </td>
                         </tr>
                     {% endfor %}
