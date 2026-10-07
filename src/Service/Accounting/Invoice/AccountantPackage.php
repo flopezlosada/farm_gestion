@@ -11,8 +11,9 @@ use ZipStream\ZipStream;
 
 /**
  * Lo que se le entrega a la gestoría cada trimestre: las facturas recibidas, cada
- * una renombrada como se hace hoy a mano («<Proveedor> Fact <nº> pago tarjeta»), y el
- * libro de facturas recibidas en una hoja de cálculo.
+ * una renombrada como se hace hoy a mano («<Proveedor> Fact <nº> pago tarjeta»), el
+ * libro de facturas recibidas y el libro de caja (todos los movimientos de cada
+ * cuenta, con factura o sin ella), los dos en hoja de cálculo.
  *
  * Sustituye a copiar y renombrar a mano las facturas de una carpeta del Dropbox a la
  * de «Envíos gestoría». La subida a la carpeta compartida de la gestoría sigue siendo
@@ -38,10 +39,12 @@ class AccountantPackage
     /**
      * @param ReceivedInvoiceRepository $invoices Para las facturas del trimestre.
      * @param InvoiceFileStore          $files    Donde están los documentos.
+     * @param QuarterCashBook           $cashBook Todos los movimientos de cada cuenta.
      */
     public function __construct(
         private readonly ReceivedInvoiceRepository $invoices,
         private readonly InvoiceFileStore $files,
+        private readonly QuarterCashBook $cashBook,
     ) {
     }
 
@@ -76,21 +79,31 @@ class AccountantPackage
 
         $zip = new ZipStream(outputStream: $output, sendHttpHeaders: false);
 
-        $ledger = tempnam(sys_get_temp_dir(), 'libro');
-        try {
-            (new Xlsx($this->ledger($quarter, $invoices, $names, $paths)))->save($ledger);
-            $zip->addFileFromPath(fileName: sprintf('Libro facturas recibidas %s.xlsx', $quarter->label()), path: $ledger);
+        $this->addSpreadsheet($zip, sprintf('Libro facturas recibidas %s.xlsx', $quarter->label()), $this->ledger($quarter, $invoices, $names, $paths));
+        $this->addSpreadsheet($zip, sprintf('Libro de caja %s.xlsx', $quarter->label()), $this->cashBook->build($quarter, $names));
 
-            foreach ($invoices as $invoice) {
-                $path = $paths[$invoice->getId()];
-                if ($path !== null) {
-                    $zip->addFileFromPath(fileName: $folder.'/'.$names[$invoice->getId()], path: $path);
-                }
+        foreach ($invoices as $invoice) {
+            $path = $paths[$invoice->getId()];
+            if ($path !== null) {
+                $zip->addFileFromPath(fileName: $folder.'/'.$names[$invoice->getId()], path: $path);
             }
+        }
 
-            $zip->finish();
+        $zip->finish();
+    }
+
+    /**
+     * Mete una hoja de cálculo en el ZIP. PhpSpreadsheet escribe a fichero, así que
+     * pasa por un temporal que se borra en cuanto está dentro.
+     */
+    private function addSpreadsheet(ZipStream $zip, string $name, Spreadsheet $book): void
+    {
+        $file = tempnam(sys_get_temp_dir(), 'xlsx');
+        try {
+            (new Xlsx($book))->save($file);
+            $zip->addFileFromPath(fileName: $name, path: $file);
         } finally {
-            @unlink($ledger);
+            @unlink($file);
         }
     }
 
