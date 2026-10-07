@@ -52,6 +52,7 @@ class AccountantExportControllerTest extends AbstractAuthenticatedTest
         $zip = $client->getInternalResponse()->getContent();
         $this->assertStringStartsWith('PK', $zip, 'Un ZIP empieza siempre por «PK».');
         $this->assertStringContainsString('Libro facturas recibidas 2T2099.xlsx', $zip);
+        $this->assertStringContainsString('Libro de caja 2T2099.xlsx', $zip, 'Con los movimientos de cada cuenta, tengan factura o no.');
     }
 
     private function enableModule(): void
