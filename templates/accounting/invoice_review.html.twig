@@ -53,6 +53,10 @@
         .inv-provider dt { color: var(--csa-ink-soft, #6b6b6b); }
         .inv-provider dd { margin: 0; }
         .inv-provider__note { grid-column: 1 / -1; font-size: 12px; color: var(--csa-ink-soft, #6b6b6b); }
+        .inv-match { padding: 14px 16px; border: 1px solid var(--csa-rule, #ddd); border-left: 3px solid var(--csa-green, #2f6b34); border-radius: 6px; background: var(--csa-surface, #fff); }
+        .inv-match__title { margin: 0 0 4px; font-weight: 600; }
+        .inv-match__option { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0 0; font-weight: 400; cursor: pointer; }
+        .inv-match__option input { margin-top: 3px; }
         .inv-facts { font-size: 12px; margin: 0 0 var(--csa-sp-4, 16px); }
         .inv-facts dt { float: left; clear: left; width: 120px; color: var(--csa-ink-soft, #6b6b6b); }
         .inv-facts dd { margin: 0 0 4px 120px; }
@@ -116,19 +120,37 @@
                 {{ form_errors(e) }}
 
                 <div class="csa-stack-lg">
-                    {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'El apunte', subtitle: 'Lo que entrará en el libro.' } %}
-                        {% block body %}
-                            {% import '_macros/csa.html.twig' as csa %}
-                            <div class="csa-form-grid">
-                                {{ csa.field(e.date, 'Fecha', { hint: 'cuándo se pagó' }) }}
-                                {{ csa.field(e.account, 'Cuenta', { widget_class: 'csa-select' }) }}
-                                {{ csa.field(e.concept, 'Concepto', { full: true }) }}
-                                {{ csa.field(e.category, 'Partida', { full: true, widget_class: 'csa-select' }) }}
-                                {{ csa.field(e.direction, '¿Entra o sale?', { widget_class: 'csa-select' }) }}
-                                {{ csa.field(e.magnitude, 'Importe', { hint: 'lo que se pagó: total con IVA y menos la retención' }) }}
-                            </div>
-                        {% endblock %}
-                    {% endembed %}
+                    {% if form.match is defined %}
+                        {# El pago ya lo trajo el banco: la factura se engancha a él. Elegido el
+                         # primero (el más cercano en fecha); el apunte nuevo sólo aparece si
+                         # se dice que es otro pago. #}
+                        <div class="inv-match">
+                            <p class="inv-match__title"><i class="fa fa-link"></i> Este pago ya está en el libro</p>
+                            <p class="acc-muted acc-small">Lo trajo el extracto del banco. La factura se engancha a él y el gasto no se cuenta dos veces.</p>
+                            {# Los pagos primero; «es otro pago», la excepción, al final. #}
+                            {% for option in form.match|filter(o => o.vars.value != '')|merge(form.match|filter(o => o.vars.value == '')) %}
+                                <label class="inv-match__option">
+                                    {{ form_widget(option) }}
+                                    <span>{{ option.vars.label }}</span>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    <div{% if form.match is defined %} data-csa-show-when="{{ form.match.vars.full_name }}="{% endif %}>
+                        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'El apunte', subtitle: 'Lo que entrará en el libro.' } %}
+                            {% block body %}
+                                {% import '_macros/csa.html.twig' as csa %}
+                                <div class="csa-form-grid">
+                                    {{ csa.field(e.date, 'Fecha', { hint: 'cuándo se pagó' }) }}
+                                    {{ csa.field(e.account, 'Cuenta', { widget_class: 'csa-select' }) }}
+                                    {{ csa.field(e.concept, 'Concepto', { full: true }) }}
+                                    {{ csa.field(e.category, 'Partida', { full: true, widget_class: 'csa-select' }) }}
+                                    {{ csa.field(e.direction, '¿Entra o sale?', { widget_class: 'csa-select' }) }}
+                                    {{ csa.field(e.magnitude, 'Importe', { hint: 'lo que se pagó: total con IVA y menos la retención' }) }}
+                                </div>
+                            {% endblock %}
+                        {% endembed %}
+                    </div>
 
                     {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Quién la emite', subtitle: 'Lo ha reconocido la lectura por el CIF. Si no es así, corrígelo.' } %}
                         {% block body %}

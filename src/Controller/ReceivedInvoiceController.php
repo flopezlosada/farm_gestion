@@ -2,12 +2,14 @@
 
 namespace App\Controller;
 
+use App\Entity\AccountEntry;
 use App\Entity\ReceivedInvoice;
 use App\Entity\User;
 use App\EventListener\InvoiceReadListener;
 use App\Form\AccountEntryType;
 use App\Form\ReceivedInvoiceConfirmType;
 use App\Form\ReceivedInvoiceUploadType;
+use App\Repository\AccountEntryRepository;
 use App\Repository\BudgetCategoryRepository;
 use App\Repository\ReceivedInvoiceRepository;
 use App\Service\Accounting\Invoice\InvoiceEntryDraft;
@@ -127,6 +129,7 @@ class ReceivedInvoiceController extends AbstractController
         ReceivedInvoiceRepository $invoices,
         InvoiceProviderResolver $providers,
         InvoiceFileStore $files,
+        AccountEntryRepository $entries,
     ): Response {
         if (!$invoice->isOpen()) {
             // Anotada o descartada ya no se revisa: se enseña tal como quedó. Un envío
@@ -144,9 +147,15 @@ class ReceivedInvoiceController extends AbstractController
         }
 
         $entry = $drafts->for($invoice);
+        // El pago que ya trajo el banco, si está: se calcula con lo leído, no con lo
+        // que se teclee, para que las opciones sean las mismas al abrir y al guardar.
+        $candidates = (float) $entry->getAmount() !== 0.0 && $entry->getDate() !== null
+            ? $entries->findPaymentCandidates($entry->getAmount(), $entry->getDate())
+            : [];
         $form = $this->createForm(ReceivedInvoiceConfirmType::class, $invoice, [
             'entry' => $entry,
             'provider' => $providers->knownFor($invoice),
+            'candidates' => $candidates,
         ]);
         $form->handleRequest($request);
 
@@ -160,9 +169,19 @@ class ReceivedInvoiceController extends AbstractController
         }
 
         if ($form->isSubmitted() && $form->isValid()) {
+            /** @var AccountEntry|null $match */
+            $match = $form->has('match') ? $form->get('match')->getData() : null;
             $entry->setCreatedBy($this->currentUser());
-            $confirmed = $this->confirmOnce($em, $invoices, $invoice, static function () use ($em, $invoice, $entry, $providers, $chosen): void {
-                $invoice->confirm($entry, $providers->resolve($invoice, $entry, $chosen));
+            $confirmed = $this->confirmOnce($em, $invoices, $invoice, static function () use ($em, $invoice, $entry, $match, $providers, $chosen): void {
+                $provider = $providers->resolve($invoice, $entry, $chosen);
+                if ($match !== null) {
+                    // El pago ya estaba en el libro: la factura lo explica, no lo repite.
+                    $match->completeFrom($entry);
+                    $invoice->confirm($match, $provider);
+
+                    return;
+                }
+                $invoice->confirm($entry, $provider);
                 $em->persist($entry);
             });
             if (!$confirmed) {
@@ -170,7 +189,9 @@ class ReceivedInvoiceController extends AbstractController
 
                 return $this->redirectToRoute('accounting_invoices');
             }
-            $this->addFlash('success', sprintf('Anotado: %s.', $entry->getConcept()));
+            $this->addFlash('success', $match !== null
+                ? sprintf('Enganchada al pago que ya estaba en el libro: %s.', $match->getConcept())
+                : sprintf('Anotado: %s.', $entry->getConcept()));
 
             // Quien confirma suele ir una tras otra: la siguiente lista para revisar.
             foreach ($invoices->findOpen() as $next) {

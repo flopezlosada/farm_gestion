@@ -9,6 +9,7 @@ use App\Entity\FinancialAccount;
 use App\Entity\Provider;
 use App\Entity\ReceivedInvoice;
 use App\Entity\Setting;
+use App\Service\Accounting\Invoice\ExtractedInvoice;
 use App\Service\AppSettings;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -31,6 +32,9 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
     private ?BudgetCategoryGroup $group = null;
     private ?BudgetCategory $category = null;
 
+    /** @var list<int> Apuntes creados a mano que no cuelgan de ninguna factura. */
+    private array $extraEntries = [];
+
     /** @var list<int> Proveedores creados a mano, también los que no llevan CIF. */
     private array $providersToRemove = [];
 
@@ -43,6 +47,13 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
             $entry = $invoice->getAccountEntry();
             $em->remove($invoice);
             if ($entry !== null) {
+                $em->remove($entry);
+            }
+        }
+        $em->flush();
+
+        foreach ($this->extraEntries as $id) {
+            if (($entry = $em->find(AccountEntry::class, $id)) !== null) {
                 $em->remove($entry);
             }
         }
@@ -277,6 +288,75 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $providers = $this->findProviders(self::TAX_ID);
         $this->assertCount(1, $providers);
         $this->assertSame($old->getId(), $providers[0]->getId());
+    }
+
+    /**
+     * Si el pago ya está en el libro (lo trajo el extracto), la revisión lo propone ya
+     * elegido y confirmar engancha la factura a ese apunte: no se crea otro y el gasto
+     * no cuenta dos veces. El apunte del banco gana el proveedor y el nº de factura.
+     */
+    public function testUnPagoQueYaEstaEnElLibroSeEngancha(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->createCatalogue();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+
+        $invoice = $this->uploadOne($client);
+        $invoice = $em->find(ReceivedInvoice::class, $invoice->getId());
+        $invoice->markRead(ExtractedInvoice::fromArray([
+            'fecha' => '2091-03-05', 'total' => 987.65, 'proveedor' => 'Ferretería Torrelaguna', 'numero_factura' => '2232',
+        ]), 'test', $this->category, new \DateTimeImmutable());
+        // Lo que trajo el banco cuatro días después: mismo importe, sin proveedor ni nº.
+        $bank = (new AccountEntry())->setAccount($this->account)->setCategory($this->category)
+            ->setDate(new \DateTimeImmutable('2091-03-09'))->setConcept('trf. ferreteria torrelaguna')->setAmount('-987.65');
+        $em->persist($bank);
+        $em->flush();
+        $before = $em->getRepository(AccountEntry::class)->count([]);
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
+        $this->assertResponseIsSuccessful();
+        $this->assertSame((string) $bank->getId(), $crawler->filter('input[name="received_invoice_confirm[match]"][checked]')->attr('value'), 'El pago del banco llega elegido.');
+
+        $client->submit($crawler->filter('form[name="received_invoice_confirm"]')->form());
+        $this->assertResponseRedirects();
+
+        $invoice = $this->findInvoice('factura-prueba.pdf');
+        $this->assertSame(ReceivedInvoice::STATUS_CONFIRMED, $invoice->getStatus());
+        $this->assertSame($bank->getId(), $invoice->getAccountEntry()?->getId(), 'Enganchada al apunte del banco.');
+        $this->assertSame($before, $em->getRepository(AccountEntry::class)->count([]), 'No se crea un segundo apunte.');
+        $this->assertSame('-987.65', $invoice->getAccountEntry()->getAmount());
+        $this->assertSame('trf. ferreteria torrelaguna', $invoice->getAccountEntry()->getConcept(), 'El concepto es del banco.');
+        $this->assertSame('2232', $invoice->getAccountEntry()->getInvoiceNumber(), 'Lo que le faltaba lo completa la factura.');
+    }
+
+    /** Si quien revisa dice que es otro pago, se anota uno nuevo como siempre. */
+    public function testOtroPagoCreaSuApunte(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->createCatalogue();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+
+        $invoice = $this->uploadOne($client);
+        $invoice = $em->find(ReceivedInvoice::class, $invoice->getId());
+        $invoice->markRead(ExtractedInvoice::fromArray(['fecha' => '2091-03-05', 'total' => 987.65]), 'test', $this->category, new \DateTimeImmutable());
+        $bank = (new AccountEntry())->setAccount($this->account)->setCategory($this->category)
+            ->setDate(new \DateTimeImmutable('2091-03-09'))->setConcept('otro pago igual')->setAmount('-987.65');
+        $em->persist($bank);
+        $em->flush();
+        $this->extraEntries[] = $bank->getId();
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
+        $form = $crawler->filter('form[name="received_invoice_confirm"]')->form();
+        $form['received_invoice_confirm[match]']->select('');
+        $form['received_invoice_confirm[entry][account]']->select((string) $this->account->getId());
+        $client->submit($form);
+        $this->assertResponseRedirects();
+
+        $invoice = $this->findInvoice('factura-prueba.pdf');
+        $this->assertNotNull($invoice->getAccountEntry());
+        $this->assertNotSame($bank->getId(), $invoice->getAccountEntry()->getId(), 'Un apunte nuevo, no el del banco.');
     }
 
     /** Una línea de IVA a medias no deja confirmar: la gestoría la necesita entera. */

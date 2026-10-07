@@ -5,6 +5,7 @@ namespace App\Repository;
 use App\Entity\AccountEntry;
 use App\Entity\BudgetCategoryGroup;
 use App\Entity\FinancialAccount;
+use App\Entity\ReceivedInvoice;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
@@ -200,6 +201,60 @@ class AccountEntryRepository extends ServiceEntityRepository
         }
 
         return $qb;
+    }
+
+    /** Días antes de la fecha de una factura en que puede estar ya su pago en el libro. */
+    public const PAYMENT_DAYS_BEFORE = 7;
+
+    /**
+     * Días después: una transferencia sale a los pocos días, la tarjeta se carga el 5
+     * del mes siguiente y una domiciliación puede tardar un mes.
+     */
+    public const PAYMENT_DAYS_AFTER = 45;
+
+    /**
+     * Apuntes que pueden ser el pago de una factura que llega a la bandeja: el mismo
+     * importe exacto, en fechas cercanas, que aún no tienen factura. El que más se
+     * acerca en fecha, primero.
+     *
+     * Es lo que evita contar un gasto dos veces: el movimiento lo trae el banco (el
+     * extracto ya está en el libro) y la factura sólo lo explica.
+     *
+     * Fuera los traspasos (no son pagos) y lo que cuelga de una cuenta o partida
+     * retirada, que la revisión no podría ofrecer.
+     *
+     * @param string             $amount Importe con signo, como en el apunte (un gasto es negativo).
+     * @param \DateTimeInterface $date   Fecha de la factura.
+     * @param int                $limit  Cuántos como mucho.
+     *
+     * @return list<AccountEntry>
+     */
+    public function findPaymentCandidates(string $amount, \DateTimeInterface $date, int $limit = 3): array
+    {
+        $day = \DateTimeImmutable::createFromInterface($date);
+
+        return $this->createQueryBuilder('e')
+            ->innerJoin('e.account', 'a')->addSelect('a')
+            ->innerJoin('e.category', 'c')->addSelect('c')
+            ->innerJoin('c.group', 'g')
+            ->leftJoin(ReceivedInvoice::class, 'ri', 'WITH', 'ri.accountEntry = e')
+            ->addSelect('ABS(DATE_DIFF(e.date, :day)) AS HIDDEN distance')
+            ->andWhere('e.amount = :amount')
+            ->andWhere('e.date BETWEEN :from AND :to')
+            ->andWhere('ri.id IS NULL')
+            ->andWhere('g.kind != :transfer')
+            ->andWhere('a.active = true')
+            ->andWhere('c.active = true')
+            ->setParameter('amount', $amount)
+            ->setParameter('day', $day->format('Y-m-d'))
+            ->setParameter('from', $day->modify(sprintf('-%d days', self::PAYMENT_DAYS_BEFORE))->format('Y-m-d'))
+            ->setParameter('to', $day->modify(sprintf('+%d days', self::PAYMENT_DAYS_AFTER))->format('Y-m-d'))
+            ->setParameter('transfer', BudgetCategoryGroup::KIND_TRANSFER)
+            ->orderBy('distance', 'ASC')
+            ->addOrderBy('e.id', 'ASC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
     }
 
     /**
