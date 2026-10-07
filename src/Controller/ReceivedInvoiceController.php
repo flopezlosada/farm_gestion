@@ -114,7 +114,8 @@ class ReceivedInvoiceController extends AbstractController
 
     /**
      * Revisar una factura y convertirla en apunte. El formulario llega relleno con lo
-     * leído: si está bien, basta con guardar.
+     * leído: si está bien, basta con guardar. Una ya anotada o descartada se enseña
+     * tal como quedó, sin formulario.
      */
     #[Route('/{id}', name: 'accounting_invoice_review', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     public function review(
@@ -127,9 +128,18 @@ class ReceivedInvoiceController extends AbstractController
         InvoiceProviderResolver $providers,
     ): Response {
         if (!$invoice->isOpen()) {
-            $this->addFlash('warning', 'Esta factura ya no está en la bandeja.');
+            // Anotada o descartada ya no se revisa: se enseña tal como quedó. Un envío
+            // del formulario a destiempo no crea un segundo apunte.
+            if ($request->isMethod('POST')) {
+                $this->addFlash('warning', 'Esta factura ya no está en la bandeja.');
 
-            return $this->redirectToRoute('accounting_invoices');
+                return $this->redirectToRoute('accounting_invoices');
+            }
+
+            return $this->render('accounting/invoice_show.html.twig', [
+                'invoice' => $invoice,
+                'hasDocument' => $files->pathTo($invoice->getFileName()) !== null,
+            ]);
         }
 
         $entry = $drafts->for($invoice);
