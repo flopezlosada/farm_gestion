@@ -3138,11 +3138,15 @@ table.csa-table thead th.sorting_desc::after { content: " ↓"; color: var(--csa
  * ============================================================ */
 
 .csa-modal {
+  /* Centrado con inset + margin auto, como el <dialog> nativo, y NO con
+   * transform: un transform convierte al modal en el marco de referencia de
+   * sus hijos `position: fixed`, y el menú de csa-dropdown —que va fixed en
+   * coordenadas de ventana— se colocaba desplazado y lo recortaba el
+   * overflow: hidden. Los desplegables del modal no se abrían. */
   position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  margin: 0;
+  inset: 0;
+  margin: auto;
+  height: fit-content;
   width: calc(100% - 32px);
   max-width: 440px;
   padding: 0;
@@ -3201,8 +3205,8 @@ dialog.csa-modal > form {
 }
 @keyframes csa-modal-backdrop-in { to { opacity: 1; } }
 @keyframes csa-modal-panel-in {
-  from { opacity: 0; transform: translate(-50%, calc(-50% + 8px)) scale(0.985); }
-  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
 }
 
 /* ---------- close ---------- */
