@@ -24,6 +24,10 @@ require('./csa-tabs.js');
 // cierre al pinchar fuera. Ver assets/js/csa-kebab.js.
 require('./csa-kebab.js');
 
+// Un formulario POST sólo se envía una vez: un doble clic en «Guardar» creaba
+// dos registros. GLOBAL, no opt-in. Ver assets/js/csa-submit-once.js.
+require('./csa-submit-once.js');
+
 // Avisos de "falta esto" en castellano y dentro del diseño, en lugar del globo
 // del navegador (opt-in por [data-csa-validate]). Ver assets/js/csa-validate.js.
 require('./csa-validate.js');
