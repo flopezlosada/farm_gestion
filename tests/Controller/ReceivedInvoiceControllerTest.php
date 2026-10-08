@@ -299,12 +299,11 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
     {
         $client = $this->createAuthenticatedClient();
         $this->enableModule();
-        $em = static::getContainer()->get(EntityManagerInterface::class);
-
         $invoice = $this->uploadOne($client);
-        // Después de subir: la subida limpia el EntityManager y dejaría la cuenta y
-        // la partida desconectadas para el apunte del banco.
+        // Después de subir: cada petición reinicia el kernel y su EntityManager, y la
+        // cuenta y la partida tienen que vivir en el mismo que guarda el apunte del banco.
         $this->createCatalogue();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
         $invoice = $em->find(ReceivedInvoice::class, $invoice->getId());
         $invoice->markRead(ExtractedInvoice::fromArray([
             'fecha' => '2091-03-05', 'total' => 987.65, 'proveedor' => 'Ferretería Torrelaguna', 'numero_factura' => '2232',
@@ -337,12 +336,11 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
     {
         $client = $this->createAuthenticatedClient();
         $this->enableModule();
-        $em = static::getContainer()->get(EntityManagerInterface::class);
-
         $invoice = $this->uploadOne($client);
-        // Después de subir: la subida limpia el EntityManager y dejaría la cuenta y
-        // la partida desconectadas para el apunte del banco.
+        // Después de subir: cada petición reinicia el kernel y su EntityManager, y la
+        // cuenta y la partida tienen que vivir en el mismo que guarda el apunte del banco.
         $this->createCatalogue();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
         $invoice = $em->find(ReceivedInvoice::class, $invoice->getId());
         $invoice->markRead(ExtractedInvoice::fromArray(['fecha' => '2091-03-05', 'total' => 987.65]), 'test', $this->category, new \DateTimeImmutable());
         $bank = (new AccountEntry())->setAccount($this->account)->setCategory($this->category)
