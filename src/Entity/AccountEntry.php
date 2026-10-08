@@ -258,6 +258,22 @@ class AccountEntry
         return $this->category !== null && $this->category->isTransfer();
     }
 
+    /**
+     * Completa este apunte con lo que sabe otro de él, sin pisar nada: cuando una
+     * factura se engancha a un pago que ya trajo el banco, el apunte del banco gana el
+     * proveedor, el nº de factura y las notas que no tenía. Concepto, partida e
+     * importe son del banco y no se tocan.
+     *
+     * @param AccountEntry $other El apunte propuesto a partir de la factura.
+     */
+    public function completeFrom(AccountEntry $other): void
+    {
+        $blank = static fn (?string $v): bool => $v === null || trim($v) === '';
+        $this->providerName = $blank($this->providerName) ? $other->providerName : $this->providerName;
+        $this->invoiceNumber = $blank($this->invoiceNumber) ? $other->invoiceNumber : $this->invoiceNumber;
+        $this->notes = $blank($this->notes) ? $other->notes : $this->notes;
+    }
+
     public function getNotes(): ?string
     {
         return $this->notes;
