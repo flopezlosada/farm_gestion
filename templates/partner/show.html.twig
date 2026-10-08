@@ -201,12 +201,9 @@
                         <i class="fa fa-plus-circle"></i> Añadir cesta extra
                     </button>
                     <dialog id="extra-basket-dialog" class="csa-modal csa-modal--info" aria-labelledby="extra-basket-title">
-                        {# Anti doble-submit: añadir cesta ACUMULA (a propósito), así que un
-                           doble clic antes de que cierre el modal sumaba dos veces. El flag
-                           corta el segundo envío; el botón se deshabilita en diferido para no
-                           cancelar el primero. #}
-                        <form method="post" action="{{ path('partner_add_extra_basket', { id: partner.id }) }}"
-                              onsubmit="if (this.dataset.sent) { return false; } this.dataset.sent = '1'; var b = this.querySelector('button[type=submit]'); setTimeout(function () { if (b) { b.disabled = true; b.textContent = 'Añadiendo…'; } }, 0);">
+                        {# Añadir cesta ACUMULA (a propósito): el doble clic lo corta
+                           csa-submit-once, que es global. #}
+                        <form method="post" action="{{ path('partner_add_extra_basket', { id: partner.id }) }}">
                             <input type="hidden" name="_csrf_token" value="{{ csrf_token('partner_extra_basket') }}">
                             <button class="csa-modal__close" type="button" aria-label="Cerrar" onclick="this.closest('dialog').close()">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
@@ -261,7 +258,7 @@
                             </div>
                             <footer class="csa-modal__footer">
                                 <button type="button" class="csa-modal__btn csa-modal__btn--ghost" onclick="this.closest('dialog').close()">Cancelar</button>
-                                <button type="submit" class="csa-modal__btn csa-modal__btn--primary">Añadir</button>
+                                <button type="submit" class="csa-modal__btn csa-modal__btn--primary" data-busy-label="Añadiendo…">Añadir</button>
                             </footer>
                         </form>
                     </dialog>
