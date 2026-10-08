@@ -493,12 +493,16 @@
                             <div class="csa-navgroup__items">
                                 {{ _self.nav_link('Cómo vamos', path('accounting_index'), 'fa-line-chart',
                                    route == 'accounting_index') }}
+                                {{ _self.nav_link('Facturas', path('accounting_invoices'), 'fa-file-text-o',
+                                   route starts with 'accounting_invoice') }}
                                 {{ _self.nav_link('Libro', path('accounting_ledger'), 'fa-list',
-                                   route starts with 'accounting_ledger' or route starts with 'accounting_month') }}
+                                   route starts with 'accounting_ledger' or route starts with 'accounting_month' or route starts with 'accounting_entry') }}
                                 {{ _self.nav_link('Resumen del año', path('accounting_year', { year: 'now'|date('Y') }), 'fa-table',
                                    route starts with 'accounting_year') }}
                                 {{ _self.nav_link('Presupuestos', path('accounting_budgets'), 'fa-calculator',
                                    route starts with 'accounting_budget') }}
+                                {{ _self.nav_link('Proveedores', path('accounting_providers'), 'fa-truck',
+                                   route starts with 'accounting_provider') }}
                                 {{ _self.nav_link('Cuentas', path('accounting_accounts'), 'fa-university',
                                    route starts with 'accounting_account') }}
                                 {{ _self.nav_link('Partidas', path('accounting_categories'), 'fa-tags',

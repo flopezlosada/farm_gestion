@@ -1,0 +1,39 @@
+{# Piezas de la revisión de facturas. Van aparte porque una macro definida dentro de
+ # un bloque no queda registrada. #}
+
+{# Una línea del desglose de IVA. La misma macro pinta las que hay y el molde de una
+ # nueva (data-prototype de csa-collection). #}
+{% macro tax_line(line) %}
+    {% import '_macros/csa.html.twig' as csa %}
+    <div class="inv-taxline" data-csa-collection-item data-inv-line>
+        {{ csa.field(line.base, 'Base') }}
+        {{ csa.field(line.rate, '% IVA') }}
+        {{ csa.field(line.taxAmount, 'Cuota') }}
+        <button type="button" class="csa-btn csa-btn--ghost inv-taxline__remove" data-csa-collection-remove hidden aria-label="Quitar esta línea">
+            <i class="fa fa-times"></i>
+        </button>
+    </div>
+{% endmacro %}
+
+{# El documento de una factura, para verlo al lado de lo que se anota. Si el fichero
+ # no está en el servidor (una base restaurada sin sus ficheros) se dice, en vez de un
+ # marco que el navegador pinta roto.
+ #
+ # block: prefijo de las clases del sitio donde va (inv-doc, ent-doc). #}
+{% macro document(invoice, available, block) %}
+    <div class="{{ block }}__bar">
+        <span class="acc-muted">{{ invoice.originalName }}</span>
+        {% if available %}
+            <a href="{{ path('accounting_invoice_file', { id: invoice.id }) }}" target="_blank" rel="noopener">Abrir aparte <i class="fa fa-external-link"></i></a>
+        {% endif %}
+    </div>
+    {% if not available %}
+        <div class="prl-empty">El documento de esta factura no está en el servidor.</div>
+    {% elseif invoice.image %}
+        <img src="{{ path('accounting_invoice_file', { id: invoice.id }) }}" alt="Factura {{ invoice.originalName }}">
+    {% elseif invoice.mimeType == 'application/pdf' %}
+        <iframe src="{{ path('accounting_invoice_file', { id: invoice.id }) }}" title="Factura {{ invoice.originalName }}"></iframe>
+    {% else %}
+        <div class="prl-empty">Este formato no se puede enseñar aquí: ábrelo aparte.</div>
+    {% endif %}
+{% endmacro %}

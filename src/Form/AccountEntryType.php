@@ -107,11 +107,11 @@ class AccountEntryType extends AbstractType
             // de obligar a navegar al libro y volver por cada apunte.
             ->add('submitAndNew', SubmitType::class, ['label' => 'Guardar y anotar otro']);
 
-        // Al abrir un apunte ya guardado, deshace el signo para llenar las dos
-        // casillas.
+        // Al abrir un apunte que ya trae importe —uno guardado, o uno propuesto a
+        // partir de una factura—, deshace el signo para llenar las dos casillas.
         $builder->addEventListener(FormEvents::POST_SET_DATA, static function (FormEvent $event): void {
             $entry = $event->getData();
-            if (!$entry instanceof AccountEntry || $entry->getId() === null) {
+            if (!$entry instanceof AccountEntry || (float) $entry->getAmount() === 0.0) {
                 return;
             }
             $amount = (float) $entry->getAmount();

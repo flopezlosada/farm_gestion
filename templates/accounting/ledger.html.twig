@@ -101,7 +101,10 @@
                         <tr>
                             <td class="tight">{{ entry.date ? entry.date|date('d/m/Y') : '—' }}</td>
                             <td>
-                                {{ entry.concept }}
+                                <a href="{{ path('accounting_entry_show', { id: entry.id }) }}">{{ entry.concept }}</a>
+                                {% if invoices[entry.id] is defined %}
+                                    <i class="fa fa-paperclip acc-muted" title="Tiene la factura adjunta"></i>
+                                {% endif %}
                                 {% if entry.providerName or entry.invoiceNumber %}
                                     <br><span class="acc-muted acc-small">
                                         {{ entry.providerName }}{% if entry.invoiceNumber %} · fra. {{ entry.invoiceNumber }}{% endif %}

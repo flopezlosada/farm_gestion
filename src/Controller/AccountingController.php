@@ -12,7 +12,9 @@ use App\Repository\BudgetCategoryRepository;
 use App\Repository\BudgetRepository;
 use App\Repository\FinancialAccountRepository;
 use App\Repository\PartnerBasketShareRepository;
+use App\Repository\ReceivedInvoiceRepository;
 use App\Service\Accounting\BudgetTracker;
+use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\MonthNames;
 use App\Service\Accounting\TransferRecorder;
 use Doctrine\ORM\EntityManagerInterface;
@@ -93,6 +95,7 @@ class AccountingController extends AbstractController
         FinancialAccountRepository $accounts,
         BudgetCategoryRepository $categories,
         PaginatorInterface $paginator,
+        ReceivedInvoiceRepository $invoices,
     ): Response {
         $accountId = $request->query->getInt('account');
         $account = $accountId > 0 ? $accounts->find($accountId) : null;
@@ -115,8 +118,11 @@ class AccountingController extends AbstractController
             ['defaultSortFieldName' => 'e.date', 'defaultSortDirection' => 'desc']
         );
 
+        $pageIds = array_map(static fn (AccountEntry $e): int => (int) $e->getId(), iterator_to_array($pagination->getItems()));
+
         return $this->render('accounting/ledger.html.twig', [
             'pagination' => $pagination,
+            'invoices' => $invoices->invoiceIdsByEntry(array_values($pageIds)),
             'accounts' => $accounts->findActive(),
             'categories' => $categories->findActive(),
             'filters' => $filters,
@@ -249,6 +255,22 @@ class AccountingController extends AbstractController
     }
 
     /**
+     * Un apunte con todo lo que se sabe de él y, si vino de una factura, el documento
+     * al lado: para comprobar un gasto no hace falta ir a buscar el papel.
+     */
+    #[Route('/entry/{id}', name: 'accounting_entry_show', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function entryShow(AccountEntry $entry, ReceivedInvoiceRepository $invoices, InvoiceFileStore $files): Response
+    {
+        $invoice = $invoices->findOneBy(['accountEntry' => $entry]);
+
+        return $this->render('accounting/entry_show.html.twig', [
+            'entry' => $entry,
+            'invoice' => $invoice,
+            'hasDocument' => $invoice !== null && $files->pathTo($invoice->getFileName()) !== null,
+        ]);
+    }
+
+    /**
      * Corregir un apunte ya anotado.
      *
      * Las mitades de un traspaso no pasan por aquí: cambiarle el importe a una sola
@@ -289,7 +311,8 @@ class AccountingController extends AbstractController
 
     /**
      * Borrar un apunte. Si es un traspaso, se van las dos mitades: dejar una sola
-     * descuadra la cuenta contraria.
+     * descuadra la cuenta contraria. Si vino de una factura, la factura vuelve a la
+     * bandeja: el papel sigue existiendo y está sin anotar.
      */
     #[Route('/entry/{id}/delete', name: 'accounting_entry_delete', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function entryDelete(
@@ -297,6 +320,7 @@ class AccountingController extends AbstractController
         AccountEntry $entry,
         EntityManagerInterface $em,
         TransferRecorder $transfers,
+        ReceivedInvoiceRepository $invoices,
     ): Response {
         $accountId = $entry->getAccount()?->getId();
 
@@ -310,8 +334,10 @@ class AccountingController extends AbstractController
             $transfers->remove($entry);
             $this->addFlash('success', 'Traspaso borrado, con sus dos mitades.');
         } else {
+            $invoice = $invoices->findOneBy(['accountEntry' => $entry]);
+            $invoice?->reopen();
             $em->remove($entry);
-            $this->addFlash('success', 'Apunte borrado.');
+            $this->addFlash('success', $invoice !== null ? 'Apunte borrado. Su factura vuelve a la bandeja.' : 'Apunte borrado.');
         }
         $em->flush();
 

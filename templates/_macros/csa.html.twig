@@ -125,13 +125,17 @@
  # llama el formulario. Lo usan field() y volunteering.check().
  #
  #   <div class="csa-field"{{ csa.reveal(form.repeatEvery, 'repeatType=weekly') }}>
+ #
+ # Si el control del que depende no es un hermano (otro subformulario), se
+ # escribe su `name` completo, con corchetes, y se usa tal cual.
  #}
 {% macro reveal(field, spec) %}
     {%- if spec -%}
         {%- set rules = [] -%}
         {%- for rule in spec|split(';') -%}
             {%- set parts = rule|split('=', 2) -%}
-            {%- set rules = rules|merge([field.parent.children[parts[0]].vars.full_name ~ '=' ~ parts[1]]) -%}
+            {%- set name = '[' in parts[0] ? parts[0] : field.parent.children[parts[0]].vars.full_name -%}
+            {%- set rules = rules|merge([name ~ '=' ~ parts[1]]) -%}
         {%- endfor %} data-csa-show-when="{{ rules|join(';') }}"
     {%- endif -%}
 {% endmacro %}
