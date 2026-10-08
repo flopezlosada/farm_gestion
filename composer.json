@@ -22,6 +22,7 @@
         "knpuniversity/oauth2-client-bundle": "^2.20",
         "league/oauth2-google": "^5.0",
         "liip/imagine-bundle": "^2.1",
+        "maennchen/zipstream-php": "^3.1",
         "mhujer/breadcrumbs-bundle": "^1.5.7",
         "minishlink/web-push": "^10.1",
         "phpdocumentor/reflection-docblock": "^5.2",

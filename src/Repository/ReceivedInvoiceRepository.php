@@ -177,6 +177,34 @@ class ReceivedInvoiceRepository extends ServiceEntityRepository
     }
 
     /**
+     * Las facturas anotadas cuya fecha cae entre dos días, ambos incluidos, en orden
+     * de fecha: lo que se le entrega a la gestoría de un trimestre. La fecha es la de
+     * la factura (la que manda para el IVA); si no se leyó, la del apunte.
+     *
+     * Trae en la misma consulta el proveedor, el desglose de IVA, el apunte y su
+     * partida, que es todo lo que pide el libro de facturas.
+     *
+     * @return list<ReceivedInvoice>
+     */
+    public function findConfirmedBetween(\DateTimeImmutable $from, \DateTimeImmutable $to): array
+    {
+        return $this->createQueryBuilder('i')
+            ->leftJoin('i.provider', 'p')->addSelect('p')
+            ->leftJoin('i.taxLines', 't')->addSelect('t')
+            ->leftJoin('i.accountEntry', 'e')->addSelect('e')
+            ->leftJoin('e.category', 'c')->addSelect('c')
+            ->andWhere('i.status = :confirmed')
+            ->andWhere('COALESCE(i.invoiceDate, e.date) BETWEEN :from AND :to')
+            ->setParameter('confirmed', ReceivedInvoice::STATUS_CONFIRMED)
+            ->setParameter('from', $from->format('Y-m-d'))
+            ->setParameter('to', $to->format('Y-m-d'))
+            ->orderBy('i.invoiceDate', 'ASC')
+            ->addOrderBy('i.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Otra factura ya anotada con el mismo proveedor y número: casi seguro la misma,
      * entregada dos veces (el trabajador la manda y la tesorera la sube del correo).
      * Anotarla otra vez contaría el gasto doble.
