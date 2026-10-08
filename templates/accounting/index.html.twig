@@ -172,7 +172,7 @@
 
     <p class="acc-muted" style="margin: 10px 2px 24px; font-size: 12px;">
         «Previsto a la fecha» es la parte del presupuesto que correspondía a los meses ya
-        anotados (hasta {{ months[tracked.throughMonth] }}), no el año entero: comparar medio año de gasto
+        anotados (hasta {{ months[tracked.throughMonth]|default('ninguno todavía') }}), no el año entero: comparar medio año de gasto
         contra doce meses de presupuesto siempre daría la falsa impresión de que sobra dinero.
         Una diferencia positiva es buena para la caja, tanto si es por ingresar de más como
         por gastar de menos.
@@ -181,7 +181,10 @@
     <div class="acc-cards">
 
         {# ============ CAJA MES A MES ============ #}
-        {% embed '_components/csa_card.html.twig' with { title: 'La caja mes a mes', subtitle: 'A partir de ' ~ months[tracked.throughMonth] ~ ' es previsión', accent: 'sky' } %}
+        {% set cashSubtitle = tracked.throughMonth >= 12
+            ? 'Todo el año es real'
+            : 'Desde ' ~ months[tracked.throughMonth + 1] ~ ' es previsión' %}
+        {% embed '_components/csa_card.html.twig' with { title: 'La caja mes a mes', subtitle: cashSubtitle, accent: 'sky' } %}
             {% block body %}
                 <div class="acc-months">
                     {% for m in cash.months %}
@@ -193,6 +196,13 @@
                     {% endfor %}
                 </div>
                 <p style="margin: 12px 0 0; font-size: 13px;">
+                    {% if cash.fromAccounts %}
+                        Arranca de los <b>{{ cash.opening|number_format(2, ',', '.') }} €</b> que había en las cuentas el 1 de enero,
+                        y los meses anotados son lo que había en ellas al cerrar cada mes.
+                    {% else %}
+                        Arranca de los <b>{{ cash.opening|number_format(2, ',', '.') }} €</b> de tesorería que apunta el presupuesto:
+                        ese año no se llevaban las cuentas aquí.
+                    {% endif %}
                     El año cerraría con <b>{{ cash.endOfYear|number_format(2, ',', '.') }} €</b>.
                     {% if cash.lowest.cumulative < 0 %}
                         El punto más bajo es el mes {{ cash.lowest.month }}, con
