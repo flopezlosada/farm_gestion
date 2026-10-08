@@ -31,7 +31,7 @@ class InvoiceReadQueueTest extends KernelTestCase
     private BudgetCategoryGroup $group;
     private BudgetCategory $category;
 
-    /** @var list<ReceivedInvoice> */
+    /** @var list<int> Ids, no entidades: un test que borra las suyas deja el id a null. */
     private array $created = [];
 
     protected function setUp(): void
@@ -48,8 +48,8 @@ class InvoiceReadQueueTest extends KernelTestCase
 
     protected function tearDown(): void
     {
-        foreach ($this->created as $invoice) {
-            $invoice = $this->em->find(ReceivedInvoice::class, $invoice->getId());
+        foreach ($this->created as $id) {
+            $invoice = $this->em->find(ReceivedInvoice::class, $id);
             if ($invoice !== null) {
                 $this->em->remove($invoice);
             }
@@ -209,7 +209,7 @@ class InvoiceReadQueueTest extends KernelTestCase
         $invoice = new ReceivedInvoice($name, 'factura.pdf', 'application/pdf', ReceivedInvoice::SOURCE_WEB, null);
         $this->em->persist($invoice);
         $this->em->flush();
-        $this->created[] = $invoice;
+        $this->created[] = $invoice->getId();
 
         return $invoice;
     }

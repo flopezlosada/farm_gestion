@@ -102,7 +102,9 @@ class GeminiInvoiceReader
                     'timeout' => 50,
                 ]);
                 $status = $response->getStatusCode();
-                $payload = $response->toArray(false);
+                // Sólo una respuesta buena trae JSON: un 429 o un 503 suelen venir
+                // vacíos o en HTML, y decodificarlos taparía el motivo real del fallo.
+                $payload = $status < 400 ? $response->toArray(false) : [];
             } catch (TransportExceptionInterface) {
                 $lastProblem = 'No hay conexión con el servicio de lectura.';
                 continue;
