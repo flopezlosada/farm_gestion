@@ -79,7 +79,7 @@
                     {% for category in group.categories %}
                         <tr class="acc-cat-row">
                             <td>
-                                {{ category.name }}
+                                <a href="{{ path('accounting_category_show', { id: category.id }) }}">{{ category.name }}</a>
                                 {% if not category.active %}
                                     <span class="prl-chip prl-chip--pausado"><span class="dot"></span>retirada</span>
                                 {% endif %}

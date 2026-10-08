@@ -73,7 +73,7 @@
                         {% set entry = invoice.accountEntry %}
                         <tr>
                             <td class="tight">{{ invoice.invoiceDate ? invoice.invoiceDate|date('d/m/Y') : '—' }}</td>
-                            <td class="tight">{{ invoice.invoiceNumber ?? '—' }}</td>
+                            <td class="tight"><a href="{{ path('accounting_invoice_review', { id: invoice.id }) }}">{{ invoice.invoiceNumber ?? 'ver' }}</a></td>
                             <td>
                                 {% if entry %}
                                     <a href="{{ path('accounting_entry_show', { id: entry.id }) }}">{{ entry.concept }}</a>

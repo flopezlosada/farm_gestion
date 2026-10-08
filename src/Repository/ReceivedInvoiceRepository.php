@@ -114,16 +114,19 @@ class ReceivedInvoiceRepository extends ServiceEntityRepository
     }
 
     /**
-     * Las últimas ya anotadas, para comprobar de un vistazo qué se hizo.
+     * Las últimas que salieron de la bandeja, anotadas o descartadas, para comprobar
+     * lo último que se hizo y poder volver a una descartada por error.
+     *
+     * @param int $limit Cuántas.
      *
      * @return list<ReceivedInvoice>
      */
-    public function findRecentlyConfirmed(int $limit): array
+    public function findRecentlyResolved(int $limit): array
     {
         return $this->createQueryBuilder('i')
             ->leftJoin('i.accountEntry', 'e')->addSelect('e')
-            ->andWhere('i.status = :confirmed')
-            ->setParameter('confirmed', ReceivedInvoice::STATUS_CONFIRMED)
+            ->andWhere('i.status IN (:resolved)')
+            ->setParameter('resolved', [ReceivedInvoice::STATUS_CONFIRMED, ReceivedInvoice::STATUS_DISCARDED])
             ->orderBy('i.updatedAt', 'DESC')
             ->setMaxResults($limit)
             ->getQuery()

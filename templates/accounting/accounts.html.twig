@@ -79,7 +79,7 @@
                     {% for row in rows %}
                         <tr>
                             <td>
-                                {{ row.account.name }}
+                                <a href="{{ path('accounting_account_show', { id: row.account.id }) }}">{{ row.account.name }}</a>
                                 {% if not row.account.active %}
                                     <span class="prl-chip prl-chip--pausado"><span class="dot"></span>cerrada</span>
                                 {% endif %}

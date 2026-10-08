@@ -1,0 +1,96 @@
+{# ============================================================
+ # La ficha de una partida: lo previsto en el presupuesto aprobado del año frente a
+ # lo real, mes a mes, y sus últimos apuntes.
+ #
+ # El controller pasa: category, year, budget (aprobado del año, o null),
+ # actual y planned (mes => importe con signo), count, recent, invoices, months.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
+{% import 'accounting/_entries.html.twig' as rows %}
+
+{% block title %}{{ category.name }} · Partidas{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_categories') }}">Partidas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ category.name }}</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+{% set plannedTotal = planned|reduce((a, v) => a + v, 0) %}
+{% set actualTotal = actual|reduce((a, v) => a + v, 0) %}
+<div class="prl">
+
+    {{ csa.page_header('Contabilidad · Partidas', category.name, category.group.name ~ ' · ' ~ category.group.kindLabel ~ (category.active ? '' : ' · retirada')) }}
+
+    <div class="prl-toolbar">
+        <div class="counters">
+            <b>{{ fmt.money(actualTotal) }}</b> en {{ year }}
+            {% if budget %} · previsto <b>{{ fmt.money(plannedTotal) }}</b>{% endif %}
+            · {{ count }} apuntes en total
+        </div>
+        <div class="spacer"></div>
+        {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+            <a href="{{ path('accounting_category_edit', { id: category.id }) }}" class="prl-btn prl-btn--primary"><i class="fa fa-pencil"></i> Cambiar</a>
+        {% endif %}
+    </div>
+
+    {% if not budget %}
+        {{ csa.callout('No hay presupuesto aprobado para ' ~ year ~ ': sólo se ve lo real.', 'info', 'info-circle') }}
+    {% endif %}
+
+    <div class="prl-table-wrap">
+        <table class="prl-table">
+            <thead>
+                <tr>
+                    <th>Mes</th>
+                    {% if budget %}<th class="tight acc-num">Previsto</th>{% endif %}
+                    <th class="tight acc-num">Real</th>
+                    {% if budget %}<th class="tight acc-num">Diferencia</th>{% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in 1..12 %}
+                    {% set p = planned[m] ?? 0 %}
+                    {% set a = actual[m] ?? 0 %}
+                    {% if p != 0 or a != 0 %}
+                        <tr>
+                            <td><a href="{{ path('accounting_month', { year: year, month: m }) }}">{{ months[m] }}</a></td>
+                            {% if budget %}<td class="acc-num">{{ fmt.money(p) }}</td>{% endif %}
+                            <td class="acc-num">{{ fmt.money(a) }}</td>
+                            {% if budget %}<td class="acc-num {{ a - p < 0 ? 'acc-neg' : '' }}">{{ fmt.money(a - p) }}</td>{% endif %}
+                        </tr>
+                    {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="prl-toolbar">
+        <div class="counters">Últimos apuntes</div>
+        <div class="spacer"></div>
+        <a href="{{ path('accounting_ledger', { category: category.id }) }}" class="prl-btn"><i class="fa fa-list"></i> Todos en el libro</a>
+    </div>
+    <div class="prl-table-wrap">
+        {% if recent is empty %}
+            <div class="prl-empty">Esta partida aún no tiene apuntes.</div>
+        {% else %}
+            {{ rows.table(recent, invoices) }}
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

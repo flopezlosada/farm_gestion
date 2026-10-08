@@ -1,0 +1,82 @@
+{# ============================================================
+ # Una factura que ya salió de la bandeja: anotada (con su apunte) o descartada.
+ # Se enseña tal como quedó, con el documento al lado; ya no se revisa.
+ #
+ # El controller pasa: invoice, hasDocument (si el fichero está en el servidor).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
+{% import 'accounting/_invoice_macros.html.twig' as invm %}
+
+{% block title %}Factura · Contabilidad{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_invoices') }}">Facturas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Factura</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'accounting/_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+    {% set entry = invoice.accountEntry %}
+    {% set providerName = invoice.provider ? invoice.provider.name : (invoice.providerName ?? invoice.originalName) %}
+
+    {{ csa.page_header(
+        'Contabilidad · Facturas',
+        providerName ~ (invoice.invoiceNumber ? ' · fra. ' ~ invoice.invoiceNumber : ''),
+        invoice.status == 'confirmed' ? 'Anotada en el libro.' : 'Descartada: no se anotó.'
+    ) }}
+
+    <div class="ent-show">
+        <div class="ent-doc">
+            {{ invm.document(invoice, hasDocument, 'ent-doc') }}
+        </div>
+
+        <div>
+            <dl class="ent-facts">
+                <dt>Estado</dt>
+                <dd>{{ invoice.status == 'confirmed' ? csa.badge('Anotada', 'green') : csa.badge('Descartada', 'neutral') }}</dd>
+                <dt>Proveedor</dt>
+                <dd>
+                    {% if invoice.provider %}
+                        <a href="{{ path('accounting_provider_show', { id: invoice.provider.id }) }}">{{ invoice.provider.name }}</a>
+                    {% else %}
+                        {{ invoice.providerName ?? '—' }}
+                    {% endif %}
+                </dd>
+                {% if entry %}
+                    <dt>Apunte</dt>
+                    <dd>
+                        <a href="{{ path('accounting_entry_show', { id: entry.id }) }}">{{ entry.concept }}</a><br>
+                        <span class="acc-muted acc-small">{{ entry.date|date('d/m/Y') }} · {{ entry.account.name }} · {{ entry.category.name }} · {{ fmt.money(entry.amount) }}</span>
+                    </dd>
+                {% endif %}
+                <dt>Forma de pago</dt>
+                <dd>{{ invoice.paymentLabel }} <span class="acc-muted">(según la factura)</span></dd>
+                <dt>Subida</dt>
+                <dd>{{ invoice.createdAt ? invoice.createdAt|date('d/m/Y H:i') : '—' }}{% if invoice.uploadedBy %} por {{ invoice.uploadedBy.username }}{% endif %}</dd>
+                {% if invoice.readByModel %}
+                    <dt>Leída</dt>
+                    <dd>{{ invoice.readAt ? invoice.readAt|date('d/m/Y H:i') : '—' }} <span class="acc-muted">· {{ invoice.readByModel }}</span></dd>
+                {% endif %}
+            </dl>
+
+            <h2 class="ent-h">La factura</h2>
+            {{ invm.facts(invoice) }}
+
+            <div class="csa-row" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                {{ csa.btn('Volver a facturas', { variant: 'ghost', href: path('accounting_invoices') }) }}
+            </div>
+        </div>
+    </div>
+{% endblock %}
