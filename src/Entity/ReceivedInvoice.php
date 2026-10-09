@@ -52,6 +52,9 @@ class ReceivedInvoice
     /** Subida desde la web. */
     public const SOURCE_WEB = 'web';
 
+    /** Mandada al bot de Telegram. */
+    public const SOURCE_TELEGRAM = 'telegram';
+
     public const PAYMENT_CARD = 'tarjeta';
     public const PAYMENT_CASH = 'efectivo';
     public const PAYMENT_TRANSFER = 'transferencia';
@@ -91,7 +94,7 @@ class ReceivedInvoice
     private string $mimeType;
 
     /**
-     * Por dónde entró: la web hoy; Telegram y el buzón de correo después.
+     * Por dónde entró: la web o Telegram; el buzón de correo, más adelante.
      * @ORM\Column(type="string", length=20)
      */
     private string $source;

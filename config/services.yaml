@@ -23,12 +23,13 @@ parameters:
     # ReceivedInvoiceController con el permiso de contabilidad. No va en el repo.
     app.invoice_files_dir: '%kernel.project_dir%/var/documentos/facturas'
 
-    # Modelos de Gemini con que se leen las facturas, por orden de preferencia. Si
+    # Modelos de Gemini, por orden de preferencia (facturas, bot de Telegram…). Si
     # uno está saturado o sin cupo se prueba el siguiente. Flash-Lite primero: en el
     # plan gratuito es el de más cupo (15 por minuto y 500 al día en oct-2026).
     # Google renombra modelos a menudo; si uno desaparece, la lectura salta al
-    # siguiente, pero conviene revisar esta lista de vez en cuando.
-    app.invoice_reader.models:
+    # siguiente, pero conviene revisar esta lista de vez en cuando. El cupo es por
+    # proyecto de Google y modelo: todo lo que use Gemini lo comparte.
+    app.gemini.models:
         - gemini-3.5-flash-lite
         - gemini-3.8-flash
         - gemini-2.5-flash
@@ -124,3 +125,12 @@ services:
         decoration_priority: -10
         arguments:
             $inner: '@.inner'
+
+    # Cliente HTTP del bot de Telegram, SIN logger. El http_client de Symfony
+    # escribe la URL de cada petición en el canal http_client, y la API de bots
+    # lleva el token DENTRO de la URL (/bot<token>/método): con el cliente común
+    # el token acabaría en dev.log siempre y en prod.log en cuanto algo fallara.
+    # HttpClient::create() devuelve un cliente al que nadie le pone logger.
+    app.telegram_http_client:
+        class: Symfony\Contracts\HttpClient\HttpClientInterface
+        factory: ['Symfony\Component\HttpClient\HttpClient', 'create']

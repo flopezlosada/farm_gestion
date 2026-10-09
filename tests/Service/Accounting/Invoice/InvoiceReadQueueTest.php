@@ -11,6 +11,7 @@ use App\Repository\BudgetCategoryRepository;
 use App\Repository\ReceivedInvoiceRepository;
 use App\Service\Accounting\Invoice\ExtractedInvoice;
 use App\Service\Accounting\Invoice\GeminiInvoiceReader;
+use App\Service\Ai\GeminiClient;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\Invoice\InvoiceReadQueue;
 use Doctrine\ORM\EntityManagerInterface;
@@ -190,7 +191,7 @@ class InvoiceReadQueueTest extends KernelTestCase
         $c = static::getContainer();
 
         return new InvoiceReadQueue(
-            new GeminiInvoiceReader(new MockHttpClient($responses), $key, ['modelo-a']),
+            new GeminiInvoiceReader(new GeminiClient(new MockHttpClient($responses), $key, ['modelo-a'])),
             $c->get(InvoiceFileStore::class),
             $c->get(ReceivedInvoiceRepository::class),
             $c->get(BudgetCategoryRepository::class),
