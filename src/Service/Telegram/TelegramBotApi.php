@@ -13,9 +13,10 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  * Sin token configurado el bot está apagado ({@see isEnabled()}) y nadie debe
  * llamar al resto; si lo hace, recibe una {@see TelegramApiException}.
  *
- * El token va en la URL porque así lo pide Telegram. Por eso los errores que se
- * lanzan desde aquí NUNCA llevan la URL ni encadenan la excepción del cliente
- * HTTP, cuyo mensaje sí la lleva: acabarían en un log con el token dentro.
+ * El token va en la URL porque así lo pide Telegram, y de ahí dos defensas para
+ * que no acabe en un log: el cliente HTTP es uno sin logger (el común escribe la
+ * URL de cada petición), y los errores que se lanzan desde aquí NUNCA llevan la
+ * URL ni encadenan la excepción del cliente HTTP, cuyo mensaje sí la lleva.
  */
 class TelegramBotApi
 {
@@ -28,10 +29,11 @@ class TelegramBotApi
     public const MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024;
 
     /**
-     * @param HttpClientInterface $http  Cliente HTTP.
+     * @param HttpClientInterface $http  Cliente HTTP SIN logger (ver app.telegram_http_client).
      * @param string              $token Token del bot; vacío = apagado.
      */
     public function __construct(
+        #[Autowire(service: 'app.telegram_http_client')]
         private readonly HttpClientInterface $http,
         #[Autowire('%env(TELEGRAM_BOT_TOKEN)%')]
         private readonly string $token,
@@ -117,6 +119,10 @@ class TelegramBotApi
             'url' => $url,
             'secret_token' => $this->webhookSecret(),
             'allowed_updates' => ['message'],
+            // Por defecto Telegram abre hasta 40 conexiones a la vez. En un
+            // hosting compartido, cada una es un proceso PHP leyendo con Gemini;
+            // con pocas, los mensajes esperan su turno en Telegram, no aquí.
+            'max_connections' => 3,
         ]);
     }
 
@@ -161,16 +167,25 @@ class TelegramBotApi
         }
 
         $target = tempnam(sys_get_temp_dir(), 'tg-');
+        if ($target === false) {
+            throw new TelegramApiException('No se puede crear el fichero temporal.');
+        }
         try {
             $response = $this->http->request('GET', sprintf('%s/file/bot%s/%s', self::BASE, trim($this->token), $path), ['timeout' => 30]);
             if ($response->getStatusCode() !== 200) {
                 throw new TelegramApiException(sprintf('Telegram no deja descargar el fichero (HTTP %d).', $response->getStatusCode()));
             }
             $handle = fopen($target, 'wb');
-            foreach ($this->http->stream($response) as $chunk) {
-                fwrite($handle, $chunk->getContent());
+            if ($handle === false) {
+                throw new TelegramApiException('No se puede escribir el fichero temporal.');
             }
-            fclose($handle);
+            try {
+                foreach ($this->http->stream($response) as $chunk) {
+                    fwrite($handle, $chunk->getContent());
+                }
+            } finally {
+                fclose($handle);
+            }
         } catch (ExceptionInterface $e) {
             @unlink($target);
 

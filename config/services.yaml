@@ -125,3 +125,12 @@ services:
         decoration_priority: -10
         arguments:
             $inner: '@.inner'
+
+    # Cliente HTTP del bot de Telegram, SIN logger. El http_client de Symfony
+    # escribe la URL de cada petición en el canal http_client, y la API de bots
+    # lleva el token DENTRO de la URL (/bot<token>/método): con el cliente común
+    # el token acabaría en dev.log siempre y en prod.log en cuanto algo fallara.
+    # HttpClient::create() devuelve un cliente al que nadie le pone logger.
+    app.telegram_http_client:
+        class: Symfony\Contracts\HttpClient\HttpClientInterface
+        factory: ['Symfony\Component\HttpClient\HttpClient', 'create']
