@@ -38,6 +38,32 @@ class TelegramLinkRepository extends ServiceEntityRepository
     }
 
     /**
+     * Gasta la invitación sólo si sigue siendo la misma y no ha caducado, en una
+     * sola sentencia: de dos peticiones simultáneas con el mismo código, sólo una
+     * la gasta. Quien llama completa el vínculo después.
+     *
+     * @param TelegramLink       $link Invitación.
+     * @param string             $code Código con que se abrió el enlace.
+     * @param \DateTimeImmutable $now  Momento actual.
+     *
+     * @return bool Si la ha gastado esta petición.
+     */
+    public function spendInvitation(TelegramLink $link, string $code, \DateTimeImmutable $now): bool
+    {
+        $spent = $this->getEntityManager()->createQuery(
+            'UPDATE ' . TelegramLink::class . ' l
+             SET l.invitationCode = NULL, l.invitationExpiresAt = NULL
+             WHERE l.id = :id AND l.invitationCode = :code AND l.invitationExpiresAt > :now'
+        )
+            ->setParameter('id', $link->getId())
+            ->setParameter('code', $code)
+            ->setParameter('now', $now)
+            ->execute();
+
+        return $spent === 1;
+    }
+
+    /**
      * El vínculo (o la invitación) de una persona.
      *
      * @param User $user Persona.

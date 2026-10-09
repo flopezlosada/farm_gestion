@@ -8,8 +8,11 @@ use App\Repository\TelegramLinkRepository;
 use App\Service\Ai\GeminiException;
 use App\Service\Telegram\Destination\TelegramDestination;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\Attribute\AutowireIterator;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 
 /**
  * La puerta del bot: a cada mensaje le aplica lo común (sólo chats privados,
@@ -29,9 +32,17 @@ use Symfony\Component\DependencyInjection\Attribute\AutowireIterator;
  *
  * NUNCA atiende a quien no está vinculado, ni descarga lo que mande: a un bot de
  * Telegram le puede escribir cualquiera.
+ *
+ * Y lo que llega se atiende UNA vez: Telegram repite la entrega si no recibe
+ * respuesta a tiempo, así que cada mensaje se marca por su `update_id` (que la
+ * propia documentación de Telegram recomienda para eso). Un fallo al atender no
+ * se propaga: se apunta y se le dice a quien escribió que lo vuelva a mandar.
  */
 class TelegramBot
 {
+    /** Cuánto se recuerda un mensaje atendido. Telegram guarda los pendientes 24 h. */
+    private const SEEN_SECONDS = 86400;
+
     private const STRANGER = 'Este bot es de la CSA Vega de Jarama y sólo atiende a su gente. Para usarlo, pide tu enlace a quien lleva la web de la asociación.';
 
     /**
@@ -40,6 +51,8 @@ class TelegramBot
      * @param iterable<TelegramDestination> $destinations Lo que sabe hacer.
      * @param TelegramClassifier            $classifier   Para elegir cuando hay varios.
      * @param EntityManagerInterface        $em           Para guardar el vínculo.
+     * @param CacheItemPoolInterface        $seen         Mensajes ya atendidos.
+     * @param RateLimiterFactory            $limiter      Cuántos mensajes por cuenta y hora.
      * @param LoggerInterface               $logger       Rastro de lo que falla.
      */
     public function __construct(
@@ -49,6 +62,10 @@ class TelegramBot
         private readonly iterable $destinations,
         private readonly TelegramClassifier $classifier,
         private readonly EntityManagerInterface $em,
+        #[Autowire(service: 'cache.app')]
+        private readonly CacheItemPoolInterface $seen,
+        #[Autowire(service: 'limiter.telegram_inbound')]
+        private readonly RateLimiterFactory $limiter,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -66,6 +83,54 @@ class TelegramBot
      */
     public function handle(array $update): void
     {
+        if (!$this->firstTime($update)) {
+            return;
+        }
+
+        try {
+            $this->attend($update);
+        } catch (\Throwable $e) {
+            // Sin la excepción entera: sólo su clase y mensaje, que nunca llevan el
+            // token (lo que habla con Telegram ya los limpia).
+            $this->logger->error('Telegram: fallo al atender un mensaje', [
+                'update_id' => $update['update_id'] ?? null,
+                'error' => $e::class . ': ' . $e->getMessage(),
+            ]);
+            $chatId = $update['message']['chat']['id'] ?? null;
+            if ($chatId !== null && ($update['message']['chat']['type'] ?? null) === 'private') {
+                (new TelegramChat($this->api, (string) $chatId, $this->logger))->say('Algo ha fallado al guardar lo que me has mandado. Vuelve a mandármelo dentro de un rato.');
+            }
+        }
+    }
+
+    /**
+     * Si este mensaje no se había atendido ya, y lo apunta como atendido. Sin
+     * `update_id` no hay forma de saberlo y se atiende.
+     *
+     * @param array<string, mixed> $update Tal como lo manda Telegram.
+     */
+    private function firstTime(array $update): bool
+    {
+        if (!isset($update['update_id'])) {
+            return true;
+        }
+
+        $item = $this->seen->getItem('telegram_update_' . (int) $update['update_id']);
+        if ($item->isHit()) {
+            return false;
+        }
+        $this->seen->save($item->set(true)->expiresAfter(self::SEEN_SECONDS));
+
+        return true;
+    }
+
+    /**
+     * Lo común a todo mensaje y el reparto a su destino.
+     *
+     * @param array<string, mixed> $update Tal como lo manda Telegram.
+     */
+    private function attend(array $update): void
+    {
         $message = $update['message'] ?? null;
         // Sólo chats privados: en un grupo, «quién manda» no es tan obvio, y el bot
         // no tiene por qué estar en ninguno.
@@ -76,6 +141,16 @@ class TelegramBot
         $chat = new TelegramChat($this->api, (string) $message['chat']['id'], $this->logger);
         $from = $message['from'];
         $text = trim((string) ($message['text'] ?? ''));
+
+        // Por cuenta de Telegram, vinculada o no: frena un bucle, una cuenta robada
+        // y a quien insista desde fuera. A un desconocido no se le contesta.
+        if (!$this->limiter->create((string) $from['id'])->consume()->isAccepted()) {
+            if ($this->links->findLinked((string) $from['id']) !== null) {
+                $chat->say('Me has mandado muchas cosas en poco rato. Espera un poco y vuelve a intentarlo.');
+            }
+
+            return;
+        }
 
         if (preg_match('~^/start(?:@\w+)?(?:\s+([A-Za-z0-9_-]+))?$~', $text, $m) === 1) {
             $chat->say($this->start($from, $m[1] ?? null));
@@ -175,21 +250,36 @@ class TelegramBot
         }
 
         $invitation = $this->links->findByInvitationCode($code);
+        $expired = 'Ese enlace ya no vale: o ha caducado o ya se usó. Pide uno nuevo a quien lleva la web de la asociación.';
         if ($invitation === null || !$invitation->isInvitationValid($now)) {
-            return 'Ese enlace ya no vale: o ha caducado o ya se usó. Pide uno nuevo a quien lleva la web de la asociación.';
-        }
-
-        // Una cuenta de Telegram es de una persona. Si ya estaba vinculada a otra,
-        // manda la invitación nueva: alguien de la gestión la ha hecho a propósito.
-        $previous = $this->links->findLinked($telegramId);
-        if ($previous !== null && $previous !== $invitation) {
-            $this->em->remove($previous);
-            $this->em->flush();
+            return $expired;
         }
 
         $name = trim(((string) ($from['first_name'] ?? '')) . ' ' . ((string) ($from['last_name'] ?? '')));
-        $invitation->link($telegramId, $name !== '' ? $name : null, $now);
-        $this->em->flush();
+        $linked = $this->em->wrapInTransaction(function () use ($invitation, $code, $telegramId, $name, $now): bool {
+            // Gastar la invitación es lo primero y es condicional: si dos personas
+            // abren el mismo enlace a la vez, sólo una consigue gastarlo.
+            if (!$this->links->spendInvitation($invitation, $code, $now)) {
+                return false;
+            }
+
+            // Una cuenta de Telegram es de una persona. Si ya estaba vinculada a
+            // otra, manda la invitación nueva: alguien de la gestión la ha hecho a
+            // propósito. En la misma transacción: o se mueve entera o no se mueve.
+            $previous = $this->links->findLinked($telegramId);
+            if ($previous !== null && $previous !== $invitation) {
+                $this->em->remove($previous);
+                $this->em->flush();
+            }
+
+            $invitation->link($telegramId, $name !== '' ? $name : null, $now);
+            $this->em->flush();
+
+            return true;
+        });
+        if (!$linked) {
+            return $expired;
+        }
 
         return sprintf("Hola, %s. Ya estás dado de alta.\n\n%s", $invitation->getUser()->getDisplayName(), $this->help($invitation->getUser()));
     }

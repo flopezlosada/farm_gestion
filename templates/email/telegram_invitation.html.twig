@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Bot de Telegram de la CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 580px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Hola, {{ name }}</h2>
+
+    <p>Te damos de alta en el bot de Telegram de la asociación (@{{ bot }}). Con él puedes mandar
+        las facturas y los tickets con una foto, sin pasar por la web.</p>
+
+    <p><strong>Abre este correo en el móvil donde tienes Telegram</strong> y pulsa el botón. Se abrirá
+        el bot: toca <strong>Iniciar</strong> y ya está.</p>
+
+    <p style="margin: 28px 0;">
+        <a href="{{ link }}"
+           style="display: inline-block; padding: 12px 24px; background: #5a8f3d; color: #fff; text-decoration: none; border-radius: 4px;">
+            Abrir el bot en Telegram
+        </a>
+    </p>
+
+    <p style="color: #777; font-size: 13px;">
+        El enlace es solo para ti: quien lo abra queda dado de alta con tu nombre, así que no lo
+        reenvíes. Caduca el <strong>{{ expires_at|format_datetime('long', 'none', locale='es') }}</strong>
+        y solo sirve una vez. Si no esperabas este correo, ignóralo.
+    </p>
+
+    <p style="margin-top: 32px; color: #777; font-size: 12px;">
+        CSA Vega de Jarama<br>
+        <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+</body>
+</html>

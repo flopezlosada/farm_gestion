@@ -186,12 +186,13 @@ class TelegramBotApi
             } finally {
                 fclose($handle);
             }
-        } catch (ExceptionInterface $e) {
+        } catch (\Throwable $e) {
+            // Sin el fichero a medias, falle lo que falle.
             @unlink($target);
 
-            throw new TelegramApiException('No se ha podido descargar el fichero de Telegram.');
-        } catch (TelegramApiException $e) {
-            @unlink($target);
+            if ($e instanceof ExceptionInterface) {
+                throw new TelegramApiException('No se ha podido descargar el fichero de Telegram.');
+            }
 
             throw $e;
         }

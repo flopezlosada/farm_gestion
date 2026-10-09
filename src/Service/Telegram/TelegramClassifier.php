@@ -22,6 +22,13 @@ class TelegramClassifier
     public const NONE = 'ninguno';
 
     /**
+     * Lo más grande que se le enseña a Gemini para clasificar. Va en base64 dentro
+     * de la petición, así que ocupa en memoria un tercio más; por encima de esto se
+     * clasifica sólo por el nombre y el texto. Una factura o una foto de móvil caben.
+     */
+    private const MAX_INLINE_BYTES = 8 * 1024 * 1024;
+
+    /**
      * Lo que se le enseña a Gemini como fichero. Del resto (un DOCX, una hoja de
      * cálculo) sólo ve el nombre y el texto que lo acompañe.
      *
@@ -75,7 +82,7 @@ class TelegramClassifier
         if ($input->hasFile()) {
             $path = $input->localPath();
             $mimeType = (string) MimeTypes::getDefault()->guessMimeType($path);
-            if (\in_array($mimeType, self::VISIBLE_MIME_TYPES, true)) {
+            if (\in_array($mimeType, self::VISIBLE_MIME_TYPES, true) && (int) filesize($path) <= self::MAX_INLINE_BYTES) {
                 $parts[] = GeminiClient::filePart((string) file_get_contents($path), $mimeType);
             }
         }

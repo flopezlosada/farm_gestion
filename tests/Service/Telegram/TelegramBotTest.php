@@ -19,8 +19,11 @@ use App\Service\Telegram\TelegramInput;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
+use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
 
 /**
  * El bot contra la base de verdad: vincular con la invitación, no atender a
@@ -49,6 +52,15 @@ class TelegramBotTest extends KernelTestCase
     /** @var list<int> */
     private array $invoices = [];
 
+    /** Mensajes ya atendidos: compartido entre los bots de un mismo test, como en la vida real. */
+    private ArrayAdapter $seen;
+
+    /** Mensajes por cuenta y hora. */
+    private int $limit = 30;
+
+    /** Si el envío a Telegram de la descarga debe fallar con un error nuestro. */
+    private bool $breakDownload = false;
+
     protected function setUp(): void
     {
         self::bootKernel();
@@ -56,6 +68,7 @@ class TelegramBotTest extends KernelTestCase
         $this->settings = static::getContainer()->get(AppSettings::class);
         $this->accountingWasOn = $this->settings->getBool(AppSettings::FEATURE_CONTABILIDAD);
         $this->settings->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
+        $this->seen = new ArrayAdapter();
 
         $suffix = bin2hex(random_bytes(4));
         $this->user = (new User())
@@ -94,11 +107,80 @@ class TelegramBotTest extends KernelTestCase
     /** A un bot le puede escribir cualquiera: a un desconocido ni se le descarga lo que mande. */
     public function testAQuienNoEstaVinculadoNoSeLeGuardaNiDescargaNada(): void
     {
+        $before = $this->telegramInvoiceCount();
+
         $this->bot()->handle($this->update($this->pdfMessage(999000111)));
 
         $this->assertStringContainsString('sólo atiende a su gente', $this->lastReply());
         $this->assertSame([], $this->downloads);
-        $this->assertSame([], $this->invoicesFrom(999000111));
+        $this->assertSame($before, $this->telegramInvoiceCount());
+    }
+
+    /** Telegram repite la entrega si no le contestan a tiempo: el mismo update_id se atiende una vez. */
+    public function testElMismoMensajeRepetidoSeAtiendeUnaSolaVez(): void
+    {
+        $this->linkAs(555000012);
+        $update = $this->update($this->pdfMessage(555000012), 555000012);
+
+        $this->bot()->handle($update);
+        $this->bot()->handle($update);
+
+        $this->assertCount(1, $this->invoicesFrom());
+        $this->assertCount(1, $this->replies);
+    }
+
+    /** Un fallo nuestro al atender no revienta ni se pierde en silencio: se le pide que lo reenvíe. */
+    public function testUnFalloAlAtenderSeLeDiceAQuienEscribio(): void
+    {
+        $this->linkAs(555000013);
+        $this->breakDownload = true;
+
+        $this->bot()->handle($this->update($this->pdfMessage(555000013), 555000013));
+
+        $this->assertSame([], $this->invoicesFrom());
+        $this->assertStringContainsString('Algo ha fallado', $this->lastReply());
+    }
+
+    /** Pasado el límite por hora, no se descarga nada más y se le avisa. */
+    public function testPasadoElLimiteNoSeAtiendeMas(): void
+    {
+        $this->linkAs(555000014);
+        $this->limit = 1;
+        $bot = $this->bot();
+
+        $bot->handle($this->update($this->pdfMessage(555000014), 555000014));
+        $bot->handle($this->update($this->pdfMessage(555000014), 555000014));
+
+        $this->assertCount(1, $this->invoicesFrom());
+        $this->assertCount(1, $this->downloads);
+        $this->assertStringContainsString('muchas cosas en poco rato', $this->lastReply());
+    }
+
+    /** Una cuenta de la web desactivada deja de poder usar el bot aunque siga vinculada. */
+    public function testUnaCuentaDesactivadaNoPuedeMandarNada(): void
+    {
+        $this->linkAs(555000015);
+        $this->user->setEnabled(false);
+        $this->em->flush();
+
+        $this->bot()->handle($this->update($this->pdfMessage(555000015), 555000015));
+
+        $this->assertSame([], $this->downloads);
+        $this->assertSame([], $this->invoicesFrom());
+        $this->assertStringContainsString('sólo atiende a su gente', $this->lastReply());
+    }
+
+    /** Quitar a alguien del bot surte efecto en el siguiente mensaje. */
+    public function testQuitarElVinculoCortaElAccesoAlMomento(): void
+    {
+        $this->linkAs(555000016);
+        $this->em->remove($this->link());
+        $this->em->flush();
+
+        $this->bot()->handle($this->update($this->pdfMessage(555000016), 555000016));
+
+        $this->assertSame([], $this->downloads);
+        $this->assertStringContainsString('sólo atiende a su gente', $this->lastReply());
     }
 
     public function testLaInvitacionVinculaLaCuentaDeTelegramYSeGasta(): void
@@ -141,7 +223,7 @@ class TelegramBotTest extends KernelTestCase
 
         $this->bot()->handle($this->update($this->pdfMessage(555000004), 555000004));
 
-        $invoices = $this->invoicesFrom(555000004);
+        $invoices = $this->invoicesFrom();
         $this->assertCount(1, $invoices);
         $this->assertSame(ReceivedInvoice::SOURCE_TELEGRAM, $invoices[0]->getSource());
         $this->assertSame('Factura Movistar.pdf', $invoices[0]->getOriginalName());
@@ -158,7 +240,7 @@ class TelegramBotTest extends KernelTestCase
 
         $this->bot(fileContent: "#!/bin/sh\necho hola\n")->handle($this->update($this->pdfMessage(555000005), 555000005));
 
-        $this->assertSame([], $this->invoicesFrom(555000005));
+        $this->assertSame([], $this->invoicesFrom());
         $this->assertStringContainsString('formato', $this->lastReply());
     }
 
@@ -181,7 +263,7 @@ class TelegramBotTest extends KernelTestCase
         $this->bot()->handle($this->update($this->pdfMessage(555000007), 555000007));
 
         $this->assertSame([], $this->downloads);
-        $this->assertSame([], $this->invoicesFrom(555000007));
+        $this->assertSame([], $this->invoicesFrom());
         $this->assertStringContainsString('no tengo nada encendido', $this->lastReply());
     }
 
@@ -195,7 +277,7 @@ class TelegramBotTest extends KernelTestCase
         $this->bot()->handle($update);
 
         $this->assertSame([], $this->replies);
-        $this->assertSame([], $this->invoicesFrom(555000008));
+        $this->assertSame([], $this->invoicesFrom());
     }
 
     /** Con varios destinos posibles decide Gemini; si dice que no es de ninguno, no se guarda. */
@@ -206,7 +288,7 @@ class TelegramBotTest extends KernelTestCase
 
         $this->bot(withGallery: true)->handle($this->update($this->pdfMessage(555000009), 555000009));
 
-        $this->assertSame([], $this->invoicesFrom(555000009));
+        $this->assertSame([], $this->invoicesFrom());
         $this->assertStringContainsString('No sé qué es esto', $this->lastReply());
     }
 
@@ -217,7 +299,7 @@ class TelegramBotTest extends KernelTestCase
 
         $this->bot(withGallery: true)->handle($this->update($this->pdfMessage(555000010), 555000010));
 
-        $this->assertCount(1, $this->invoicesFrom(555000010));
+        $this->assertCount(1, $this->invoicesFrom());
     }
 
     /** Una cuenta de Telegram es de una persona: la invitación nueva se la lleva. */
@@ -260,6 +342,11 @@ class TelegramBotTest extends KernelTestCase
                 return new MockResponse('{"ok":true,"result":{"file_path":"documents/file_1.pdf"}}');
             }
             if (str_contains($url, '/file/bot')) {
+                if ($this->breakDownload) {
+                    // Un fallo que no es de Telegram ni de la red: lo que no se espera.
+                    throw new \LogicException('disco lleno');
+                }
+
                 return new MockResponse($fileContent);
             }
 
@@ -305,6 +392,8 @@ class TelegramBotTest extends KernelTestCase
             $destinations,
             new TelegramClassifier(new GeminiClient($gemini, 'clave', ['modelo-a'])),
             $this->em,
+            $this->seen,
+            new RateLimiterFactory(['id' => 'telegram_test', 'policy' => 'sliding_window', 'limit' => $this->limit, 'interval' => '1 hour'], new InMemoryStorage()),
             new NullLogger(),
         );
     }
@@ -362,12 +451,12 @@ class TelegramBotTest extends KernelTestCase
     }
 
     /**
-     * Las facturas que ha dejado alguien vinculado con esa cuenta (y se apuntan para
+     * Las facturas que ha dejado por Telegram la persona del test (y se apuntan para
      * borrarlas al terminar).
      *
      * @return list<ReceivedInvoice>
      */
-    private function invoicesFrom(int $telegramId): array
+    private function invoicesFrom(): array
     {
         $found = $this->em->getRepository(ReceivedInvoice::class)->findBy(['uploadedBy' => $this->user, 'source' => ReceivedInvoice::SOURCE_TELEGRAM]);
         foreach ($found as $invoice) {
@@ -375,6 +464,12 @@ class TelegramBotTest extends KernelTestCase
         }
 
         return $found;
+    }
+
+    /** Todas las facturas entradas por Telegram, de quien sea. */
+    private function telegramInvoiceCount(): int
+    {
+        return $this->em->getRepository(ReceivedInvoice::class)->count(['source' => ReceivedInvoice::SOURCE_TELEGRAM]);
     }
 
     private function lastReply(): string

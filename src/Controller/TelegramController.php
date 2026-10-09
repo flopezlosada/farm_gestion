@@ -8,6 +8,7 @@ use App\Form\TelegramInviteType;
 use App\Repository\TelegramLinkRepository;
 use App\Service\Telegram\TelegramApiException;
 use App\Service\Telegram\TelegramBotApi;
+use App\Service\Telegram\TelegramInvitationMailer;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -49,13 +50,19 @@ class TelegramController extends AbstractController
     }
 
     /**
-     * Prepara la invitación de una persona. Si ya estaba vinculada, la nueva
-     * invitación sirve para pasar a otra cuenta de Telegram; la vieja sigue valiendo
-     * hasta que se use la nueva.
+     * Prepara la invitación de una persona y se la manda por correo. Si ya estaba
+     * vinculada, la nueva invitación sirve para pasar a otra cuenta de Telegram; la
+     * vieja sigue valiendo hasta que se use la nueva.
      */
     #[Route('/invite', name: 'telegram_invite', methods: ['POST'])]
-    public function invite(Request $request, TelegramLinkRepository $links, EntityManagerInterface $em): Response
-    {
+    public function invite(
+        Request $request,
+        TelegramLinkRepository $links,
+        EntityManagerInterface $em,
+        TelegramBotApi $api,
+        CacheInterface $cache,
+        TelegramInvitationMailer $mailer,
+    ): Response {
         $form = $this->createForm(TelegramInviteType::class);
         $form->handleRequest($request);
         if (!$form->isSubmitted() || !$form->isValid()) {
@@ -76,9 +83,45 @@ class TelegramController extends AbstractController
         $link->invite(new \DateTimeImmutable());
         $em->flush();
 
-        $this->addFlash('success', sprintf('Invitación lista para %s. Mándale el enlace de la tabla: vale %d días y un solo uso.', $user->getDisplayName(), TelegramLink::INVITATION_DAYS));
+        $this->mailInvitation($link, $api, $cache, $mailer);
 
         return $this->redirectToRoute('telegram_index');
+    }
+
+    /**
+     * Vuelve a mandar por correo la invitación vigente (no crea una nueva: para
+     * eso, volver a invitar).
+     */
+    #[Route('/{id}/send', name: 'telegram_send', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function send(TelegramLink $link, Request $request, TelegramBotApi $api, CacheInterface $cache, TelegramInvitationMailer $mailer): Response
+    {
+        if (!$this->isCsrfTokenValid('telegram_send_' . $link->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('danger', 'La página había caducado. Vuelve a intentarlo.');
+        } elseif (!$link->isInvitationValid(new \DateTimeImmutable())) {
+            $this->addFlash('danger', 'Esa invitación ya se usó o ha caducado. Invita de nuevo para generar otra.');
+        } else {
+            $this->mailInvitation($link, $api, $cache, $mailer);
+        }
+
+        return $this->redirectToRoute('telegram_index');
+    }
+
+    /**
+     * Manda la invitación y dice cómo ha ido. Si no se puede (sin bot, sin correo),
+     * el enlace sigue en la tabla para pasarlo a mano.
+     */
+    private function mailInvitation(TelegramLink $link, TelegramBotApi $api, CacheInterface $cache, TelegramInvitationMailer $mailer): void
+    {
+        $user = $link->getUser();
+        $bot = $this->botUsername($api, $cache);
+
+        if ($bot === null) {
+            $this->addFlash('warning', sprintf('Invitación preparada para %s, pero no se ha podido mandar: el bot no está configurado o Telegram no contesta.', $user->getDisplayName()));
+        } elseif (!$mailer->send($link, $bot)) {
+            $this->addFlash('warning', sprintf('%s no tiene correo en su cuenta. Pásale el enlace de la tabla por otro lado: vale %d días y un solo uso.', $user->getDisplayName(), TelegramLink::INVITATION_DAYS));
+        } else {
+            $this->addFlash('success', sprintf('Invitación enviada a %s (%s). Tiene que abrir el correo en el móvil donde usa Telegram.', $user->getDisplayName(), $user->getEmail()));
+        }
     }
 
     /**

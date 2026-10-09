@@ -1,8 +1,9 @@
 {# ============================================================
  # Quién puede usar el bot de Telegram.
  #
- # Invitar = elegir a la persona → sale un enlace en la tabla → se lo mandas por
- # donde sea → lo abre en Telegram, toca «Iniciar» y queda vinculada.
+ # Invitar = elegir a la persona → le llega un correo con su enlace → lo abre en
+ # el móvil, toca «Iniciar» y queda vinculada. El enlace también se ve en la
+ # tabla, por si no tiene correo.
  #
  # El controller pasa: links (TelegramLink con su user), bot (@nombre o null),
  # enabled (si hay token), now, form (invitar).
@@ -44,7 +45,7 @@
     {% elseif bot is null %}
         {{ csa.callout('Telegram no contesta o no reconoce el token configurado, así que no se pueden generar los enlaces. Revisa TELEGRAM_BOT_TOKEN.', 'warning', 'exclamation-triangle') }}
     {% else %}
-        {{ csa.callout('El bot es @' ~ bot ~ '. Invita a una persona y mándale el enlace que aparece en la tabla.', 'info', 'paper-plane') }}
+        {{ csa.callout('El bot es @' ~ bot ~ '. Al invitar a una persona le llega un correo con su enlace; si no tiene correo, pásale el de la tabla.', 'info', 'paper-plane') }}
     {% endif %}
 
     <div class="prl-toolbar">
@@ -99,6 +100,12 @@
                                 {% endif %}
                             </td>
                             <td class="tight">
+                                {% if bot and link.invitationValid(now) %}
+                                    <form method="post" action="{{ path('telegram_send', { id: link.id }) }}" style="margin-bottom: 4px;">
+                                        <input type="hidden" name="_token" value="{{ csrf_token('telegram_send_' ~ link.id) }}">
+                                        <button type="submit" class="prl-btn" title="Volver a mandarle el correo con el enlace"><i class="fa fa-envelope-o"></i> Reenviar</button>
+                                    </form>
+                                {% endif %}
                                 <form method="post" action="{{ path('telegram_remove', { id: link.id }) }}">
                                     <input type="hidden" name="_token" value="{{ csrf_token('telegram_remove_' ~ link.id) }}">
                                     <button type="submit" class="prl-btn" title="Quitarle el acceso al bot"><i class="fa fa-times"></i> Quitar</button>
