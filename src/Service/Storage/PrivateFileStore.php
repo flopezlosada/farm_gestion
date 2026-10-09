@@ -3,6 +3,7 @@
 namespace App\Service\Storage;
 
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\HttpFoundation\File\File;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\String\Slugger\SluggerInterface;
 
@@ -45,9 +46,24 @@ abstract class PrivateFileStore
      */
     public function store(UploadedFile $upload): string
     {
-        $original = pathinfo($upload->getClientOriginalName(), PATHINFO_FILENAME);
+        return $this->storeFile($upload, $upload->getClientOriginalName());
+    }
+
+    /**
+     * Guarda un fichero que no viene de un formulario (uno descargado de otro
+     * servicio, por ejemplo) y devuelve el nombre con el que quedó. El fichero se
+     * MUEVE: deja de estar donde estaba.
+     *
+     * @param File   $file         Fichero en disco.
+     * @param string $originalName Nombre con que llegó, para el nombre guardado.
+     *
+     * @return string Nombre guardado, que es lo que se persiste en la fila.
+     */
+    public function storeFile(File $file, string $originalName): string
+    {
+        $original = pathinfo($originalName, PATHINFO_FILENAME);
         $slug = $this->slugger->slug($original)->lower()->truncate(80)->toString();
-        $extension = $this->extensionOf($upload);
+        $extension = $this->extensionOf($file, $originalName);
 
         $name = sprintf(
             '%s-%s%s',
@@ -56,7 +72,7 @@ abstract class PrivateFileStore
             $extension !== null ? '.' . $extension : ''
         );
 
-        $upload->move($this->directory, $name);
+        $file->move($this->directory, $name);
 
         return $name;
     }
@@ -106,19 +122,20 @@ abstract class PrivateFileStore
      * el nombre del cliente. Si el contenido no la delata, se acepta la del
      * nombre siempre que sea inofensiva.
      *
-     * @param UploadedFile $upload Fichero subido.
+     * @param File   $file         Fichero en disco.
+     * @param string $originalName Nombre con que llegó.
      *
      * @return string|null Extensión sin punto, o null si no hay ninguna fiable.
      */
-    private function extensionOf(UploadedFile $upload): ?string
+    private function extensionOf(File $file, string $originalName): ?string
     {
-        $guessed = $upload->guessExtension();
+        $guessed = $file->guessExtension();
 
         if ($guessed !== null && $guessed !== '') {
             return $guessed;
         }
 
-        $claimed = strtolower($upload->getClientOriginalExtension());
+        $claimed = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
 
         return preg_match('/^[a-z0-9]{1,8}$/', $claimed) === 1 ? $claimed : null;
     }

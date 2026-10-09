@@ -1,0 +1,115 @@
+{# ============================================================
+ # Quién puede usar el bot de Telegram.
+ #
+ # Invitar = elegir a la persona → sale un enlace en la tabla → se lo mandas por
+ # donde sea → lo abre en Telegram, toca «Iniciar» y queda vinculada.
+ #
+ # El controller pasa: links (TelegramLink con su user), bot (@nombre o null),
+ # enabled (si hay token), now, form (invitar).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Bot de Telegram{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Bot de Telegram</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    <style>
+        .tg-invite { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0; }
+        .tg-invite select { min-width: 0; max-width: 100%; }
+        .tg-link { width: 100%; min-width: 16em; font-family: monospace; font-size: 12px; }
+        .tg-muted { color: var(--csa-ink-3, #777); font-size: 12px; }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Administración',
+        'Bot de Telegram',
+        'Quién puede mandar cosas al bot. Estar aquí no da permisos: cada cosa que hace el bot pide los mismos que en la web.'
+    ) }}
+
+    {% if not enabled %}
+        {{ csa.callout('El bot está apagado: falta TELEGRAM_BOT_TOKEN en la configuración del servidor. Puedes preparar invitaciones, pero los enlaces no funcionarán hasta que haya bot.', 'warning', 'exclamation-triangle') }}
+    {% elseif bot is null %}
+        {{ csa.callout('Telegram no contesta o no reconoce el token configurado, así que no se pueden generar los enlaces. Revisa TELEGRAM_BOT_TOKEN.', 'warning', 'exclamation-triangle') }}
+    {% else %}
+        {{ csa.callout('El bot es @' ~ bot ~ '. Invita a una persona y mándale el enlace que aparece en la tabla.', 'info', 'paper-plane') }}
+    {% endif %}
+
+    <div class="prl-toolbar">
+        {{ form_start(form, { attr: { class: 'tg-invite', 'data-csa-dropdowns': '1' } }) }}
+            {{ form_widget(form.user, { attr: { class: 'csa-select' } }) }}
+            <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-user-plus"></i> Invitar</button>
+        {{ form_end(form) }}
+    </div>
+
+    <div class="prl-table-wrap">
+        {% if links is empty %}
+            <div class="prl-empty">Todavía no hay nadie. Invita a la primera persona con el formulario de arriba.</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th>Persona</th>
+                        <th>En Telegram</th>
+                        <th>Invitación pendiente</th>
+                        <th class="tight"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for link in links %}
+                        <tr>
+                            <td>
+                                {{ link.user.displayName }}
+                                {% if not link.user.enabled %}
+                                    <br><span class="tg-muted">cuenta desactivada: el bot no la atiende</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if link.linked %}
+                                    {{ link.telegramName ?? 'vinculada' }}
+                                    <br><span class="tg-muted">desde el {{ link.linkedAt|date('d/m/Y') }}</span>
+                                {% else %}
+                                    <span class="tg-muted">todavía no</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if link.invitationValid(now) %}
+                                    {% if bot %}
+                                        <input class="tg-link" type="text" readonly onfocus="this.select()"
+                                               value="https://t.me/{{ bot }}?start={{ link.invitationCode }}"
+                                               aria-label="Enlace de invitación">
+                                    {% endif %}
+                                    <span class="tg-muted">caduca el {{ link.invitationExpiresAt|date('d/m/Y') }}</span>
+                                {% elseif link.invitationCode %}
+                                    <span class="tg-muted">caducada: vuelve a invitar</span>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td class="tight">
+                                <form method="post" action="{{ path('telegram_remove', { id: link.id }) }}">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('telegram_remove_' ~ link.id) }}">
+                                    <button type="submit" class="prl-btn" title="Quitarle el acceso al bot"><i class="fa fa-times"></i> Quitar</button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}
