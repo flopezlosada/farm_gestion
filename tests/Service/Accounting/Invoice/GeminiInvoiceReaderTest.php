@@ -3,6 +3,7 @@
 namespace App\Tests\Service\Accounting\Invoice;
 
 use App\Service\Accounting\Invoice\GeminiInvoiceReader;
+use App\Service\Ai\GeminiClient;
 use App\Service\Accounting\Invoice\InvoiceReadException;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -80,7 +81,7 @@ class GeminiInvoiceReaderTest extends TestCase
             new MockResponse('{"error":{"code":400}}', ['http_code' => 400]),
             $this->ok(['proveedor' => 'No debería llegar aquí']),
         ]);
-        $reader = new GeminiInvoiceReader($client, 'clave', ['modelo-a', 'modelo-b']);
+        $reader = new GeminiInvoiceReader(new GeminiClient($client, 'clave', ['modelo-a', 'modelo-b']));
 
         try {
             $reader->read($this->pdf, 'application/pdf', []);
@@ -95,7 +96,7 @@ class GeminiInvoiceReaderTest extends TestCase
     public function testUnFormatoQueNoSeLeeNoLlegaAGastarUnaPeticion(): void
     {
         $client = new MockHttpClient([]);
-        $reader = new GeminiInvoiceReader($client, 'clave', ['modelo-a']);
+        $reader = new GeminiInvoiceReader(new GeminiClient($client, 'clave', ['modelo-a']));
 
         try {
             $reader->read($this->pdf, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', []);
@@ -110,7 +111,7 @@ class GeminiInvoiceReaderTest extends TestCase
     public function testSinClaveNoSeLlamaYSeAplaza(): void
     {
         $client = new MockHttpClient([]);
-        $reader = new GeminiInvoiceReader($client, '', ['modelo-a']);
+        $reader = new GeminiInvoiceReader(new GeminiClient($client, '', ['modelo-a']));
 
         $this->assertFalse($reader->isConfigured());
         try {
@@ -131,7 +132,7 @@ class GeminiInvoiceReaderTest extends TestCase
 
             return $this->ok(['proveedor' => 'x', 'total' => 1, 'forma_pago' => 'efectivo', 'tipo' => 'ticket', 'confianza' => 'alta']);
         });
-        (new GeminiInvoiceReader($client, 'secreta', ['modelo-a']))->read($this->pdf, 'application/pdf', []);
+        (new GeminiInvoiceReader(new GeminiClient($client, 'secreta', ['modelo-a'])))->read($this->pdf, 'application/pdf', []);
 
         $this->assertStringNotContainsString('secreta', $seen['url']);
         $this->assertSame('x-goog-api-key: secreta', $seen['key']);
@@ -142,7 +143,7 @@ class GeminiInvoiceReaderTest extends TestCase
      */
     private function reader(array $responses): GeminiInvoiceReader
     {
-        return new GeminiInvoiceReader(new MockHttpClient($responses), 'clave', ['modelo-a', 'modelo-b']);
+        return new GeminiInvoiceReader(new GeminiClient(new MockHttpClient($responses), 'clave', ['modelo-a', 'modelo-b']));
     }
 
     /** Respuesta de Gemini con el JSON pedido dentro, como la devuelve la API. */
