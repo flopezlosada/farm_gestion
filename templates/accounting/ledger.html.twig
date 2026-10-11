@@ -42,7 +42,7 @@
     <div class="prl-toolbar">
         <form method="get" class="acc-filters">
             <span class="prl-search">
-                <i class="fa fa-search"></i>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
                 <input type="search" name="q" value="{{ filters.text }}" placeholder="Concepto, proveedor o nº de factura">
             </span>
             <select name="account" class="csa-input">
@@ -57,8 +57,8 @@
                     <option value="{{ c.id }}" {{ filters.category == c.id ? 'selected' : '' }}>{{ c.qualifiedName }}</option>
                 {% endfor %}
             </select>
-            <input type="date" name="from" class="csa-input" value="{{ filters.from ? filters.from|date('Y-m-d') : '' }}" title="Desde">
-            <input type="date" name="to" class="csa-input" value="{{ filters.to ? filters.to|date('Y-m-d') : '' }}" title="Hasta">
+            <label class="acc-filter-date">Desde <input type="date" name="from" class="csa-input" value="{{ filters.from ? filters.from|date('Y-m-d') : '' }}"></label>
+            <label class="acc-filter-date">Hasta <input type="date" name="to" class="csa-input" value="{{ filters.to ? filters.to|date('Y-m-d') : '' }}"></label>
             <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-filter"></i> Filtrar</button>
             <a href="{{ path('accounting_ledger') }}" class="prl-btn">Limpiar</a>
         </form>
@@ -86,7 +86,7 @@
                 No hay ningún apunte que encaje con lo que buscas.
             </div>
         {% else %}
-            <table class="prl-table">
+            <table class="prl-table acc-wrap">
                 <thead>
                     <tr>
                         <th class="tight">{{ knp_pagination_sortable(pagination, 'Fecha', 'e.date') }}</th>
