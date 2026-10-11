@@ -13,7 +13,10 @@
       qué viernes recogen) y con huevos quincenales en cualquier modalidad
       (decide qué viernes van los huevos). OPCIONAL en las mensuales sin huevos
       quincenales (ancla su orden a las entregas de ese turno en vez de a los
-      viernes del mes). #}
+      viernes del mes).
+    - amount           = cuántas cestas de verdura. Oculto en «Solo huevos»: ahí no
+      hay verdura y la entrega cuenta 0 cestas pase lo que pase (el peso de la
+      modalidad es 0), así que preguntarlo sólo confunde. #}
 <script>
     document.querySelectorAll('.datepicker, .datepicker2, .datepicker3')
         .forEach(function (el) { el.type = 'date'; });
@@ -24,6 +27,7 @@
     var SHARES_BIWEEKLY  = {{ constant('App\\Entity\\BasketShare::IDS_BIWEEKLY')|json_encode|raw }};
     var SHARES_MONTHLY   = {{ constant('App\\Entity\\BasketShare::IDS_MONTHLY')|json_encode|raw }};
     var EGG_PERIOD_BIWEEKLY = {{ constant('App\\Entity\\EggPeriod::ID_BIWEEKLY') }};
+    var SHARE_ONLY_EGG   = {{ constant('App\\Entity\\BasketShare::ID_ONLY_EGG') }};
 
     function inList(list, value) {
         return list.indexOf(parseInt(value, 10)) !== -1;
@@ -149,6 +153,7 @@
         $('#egg_period').toggleClass('hidden', !showEggPeriod);
         $('#egg_day_month_order').toggleClass('hidden', !showEggDayMonth);
         $('#delivery_group').toggleClass('hidden', !showDeliveryGroup);
+        $('#partner_basket_share_amount').closest('.csa-field').toggleClass('hidden', parseInt(basketShare, 10) === SHARE_ONLY_EGG);
 
         if (showDeliveryGroup) {
             syncTurnOptions(isMonthly && !biweeklyEggs);
