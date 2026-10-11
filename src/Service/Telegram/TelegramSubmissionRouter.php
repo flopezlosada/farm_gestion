@@ -7,6 +7,7 @@ use App\Entity\TelegramSubmission;
 use App\Entity\User;
 use App\Service\Telegram\Destination\TelegramDestination;
 use App\Service\Telegram\Destination\TelegramRejected;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\AutowireIterator;
@@ -52,6 +53,7 @@ class TelegramSubmissionRouter
      * @param string        $chatId Su chat.
      *
      * @throws TelegramApiException Si el fichero no se puede descargar de Telegram.
+     * @throws TelegramRejected     Si es de un formato que no se guarda.
      */
     public function record(TelegramInput $input, TelegramLink $link, string $chatId): TelegramSubmission
     {
@@ -59,6 +61,9 @@ class TelegramSubmissionRouter
         if ($input->hasFile()) {
             $path = $input->localPath();
             $mimeType = MimeTypes::getDefault()->guessMimeType($path);
+            if (!\in_array($mimeType, TelegramFileStore::MIME_TYPES, true)) {
+                throw new TelegramRejected('Ese formato no lo guardo. Vale un PDF, una foto, una nota de voz o un documento (DOCX, ODT, XLSX, ODS).');
+            }
             $submission->attachFile($this->files->keepCopy($path, (string) $input->fileName), (string) $input->fileName, $mimeType);
         }
         $this->em->persist($submission);
@@ -113,6 +118,14 @@ class TelegramSubmissionRouter
      * Lo manda a un apartado. Si ya estaba en otro, primero lo deshace allí; si
      * allí ya no se puede deshacer, no se toca nada.
      *
+     * Todo dentro de una transacción con la fila del envío bloqueada: dos
+     * pulsaciones a la vez (un doble toque, o Telegram y la web) se atienden una
+     * detrás de otra, y la segunda ve lo que hizo la primera en vez de crear otra
+     * factura. Y si el apartado falla a medias (base de datos, Gemini…), se vuelve
+     * entero a como estaba, deshacer incluido. Lo que se le dice por Telegram va
+     * después, fuera de la transacción: no se tiene la fila bloqueada esperando a
+     * Telegram.
+     *
      * @param TelegramSubmission  $submission  El envío.
      * @param TelegramDestination $destination Adónde.
      * @param User|null           $by          Quién lo decide desde la web; null si es por Telegram.
@@ -121,41 +134,50 @@ class TelegramSubmissionRouter
      */
     public function route(TelegramSubmission $submission, TelegramDestination $destination, ?User $by = null): ?string
     {
-        if ($submission->getStatus() === TelegramSubmission::STATUS_DISCARDED) {
-            return 'Ese envío ya se descartó.';
-        }
-        if ($submission->isRouted() && $submission->getDestination() === $destination->key()) {
-            return null;
-        }
+        $result = $this->em->wrapInTransaction(function () use ($submission, $destination, $by): array {
+            $this->em->refresh($submission, LockMode::PESSIMISTIC_WRITE);
+            if ($submission->getStatus() === TelegramSubmission::STATUS_DISCARDED) {
+                return ['problem' => 'Ese envío ya se descartó.', 'changed' => false];
+            }
+            if ($submission->isRouted() && $submission->getDestination() === $destination->key()) {
+                return ['problem' => null, 'changed' => false];
+            }
 
-        $refused = $this->undoCurrent($submission);
-        if ($refused !== null) {
-            return $refused;
-        }
+            $refused = $this->undoCurrent($submission);
+            if ($refused !== null) {
+                return ['problem' => $refused, 'changed' => false];
+            }
 
-        $input = $this->inputFor($submission);
-        try {
-            $outcome = $destination->commit($input, $submission->getUser());
-        } catch (TelegramRejected $e) {
-            // Deshecho donde estaba y rechazado aquí: queda pendiente, con el motivo.
-            $submission->askAbout($destination->label() . ': ' . $e->getMessage());
+            $input = $this->inputFor($submission);
+            try {
+                $outcome = $destination->commit($input, $submission->getUser());
+            } catch (TelegramRejected $e) {
+                // Deshecho donde estaba y rechazado aquí: queda pendiente, con el motivo.
+                $submission->askAbout($destination->label() . ': ' . $e->getMessage());
+                $this->em->flush();
+
+                return ['problem' => $e->getMessage(), 'changed' => false];
+            } finally {
+                $input->cleanUp();
+            }
+
+            $submission->routeTo($destination->key(), $outcome->ref, $outcome->summary, $by, new \DateTimeImmutable());
             $this->em->flush();
 
-            return $e->getMessage();
-        } finally {
-            $input->cleanUp();
+            return ['problem' => null, 'changed' => true];
+        });
+
+        if ($result['changed']) {
+            $this->tellRouted($submission, $by);
         }
 
-        $submission->routeTo($destination->key(), $outcome->ref, $outcome->summary, $by, new \DateTimeImmutable());
-        $this->em->flush();
-        $this->tellRouted($submission, $by);
-
-        return null;
+        return $result['problem'];
     }
 
     /**
      * No era nada que guardar. Si estaba en un apartado, se deshace allí antes. El
      * fichero se conserva, como en la bandeja de facturas: descartar no es borrar.
+     * Con la fila bloqueada, por lo mismo que {@see route()}.
      *
      * @param TelegramSubmission $submission El envío.
      * @param User|null          $by         Quién lo decide desde la web; null si es por Telegram.
@@ -164,29 +186,36 @@ class TelegramSubmissionRouter
      */
     public function discard(TelegramSubmission $submission, ?User $by = null): ?string
     {
-        if ($submission->getStatus() === TelegramSubmission::STATUS_DISCARDED) {
-            return null;
+        $result = $this->em->wrapInTransaction(function () use ($submission, $by): array {
+            $this->em->refresh($submission, LockMode::PESSIMISTIC_WRITE);
+            if ($submission->getStatus() === TelegramSubmission::STATUS_DISCARDED) {
+                return ['problem' => null, 'changed' => false];
+            }
+            $refused = $this->undoCurrent($submission);
+            if ($refused !== null) {
+                return ['problem' => $refused, 'changed' => false];
+            }
+
+            $submission->discard($by === null ? 'Descartado por quien lo mandó.' : 'Descartado desde la web.', $by, new \DateTimeImmutable());
+            $this->em->flush();
+
+            return ['problem' => null, 'changed' => true];
+        });
+
+        if ($result['changed']) {
+            $text = $by === null
+                ? 'Vale, no lo guardo.'
+                : sprintf('Lo que mandaste el %s lo han descartado desde la web: no se ha guardado.', $submission->getSentAt()->format('d/m/Y'));
+            $submission->setBotMessageId($this->chat($submission)->replace($submission->getBotMessageId(), $this->quote($submission) . $text));
+            $this->em->flush();
         }
-        $refused = $this->undoCurrent($submission);
-        if ($refused !== null) {
-            return $refused;
-        }
 
-        $submission->discard($by === null ? 'Descartado por quien lo mandó.' : 'Descartado desde la web.', $by, new \DateTimeImmutable());
-        $this->em->flush();
-
-        $text = $by === null
-            ? 'Vale, no lo guardo.'
-            : sprintf('Lo que mandaste el %s lo han descartado desde la web: no se ha guardado.', $submission->getSentAt()->format('d/m/Y'));
-        $submission->setBotMessageId($this->chat($submission)->replace($submission->getBotMessageId(), $this->quote($submission) . $text));
-        $this->em->flush();
-
-        return null;
+        return $result['problem'];
     }
 
     /**
      * El único apartado posible no lo admite (un formato que no guarda): se
-     * descarta y se le dice por qué.
+     * descarta, se borra su copia (no hay nada que conservar) y se le dice por qué.
      *
      * @param TelegramSubmission $submission El envío, recién llegado.
      * @param string             $reason     Lo que ha dicho el apartado.
@@ -195,6 +224,7 @@ class TelegramSubmissionRouter
     {
         $submission->discard($reason, null, new \DateTimeImmutable());
         $this->em->flush();
+        $this->files->discard($submission->getFileName());
         $this->chat($submission)->replace($submission->getBotMessageId(), $reason);
     }
 

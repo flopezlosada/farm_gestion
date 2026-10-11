@@ -9,6 +9,7 @@ use App\Repository\TelegramLinkRepository;
 use App\Repository\TelegramSubmissionRepository;
 use App\Service\Ai\GeminiException;
 use App\Service\Telegram\Destination\TelegramDestination;
+use App\Service\Telegram\Destination\TelegramRejected;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
@@ -218,13 +219,32 @@ class TelegramBot
 
         try {
             $submission = $this->router->record($input, $link, $chatId);
-        } catch (TelegramApiException $e) {
-            $this->logger->warning('Telegram: no se pudo descargar un envío', ['error' => $e->getMessage()]);
+        } catch (TelegramApiException|TelegramRejected $e) {
+            $this->logger->warning('Telegram: no se pudo guardar un envío', ['error' => $e->getMessage()]);
             $chat->say($e->getMessage());
 
             return;
         }
 
+        // Ya está guardado: si algo falla de aquí en adelante, no se le pide que lo
+        // reenvíe (saldría repetido), queda pendiente en la web.
+        try {
+            $this->place($submission, $input, $candidates);
+        } catch (\Throwable $e) {
+            $this->logger->error('Telegram: fallo al colocar un envío', ['submission' => $submission->getId(), 'error' => $e::class . ': ' . $e->getMessage()]);
+            $chat->say('Algo ha fallado al guardarlo, pero lo tengo apuntado y lo revisarán desde la web. No hace falta que lo mandes otra vez.');
+        }
+    }
+
+    /**
+     * Lo coloca en su destino o pregunta adónde va.
+     *
+     * @param TelegramSubmission        $submission El envío, ya guardado.
+     * @param TelegramInput             $input      Lo recibido.
+     * @param list<TelegramDestination> $candidates Destinos posibles (uno o más).
+     */
+    private function place(TelegramSubmission $submission, TelegramInput $input, array $candidates): void
+    {
         if (\count($candidates) === 1) {
             $this->routeAlone($submission, $candidates[0], $candidates);
 
@@ -328,13 +348,18 @@ class TelegramBot
             return;
         }
 
-        $problem = match ($parsed['action']) {
-            'o' => $this->offerAlternatives($submission),
-            'k' => $this->showRouted($submission),
-            'x' => $this->router->discard($submission),
-            'r' => $this->routeTo($submission, (string) $parsed['key']),
-        };
-        $this->answer($callbackId, $problem);
+        // Se contesta pase lo que pase: si no, el botón se queda «cargando».
+        $problem = 'Algo ha fallado. Inténtalo dentro de un rato.';
+        try {
+            $problem = match ($parsed['action']) {
+                'o' => $this->offerAlternatives($submission),
+                'k' => $this->showRouted($submission),
+                'x' => $this->router->discard($submission),
+                'r' => $this->routeTo($submission, (string) $parsed['key']),
+            };
+        } finally {
+            $this->answer($callbackId, $problem);
+        }
     }
 
     /** «Es otra cosa»: los otros destinos posibles. */

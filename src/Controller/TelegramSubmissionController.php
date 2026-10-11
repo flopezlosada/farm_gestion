@@ -78,11 +78,17 @@ class TelegramSubmissionController extends AbstractController
             throw $this->createNotFoundException('El fichero de este envío no está en el servidor.');
         }
 
+        // Sólo se abre en el navegador lo que no puede ejecutar nada (PDF, fotos);
+        // el resto se descarga. Y sin que el navegador adivine el tipo por su cuenta.
+        $inline = \in_array($submission->getMimeType(), TelegramFileStore::INLINE_MIME_TYPES, true);
         $response = new BinaryFileResponse($path);
-        if ($submission->getMimeType() !== null) {
-            $response->headers->set('Content-Type', $submission->getMimeType());
-        }
-        $response->setContentDisposition(ResponseHeaderBag::DISPOSITION_INLINE, (string) $submission->getOriginalName(), 'envio');
+        $response->headers->set('Content-Type', $inline ? (string) $submission->getMimeType() : 'application/octet-stream');
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        $response->setContentDisposition(
+            $inline ? ResponseHeaderBag::DISPOSITION_INLINE : ResponseHeaderBag::DISPOSITION_ATTACHMENT,
+            (string) $submission->getOriginalName(),
+            'envio',
+        );
 
         return $response;
     }

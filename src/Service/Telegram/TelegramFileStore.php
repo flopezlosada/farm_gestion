@@ -2,6 +2,7 @@
 
 namespace App\Service\Telegram;
 
+use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Storage\PrivateFileStore;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
@@ -18,6 +19,26 @@ use Symfony\Component\String\Slugger\SluggerInterface;
  */
 final class TelegramFileStore extends PrivateFileStore
 {
+    /**
+     * Lo único que se guarda, comprobado por el contenido: lo que admite la bandeja
+     * de facturas más las notas de voz. Cualquier otra cosa (un ejecutable, un zip,
+     * una página web) ni se guarda: a un bot le escribe cualquiera que esté
+     * vinculado, y el disco del hosting es compartido.
+     */
+    public const MIME_TYPES = [
+        ...InvoiceFileStore::MIME_TYPES,
+        'audio/ogg',
+        'audio/mpeg',
+        'audio/mp4',
+    ];
+
+    /**
+     * Lo que se puede abrir en el navegador. El resto se descarga: un fichero que
+     * el navegador interpretara (HTML, SVG) se ejecutaría con la sesión de quien lo
+     * abre.
+     */
+    public const INLINE_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+
     /**
      * @param string           $directory  Carpeta del archivo del bot.
      * @param SluggerInterface $slugger    Para limpiar el nombre original.

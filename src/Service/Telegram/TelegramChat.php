@@ -61,6 +61,11 @@ final class TelegramChat
 
                 return $messageId;
             } catch (TelegramApiException $e) {
+                // Telegram rechaza cambiar un mensaje por el mismo texto y botones
+                // (pulsar dos veces lo mismo): ya dice lo que tiene que decir.
+                if (str_contains($e->getMessage(), 'message is not modified')) {
+                    return $messageId;
+                }
                 $this->logger->info('Telegram: no se pudo cambiar un mensaje; se manda otro', ['error' => $e->getMessage()]);
             }
         }

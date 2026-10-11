@@ -126,9 +126,12 @@ class InvoiceDestination implements TelegramDestination
             return 'Esa factura ya está anotada en el libro. Corrígela desde la web.';
         }
 
-        $this->files->discard($invoice->getFileName());
+        $fileName = $invoice->getFileName();
         $this->em->remove($invoice);
         $this->em->flush();
+        // El fichero, después de quitar la fila: si quitarla falla, la factura sigue
+        // entera. (La copia original la conserva el envío del bot.)
+        $this->files->discard($fileName);
 
         return null;
     }

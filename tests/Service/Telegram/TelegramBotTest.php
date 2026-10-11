@@ -273,7 +273,7 @@ class TelegramBotTest extends KernelTestCase
 
         $this->assertSame([], $this->invoicesFrom());
         $this->assertStringContainsString('formato', $this->lastReply());
-        $this->assertSame(TelegramSubmission::STATUS_DISCARDED, $this->onlySubmission()->getStatus());
+        $this->assertSame([], $this->submissionsFrom(), 'ni se guarda una copia: a un bot le escribe cualquiera vinculado');
     }
 
     public function testUnTextoContestaConLoQueSePuedeMandar(): void

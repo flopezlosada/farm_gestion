@@ -5,6 +5,8 @@ namespace App\Command;
 use App\Service\Telegram\TelegramApiException;
 use App\Service\Telegram\TelegramBot;
 use App\Service\Telegram\TelegramBotApi;
+use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\ManagerRegistry;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -26,9 +28,15 @@ class TelegramPollCommand extends Command
     /** Segundos que se espera en cada pregunta si no llega nada. */
     private const WAIT = 25;
 
+    /**
+     * @param TelegramBot     $bot      El bot.
+     * @param TelegramBotApi  $api      Para recoger los mensajes.
+     * @param ManagerRegistry $doctrine Para empezar cada mensaje con la base al día.
+     */
     public function __construct(
         private readonly TelegramBot $bot,
         private readonly TelegramBotApi $api,
+        private readonly ManagerRegistry $doctrine,
     ) {
         parent::__construct();
     }
@@ -66,6 +74,7 @@ class TelegramPollCommand extends Command
                 $offset = (int) $update['update_id'] + 1;
                 $io->writeln(sprintf('Mensaje %d', $update['update_id']));
                 $this->bot->handle($update);
+                $this->freshManager();
             }
         } while (!$once || $updates !== []);
 
@@ -79,5 +88,23 @@ class TelegramPollCommand extends Command
         }
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * Cada mensaje empieza con la base al día. En el servidor cada mensaje es una
+     * petición nueva y esto viene solo; aquí el proceso dura horas: sin vaciarlo, se
+     * trabajaría con envíos cambiados desde la web entretanto, y un fallo que cierre
+     * el EntityManager (Doctrine lo cierra si algo falla dentro de una transacción)
+     * tumbaría todos los mensajes siguientes.
+     */
+    private function freshManager(): void
+    {
+        $manager = $this->doctrine->getManager();
+        if ($manager instanceof EntityManagerInterface && !$manager->isOpen()) {
+            $this->doctrine->resetManager();
+
+            return;
+        }
+        $manager->clear();
     }
 }

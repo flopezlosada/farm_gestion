@@ -121,12 +121,41 @@ class TelegramSubmissionControllerTest extends AbstractAuthenticatedTest
         $this->assertTrue($em->find(TelegramSubmission::class, $id)->isPending());
     }
 
+    /** Un fichero que el navegador interpretaría (una página web) se descarga, no se abre. */
+    public function testUnFicheroQueNoEsPdfNiFotoSeDescarga(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $id = $this->pendingPdf($this->person([]), 'text/html');
+
+        $client->request('GET', sprintf('/gestion/telegram/envios/%d/file', $id));
+
+        $this->assertResponseIsSuccessful();
+        $this->assertStringStartsWith('attachment', (string) $client->getResponse()->headers->get('Content-Disposition'));
+        $this->assertSame('application/octet-stream', $client->getResponse()->headers->get('Content-Type'));
+        $this->assertSame('nosniff', $client->getResponse()->headers->get('X-Content-Type-Options'));
+    }
+
+    public function testUnPdfSeAbreEnElNavegador(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $id = $this->pendingPdf($this->person([]));
+
+        $client->request('GET', sprintf('/gestion/telegram/envios/%d/file', $id));
+
+        $this->assertResponseIsSuccessful();
+        $this->assertStringStartsWith('inline', (string) $client->getResponse()->headers->get('Content-Disposition'));
+        $this->assertSame('application/pdf', $client->getResponse()->headers->get('Content-Type'));
+    }
+
     /**
      * Un PDF que llegó al bot y está pendiente, con su copia guardada.
      *
+     * @param User   $sender   Quién lo mandó.
+     * @param string $mimeType Tipo con el que quedó apuntado (para probar cómo se sirve).
+     *
      * @return int Id del envío.
      */
-    private function pendingPdf(User $sender): int
+    private function pendingPdf(User $sender, string $mimeType = 'application/pdf'): int
     {
         // Las facturas sólo se admiten con contabilidad encendida. Aquí y no en
         // setUp(): arrancar el kernel antes de createClient() no está permitido.
@@ -139,7 +168,7 @@ class TelegramSubmissionControllerTest extends AbstractAuthenticatedTest
         file_put_contents($path, "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n");
 
         $submission = new TelegramSubmission($em->find(User::class, $sender->getId()), '555000999', TelegramInput::DOCUMENT, '', new \DateTimeImmutable());
-        $submission->attachFile(static::getContainer()->get(TelegramFileStore::class)->keepCopy($path, 'Factura Movistar.pdf'), 'Factura Movistar.pdf', 'application/pdf');
+        $submission->attachFile(static::getContainer()->get(TelegramFileStore::class)->keepCopy($path, 'Factura Movistar.pdf'), 'Factura Movistar.pdf', $mimeType);
         $submission->askAbout('¿Qué es esto?');
         $em->persist($submission);
         $em->flush();
