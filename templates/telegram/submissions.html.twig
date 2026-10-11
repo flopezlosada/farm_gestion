@@ -1,0 +1,144 @@
+{# ============================================================
+ # Envíos al bot de Telegram: lo pendiente (el bot no lo tenía claro y ha
+ # preguntado) y lo último que colocó solo, para corregirlo.
+ #
+ # El controller pasa: pending y recent (TelegramSubmission), options
+ # (id → apartados posibles para ese envío), labels (clave → nombre).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Envíos al bot{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('telegram_index') }}">Bot de Telegram</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Envíos</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    <style>
+        .tgs-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0; }
+        .tgs-actions select { width: auto; min-width: 10em; }
+        .tgs-muted { color: var(--csa-ink-3, #777); font-size: 12px; }
+        .tgs-text { white-space: pre-line; overflow-wrap: anywhere; }
+        .tgs-section { margin: var(--csa-sp-6, 32px) 0 var(--csa-sp-3, 12px); font-size: 15px; font-weight: 600; }
+    </style>
+{% endblock %}
+
+{% macro what(s) %}
+    {% if s.fileName %}
+        <a href="{{ path('telegram_submission_file', { id: s.id }) }}" target="_blank" rel="noopener"><i class="fa fa-paperclip"></i> {{ s.originalName }}</a>
+    {% endif %}
+    {% if s.text %}
+        <div class="tgs-text">{{ s.text|u.truncate(200, '…') }}</div>
+    {% endif %}
+{% endmacro %}
+
+{% macro actions(s, options, current) %}
+    {% set choices = options|filter(d => d.key != current) %}
+    <form method="post" class="tgs-actions">
+        <input type="hidden" name="_token" value="{{ csrf_token('telegram_submission_' ~ s.id) }}">
+        {% if choices is not empty %}
+            <select name="destination" class="csa-input" aria-label="Apartado">
+                {% for d in choices %}
+                    <option value="{{ d.key }}">{{ d.label }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" formaction="{{ path('telegram_submission_route', { id: s.id }) }}" class="prl-btn prl-btn--primary">
+                {{ current ? 'Cambiar' : 'Guardar' }}
+            </button>
+        {% endif %}
+        <button type="submit" formaction="{{ path('telegram_submission_discard', { id: s.id }) }}" class="prl-btn" title="No era nada que guardar">
+            <i class="fa fa-times"></i> Descartar
+        </button>
+    </form>
+{% endmacro %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Bot de Telegram',
+        'Envíos al bot',
+        'Lo que el bot no tenía claro, para decir qué es, y lo último que colocó solo, por si se equivocó. A quien lo mandó le llega el aviso en Telegram.'
+    ) }}
+
+    <h2 class="tgs-section">Pendientes ({{ pending|length }})</h2>
+    <div class="prl-table-wrap">
+        {% if pending is empty %}
+            <div class="prl-empty">No hay nada pendiente: todo lo que ha llegado está en su sitio.</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th class="tight">Llegó</th>
+                        <th>Quién</th>
+                        <th>Qué</th>
+                        <th>El bot</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in pending %}
+                        <tr>
+                            <td class="tight">{{ s.sentAt|date('d/m/Y H:i') }}</td>
+                            <td>{{ s.user.displayName }}</td>
+                            <td>{{ _self.what(s) }}</td>
+                            <td><span class="tgs-muted">{{ s.summary }}</span></td>
+                            <td>{{ _self.actions(s, options[s.id] ?? [], null) }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+    <h2 class="tgs-section">Últimos colocados</h2>
+    <div class="prl-table-wrap">
+        {% if recent is empty %}
+            <div class="prl-empty">Todavía no ha llegado nada al bot.</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th class="tight">Llegó</th>
+                        <th>Quién</th>
+                        <th>Qué</th>
+                        <th>Dónde está</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in recent %}
+                        <tr>
+                            <td class="tight">{{ s.sentAt|date('d/m/Y H:i') }}</td>
+                            <td>{{ s.user.displayName }}</td>
+                            <td>{{ _self.what(s) }}</td>
+                            <td>
+                                {% if s.routed %}
+                                    <b>{{ labels[s.destination] ?? s.destination }}</b>
+                                {% else %}
+                                    <span class="tgs-muted">Descartado</span>
+                                {% endif %}
+                                <br><span class="tgs-muted">{{ s.summary }}{% if s.resolvedBy %} · {{ s.resolvedBy.displayName }}{% endif %}</span>
+                            </td>
+                            <td>
+                                {% if s.routed %}
+                                    {{ _self.actions(s, options[s.id] ?? [], s.destination) }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

@@ -14,8 +14,12 @@ use Symfony\Component\Mime\MimeTypes;
  *
  * Elige SÓLO entre los candidatos: la respuesta está atada a sus claves en el
  * esquema, así que no puede inventarse un destino. «Ninguno» es una respuesta
- * válida y es lo que debe salir cuando no encaja claramente: mejor no guardar que
- * guardar en el sitio equivocado.
+ * válida.
+ *
+ * Además dice si está seguro. Sólo entonces el bot guarda sin preguntar; si duda,
+ * pregunta con botones a quien lo mandó. Que el modelo diga «seguro» no garantiza
+ * que acierte (estos modelos se equivocan también con aplomo): por eso, aunque
+ * guarde solo, el bot cuenta lo que ha entendido y ofrece «Es otra cosa».
  */
 class TelegramClassifier
 {
@@ -61,17 +65,15 @@ class TelegramClassifier
     }
 
     /**
-     * Elige destino.
+     * A qué apartado va y si lo tiene claro.
      *
      * @param TelegramInput             $input      Lo recibido.
      * @param list<TelegramDestination> $candidates Destinos posibles (dos o más).
      *
-     * @return TelegramDestination|null El elegido, o null si no encaja en ninguno.
-     *
      * @throws GeminiException      Si Gemini no ha contestado.
      * @throws TelegramApiException Si el fichero no se puede descargar.
      */
-    public function choose(TelegramInput $input, array $candidates): ?TelegramDestination
+    public function classify(TelegramInput $input, array $candidates): TelegramClassification
     {
         $byKey = [];
         foreach ($candidates as $destination) {
@@ -92,11 +94,15 @@ class TelegramClassifier
             'type' => 'OBJECT',
             'properties' => [
                 'destino' => ['type' => 'STRING', 'enum' => [...array_keys($byKey), self::NONE]],
+                'seguro' => ['type' => 'BOOLEAN'],
             ],
-            'required' => ['destino'],
+            'required' => ['destino', 'seguro'],
         ]);
 
-        return $byKey[(string) ($result['data']['destino'] ?? self::NONE)] ?? null;
+        return new TelegramClassification(
+            $byKey[(string) ($result['data']['destino'] ?? self::NONE)] ?? null,
+            ($result['data']['seguro'] ?? false) === true,
+        );
     }
 
     /**
@@ -119,6 +125,7 @@ class TelegramClassifier
         return "Alguien de la asociación CSA Vega de Jarama (huerta ecológica que reparte cestas a sus socias) ha mandado esto al bot de la asociación.\n"
             . ($context !== [] ? implode("\n", $context) . "\n" : '')
             . "Elige a qué apartado va, según estas descripciones:\n{$options}\n"
-            . 'Si no encaja claramente en ninguno, responde "' . self::NONE . '". No elijas uno por aproximación.';
+            . 'Si no encaja en ninguno, responde "' . self::NONE . '". '
+            . 'En "seguro" pon true sólo si no hay duda razonable de que es de ese apartado; si podría ser de otro, false.';
     }
 }

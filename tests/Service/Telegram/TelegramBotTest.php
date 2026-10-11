@@ -4,18 +4,22 @@ namespace App\Tests\Service\Telegram;
 
 use App\Entity\ReceivedInvoice;
 use App\Entity\TelegramLink;
+use App\Entity\TelegramSubmission;
 use App\Entity\User;
 use App\Repository\TelegramLinkRepository;
+use App\Repository\TelegramSubmissionRepository;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Ai\GeminiClient;
 use App\Service\AppSettings;
 use App\Service\Telegram\Destination\InvoiceDestination;
 use App\Service\Telegram\Destination\TelegramDestination;
+use App\Service\Telegram\Destination\TelegramOutcome;
 use App\Service\Telegram\TelegramBot;
 use App\Service\Telegram\TelegramBotApi;
-use App\Service\Telegram\TelegramChat;
 use App\Service\Telegram\TelegramClassifier;
+use App\Service\Telegram\TelegramFileStore;
 use App\Service\Telegram\TelegramInput;
+use App\Service\Telegram\TelegramSubmissionRouter;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -27,7 +31,8 @@ use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
 
 /**
  * El bot contra la base de verdad: vincular con la invitación, no atender a
- * desconocidos, dejar las facturas en la bandeja y no guardar lo que no sabe qué es.
+ * desconocidos, dejar las facturas en la bandeja, preguntar cuando duda y dejar
+ * corregirlo con los botones («Es otra cosa», otro apartado, descartar).
  *
  * Telegram y Gemini están simulados; los mensajes tienen la forma real de los de
  * Telegram (fotos en varios tamaños, documentos con su nombre, chats privados y de
@@ -40,8 +45,20 @@ class TelegramBotTest extends KernelTestCase
     private bool $accountingWasOn;
     private User $user;
 
-    /** @var list<string> Lo que el bot ha contestado. */
+    /** @var list<string> Lo que el bot ha contestado (mensajes nuevos y cambiados). */
     private array $replies = [];
+
+    /** @var list<list<string>> Los botones de cada respuesta, por su texto. */
+    private array $buttons = [];
+
+    /** @var list<string|null> Lo contestado a cada pulsación de botón. */
+    private array $answers = [];
+
+    /** Si Gemini dice que está seguro. */
+    private bool $sure = true;
+
+    /** Si el apartado de mentira se niega a deshacer. */
+    private bool $galleryRefusesUndo = false;
 
     /** @var list<string> Ficheros que ha pedido descargar. */
     private array $downloads = [];
@@ -90,6 +107,12 @@ class TelegramBotTest extends KernelTestCase
                 $files->discard($invoice->getFileName());
                 $this->em->remove($invoice);
             }
+        }
+        $this->em->flush();
+        $telegramFiles = static::getContainer()->get(TelegramFileStore::class);
+        foreach ($this->em->getRepository(TelegramSubmission::class)->findBy(['user' => $this->user]) as $submission) {
+            $telegramFiles->discard($submission->getFileName());
+            $this->em->remove($submission);
         }
         $this->em->flush();
         // La fila del vínculo cae con la persona (ON DELETE CASCADE), pero el
@@ -230,7 +253,15 @@ class TelegramBotTest extends KernelTestCase
         $this->assertSame('application/pdf', $invoices[0]->getMimeType());
         $this->assertSame($this->user->getId(), $invoices[0]->getUploadedBy()?->getId());
         $this->assertNotNull(static::getContainer()->get(InvoiceFileStore::class)->pathTo($invoices[0]->getFileName()));
-        $this->assertStringContainsString('Recibido «Factura Movistar.pdf»', $this->lastReply());
+        // Sin Gemini en los tests no se lee: lo dice, y ofrece corregirlo.
+        $this->assertStringContainsString('Factura «Factura Movistar.pdf» guardada', $this->lastReply());
+        $this->assertSame(['Es otra cosa'], $this->lastButtons());
+
+        $submission = $this->onlySubmission();
+        $this->assertTrue($submission->isRouted());
+        $this->assertSame('invoice', $submission->getDestination());
+        $this->assertSame((string) $invoices[0]->getId(), $submission->getTargetRef());
+        $this->assertNotNull(static::getContainer()->get(TelegramFileStore::class)->pathTo($submission->getFileName()), 'el envío guarda su propia copia');
     }
 
     /** Las mismas reglas que la subida web: un fichero que no es factura ni foto no se guarda. */
@@ -242,6 +273,7 @@ class TelegramBotTest extends KernelTestCase
 
         $this->assertSame([], $this->invoicesFrom());
         $this->assertStringContainsString('formato', $this->lastReply());
+        $this->assertSame(TelegramSubmission::STATUS_DISCARDED, $this->onlySubmission()->getStatus());
     }
 
     public function testUnTextoContestaConLoQueSePuedeMandar(): void
@@ -252,6 +284,7 @@ class TelegramBotTest extends KernelTestCase
 
         $this->assertStringContainsString('Eso no sé qué hacer con ello', $this->lastReply());
         $this->assertStringContainsString('Facturas y tickets', $this->lastReply());
+        $this->assertSame([], $this->submissionsFrom(), 'lo que nadie puede recibir no se guarda');
     }
 
     /** Con contabilidad apagada, una foto no tiene destino: ni se descarga. */
@@ -280,8 +313,8 @@ class TelegramBotTest extends KernelTestCase
         $this->assertSame([], $this->invoicesFrom());
     }
 
-    /** Con varios destinos posibles decide Gemini; si dice que no es de ninguno, no se guarda. */
-    public function testSiElClasificadorNoLoReconoceNoSeGuardaEnNingunSitio(): void
+    /** Si el clasificador no sabe qué es, no lo guarda en ningún apartado: pregunta, y queda pendiente. */
+    public function testSiElClasificadorNoLoReconocePregunta(): void
     {
         $this->linkAs(555000009);
         $this->classification = TelegramClassifier::NONE;
@@ -290,15 +323,117 @@ class TelegramBotTest extends KernelTestCase
 
         $this->assertSame([], $this->invoicesFrom());
         $this->assertStringContainsString('No sé qué es esto', $this->lastReply());
+        $this->assertSame(['Factura recibida', 'Galería', 'Nada de esto: descártalo'], $this->lastButtons());
+        $this->assertTrue($this->onlySubmission()->isPending());
     }
 
-    public function testSiElClasificadorLoReconoceComoFacturaVaALaBandeja(): void
+    public function testSiElClasificadorLoTieneClaroVaALaBandeja(): void
     {
         $this->linkAs(555000010);
         $this->classification = 'invoice';
 
         $this->bot(withGallery: true)->handle($this->update($this->pdfMessage(555000010), 555000010));
 
+        $this->assertCount(1, $this->invoicesFrom());
+    }
+
+    /** Si cree que es una factura pero duda, no la guarda: pregunta, con su apuesta primero. */
+    public function testSiElClasificadorDudaPreguntaConSuApuestaPrimero(): void
+    {
+        $this->linkAs(555000017);
+        $this->classification = 'gallery';
+        $this->sure = false;
+
+        $this->bot(withGallery: true)->handle($this->update($this->pdfMessage(555000017), 555000017));
+
+        $this->assertSame([], $this->invoicesFrom());
+        $this->assertStringContainsString('Creo que es «Galería»', $this->lastReply());
+        $this->assertSame(['Galería', 'Factura recibida', 'Nada de esto: descártalo'], $this->lastButtons());
+        $this->assertTrue($this->onlySubmission()->isPending());
+    }
+
+    /** Un pendiente se coloca con su botón. */
+    public function testElBotonDeUnPendienteLoColoca(): void
+    {
+        $this->linkAs(555000018);
+        $this->classification = TelegramClassifier::NONE;
+        $bot = $this->bot(withGallery: true);
+        $bot->handle($this->update($this->pdfMessage(555000018), 555000018));
+        $id = (int) $this->onlySubmission()->getId();
+
+        $bot->handle($this->press(555000018, 's:' . $id . ':r:invoice'));
+
+        $this->assertCount(1, $this->invoicesFrom());
+        $this->assertSame('invoice', $this->onlySubmission()->getDestination());
+        $this->assertSame([null], $this->answers);
+        $this->assertSame(['Es otra cosa'], $this->lastButtons());
+    }
+
+    /** «Es otra cosa» ofrece los otros apartados; elegir uno saca la factura de la bandeja. */
+    public function testEsOtraCosaLoCambiaDeApartado(): void
+    {
+        $this->linkAs(555000019);
+        $this->classification = 'invoice';
+        $bot = $this->bot(withGallery: true);
+        $bot->handle($this->update($this->pdfMessage(555000019), 555000019));
+        $id = (int) $this->onlySubmission()->getId();
+        $this->assertCount(1, $this->invoicesFrom());
+
+        $bot->handle($this->press(555000019, 's:' . $id . ':o'));
+        $this->assertSame(['Galería', 'Nada de esto: descártalo', '« Estaba bien'], $this->lastButtons());
+
+        $bot->handle($this->press(555000019, 's:' . $id . ':r:gallery'));
+
+        $this->assertSame([], $this->invoicesFrom(), 'la factura sale de la bandeja');
+        $submission = $this->onlySubmission();
+        $this->assertSame('gallery', $submission->getDestination());
+        $this->assertSame('Guardada en la galería.', $submission->getSummary());
+    }
+
+    /** Descartar algo ya colocado lo deshace allí. */
+    public function testDescartarLoQueYaEstabaColocadoLoDeshace(): void
+    {
+        $this->linkAs(555000020);
+        $bot = $this->bot();
+        $bot->handle($this->update($this->pdfMessage(555000020), 555000020));
+        $id = (int) $this->onlySubmission()->getId();
+
+        $bot->handle($this->press(555000020, 's:' . $id . ':x'));
+
+        $this->assertSame([], $this->invoicesFrom());
+        $this->assertSame(TelegramSubmission::STATUS_DISCARDED, $this->onlySubmission()->getStatus());
+        $this->assertStringContainsString('no lo guardo', $this->lastReply());
+    }
+
+    /** Si el apartado ya no deja deshacerlo, no se mueve y se dice por qué. */
+    public function testSiNoSePuedeDeshacerNoSeMueve(): void
+    {
+        $this->linkAs(555000021);
+        $this->classification = 'gallery';
+        $this->galleryRefusesUndo = true;
+        $bot = $this->bot(withGallery: true);
+        $bot->handle($this->update($this->pdfMessage(555000021), 555000021));
+        $id = (int) $this->onlySubmission()->getId();
+
+        $bot->handle($this->press(555000021, 's:' . $id . ':r:invoice'));
+
+        $this->assertSame(['Ya está publicada.'], $this->answers);
+        $this->assertSame('gallery', $this->onlySubmission()->getDestination());
+        $this->assertSame([], $this->invoicesFrom());
+    }
+
+    /** Los botones de un envío sólo valen para quien lo mandó. */
+    public function testLosBotonesDeOtraPersonaNoHacenNada(): void
+    {
+        $this->linkAs(555000022);
+        $bot = $this->bot();
+        $bot->handle($this->update($this->pdfMessage(555000022), 555000022));
+        $id = (int) $this->onlySubmission()->getId();
+
+        $bot->handle($this->press(999000222, 's:' . $id . ':x'));
+
+        $this->assertSame(['Este botón ya no sirve.'], $this->answers);
+        $this->assertTrue($this->onlySubmission()->isRouted());
         $this->assertCount(1, $this->invoicesFrom());
     }
 
@@ -331,10 +466,20 @@ class TelegramBotTest extends KernelTestCase
     private function bot(string $fileContent = "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n", bool $withGallery = false): TelegramBot
     {
         $telegram = new MockHttpClient(function (string $method, string $url, array $options) use ($fileContent): MockResponse {
-            if (str_contains($url, '/sendMessage')) {
-                $this->replies[] = json_decode($options['body'], true)['text'];
+            if (str_contains($url, '/sendMessage') || str_contains($url, '/editMessageText')) {
+                $body = json_decode($options['body'], true);
+                $this->replies[] = $body['text'];
+                $this->buttons[] = array_merge(...array_map(
+                    static fn (array $row): array => array_column($row, 'text'),
+                    $body['reply_markup']['inline_keyboard'] ?? [],
+                ));
 
-                return new MockResponse('{"ok":true,"result":{}}');
+                return new MockResponse('{"ok":true,"result":{"message_id":' . \count($this->replies) . '}}');
+            }
+            if (str_contains($url, '/answerCallbackQuery')) {
+                $this->answers[] = json_decode($options['body'], true)['text'] ?? null;
+
+                return new MockResponse('{"ok":true,"result":true}');
             }
             if (str_contains($url, '/getFile')) {
                 $this->downloads[] = json_decode($options['body'], true)['file_id'];
@@ -353,15 +498,24 @@ class TelegramBotTest extends KernelTestCase
             return new MockResponse('{"ok":false,"description":"no simulado"}', ['http_code' => 400]);
         });
         $gemini = new MockHttpClient(fn (): MockResponse => new MockResponse(json_encode([
-            'candidates' => [['content' => ['parts' => [['text' => json_encode(['destino' => $this->classification])]]]]],
+            'candidates' => [['content' => ['parts' => [['text' => json_encode(['destino' => $this->classification, 'seguro' => $this->sure])]]]]],
         ])));
 
         $destinations = [static::getContainer()->get(InvoiceDestination::class)];
         if ($withGallery) {
-            $destinations[] = new class implements TelegramDestination {
+            $destinations[] = new class($this->galleryRefusesUndo) implements TelegramDestination {
+                public function __construct(private readonly bool $refusesUndo)
+                {
+                }
+
                 public function key(): string
                 {
                     return 'gallery';
+                }
+
+                public function label(): string
+                {
+                    return 'Galería';
                 }
 
                 public function description(): string
@@ -374,9 +528,14 @@ class TelegramBotTest extends KernelTestCase
                     return $input->hasFile();
                 }
 
-                public function handle(TelegramInput $input, TelegramLink $link, TelegramChat $chat): void
+                public function commit(TelegramInput $input, User $user): TelegramOutcome
                 {
-                    $chat->say('Guardada en la galería.');
+                    return new TelegramOutcome('g1', 'Guardada en la galería.');
+                }
+
+                public function undo(string $ref): ?string
+                {
+                    return $this->refusesUndo ? 'Ya está publicada.' : null;
                 }
 
                 public function help(User $user): ?string
@@ -386,11 +545,15 @@ class TelegramBotTest extends KernelTestCase
             };
         }
 
+        $api = new TelegramBotApi($telegram, '123:TOKEN');
+
         return new TelegramBot(
-            new TelegramBotApi($telegram, '123:TOKEN'),
+            $api,
             static::getContainer()->get(TelegramLinkRepository::class),
             $destinations,
             new TelegramClassifier(new GeminiClient($gemini, 'clave', ['modelo-a'])),
+            new TelegramSubmissionRouter($destinations, static::getContainer()->get(TelegramFileStore::class), $api, $this->em, new NullLogger()),
+            static::getContainer()->get(TelegramSubmissionRepository::class),
             $this->em,
             $this->seen,
             new RateLimiterFactory(['id' => 'telegram_test', 'policy' => 'sliding_window', 'limit' => $this->limit, 'interval' => '1 hour'], new InMemoryStorage()),
@@ -414,6 +577,24 @@ class TelegramBotTest extends KernelTestCase
                 'date' => time(),
                 'from' => array_filter(['id' => $from, 'is_bot' => false, 'first_name' => $firstName, 'last_name' => $lastName], static fn ($v) => $v !== null),
                 'chat' => ['id' => $from, 'type' => 'private', 'first_name' => $firstName],
+            ],
+        ];
+    }
+
+    /**
+     * Una pulsación de botón en el chat privado de `$from`.
+     *
+     * @return array<string, mixed>
+     */
+    private function press(int $from, string $data): array
+    {
+        return [
+            'update_id' => random_int(1, 1_000_000),
+            'callback_query' => [
+                'id' => 'cb' . random_int(1, 1_000_000),
+                'from' => ['id' => $from, 'is_bot' => false, 'first_name' => 'Prueba'],
+                'message' => ['message_id' => 1, 'chat' => ['id' => $from, 'type' => 'private']],
+                'data' => $data,
             ],
         ];
     }
@@ -470,6 +651,35 @@ class TelegramBotTest extends KernelTestCase
     private function telegramInvoiceCount(): int
     {
         return $this->em->getRepository(ReceivedInvoice::class)->count(['source' => ReceivedInvoice::SOURCE_TELEGRAM]);
+    }
+
+    /**
+     * Los envíos de la persona del test, releídos de la base.
+     *
+     * @return list<TelegramSubmission>
+     */
+    private function submissionsFrom(): array
+    {
+        $this->em->clear();
+        $this->user = $this->em->find(User::class, $this->user->getId());
+
+        return $this->em->getRepository(TelegramSubmission::class)->findBy(['user' => $this->user]);
+    }
+
+    private function onlySubmission(): TelegramSubmission
+    {
+        $found = $this->submissionsFrom();
+        $this->assertCount(1, $found);
+
+        return $found[0];
+    }
+
+    /** @return list<string> */
+    private function lastButtons(): array
+    {
+        $this->assertNotSame([], $this->buttons, 'El bot no ha contestado nada.');
+
+        return end($this->buttons);
     }
 
     private function lastReply(): string

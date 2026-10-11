@@ -2,15 +2,13 @@
 
 namespace App\Service\Telegram\Destination;
 
-use App\Entity\TelegramLink;
 use App\Entity\User;
-use App\Service\Telegram\TelegramChat;
 use App\Service\Telegram\TelegramInput;
 use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
 
 /**
- * Una cosa que el bot sabe hacer con lo que le mandan: guardar una factura,
- * apuntar una cosecha, guardar fotos para una galería…
+ * Un apartado al que puede ir lo que llega al bot: facturas, y lo que venga
+ * (cosecha, huevos, fichajes…).
  *
  * AÑADIR UNA OPCIÓN AL BOT ES ESCRIBIR UNA CLASE QUE IMPLEMENTE ESTO. Nada más: el
  * tag la registra, {@see \App\Service\Telegram\TelegramBot} la tiene en cuenta y,
@@ -19,12 +17,21 @@ use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
  *
  * Cada destino comprueba sus permisos en {@see accepts()}: estar vinculado al bot no
  * da más derechos que los que esa persona tiene en la web.
+ *
+ * Cada apartado GUARDA ({@see commit()}) y sabe DESHACER lo que guardó
+ * ({@see undo()}). El bot guarda sin preguntar cuando lo tiene claro y le cuenta a
+ * quien lo mandó lo que ha entendido, con un botón «Es otra cosa»: si se equivocó,
+ * se deshace aquí y se manda al apartado bueno. Por eso el resumen de
+ * {@see TelegramOutcome} tiene que decir lo entendido, no sólo «recibido».
  */
 #[AutoconfigureTag('app.telegram_destination')]
 interface TelegramDestination
 {
-    /** Identificador estable y corto (`invoice`, `harvest`…). */
+    /** Identificador estable y corto (`invoice`, `harvest`…). Se guarda en cada envío. */
     public function key(): string;
+
+    /** Nombre para un botón y para la web: «Factura recibida», «Cosecha». */
+    public function label(): string;
 
     /**
      * Qué es lo que recibe, para que el clasificador sepa distinguirlo de lo de los
@@ -44,13 +51,26 @@ interface TelegramDestination
     public function accepts(TelegramInput $input, User $user): bool;
 
     /**
-     * Lo atiende y contesta por `$chat`.
+     * Se queda con el envío.
      *
-     * @param TelegramInput $input Lo recibido.
-     * @param TelegramLink  $link  Quién lo manda.
-     * @param TelegramChat  $chat  Para contestar.
+     * @param TelegramInput $input Lo recibido. Su fichero, si lo pide, es una copia
+     *                             que puede llevarse (moverla).
+     * @param User          $user  Quién lo mandó.
+     *
+     * @throws TelegramRejected Si no puede quedárselo; el mensaje es para quien lo mandó.
      */
-    public function handle(TelegramInput $input, TelegramLink $link, TelegramChat $chat): void;
+    public function commit(TelegramInput $input, User $user): TelegramOutcome;
+
+    /**
+     * Deshace lo que guardó {@see commit()}, porque no era para este apartado.
+     *
+     * @param string $ref Lo que devolvió commit().
+     *
+     * @return string|null Null si se ha deshecho (o ya no estaba); si no se puede,
+     *                     por qué, para quien lo pidió: «Esa factura ya está anotada
+     *                     en el libro; corrígela desde la web».
+     */
+    public function undo(string $ref): ?string;
 
     /**
      * Una línea para la ayuda: qué se le puede mandar. Null si esta persona no

@@ -29,6 +29,13 @@ class TelegramBotApi
     public const MAX_DOWNLOAD_BYTES = 20 * 1024 * 1024;
 
     /**
+     * Lo que se le pide a Telegram que mande: mensajes y pulsaciones de botones.
+     * Cambiarlo en un bot ya en marcha exige volver a poner el webhook
+     * (`app:telegram-webhook set`): Telegram guarda la lista con el webhook.
+     */
+    private const ALLOWED_UPDATES = ['message', 'callback_query'];
+
+    /**
      * @param HttpClientInterface $http  Cliente HTTP SIN logger (ver app.telegram_http_client).
      * @param string              $token Token del bot; vacío = apagado.
      */
@@ -72,16 +79,51 @@ class TelegramBotApi
     }
 
     /**
-     * Manda un mensaje de texto a un chat.
+     * Manda un mensaje de texto a un chat, con botones debajo si se dan.
      *
-     * @param string $chatId Chat de destino.
-     * @param string $text   Texto, sin formato.
+     * @param string                                  $chatId  Chat de destino.
+     * @param string                                  $text    Texto, sin formato.
+     * @param list<list<array{0: string, 1: string}>> $buttons Filas de botones: [texto, dato que vuelve al pulsarlo].
+     *
+     * @return int|null Id del mensaje enviado, para cambiarlo luego.
      *
      * @throws TelegramApiException Si Telegram lo rechaza o no hay conexión.
      */
-    public function sendMessage(string $chatId, string $text): void
+    public function sendMessage(string $chatId, string $text, array $buttons = []): ?int
     {
-        $this->call('sendMessage', ['chat_id' => $chatId, 'text' => $text]);
+        $result = $this->call('sendMessage', ['chat_id' => $chatId, 'text' => $text] + ($buttons !== [] ? $this->keyboard($buttons) : []));
+
+        return isset($result['message_id']) ? (int) $result['message_id'] : null;
+    }
+
+    /**
+     * Cambia el texto (y los botones) de un mensaje ya enviado por el bot. Sin
+     * botones, los quita: así un mensaje ya resuelto no se puede volver a pulsar.
+     *
+     * @param string                                  $chatId    Chat.
+     * @param int                                     $messageId Mensaje.
+     * @param string                                  $text      Texto nuevo.
+     * @param list<list<array{0: string, 1: string}>> $buttons   Botones nuevos.
+     *
+     * @throws TelegramApiException Si Telegram lo rechaza o no hay conexión.
+     */
+    public function editMessageText(string $chatId, int $messageId, string $text, array $buttons = []): void
+    {
+        $this->call('editMessageText', ['chat_id' => $chatId, 'message_id' => $messageId, 'text' => $text] + $this->keyboard($buttons));
+    }
+
+    /**
+     * Responde a la pulsación de un botón. Hay que hacerlo siempre: si no, Telegram
+     * deja el botón «cargando» unos segundos.
+     *
+     * @param string      $callbackId Id de la pulsación.
+     * @param string|null $text       Aviso breve que sale encima del chat.
+     *
+     * @throws TelegramApiException Si Telegram lo rechaza o no hay conexión.
+     */
+    public function answerCallbackQuery(string $callbackId, ?string $text = null): void
+    {
+        $this->call('answerCallbackQuery', array_filter(['callback_query_id' => $callbackId, 'text' => $text], static fn ($v) => $v !== null));
     }
 
     /**
@@ -101,7 +143,7 @@ class TelegramBotApi
         return $this->call('getUpdates', [
             'offset' => $offset,
             'timeout' => $timeout,
-            'allowed_updates' => ['message'],
+            'allowed_updates' => self::ALLOWED_UPDATES,
         ], $timeout + 10);
     }
 
@@ -118,7 +160,7 @@ class TelegramBotApi
         $this->call('setWebhook', [
             'url' => $url,
             'secret_token' => $this->webhookSecret(),
-            'allowed_updates' => ['message'],
+            'allowed_updates' => self::ALLOWED_UPDATES,
             // Por defecto Telegram abre hasta 40 conexiones a la vez. En un
             // hosting compartido, cada una es un proceso PHP leyendo con Gemini;
             // con pocas, los mensajes esperan su turno en Telegram, no aquí.
@@ -198,6 +240,25 @@ class TelegramBotApi
         }
 
         return $target;
+    }
+
+    /**
+     * Los botones en la forma que pide Telegram (teclado «inline», debajo del
+     * mensaje). Sin botones, un teclado vacío: al editar, eso es lo que los quita.
+     *
+     * @param list<list<array{0: string, 1: string}>> $buttons Filas de [texto, dato].
+     *
+     * @return array{reply_markup: array{inline_keyboard: list<list<array{text: string, callback_data: string}>>}}
+     */
+    private function keyboard(array $buttons): array
+    {
+        return ['reply_markup' => ['inline_keyboard' => array_map(
+            static fn (array $row): array => array_map(
+                static fn (array $button): array => ['text' => $button[0], 'callback_data' => $button[1]],
+                $row,
+            ),
+            $buttons,
+        )]];
     }
 
     /**

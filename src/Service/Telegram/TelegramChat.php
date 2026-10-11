@@ -5,8 +5,8 @@ namespace App\Service\Telegram;
 use Psr\Log\LoggerInterface;
 
 /**
- * La conversación con quien ha escrito: lo único que un destino necesita para
- * contestar, sin saber nada de la API de Telegram.
+ * La conversación con quien ha escrito: lo único que hace falta para contestar,
+ * sin saber nada de la API de Telegram.
  */
 final class TelegramChat
 {
@@ -26,14 +26,45 @@ final class TelegramChat
      * Contesta. Si no se puede (la persona ha bloqueado el bot, Telegram caído), se
      * apunta y se sigue: lo que había que guardar ya está guardado.
      *
-     * @param string $text Respuesta, sin formato.
+     * @param string                                  $text    Respuesta, sin formato.
+     * @param list<list<array{0: string, 1: string}>> $buttons Filas de botones [texto, dato].
+     *
+     * @return int|null Id del mensaje, o null si no se pudo mandar.
      */
-    public function say(string $text): void
+    public function say(string $text, array $buttons = []): ?int
     {
         try {
-            $this->api->sendMessage($this->chatId, $text);
+            return $this->api->sendMessage($this->chatId, $text, $buttons);
         } catch (TelegramApiException $e) {
             $this->logger->warning('Telegram: no se pudo contestar', ['error' => $e->getMessage()]);
+
+            return null;
         }
+    }
+
+    /**
+     * Cambia un mensaje ya enviado (para quitarle los botones cuando se resuelve).
+     * Si no se puede (muy antiguo, ya borrado), se manda uno nuevo: lo importante
+     * es que le llegue.
+     *
+     * @param int|null                                $messageId Mensaje a cambiar; null = mandar uno nuevo.
+     * @param string                                  $text      Texto nuevo.
+     * @param list<list<array{0: string, 1: string}>> $buttons   Botones nuevos (ninguno los quita).
+     *
+     * @return int|null Id del mensaje que queda con ese texto.
+     */
+    public function replace(?int $messageId, string $text, array $buttons = []): ?int
+    {
+        if ($messageId !== null) {
+            try {
+                $this->api->editMessageText($this->chatId, $messageId, $text, $buttons);
+
+                return $messageId;
+            } catch (TelegramApiException $e) {
+                $this->logger->info('Telegram: no se pudo cambiar un mensaje; se manda otro', ['error' => $e->getMessage()]);
+            }
+        }
+
+        return $this->say($text, $buttons);
     }
 }

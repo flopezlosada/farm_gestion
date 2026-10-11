@@ -7,3 +7,4 @@
 parameters:
     app.obligation_documents_dir: '%kernel.cache_dir%/documentos-vencimientos'
     app.invoice_files_dir: '%kernel.cache_dir%/documentos-facturas'
+    app.telegram_files_dir: '%kernel.cache_dir%/documentos-telegram'

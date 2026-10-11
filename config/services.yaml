@@ -23,6 +23,11 @@ parameters:
     # ReceivedInvoiceController con el permiso de contabilidad. No va en el repo.
     app.invoice_files_dir: '%kernel.project_dir%/var/documentos/facturas'
 
+    # Archivo de lo que llega al bot de Telegram (su copia de cada fichero, para
+    # poder mandarlo a otro apartado si el bot se equivocó). Fuera de public/ y
+    # fuera del repo, como los anteriores.
+    app.telegram_files_dir: '%kernel.project_dir%/var/documentos/telegram'
+
     # Modelos de Gemini, por orden de preferencia (facturas, bot de Telegram…). Si
     # uno está saturado o sin cupo se prueba el siguiente. Flash-Lite primero: en el
     # plan gratuito es el de más cupo (15 por minuto y 500 al día en oct-2026).

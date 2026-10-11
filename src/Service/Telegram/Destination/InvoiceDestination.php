@@ -3,13 +3,11 @@
 namespace App\Service\Telegram\Destination;
 
 use App\Entity\ReceivedInvoice;
-use App\Entity\TelegramLink;
 use App\Entity\User;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\Invoice\InvoiceReadQueue;
 use App\Service\AppSettings;
 use App\Service\Telegram\TelegramApiException;
-use App\Service\Telegram\TelegramChat;
 use App\Service\Telegram\TelegramInput;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -20,8 +18,12 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
  * Facturas y tickets → la bandeja de facturas recibidas.
  *
  * Deja la factura en la misma cola que la subida por la web, con las mismas reglas
- * de formato y tamaño, y la manda leer en el momento. Lo demás (proponer,
- * confirmar) es lo de siempre: el bot no sabe nada de contabilidad.
+ * de formato y tamaño, y la lee en el momento para contarle a quien la mandó lo
+ * que ha entendido (proveedor, importe, fecha). Lo demás (proponer, confirmar) es
+ * lo de siempre: el bot no sabe nada de contabilidad.
+ *
+ * Deshacer la quita de la bandeja mientras nadie la haya anotado. Anotada, ya es
+ * un apunte del libro, y eso se corrige en la web, no desde el móvil.
  *
  * Puede mandar facturas cualquiera que esté vinculado, tenga o no permiso de
  * contabilidad: es lo que hace un trabajador con el ticket de la gasolina. Mandar
@@ -52,6 +54,11 @@ class InvoiceDestination implements TelegramDestination
         return 'invoice';
     }
 
+    public function label(): string
+    {
+        return 'Factura recibida';
+    }
+
     public function description(): string
     {
         return 'Factura, factura simplificada o ticket de compra emitido por un proveedor o comercio, con importe a pagar (gasolina, ferretería, teléfono, alquiler…).';
@@ -72,23 +79,20 @@ class InvoiceDestination implements TelegramDestination
         return 'Facturas y tickets: mándame la foto o el PDF. Si la foto sale borrosa, mándala como archivo (clip → Archivo), que así Telegram no la comprime.';
     }
 
-    public function handle(TelegramInput $input, TelegramLink $link, TelegramChat $chat): void
+    public function commit(TelegramInput $input, User $user): TelegramOutcome
     {
         try {
             $path = $input->localPath();
         } catch (TelegramApiException $e) {
             $this->logger->warning('Telegram: no se pudo descargar una factura', ['error' => $e->getMessage()]);
-            $chat->say($e->getMessage());
 
-            return;
+            throw new TelegramRejected($e->getMessage());
         }
 
         $file = new File($path);
         $violations = $this->validator->validate($file, InvoiceFileStore::constraint());
         if (\count($violations) > 0) {
-            $chat->say((string) $violations->get(0)->getMessage());
-
-            return;
+            throw new TelegramRejected((string) $violations->get(0)->getMessage());
         }
 
         $name = (string) $input->fileName;
@@ -99,15 +103,61 @@ class InvoiceDestination implements TelegramDestination
             mb_substr($name, 0, 255),
             $mimeType,
             ReceivedInvoice::SOURCE_TELEGRAM,
-            $link->getUser(),
+            $user,
         );
         $this->em->persist($invoice);
         $this->em->flush();
 
-        $chat->say(sprintf('Recibido «%s». Ya está en la bandeja de facturas; ahora se lee sola.', $invoice->getOriginalName()));
-
-        // Quien manda ya tiene su respuesta; leer tarda unos segundos y, si falla,
-        // la cola lo reintenta sola.
+        // Se lee ya, para poder contar lo leído. Si falla (Gemini saturado, sin
+        // clave), la cola la reintenta sola y aquí se dice sin más.
         $this->queue->process(1, [(int) $invoice->getId()]);
+        $this->em->refresh($invoice);
+
+        return new TelegramOutcome((string) $invoice->getId(), $this->summarize($invoice));
+    }
+
+    public function undo(string $ref): ?string
+    {
+        $invoice = $this->em->find(ReceivedInvoice::class, (int) $ref);
+        if ($invoice === null) {
+            return null;
+        }
+        if ($invoice->getAccountEntry() !== null) {
+            return 'Esa factura ya está anotada en el libro. Corrígela desde la web.';
+        }
+
+        $this->files->discard($invoice->getFileName());
+        $this->em->remove($invoice);
+        $this->em->flush();
+
+        return null;
+    }
+
+    /**
+     * Lo que se ha entendido de la factura, en una frase.
+     *
+     * @param ReceivedInvoice $invoice Recién guardada (y leída, si se pudo).
+     */
+    private function summarize(ReceivedInvoice $invoice): string
+    {
+        if ($invoice->getStatus() !== ReceivedInvoice::STATUS_READ) {
+            return sprintf('Factura «%s» guardada en la bandeja. Aún no la he podido leer; se leerá sola.', $invoice->getOriginalName());
+        }
+
+        $provider = $invoice->getProviderName();
+        $total = $invoice->getTotal();
+        if ($provider === null && $total === null) {
+            return sprintf('Factura «%s» guardada en la bandeja, pero no he sacado ni el proveedor ni el importe: revísala en la web.', $invoice->getOriginalName());
+        }
+
+        $what = $provider !== null ? 'Factura de ' . $provider : 'Factura';
+        if ($total !== null) {
+            $what .= ', ' . number_format((float) $total, 2, ',', '.') . ' €';
+        }
+        if ($invoice->getInvoiceDate() !== null) {
+            $what .= ', del ' . $invoice->getInvoiceDate()->format('d/m/Y');
+        }
+
+        return $what . '. Guardada en la bandeja de facturas.';
     }
 }
