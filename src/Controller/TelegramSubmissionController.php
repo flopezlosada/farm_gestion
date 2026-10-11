@@ -113,9 +113,12 @@ class TelegramSubmissionController extends AbstractController
         }
 
         $problem = $router->route($submission, $destination, $this->actor());
-        $problem === null
-            ? $this->addFlash('success', sprintf('Guardado como «%s». Se lo hemos dicho a %s por Telegram.', $destination->label(), $submission->getUser()->getDisplayName()))
-            : $this->addFlash('danger', $problem);
+        if ($problem !== null) {
+            $this->addFlash('danger', $problem);
+        } else {
+            $this->addFlash('success', sprintf('Guardado como «%s».', $destination->label()));
+            $this->flashNotice($submission);
+        }
 
         return $this->redirectToRoute('telegram_submissions');
     }
@@ -133,11 +136,23 @@ class TelegramSubmissionController extends AbstractController
         }
 
         $problem = $router->discard($submission, $this->actor());
-        $problem === null
-            ? $this->addFlash('success', 'Descartado.')
-            : $this->addFlash('danger', $problem);
+        if ($problem !== null) {
+            $this->addFlash('danger', $problem);
+        } else {
+            $this->addFlash('success', 'Descartado.');
+            $this->flashNotice($submission);
+        }
 
         return $this->redirectToRoute('telegram_submissions');
+    }
+
+    /** Si a quien lo mandó le ha llegado el aviso: no se da por hecho. */
+    private function flashNotice(TelegramSubmission $submission): void
+    {
+        $name = $submission->getUser()->getDisplayName();
+        TelegramSubmissionRouter::wasTold($submission)
+            ? $this->addFlash('info', sprintf('%s lo ha recibido en Telegram.', $name))
+            : $this->addFlash('warning', sprintf('No se ha podido avisar a %s por Telegram (bot apagado, o lo ha bloqueado). Si hace falta, díselo por otro lado.', $name));
     }
 
     private function actor(): User

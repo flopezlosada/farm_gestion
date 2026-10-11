@@ -178,7 +178,8 @@ class TelegramSubmissionRouter
         $text = $by === null
             ? 'Vale, no lo guardo.'
             : sprintf('Lo que mandaste el %s lo han descartado desde la web: no se ha guardado.', $submission->getSentAt()->format('d/m/Y'));
-        $this->chat($submission)->replace($submission->getBotMessageId(), $this->quote($submission) . $text);
+        $submission->setBotMessageId($this->chat($submission)->replace($submission->getBotMessageId(), $this->quote($submission) . $text));
+        $this->em->flush();
 
         return null;
     }
@@ -262,6 +263,16 @@ class TelegramSubmissionRouter
         }
 
         return ['id' => (int) $m[1], 'action' => $m[2], 'key' => $m[3] ?? null];
+    }
+
+    /**
+     * Si a quien lo mandó le ha llegado el último aviso sobre este envío. Tras
+     * colocarlo o descartarlo, el mensaje del bot es el de ese aviso; si no se pudo
+     * mandar (sin bot, Telegram caído, bot bloqueado), no queda ninguno.
+     */
+    public static function wasTold(TelegramSubmission $submission): bool
+    {
+        return $submission->getBotMessageId() !== null;
     }
 
     /**

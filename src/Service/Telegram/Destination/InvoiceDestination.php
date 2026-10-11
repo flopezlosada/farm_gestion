@@ -140,8 +140,11 @@ class InvoiceDestination implements TelegramDestination
      */
     private function summarize(ReceivedInvoice $invoice): string
     {
-        if ($invoice->getStatus() !== ReceivedInvoice::STATUS_READ) {
+        if ($invoice->getStatus() === ReceivedInvoice::STATUS_PENDING) {
             return sprintf('Factura «%s» guardada en la bandeja. Aún no la he podido leer; se leerá sola.', $invoice->getOriginalName());
+        }
+        if ($invoice->getStatus() !== ReceivedInvoice::STATUS_READ) {
+            return sprintf('Factura «%s» guardada en la bandeja, pero no he podido leerla: habrá que completarla a mano en la web.', $invoice->getOriginalName());
         }
 
         $provider = $invoice->getProviderName();

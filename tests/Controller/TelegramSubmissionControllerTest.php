@@ -80,6 +80,9 @@ class TelegramSubmissionControllerTest extends AbstractAuthenticatedTest
         $client->submit($form);
 
         $this->assertResponseRedirects('/gestion/telegram/envios');
+        // Sin bot en los tests el aviso no sale, y la web no lo da por hecho.
+        $client->followRedirect();
+        $this->assertSelectorTextContains('body', 'No se ha podido avisar');
         $em = static::getContainer()->get(EntityManagerInterface::class);
         $em->clear();
         $submission = $em->find(TelegramSubmission::class, $id);
