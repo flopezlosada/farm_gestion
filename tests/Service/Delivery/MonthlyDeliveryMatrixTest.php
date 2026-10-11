@@ -4,6 +4,7 @@ namespace App\Tests\Service\Delivery;
 
 use App\Entity\Node;
 use App\Service\Delivery\MonthlyDeliveryMatrix;
+use App\Service\Delivery\NodeDeliverySheet;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -220,7 +221,100 @@ class MonthlyDeliveryMatrixTest extends TestCase
         $this->assertSame(['cestas' => 2.0, 'docenas' => 0.5], $result['grand_totals'][1]);
     }
 
+    public function testMensualConHuevosSemanalesSaleEnUnaSolaFila(): void
+    {
+        // Santos: mensual con huevo semanal. El viernes de su cesta sale MH en
+        // "Quincenales y mensuales"; los demás, H en "Solo huevos" del mismo grupo.
+        $result = $this->matrix->build([
+            $this->week('2026-08-07', [
+                $this->torremocha([['Solo huevos', [$this->eggRow('Santos', 'H', 0.0, 12, 86)]]], 0.0),
+            ]),
+            $this->week('2026-08-14', [
+                $this->torremocha([
+                    ['Semanales', [$this->row('Cris', 'S', 1.0, 1)]],
+                    ['Quincenales y mensuales', [$this->eggRow('Santos', 'MH', 1.0, 12, 86)]],
+                ], 2.0),
+            ]),
+            $this->week('2026-08-21', [
+                $this->torremocha([['Solo huevos', [$this->eggRow('Santos', 'H', 0.0, 12, 86)]]], 0.0),
+            ]),
+        ]);
+
+        $group = $result['nodes'][0]['groups'][0];
+        $this->assertSame(['Semanales', 'Quincenales y mensuales'], array_column($group['modalities'], 'label'), 'la sección "Solo huevos" desaparece: sólo estaba Santos');
+
+        $santos = $group['modalities'][1]['rows'];
+        $this->assertCount(1, $santos, 'Santos sale una sola vez en el mes');
+        $this->assertSame('MH', $santos[0]['code'], 'en la fila de su cesta, no en la de solo huevos');
+        $this->assertSame([0.0, 1.0, 0.0], array_column($santos[0]['cells'], 'cestas'));
+        $this->assertSame([12, 12, 12], array_column($santos[0]['cells'], 'egg_count'), 'la docena de cada viernes se conserva');
+
+        $this->assertSame(['cestas' => 0.0, 'egg_spec' => '1D'], $group['subtotals'][0]);
+        $this->assertSame(['cestas' => 2.0, 'egg_spec' => '1D'], $group['subtotals'][1]);
+    }
+
+    public function testCompartidaConSemanaDeSoloHuevosVuelveAlBloqueDeCompartidas(): void
+    {
+        // Mensual compartida con huevo quincenal: el viernes intermedio su entrega
+        // de solo huevos cae en su grupo de recogida, fuera del bloque Compartidas.
+        $result = $this->matrix->build([
+            $this->week('2026-08-07', [[
+                'node' => $this->node('Sierra'),
+                'sheet' => [
+                    'groups' => [$this->group('Torremocha', [['Semanales', [$this->row('Cris', 'S', 1.0, 1)]]], 1.0)],
+                    'shared' => ['rows' => [$this->eggRow('Ana', 'MCH', 0.5, 6, 10)], 'subtotal_cestas' => 0.5, 'subtotal_eggs' => '1M'],
+                    'totals' => ['cestas' => 1.5, 'docenas' => 0.5],
+                ],
+            ]]),
+            $this->week('2026-08-21', [[
+                'node' => $this->node('Sierra'),
+                'sheet' => [
+                    'groups' => [$this->group('Torremocha', [
+                        ['Semanales', [$this->row('Cris', 'S', 1.0, 1)]],
+                        ['Solo huevos', [$this->eggRow('Ana', 'H', 0.0, 6, 10)]],
+                    ], 1.0)],
+                    'shared' => ['rows' => [], 'subtotal_cestas' => 0.0, 'subtotal_eggs' => null],
+                    'totals' => ['cestas' => 1.0, 'docenas' => 0.5],
+                ],
+            ]]),
+        ]);
+
+        [$torremocha, $shared] = $result['nodes'][0]['groups'];
+        $this->assertSame(['Semanales'], array_column($torremocha['modalities'], 'label'));
+        $this->assertSame([null, null], array_column($torremocha['subtotals'], 'egg_spec'), 'la media docena de Ana ya no cuenta en Torremocha');
+
+        $ana = $shared['modalities'][0]['rows'];
+        $this->assertCount(1, $ana);
+        $this->assertSame([6, 6], array_column($ana[0]['cells'], 'egg_count'));
+        $this->assertSame(['cestas' => 0.0, 'egg_spec' => '1M'], $shared['subtotals'][1]);
+    }
+
+    public function testSoloHuevosDeVerdadSeQuedaEnSuSeccion(): void
+    {
+        $result = $this->matrix->build([
+            $this->week('2026-08-07', [
+                $this->torremocha([
+                    ['Semanales', [$this->row('Cris', 'S', 1.0, 1)]],
+                    ['Solo huevos', [$this->eggRow('Luz', 'H', 0.0, 12, 5)]],
+                ], 1.0),
+            ]),
+        ]);
+
+        $group = $result['nodes'][0]['groups'][0];
+        $this->assertSame(['Semanales', 'Solo huevos'], array_column($group['modalities'], 'label'));
+        $this->assertSame('Luz', $group['modalities'][1]['rows'][0]['name']);
+    }
+
     // --- helpers de construcción ---
+
+    /** Fila con huevos: $eggCount huevos (12 = una docena, notación "1D"). */
+    private function eggRow(string $name, string $code, float $cestas, int $eggCount, int $partnerId): array
+    {
+        return array_merge($this->row($name, $code, $cestas, $partnerId), [
+            'egg_spec' => NodeDeliverySheet::formatEggs($eggCount / 12)['spec'],
+            'egg_count' => $eggCount,
+        ]);
+    }
 
     /** Una hoja de nodo con un único grupo y su total (cestas, docenas) explícito. */
     private function sheetFor(string $nodeName, string $groupName, array $rows, float $cestas, float $docenas): array

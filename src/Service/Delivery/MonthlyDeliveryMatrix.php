@@ -121,12 +121,7 @@ class MonthlyDeliveryMatrix
             'color' => $group['color'] ?? null,
             'shared' => $shared,
             'mods' => [],         // label => ['label'=>, 'order'=>, 'rows'=> key => row]
-            'subtotals' => array_fill(0, $weekCount, null),
-        ];
-
-        $groups[$name]['subtotals'][$wi] = [
-            'cestas' => (float) ($group['subtotal_cestas'] ?? 0.0),
-            'egg_spec' => $group['subtotal_eggs'] ?? null,
+            'week_count' => $weekCount,
         ];
 
         foreach ($group['modalities'] ?? [] as $mod) {
@@ -154,8 +149,6 @@ class MonthlyDeliveryMatrix
         $this->accumulateGroup($groups, [
             'name' => self::SHARED_GROUP_NAME,
             'color' => null,
-            'subtotal_cestas' => $shared['subtotal_cestas'] ?? 0.0,
-            'subtotal_eggs' => $shared['subtotal_eggs'] ?? null,
             'modalities' => [['label' => null, 'rows' => $shared['rows']]],
         ], true, $wi, $weekCount);
     }
@@ -208,12 +201,112 @@ class MonthlyDeliveryMatrix
 
         $out = [];
         foreach ($nodes as $node) {
-            $groups = array_values(array_map($this->finalizeGroup(...), $node['groups']));
+            $groups = array_values(array_map($this->finalizeGroup(...), $this->foldEggOnlyWeeks($node['groups'])));
             usort($groups, $this->compareGroups(...));
             $out[] = ['name' => $node['name'], 'groups' => $groups, 'totals' => $node['totals']];
         }
 
         return $out;
+    }
+
+    /**
+     * Junta en una sola fila a quien recoge SOLO huevos algunas semanas del mes.
+     *
+     * Un mensual (o quincenal) con huevos más frecuentes que la cesta recoge sólo
+     * huevos en los viernes intermedios, y esa entrega se guarda con la modalidad
+     * "Solo huevos" (código H) en el grupo de recogida del socio. El semanal lo
+     * pinta bien (una fila esa semana), pero al pivotar el mes el socio acabaría en
+     * dos filas: la de su cesta (p. ej. MH) y otra en "Solo huevos". Aquí cada
+     * celda H se pasa a la fila no-H del mismo socio en el nodo — en su grupo o en
+     * Compartidas — y la fila H desaparece. Si el socio no tiene fila no-H en el
+     * nodo (es "Solo huevos" de verdad), se queda como está.
+     *
+     * Sólo mira filas H de grupos de recogida normales: las secciones especiales
+     * (Trasladados, Cestas extra, Albergue) cuentan algo distinto y se respetan.
+     *
+     * @param array<string,array> $groups acumuladores de grupo del nodo
+     * @return array<string,array> los mismos, sin filas H duplicadas ni modalidades o grupos vacíos
+     */
+    private function foldEggOnlyWeeks(array $groups): array
+    {
+        // Dónde está la fila de cesta (no-H) de cada socio: [grupo, modalidad, clave].
+        $homes = [];
+        foreach ($groups as $gName => $group) {
+            if ($this->groupWeight($gName, $group['shared']) === 2) {
+                continue;
+            }
+            foreach ($group['mods'] as $mKey => $mod) {
+                foreach ($mod['rows'] as $rKey => $row) {
+                    if (str_starts_with($rKey, 'p:') && $row['code'] !== 'H') {
+                        $homes[$rKey] ??= [$gName, $mKey, $rKey];
+                    }
+                }
+            }
+        }
+
+        foreach ($groups as $gName => $group) {
+            if ($this->groupWeight($gName, $group['shared']) === 2) {
+                continue;
+            }
+            foreach ($group['mods'] as $mKey => $mod) {
+                foreach ($mod['rows'] as $rKey => $row) {
+                    if ($row['code'] !== 'H' || !isset($homes[$rKey])) {
+                        continue;
+                    }
+                    [$hg, $hm, $hr] = $homes[$rKey];
+                    foreach ($row['cells'] as $wi => $cell) {
+                        if ($cell !== null) {
+                            $groups[$hg]['mods'][$hm]['rows'][$hr]['cells'][$wi] ??= $cell;
+                        }
+                    }
+                    unset($groups[$gName]['mods'][$mKey]['rows'][$rKey]);
+                }
+            }
+        }
+
+        return array_filter(
+            array_map(static function (array $group): array {
+                $group['mods'] = array_filter($group['mods'], static fn (array $m): bool => $m['rows'] !== []);
+
+                return $group;
+            }, $groups),
+            static fn (array $g): bool => $g['mods'] !== [],
+        );
+    }
+
+    /**
+     * Subtotal de un grupo en cada semana, sumado de sus filas: cestas y huevos
+     * (en la notación D/M del listado). Null la semana en que el grupo no tiene
+     * ninguna entrega. Se suma aquí y no se copia del semanal porque
+     * {@see foldEggOnlyWeeks} puede mover celdas de un grupo a otro.
+     *
+     * @param array<string,array> $mods modalidades del grupo con sus filas
+     * @return list<?array{cestas:float, egg_spec:?string}>
+     */
+    private function subtotalsFromRows(array $mods, int $weekCount): array
+    {
+        $subtotals = array_fill(0, $weekCount, null);
+        $eggCounts = array_fill(0, $weekCount, 0);
+        foreach ($mods as $mod) {
+            foreach ($mod['rows'] as $row) {
+                foreach ($row['cells'] as $wi => $cell) {
+                    if ($cell === null) {
+                        continue;
+                    }
+                    $subtotals[$wi] ??= ['cestas' => 0.0, 'egg_spec' => null];
+                    $subtotals[$wi]['cestas'] += $cell['cestas'];
+                    $eggCounts[$wi] += $cell['egg_count'];
+                }
+            }
+        }
+
+        foreach ($subtotals as $wi => $st) {
+            if ($st !== null) {
+                $subtotals[$wi]['egg_spec'] = NodeDeliverySheet::formatEggs($eggCounts[$wi] / 12)['spec'];
+            }
+        }
+
+        return $subtotals;
     }
 
     /**
@@ -246,7 +339,7 @@ class MonthlyDeliveryMatrix
             'shared' => $group['shared'],
             'multi_mod' => count($modalities) > 1,
             'modalities' => $modalities,
-            'subtotals' => $group['subtotals'],
+            'subtotals' => $this->subtotalsFromRows($group['mods'], $group['week_count']),
         ];
     }
 

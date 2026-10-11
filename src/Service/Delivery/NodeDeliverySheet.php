@@ -256,7 +256,7 @@ class NodeDeliverySheet
                 'color' => $g['color'],
                 'locality' => $g['locality'],
                 'subtotal_cestas' => $g['subtotal_cestas'],
-                'subtotal_eggs' => $this->formatEggs($g['subtotal_dozens'])['spec'],
+                'subtotal_eggs' => self::formatEggs($g['subtotal_dozens'])['spec'],
                 'modalities' => array_values($g['mods']),
             ];
         }
@@ -378,7 +378,7 @@ class NodeDeliverySheet
             $dozens += $line->dozens;
         }
 
-        return $this->formatEggs($dozens)['spec'];
+        return self::formatEggs($dozens)['spec'];
     }
 
     /**
@@ -449,7 +449,7 @@ class NodeDeliverySheet
      */
     private function row(DeliveryLine $line): array
     {
-        $eggs = $this->formatEggs($line->dozens);
+        $eggs = self::formatEggs($line->dozens);
 
         return [
             'name' => $line->nameForDelivery,
@@ -512,9 +512,11 @@ class NodeDeliverySheet
      * materializadas: 0,5→"1M"/6, 1→"1D"/12, 1,5→"1D+1M"/18, 2→"2D"/24…
      * Devuelve spec=null cuando no hay huevos en la entrega.
      *
+     * Pública porque el listado mensual suma sus subtotales con la misma notación.
+     *
      * @return array{spec:?string, count:int}
      */
-    private function formatEggs(float $dozens): array
+    public static function formatEggs(float $dozens): array
     {
         if ($dozens <= 0.0) {
             return ['spec' => null, 'count' => 0];
