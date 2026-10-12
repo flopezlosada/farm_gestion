@@ -1,0 +1,24 @@
+<style>
+    .iss-line { display: grid; grid-template-columns: 1fr 150px 130px auto; gap: var(--csa-sp-3, 12px); align-items: start; padding: var(--csa-sp-3, 12px) 0; border-bottom: 1px solid var(--csa-rule); }
+    .iss-line__remove { margin-top: 26px; }
+    @media (max-width: 720px) { .iss-line { grid-template-columns: 1fr 1fr auto; } .iss-line__concept { grid-column: 1 / -1; } }
+    .iss-totals { display: grid; grid-template-columns: 1fr max-content; gap: 4px 24px; max-width: 360px; margin: var(--csa-sp-5, 20px) 0 0 auto; font-size: 14px; }
+    .iss-totals dt { text-align: right; color: var(--csa-ink-soft); }
+    .iss-totals dd { margin: 0; text-align: right; }
+    .iss-totals__total { font-weight: 600; color: var(--csa-ink) !important; border-top: 1px solid var(--csa-rule); padding-top: 4px; }
+    .iss-paper { background: var(--csa-surface, #fff); border: 1px solid var(--csa-rule); border-radius: 8px; padding: var(--csa-sp-6, 24px); }
+    .iss-head { display: grid; grid-template-columns: 1fr 1fr; gap: var(--csa-sp-5, 20px); margin-bottom: var(--csa-sp-5, 20px); font-size: 14px; }
+    .iss-head h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--csa-ink-soft); margin: 0 0 4px; }
+    .iss-head p { margin: 0; white-space: pre-line; }
+    @media (max-width: 720px) { .iss-head { grid-template-columns: 1fr; } }
+    .iss-desc { white-space: pre-line; margin: 0 0 var(--csa-sp-4, 16px); }
+    .iss-lines { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .iss-lines td { padding: 8px 0; border-bottom: 1px solid var(--csa-rule); vertical-align: top; }
+    .iss-lines td.num { text-align: right; white-space: nowrap; padding-left: 16px; }
+    .iss-lines td.rate { color: var(--csa-ink-soft); white-space: nowrap; padding-left: 16px; }
+    .iss-note { white-space: pre-line; font-size: 13px; color: var(--csa-ink-soft); margin-top: var(--csa-sp-4, 16px); }
+    .iss-problems { margin: 0 0 var(--csa-sp-5, 20px); }
+    .iss-problems ul { margin: 4px 0 0; padding-left: 18px; }
+    .iss-actions { display: flex; flex-wrap: wrap; gap: var(--csa-sp-2, 8px); }
+    .iss-actions form { margin: 0; }
+</style>

@@ -244,6 +244,7 @@ class SettingsController extends AbstractController
                 'label' => $definition['label'],
                 'help' => $definition['help'],
                 'value' => $settings->getString($name),
+                'multiline' => $definition['multiline'] ?? false,
             ];
         }
 

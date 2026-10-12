@@ -1,0 +1,105 @@
+{# ============================================================
+ # Hacer o cambiar un borrador de factura emitida.
+ #
+ # El controller pasa: form, invoice, exemptionDefault.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% set is_new = invoice.id is null %}
+{% set title = invoice.rectifying ? 'Rectificativa de la ' ~ invoice.rectifies.numberLabel : (is_new ? 'Nueva factura' : 'Cambiar el borrador') %}
+
+{% block title %}{{ title }} · Facturas emitidas{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_issued_invoices') }}">Facturas emitidas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ is_new ? 'Nueva' : 'Borrador' }}</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'accounting/_issued_invoice_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Contabilidad · Facturas emitidas', title, 'Se guarda como borrador, sin número. El número se pone al emitirla.') }}
+
+    {{ form_start(form, { attr: { class: 'csa-form-narrow', style: 'max-width: 860px;' } }) }}
+
+        {{ form_errors(form) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'A quién y cuándo', subtitle: 'El cliente y la fecha que lleva la factura.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.customer, 'Cliente', { full: true }) }}
+                        {{ csa.field(form.issueDate, 'Fecha de la factura') }}
+                        {% if form.series is defined %}
+                            {{ csa.field(form.series, 'Serie', { hint: 'X = lo que no es formación' }) }}
+                        {% endif %}
+                    </div>
+                    <p class="acc-muted" style="margin: var(--csa-sp-2, 8px) 0 0; font-size: 13px;">¿No está el cliente? <a href="{{ path('accounting_customer_new') }}" target="_blank" rel="noopener">Dalo de alta</a> en otra pestaña y recarga esta.</p>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with invoice.rectifying
+                ? { num: '2', title: 'Por qué se rectifica', subtitle: 'El motivo: un error de IVA, un importe equivocado… La referencia a la factura ' ~ invoice.rectifies.numberLabel ~ ' ya la pone sola.' }
+                : { num: '2', title: 'Qué se hizo', subtitle: 'Va encima de las líneas: la actividad, las fechas, el presupuesto aceptado…' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.description, 'Descripción', { full: true, hint: 'opcional' }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Líneas', subtitle: 'Una por cada cosa que se cobra, con su tipo de IVA. La formación va exenta; los gastos, al 21 %.' } %}
+                {% block body %}
+                    {% import 'accounting/_issued_invoice_macros.html.twig' as issm %}
+                    <div data-csa-collection data-prototype="{{ issm.line(form.lines.vars.prototype)|e('html_attr') }}">
+                        <div data-csa-collection-items>
+                            {% for line in form.lines %}
+                                {{ issm.line(line) }}
+                            {% endfor %}
+                        </div>
+                        {% do form.lines.setRendered %}
+                        {% if not form.lines.vars.valid %}
+                            <div class="csa-field__error">{{ form_errors(form.lines) }}</div>
+                        {% endif %}
+                        <button type="button" class="csa-btn csa-btn--ghost" data-csa-collection-add hidden style="margin-top: var(--csa-sp-3, 12px);">
+                            <i class="fa fa-plus"></i> Añadir una línea
+                        </button>
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '4', title: 'Exención de IVA', subtitle: 'Sólo si hay líneas exentas: la ley pide decir por qué. Vacío = se pone el texto de siempre.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.exemptionNote, 'Motivo', { full: true, hint: exemptionDefault ? 'si lo dejas vacío: «' ~ exemptionDefault ~ '»' : 'opcional' }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: is_new ? path('accounting_issued_invoices') : path('accounting_issued_invoice_show', { id: invoice.id }) }) }}
+                    <button type="submit" class="csa-btn csa-btn--primary">Guardar el borrador</button>
+                </div>
+            </div>
+
+        </div>
+
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
+{% endblock %}

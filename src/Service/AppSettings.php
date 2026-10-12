@@ -258,6 +258,27 @@ class AppSettings
     public const CONSUMER_GROUP_PAYMENT_INFO = 'consumer_group.payment_info';
 
     /**
+     * Quién emite las facturas: razón social, CIF y dirección, una cosa por línea,
+     * tal como va en la cabecera de cada factura emitida.
+     *
+     * VIVE AQUÍ Y NO EN EL CÓDIGO por lo mismo que el número de cuenta: son datos
+     * de la asociación y el repositorio es público. Vacío = no se puede emitir.
+     */
+    public const ISSUED_INVOICE_ISSUER = 'issued_invoice.issuer';
+
+    /**
+     * Cómo se paga una factura emitida: el texto con el número de cuenta que va
+     * en cada factura. Vacío = no se imprime.
+     */
+    public const ISSUED_INVOICE_PAYMENT = 'issued_invoice.payment';
+
+    /**
+     * El texto legal que se propone al hacer una factura con líneas exentas de
+     * IVA. Se puede cambiar en cada factura.
+     */
+    public const ISSUED_INVOICE_EXEMPTION = 'issued_invoice.exemption';
+
+    /**
      * Registro de vencimientos (convenios, registros oficiales, pólizas,
      * cargos). Gatea la sección de gestión y, a través del `requires` de su
      * tarea, también los avisos: con el módulo apagado nadie recibe correos de
@@ -1087,6 +1108,30 @@ class AppSettings
             'help' => 'Número de cuenta y a nombre de quién, tal cual lo verá la socia cuando su pedido se confirme. La app no cobra: esto es lo que le dice dónde transferir. Vacío = no se le enseña nada (mejor eso que una cuenta equivocada).',
             'default' => '',
             'general' => true,
+        ],
+        self::ISSUED_INVOICE_ISSUER => [
+            'group' => 'Facturas emitidas',
+            'label' => 'Quién emite las facturas',
+            'help' => 'Razón social, CIF y dirección de la asociación, una cosa por línea, tal como van en la cabecera de cada factura. Vacío = no se puede emitir ninguna.',
+            'default' => '',
+            'general' => true,
+            'multiline' => true,
+        ],
+        self::ISSUED_INVOICE_PAYMENT => [
+            'group' => 'Facturas emitidas',
+            'label' => 'Cómo se paga una factura',
+            'help' => 'El texto con el número de cuenta que va en cada factura emitida. Vacío = no se imprime.',
+            'default' => '',
+            'general' => true,
+            'multiline' => true,
+        ],
+        self::ISSUED_INVOICE_EXEMPTION => [
+            'group' => 'Facturas emitidas',
+            'label' => 'Texto de la exención de IVA',
+            'help' => 'Se propone en las facturas con líneas exentas (formación). Se puede cambiar en cada factura.',
+            'default' => 'Esta formación está exenta de IVA en virtud del artículo 20.Uno.9º de la Ley 37/1992 del Impuesto sobre el Valor Añadido.',
+            'general' => true,
+            'multiline' => true,
         ],
     ];
 

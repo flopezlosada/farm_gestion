@@ -1,0 +1,30 @@
+{# Piezas de las facturas emitidas. Van aparte porque una macro definida dentro de un
+ # bloque no queda registrada. #}
+
+{# Una línea de la factura. La misma macro pinta las que hay y el molde de una nueva
+ # (data-prototype de csa-collection). #}
+{% macro line(line) %}
+    {% import '_macros/csa.html.twig' as csa %}
+    <div class="iss-line" data-csa-collection-item>
+        <div class="iss-line__concept">{{ csa.field(line.concept, 'Concepto') }}</div>
+        <div class="iss-line__amount">{{ csa.field(line.amount, 'Importe sin IVA') }}</div>
+        <div class="iss-line__rate">{{ csa.field(line.vatRate, 'IVA') }}</div>
+        <button type="button" class="csa-btn csa-btn--ghost iss-line__remove" data-csa-collection-remove hidden aria-label="Quitar esta línea">
+            <i class="fa fa-times"></i>
+        </button>
+    </div>
+{% endmacro %}
+
+{# El pie de la factura: bases, IVA por tipo y total. #}
+{% macro totals(invoice) %}
+    {% import 'accounting/_money.html.twig' as fmt %}
+    {% set breakdown = invoice.taxBreakdown %}
+    <dl class="iss-totals">
+        <dt>Subtotal</dt><dd>{{ fmt.money(invoice.subtotal) }}</dd>
+        {% for row in breakdown %}
+            <dt>IVA {{ row.rate }} %{% if breakdown|length > 1 %} sobre {{ row.base|number_format(2, ',', '.') }} €{% endif %}</dt>
+            <dd>{{ fmt.money(row.tax) }}</dd>
+        {% endfor %}
+        <dt class="iss-totals__total">Total</dt><dd class="iss-totals__total">{{ fmt.money(invoice.total) }}</dd>
+    </dl>
+{% endmacro %}

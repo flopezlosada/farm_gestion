@@ -28,6 +28,11 @@ parameters:
     # fuera del repo, como los anteriores.
     app.telegram_files_dir: '%kernel.project_dir%/var/documentos/telegram'
 
+    # PDF de cada factura emitida, tal como salió al emitirla. Se guarda y no se
+    # regenera: si mañana cambia la cuenta o la dirección de la asociación, las
+    # facturas ya emitidas no cambian. Fuera de public/ y fuera del repo.
+    app.issued_invoice_files_dir: '%kernel.project_dir%/var/documentos/facturas-emitidas'
+
     # Modelos de Gemini, por orden de preferencia (facturas, bot de Telegram…). Si
     # uno está saturado o sin cupo se prueba el siguiente. Flash-Lite primero: en el
     # plan gratuito es el de más cupo (15 por minuto y 500 al día en oct-2026).

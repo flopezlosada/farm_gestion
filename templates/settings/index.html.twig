@@ -112,8 +112,11 @@
                                             <span class="csa-setting__label">{{ s.label }}</span>
                                             <span class="csa-setting__help">{{ s.help }}</span>
                                         </span>
-                                        {% if s.type == 'string' %}
-                                            <input type="text" class="csa-input"
+                                        {% if s.type == 'string' and s.multiline|default(false) %}
+                                            <textarea class="csa-input" rows="5" maxlength="255"
+                                                      name="settings[{{ s.name }}]">{{ s.value }}</textarea>
+                                        {% elseif s.type == 'string' %}
+                                            <input type="text" class="csa-input" maxlength="255"
                                                    name="settings[{{ s.name }}]" value="{{ s.value }}">
                                         {% endif %}
                                     </label>
