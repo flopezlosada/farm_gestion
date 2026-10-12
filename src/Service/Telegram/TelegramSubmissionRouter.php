@@ -145,7 +145,7 @@ class TelegramSubmissionRouter
 
             $refused = $this->undoCurrent($submission);
             if ($refused !== null) {
-                return ['problem' => $refused, 'changed' => false];
+                return ['problem' => $refused, 'changed' => false, 'settled' => true];
             }
 
             $input = $this->inputFor($submission);
@@ -170,6 +170,7 @@ class TelegramSubmissionRouter
         if ($result['changed']) {
             $this->tellRouted($submission, $by);
         }
+        $this->tellSettled($submission, $result);
 
         return $result['problem'];
     }
@@ -193,7 +194,7 @@ class TelegramSubmissionRouter
             }
             $refused = $this->undoCurrent($submission);
             if ($refused !== null) {
-                return ['problem' => $refused, 'changed' => false];
+                return ['problem' => $refused, 'changed' => false, 'settled' => true];
             }
 
             $submission->discard($by === null ? 'Descartado por quien lo mandó.' : 'Descartado desde la web.', $by, new \DateTimeImmutable());
@@ -209,6 +210,7 @@ class TelegramSubmissionRouter
             $submission->setBotMessageId($this->chat($submission)->replace($submission->getBotMessageId(), $this->quote($submission) . $text));
             $this->em->flush();
         }
+        $this->tellSettled($submission, $result);
 
         return $result['problem'];
     }
@@ -335,6 +337,28 @@ class TelegramSubmissionRouter
             $submission->getBotMessageId(),
             $text,
             [[['✓ Correcto', $this->callback($submission, 'c')], ['Es otra cosa', $this->callback($submission, 'o')]]],
+        );
+        $submission->setBotMessageId($messageId);
+        $this->em->flush();
+    }
+
+    /**
+     * Si el apartado se ha negado a deshacerlo (ya resuelto en la web: una factura
+     * anotada o descartada), ya no hay nada que corregir desde el móvil: el mensaje
+     * lo dice y se queda sin botones, en vez de seguir ofreciendo uno que no sirve.
+     *
+     * @param TelegramSubmission                                        $submission El envío, que sigue donde estaba.
+     * @param array{problem: string|null, changed: bool, settled?: bool} $result     Lo que pasó en la transacción.
+     */
+    private function tellSettled(TelegramSubmission $submission, array $result): void
+    {
+        if (!($result['settled'] ?? false)) {
+            return;
+        }
+
+        $messageId = $this->chat($submission)->replace(
+            $submission->getBotMessageId(),
+            $submission->getSummary() . "\n\n" . $result['problem'],
         );
         $submission->setBotMessageId($messageId);
         $this->em->flush();
