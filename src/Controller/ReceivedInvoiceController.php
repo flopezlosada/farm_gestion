@@ -189,18 +189,29 @@ class ReceivedInvoiceController extends AbstractController
 
                 return $this->redirectToRoute('accounting_invoices');
             }
-            $this->addFlash('success', $match !== null
+            $done = $match !== null
                 ? sprintf('Enganchada al pago que ya estaba en el libro: %s.', $match->getConcept())
-                : sprintf('Anotado: %s.', $entry->getConcept()));
+                : sprintf('Anotado: %s.', $entry->getConcept());
 
             // Quien confirma suele ir una tras otra: la siguiente lista para revisar.
-            foreach ($invoices->findOpen() as $next) {
-                if ($next->getStatus() !== ReceivedInvoice::STATUS_PENDING) {
-                    return $this->redirectToRoute('accounting_invoice_review', ['id' => $next->getId()]);
-                }
-            }
+            // El aviso lo dice, porque habla de la factura anterior y la pantalla ya
+            // enseña otra: sin eso parece que no se ha guardado.
+            $next = array_values(array_filter(
+                $invoices->findOpen(),
+                static fn (ReceivedInvoice $open): bool => $open->getStatus() !== ReceivedInvoice::STATUS_PENDING,
+            ));
+            if ($next === []) {
+                $this->addFlash('success', $done);
 
-            return $this->redirectToRoute('accounting_invoices');
+                return $this->redirectToRoute('accounting_invoices');
+            }
+            $this->addFlash('success', sprintf(
+                '%s Ahora tienes delante la siguiente sin validar (%s).',
+                $done,
+                \count($next) === 1 ? 'es la última' : sprintf('quedan %d', \count($next)),
+            ));
+
+            return $this->redirectToRoute('accounting_invoice_review', ['id' => $next[0]->getId()]);
         }
 
         return $this->render('accounting/invoice_review.html.twig', [

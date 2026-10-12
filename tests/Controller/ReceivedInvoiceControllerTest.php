@@ -43,7 +43,7 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $em = static::getContainer()->get(EntityManagerInterface::class);
         $em->clear();
 
-        foreach ($em->getRepository(ReceivedInvoice::class)->findBy(['originalName' => ['factura-prueba.pdf', 'apuntes.txt']]) as $invoice) {
+        foreach ($em->getRepository(ReceivedInvoice::class)->findBy(['originalName' => ['factura-prueba.pdf', 'apuntes.txt', 'siguiente.pdf']]) as $invoice) {
             $entry = $invoice->getAccountEntry();
             $em->remove($invoice);
             if ($entry !== null) {
@@ -359,6 +359,30 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $invoice = $this->findInvoice('factura-prueba.pdf');
         $this->assertNotNull($invoice->getAccountEntry());
         $this->assertNotSame($bank->getId(), $invoice->getAccountEntry()->getId(), 'Un apunte nuevo, no el del banco.');
+    }
+
+    /**
+     * Al confirmar se salta a la siguiente ya leída, y el aviso lo dice: habla de la
+     * anterior mientras la pantalla enseña otra, y sin decirlo parece que no se guardó.
+     */
+    public function testAlConfirmarPasaALaSiguienteYElAvisoLoDice(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $invoice = $this->uploadOne($client);
+        $this->createCatalogue();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $next = new ReceivedInvoice('siguiente.pdf', 'siguiente.pdf', 'application/pdf', ReceivedInvoice::SOURCE_WEB, null);
+        $next->markRead(ExtractedInvoice::fromArray(['fecha' => '2026-03-06', 'total' => 12.5]), 'test', $this->category, new \DateTimeImmutable());
+        $em->persist($next);
+        $em->flush();
+
+        $this->confirm($client, $invoice, [], '26.75');
+
+        $this->assertResponseRedirects(sprintf('/gestion/accounting/invoices/%d', $next->getId()));
+        $client->followRedirect();
+        $this->assertSelectorTextContains('.csa-alerts', 'Anotado: Ferretería Torrelaguna · tornillería.');
+        $this->assertSelectorTextContains('.csa-alerts', 'Ahora tienes delante la siguiente sin validar (es la última).');
     }
 
     /** Una línea de IVA a medias no deja confirmar: la gestoría la necesita entera. */
