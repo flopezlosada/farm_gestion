@@ -255,7 +255,7 @@ class TelegramBotTest extends KernelTestCase
         $this->assertNotNull(static::getContainer()->get(InvoiceFileStore::class)->pathTo($invoices[0]->getFileName()));
         // Sin Gemini en los tests no se lee: lo dice, y ofrece corregirlo.
         $this->assertStringContainsString('Factura «Factura Movistar.pdf» guardada', $this->lastReply());
-        $this->assertSame(['Es otra cosa'], $this->lastButtons());
+        $this->assertSame(['✓ Correcto', 'Es otra cosa'], $this->lastButtons());
 
         $submission = $this->onlySubmission();
         $this->assertTrue($submission->isRouted());
@@ -366,7 +366,7 @@ class TelegramBotTest extends KernelTestCase
         $this->assertCount(1, $this->invoicesFrom());
         $this->assertSame('invoice', $this->onlySubmission()->getDestination());
         $this->assertSame([null], $this->answers);
-        $this->assertSame(['Es otra cosa'], $this->lastButtons());
+        $this->assertSame(['✓ Correcto', 'Es otra cosa'], $this->lastButtons());
     }
 
     /** «Es otra cosa» ofrece los otros apartados; elegir uno saca la factura de la bandeja. */
@@ -388,6 +388,24 @@ class TelegramBotTest extends KernelTestCase
         $submission = $this->onlySubmission();
         $this->assertSame('gallery', $submission->getDestination());
         $this->assertSame('Guardada en la galería.', $submission->getSummary());
+    }
+
+    /** «Correcto» quita los botones y deja lo colocado donde estaba. */
+    public function testCorrectoQuitaLosBotonesSinTocarLoColocado(): void
+    {
+        $this->linkAs(555000023);
+        $bot = $this->bot();
+        $bot->handle($this->update($this->pdfMessage(555000023), 555000023));
+        $submission = $this->onlySubmission();
+        $id = (int) $submission->getId();
+
+        $bot->handle($this->press(555000023, 's:' . $id . ':c'));
+
+        $this->assertSame([], $this->lastButtons());
+        $this->assertSame($submission->getSummary(), $this->lastReply(), 'el mensaje sigue diciendo lo entendido');
+        $this->assertSame([null], $this->answers);
+        $this->assertTrue($this->onlySubmission()->isRouted());
+        $this->assertCount(1, $this->invoicesFrom());
     }
 
     /** Descartar algo ya colocado lo deshace allí. */

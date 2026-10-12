@@ -280,6 +280,18 @@ class TelegramSubmissionRouter
     }
 
     /**
+     * «Correcto»: deja el mensaje como está pero sin botones, para que no quede una
+     * corrección a medio decidir ni se pueda pulsar por error más adelante. Corregirlo
+     * sigue siendo posible desde la web.
+     *
+     * @param TelegramSubmission $submission El envío, ya en un apartado.
+     */
+    public function settle(TelegramSubmission $submission): void
+    {
+        $this->chat($submission)->replace($submission->getBotMessageId(), (string) $submission->getSummary());
+    }
+
+    /**
      * Lee el dato de un botón.
      *
      * @param string $data Lo que manda Telegram al pulsarlo.
@@ -288,7 +300,7 @@ class TelegramSubmissionRouter
      */
     public static function parseCallback(string $data): ?array
     {
-        if (preg_match('~^' . self::CALLBACK_PREFIX . ':(\d+):([orxk])(?::([a-z0-9_-]{1,40}))?$~', $data, $m) !== 1) {
+        if (preg_match('~^' . self::CALLBACK_PREFIX . ':(\d+):([orxkc])(?::([a-z0-9_-]{1,40}))?$~', $data, $m) !== 1) {
             return null;
         }
 
@@ -322,7 +334,7 @@ class TelegramSubmissionRouter
         $messageId = $this->chat($submission)->replace(
             $submission->getBotMessageId(),
             $text,
-            [[['Es otra cosa', $this->callback($submission, 'o')]]],
+            [[['✓ Correcto', $this->callback($submission, 'c')], ['Es otra cosa', $this->callback($submission, 'o')]]],
         );
         $submission->setBotMessageId($messageId);
         $this->em->flush();

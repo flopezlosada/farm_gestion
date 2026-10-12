@@ -33,7 +33,8 @@ use Symfony\Component\RateLimiter\RateLimiterFactory;
  *   si duda (o no puede opinar), se le pregunta a quien lo mandó con botones, y
  *   mientras tanto queda pendiente en la web.
  * - Vaya donde vaya sin preguntar, se le cuenta lo que se ha entendido con un
- *   botón «Es otra cosa», por si el bot se equivocó.
+ *   botón «Es otra cosa», por si el bot se equivocó, y otro «Correcto» para
+ *   darlo por bueno y que no quede nada por pulsar.
  *
  * Llegue el mensaje por el webhook (servidor) o por getUpdates (local), pasa por
  * aquí. Añadir una opción al bot es añadir un destino, sin tocar esta clase.
@@ -320,7 +321,7 @@ class TelegramBot
 
     /**
      * Alguien ha pulsado un botón de un envío: colocarlo, descartarlo, «Es otra
-     * cosa» o «Estaba bien». Sólo vale para quien lo mandó, y mientras siga
+     * cosa», «Estaba bien» o «Correcto». Sólo vale para quien lo mandó, y mientras siga
      * vinculado.
      *
      * @param array<string, mixed> $callback La pulsación, tal como la manda Telegram.
@@ -354,6 +355,7 @@ class TelegramBot
             $problem = match ($parsed['action']) {
                 'o' => $this->offerAlternatives($submission),
                 'k' => $this->showRouted($submission),
+                'c' => $this->settle($submission),
                 'x' => $this->router->discard($submission),
                 'r' => $this->routeTo($submission, (string) $parsed['key']),
             };
@@ -378,6 +380,16 @@ class TelegramBot
     {
         if ($submission->isRouted()) {
             $this->router->showRouted($submission);
+        }
+
+        return null;
+    }
+
+    /** «Correcto»: se quitan los botones; lo colocado se queda donde está. */
+    private function settle(TelegramSubmission $submission): ?string
+    {
+        if ($submission->isRouted()) {
+            $this->router->settle($submission);
         }
 
         return null;
