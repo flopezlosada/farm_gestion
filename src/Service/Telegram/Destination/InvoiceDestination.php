@@ -4,6 +4,7 @@ namespace App\Service\Telegram\Destination;
 
 use App\Entity\ReceivedInvoice;
 use App\Entity\User;
+use App\Service\Accounting\Invoice\ExtractedInvoice;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\Invoice\InvoiceReadQueue;
 use App\Service\AppSettings;
@@ -114,7 +115,27 @@ class InvoiceDestination implements TelegramDestination
         $this->queue->process(1, [(int) $invoice->getId()]);
         $this->em->refresh($invoice);
 
+        if ($invoice->getStatus() === ReceivedInvoice::STATUS_READ && $invoice->getDocumentType() === ExtractedInvoice::TYPE_OTHER) {
+            // Leída, y quien la leyó dice que no es una factura (un cartel, una foto
+            // cualquiera): se pregunta en vez de dar por buena la bandeja.
+            $what = $this->described($invoice);
+
+            return new TelegramOutcome(
+                (string) $invoice->getId(),
+                sprintf('No parecía una factura%s, pero está guardada en la bandeja de facturas.', $what),
+                sprintf('Esto no parece una factura%s. ¿La guardo igualmente en la bandeja de facturas?', $what),
+            );
+        }
+
         return new TelegramOutcome((string) $invoice->getId(), $this->summarize($invoice));
+    }
+
+    /** Lo que ha visto quien la leyó, entre paréntesis, si lo ha dicho. */
+    private function described(ReceivedInvoice $invoice): string
+    {
+        $concept = trim((string) $invoice->getConcept());
+
+        return $concept !== '' ? sprintf(' («%s»)', mb_strimwidth($concept, 0, 80, '…')) : '';
     }
 
     public function undo(string $ref): ?string

@@ -164,11 +164,13 @@ class TelegramSubmissionRouter
             $submission->routeTo($destination->key(), $outcome->ref, $outcome->summary, $by, new \DateTimeImmutable());
             $this->em->flush();
 
-            return ['problem' => null, 'changed' => true];
+            return ['problem' => null, 'changed' => true, 'doubt' => $outcome->doubt];
         });
 
         if ($result['changed']) {
-            $this->tellRouted($submission, $by);
+            // Si lo ha colocado una persona desde la web, no hay duda que preguntar.
+            $doubt = $by === null ? $result['doubt'] : null;
+            $doubt !== null ? $this->askToKeep($submission, $doubt) : $this->tellRouted($submission, $by);
         }
         $this->tellSettled($submission, $result);
 
@@ -259,16 +261,26 @@ class TelegramSubmissionRouter
      */
     public function offerAlternatives(TelegramSubmission $submission): void
     {
-        $others = array_values(array_filter(
-            $this->candidatesFor($submission),
-            static fn (TelegramDestination $d): bool => $d->key() !== $submission->getDestination(),
-        ));
+        $others = $this->others($submission);
 
         $this->chat($submission)->replace(
             $submission->getBotMessageId(),
             $this->quote($submission) . '¿Qué es entonces?',
             [...$this->optionButtons($submission, $others), [['« Estaba bien', $this->callback($submission, 'k')]]],
         );
+    }
+
+    /**
+     * Los apartados posibles para este envío, menos en el que está.
+     *
+     * @return list<TelegramDestination>
+     */
+    private function others(TelegramSubmission $submission): array
+    {
+        return array_values(array_filter(
+            $this->candidatesFor($submission),
+            static fn (TelegramDestination $d): bool => $d->key() !== $submission->getDestination(),
+        ));
     }
 
     /**
@@ -337,6 +349,25 @@ class TelegramSubmissionRouter
             $submission->getBotMessageId(),
             $text,
             [[['✓ Correcto', $this->callback($submission, 'c')], ['Es otra cosa', $this->callback($submission, 'o')]]],
+        );
+        $submission->setBotMessageId($messageId);
+        $this->em->flush();
+    }
+
+    /**
+     * El apartado lo ha guardado pero duda de que sea para él: en vez de «hecho», se
+     * pregunta. Guardarlo igualmente es lo mismo que «Correcto» (se quitan los
+     * botones y se queda donde está); si no, a otro apartado o se descarta.
+     *
+     * @param TelegramSubmission $submission El envío, ya en el apartado que duda.
+     * @param string             $doubt      La pregunta, tal como la formula el apartado.
+     */
+    private function askToKeep(TelegramSubmission $submission, string $doubt): void
+    {
+        $messageId = $this->chat($submission)->replace(
+            $submission->getBotMessageId(),
+            $doubt,
+            [[['Guárdalo igualmente', $this->callback($submission, 'c')]], ...$this->optionButtons($submission, $this->others($submission))],
         );
         $submission->setBotMessageId($messageId);
         $this->em->flush();

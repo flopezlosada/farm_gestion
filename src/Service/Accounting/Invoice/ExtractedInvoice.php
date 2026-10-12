@@ -15,7 +15,10 @@ use App\Entity\ReceivedInvoice;
  */
 final class ExtractedInvoice
 {
-    private const DOCUMENT_TYPES = ['factura', 'factura_simplificada', 'ticket', 'otro'];
+    /** Lo que dice quien lee cuando no es factura, ticket ni factura simplificada. */
+    public const TYPE_OTHER = 'otro';
+
+    private const DOCUMENT_TYPES = ['factura', 'factura_simplificada', 'ticket', self::TYPE_OTHER];
 
     private const CONFIDENCES = ['alta', 'media', 'baja'];
 

@@ -6,9 +6,13 @@ use App\Entity\ReceivedInvoice;
 use App\Entity\TelegramLink;
 use App\Entity\TelegramSubmission;
 use App\Entity\User;
+use App\Repository\BudgetCategoryRepository;
+use App\Repository\ReceivedInvoiceRepository;
 use App\Repository\TelegramLinkRepository;
 use App\Repository\TelegramSubmissionRepository;
+use App\Service\Accounting\Invoice\GeminiInvoiceReader;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
+use App\Service\Accounting\Invoice\InvoiceReadQueue;
 use App\Service\Ai\GeminiClient;
 use App\Service\AppSettings;
 use App\Service\Telegram\Destination\InvoiceDestination;
@@ -28,6 +32,7 @@ use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\InMemoryStorage;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 /**
  * El bot contra la base de verdad: vincular con la invitación, no atender a
@@ -59,6 +64,12 @@ class TelegramBotTest extends KernelTestCase
 
     /** Si el apartado de mentira se niega a deshacer. */
     private bool $galleryRefusesUndo = false;
+
+    /** @var array<string, mixed>|null Lo que «lee» Gemini de la factura; null = sin lector, se queda en cola. */
+    private ?array $invoiceReading = null;
+
+    /** Si el apartado falso «Galería» guarda pero duda de que sea para él. */
+    private bool $galleryDoubts = false;
 
     /** @var list<string> Ficheros que ha pedido descargar. */
     private array $downloads = [];
@@ -390,6 +401,74 @@ class TelegramBotTest extends KernelTestCase
         $this->assertSame('Guardada en la galería.', $submission->getSummary());
     }
 
+    /**
+     * Si el apartado lo guarda pero duda de que sea para él, no dice «hecho»: pregunta
+     * si se queda, con los demás apartados y descartar a un toque.
+     */
+    public function testSiElApartadoDudaPreguntaSiSeQueda(): void
+    {
+        $this->linkAs(555000025);
+        $this->classification = 'gallery';
+        $this->galleryDoubts = true;
+        $bot = $this->bot(withGallery: true);
+
+        $bot->handle($this->update($this->pdfMessage(555000025), 555000025));
+
+        $this->assertSame('No parece de la huerta. ¿La guardo igualmente?', $this->lastReply());
+        $this->assertSame(['Guárdalo igualmente', 'Factura recibida', 'Nada de esto: descártalo'], $this->lastButtons());
+        $submission = $this->onlySubmission();
+        $this->assertTrue($submission->isRouted(), 'ya está guardado: preguntar no lo deja a medias');
+        $this->assertSame('gallery', $submission->getDestination());
+
+        // «Guárdalo igualmente» es «Correcto»: se queda, sin botones, con el resumen.
+        $bot->handle($this->press(555000025, 's:' . $submission->getId() . ':c'));
+
+        $this->assertSame('Guardada en la galería.', $this->lastReply());
+        $this->assertSame([], $this->lastButtons());
+        $this->assertSame('gallery', $this->onlySubmission()->getDestination());
+    }
+
+    /**
+     * Una foto que Gemini lee como «otro» (un cartel) no se da por factura: se
+     * pregunta, y descartarla está a un toque.
+     */
+    public function testUnaFotoQueNoEsFacturaPreguntaSiSeGuarda(): void
+    {
+        $this->linkAs(555000026);
+        $this->invoiceReading = [
+            'tipo' => 'otro', 'proveedor' => null, 'total' => null, 'forma_pago' => 'desconocida',
+            'confianza' => 'baja', 'concepto' => 'Cartel informativo de la III Feria Agroecológica',
+        ];
+        $bot = $this->bot();
+
+        $bot->handle($this->update($this->pdfMessage(555000026), 555000026));
+
+        $this->assertSame('Esto no parece una factura («Cartel informativo de la III Feria Agroecológica»). ¿La guardo igualmente en la bandeja de facturas?', $this->lastReply());
+        $this->assertSame(['Guárdalo igualmente', 'Nada de esto: descártalo'], $this->lastButtons());
+        $this->assertCount(1, $this->invoicesFrom(), 'ya está en la bandeja mientras no se diga otra cosa');
+
+        $bot->handle($this->press(555000026, 's:' . $this->onlySubmission()->getId() . ':x'));
+
+        $this->assertSame([], $this->invoicesFrom());
+        $this->assertSame(TelegramSubmission::STATUS_DISCARDED, $this->onlySubmission()->getStatus());
+    }
+
+    /** Una factura leída como tal no pregunta nada: dice lo entendido. */
+    public function testUnaFacturaLeidaDiceLoEntendidoSinPreguntar(): void
+    {
+        $this->linkAs(555000027);
+        $this->invoiceReading = [
+            'tipo' => 'factura', 'proveedor' => 'Almacenes Europa, S.A.', 'total' => 134.42, 'fecha' => '2026-06-30',
+            'forma_pago' => 'tarjeta', 'confianza' => 'alta', 'concepto' => 'Ferretería',
+        ];
+
+        $this->bot()->handle($this->update($this->pdfMessage(555000027), 555000027));
+
+        $this->assertSame('Factura de Almacenes Europa, S.A., 134,42 €, del 30/06/2026. Guardada en la bandeja de facturas.', $this->lastReply());
+        $this->assertSame(['✓ Correcto', 'Es otra cosa'], $this->lastButtons());
+        $this->assertSame(ReceivedInvoice::STATUS_READ, $this->invoicesFrom()[0]->getStatus());
+    }
+
     /** «Correcto» quita los botones y deja lo colocado donde estaba. */
     public function testCorrectoQuitaLosBotonesSinTocarLoColocado(): void
     {
@@ -540,10 +619,10 @@ class TelegramBotTest extends KernelTestCase
             'candidates' => [['content' => ['parts' => [['text' => json_encode(['destino' => $this->classification, 'seguro' => $this->sure])]]]]],
         ])));
 
-        $destinations = [static::getContainer()->get(InvoiceDestination::class)];
+        $destinations = [$this->invoiceDestination()];
         if ($withGallery) {
-            $destinations[] = new class($this->galleryRefusesUndo) implements TelegramDestination {
-                public function __construct(private readonly bool $refusesUndo)
+            $destinations[] = new class($this->galleryRefusesUndo, $this->galleryDoubts) implements TelegramDestination {
+                public function __construct(private readonly bool $refusesUndo, private readonly bool $doubts)
                 {
                 }
 
@@ -569,7 +648,7 @@ class TelegramBotTest extends KernelTestCase
 
                 public function commit(TelegramInput $input, User $user): TelegramOutcome
                 {
-                    return new TelegramOutcome('g1', 'Guardada en la galería.');
+                    return new TelegramOutcome('g1', 'Guardada en la galería.', $this->doubts ? 'No parece de la huerta. ¿La guardo igualmente?' : null);
                 }
 
                 public function undo(string $ref): ?string
@@ -714,6 +793,40 @@ class TelegramBotTest extends KernelTestCase
     }
 
     /** @return list<string> */
+    /**
+     * El apartado de facturas del contenedor o, si el test fija una lectura, uno
+     * igual cuya cola «lee» con un Gemini simulado que contesta eso.
+     */
+    private function invoiceDestination(): InvoiceDestination
+    {
+        $c = static::getContainer();
+        if ($this->invoiceReading === null) {
+            return $c->get(InvoiceDestination::class);
+        }
+
+        $reader = new GeminiInvoiceReader(new GeminiClient(new MockHttpClient(new MockResponse(json_encode([
+            'candidates' => [['content' => ['parts' => [['text' => json_encode($this->invoiceReading)]]]]],
+        ]))), 'clave', ['modelo-a']));
+        $queue = new InvoiceReadQueue(
+            $reader,
+            $c->get(InvoiceFileStore::class),
+            $c->get(ReceivedInvoiceRepository::class),
+            $c->get(BudgetCategoryRepository::class),
+            $this->em,
+            new NullLogger(),
+            static function (int $seconds): void {},
+        );
+
+        return new InvoiceDestination(
+            $c->get(InvoiceFileStore::class),
+            $queue,
+            $c->get(ValidatorInterface::class),
+            $this->em,
+            $this->settings,
+            new NullLogger(),
+        );
+    }
+
     private function lastButtons(): array
     {
         $this->assertNotSame([], $this->buttons, 'El bot no ha contestado nada.');
