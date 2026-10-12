@@ -2,6 +2,7 @@
 
 namespace App\Tests\Entity;
 
+use App\Entity\AccountEntry;
 use App\Entity\Customer;
 use App\Entity\IssuedInvoice;
 use App\Entity\IssuedInvoiceLine;
@@ -190,6 +191,51 @@ class IssuedInvoiceTest extends TestCase
         $this->assertSame('21', $line->getVatRate());
         $this->assertSame('0', (new IssuedInvoiceLine('x', '10.00', '0.00'))->getVatRate());
         $this->assertTrue((new IssuedInvoiceLine('x', '10.00', '0.00'))->isExempt());
+    }
+
+    public function testSeCobraConElApunteDeSuImporteExacto(): void
+    {
+        $invoice = $this->imidra();
+        $invoice->issue(10, null, new \DateTimeImmutable());
+        $entry = (new AccountEntry())->setAmount('3139.12');
+
+        $invoice->markPaid($entry);
+
+        $this->assertTrue($invoice->isPaid());
+        $this->assertSame($entry, $invoice->getAccountEntry());
+
+        $invoice->unmarkPaid();
+        $this->assertFalse($invoice->isPaid());
+    }
+
+    public function testUnBorradorNoSeCobra(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->imidra()->markPaid((new AccountEntry())->setAmount('3139.12'));
+    }
+
+    public function testNoSeCobraConUnApunteDeOtroImporte(): void
+    {
+        $invoice = $this->imidra();
+        $invoice->issue(10, null, new \DateTimeImmutable());
+
+        $this->expectException(\LogicException::class);
+        $invoice->markPaid((new AccountEntry())->setAmount('3139.11'));
+    }
+
+    public function testUnaRectificativaCasaConLaDevolucionNoConUnCobro(): void
+    {
+        $original = $this->imidra();
+        $original->issue(10, null, new \DateTimeImmutable());
+        $rect = IssuedInvoice::rectificationOf($original);
+        $rect->setIssueDate(new \DateTimeImmutable('2026-07-01'));
+        $rect->issue(1, null, new \DateTimeImmutable());
+
+        $rect->markPaid((new AccountEntry())->setAmount('-3139.12'));
+        $this->assertTrue($rect->isPaid());
+
+        $this->expectException(\LogicException::class);
+        $rect->markPaid((new AccountEntry())->setAmount('3139.12'));
     }
 
     private function imidra(): IssuedInvoice

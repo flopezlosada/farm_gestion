@@ -5,7 +5,10 @@
  # cambiar, ver el PDF, emitir y tirar. Emitida: tal como salió, su PDF, sus
  # rectificativas y el botón de rectificar.
  #
- # El controller pasa: invoice, problems, hasIssuer, rectifications.
+ # Emitida y sin cobrar: los apuntes del libro que pueden ser su cobro, para
+ # ligarla con un clic; cobrada: dónde y cuándo, con la opción de desligar.
+ #
+ # El controller pasa: invoice, problems, hasIssuer, rectifications, paymentCandidates.
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -130,6 +133,48 @@
         {% if note %}<p class="iss-note">{{ note }}</p>{% endif %}
         {% if invoice.hasExemptLines and invoice.exemptionNote %}<p class="iss-note">{{ invoice.exemptionNote }}</p>{% endif %}
     </div>
+
+    {% if invoice.issued %}
+        <h2 style="font-size: 15px; font-weight: 600; margin: var(--csa-sp-6, 24px) 0 var(--csa-sp-3, 12px);">{{ invoice.rectifying ? 'Devolución' : 'Cobro' }}</h2>
+        {% if invoice.paid %}
+            {% set entry = invoice.accountEntry %}
+            <div class="csa-alert csa-alert--success" role="status">
+                <i class="csa-alert__icon fa fa-check-circle" aria-hidden="true"></i>
+                <div class="csa-alert__body">
+                    {{ invoice.rectifying ? 'Devuelta' : 'Cobrada' }} el {{ entry.date|date('d/m/Y') }} en {{ entry.account.name }}:
+                    {% if can_edit %}<a href="{{ path('accounting_entry_edit', { id: entry.id }) }}">{{ entry.concept }}</a>{% else %}{{ entry.concept }}{% endif %}
+                    · {{ fmt.money(entry.amount) }}
+                    {% if can_edit %}
+                        <form method="post" action="{{ path('accounting_issued_invoice_payment_remove', { id: invoice.id }) }}" style="display: inline;">
+                            <input type="hidden" name="_token" value="{{ csrf_token('payment-remove-invoice-' ~ invoice.id) }}">
+                            <button type="submit" class="prl-btn"><i class="fa fa-chain-broken"></i> No es este</button>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+        {% elseif paymentCandidates is empty %}
+            <p class="acc-muted">Sin {{ invoice.rectifying ? 'devolver' : 'cobrar' }}: en el libro no hay ningún apunte de {{ fmt.money(invoice.total) }} cerca de su fecha. Cuando entre el extracto del banco aparecerá aquí.</p>
+        {% else %}
+            <p>Sin {{ invoice.rectifying ? 'devolver' : 'cobrar' }}. {{ paymentCandidates|length == 1 ? 'Este apunte del libro tiene' : 'Estos apuntes del libro tienen' }} su importe exacto:</p>
+            <table class="iss-lines">
+                {% for entry in paymentCandidates %}
+                    <tr>
+                        <td>{{ entry.date|date('d/m/Y') }} · {{ entry.account.name }} · {{ entry.concept }}</td>
+                        <td class="num">{{ fmt.money(entry.amount) }}</td>
+                        {% if can_edit %}
+                            <td class="num">
+                                <form method="post" action="{{ path('accounting_issued_invoice_payment', { id: invoice.id }) }}">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('payment-invoice-' ~ invoice.id) }}">
+                                    <input type="hidden" name="entry" value="{{ entry.id }}">
+                                    <button type="submit" class="prl-btn"><i class="fa fa-link"></i> Es este</button>
+                                </form>
+                            </td>
+                        {% endif %}
+                    </tr>
+                {% endfor %}
+            </table>
+        {% endif %}
+    {% endif %}
 
     {% if rectifications is not empty %}
         <h2 style="font-size: 15px; font-weight: 600; margin: var(--csa-sp-6, 24px) 0 var(--csa-sp-3, 12px);">Rectificativas</h2>

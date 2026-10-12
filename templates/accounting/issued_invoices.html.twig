@@ -105,6 +105,7 @@
                         <th class="tight acc-num">Base</th>
                         <th class="tight acc-num">IVA</th>
                         <th class="tight acc-num">Total</th>
+                        <th class="tight">Cobro</th>
                         <th class="tight"></th>
                     </tr>
                 </thead>
@@ -117,6 +118,7 @@
                             <td class="acc-num">{{ fmt.money(invoice.subtotal) }}</td>
                             <td class="acc-num">{{ fmt.money(invoice.taxTotal) }}</td>
                             <td class="acc-num">{{ fmt.money(invoice.total) }}</td>
+                            <td class="tight{{ invoice.paid ? ' acc-muted' }}">{{ invoice.paid ? (invoice.rectifying ? 'Devuelta' : 'Cobrada') : (invoice.rectifying ? 'Sin devolver' : 'Sin cobrar') }}</td>
                             <td class="tight"><a href="{{ path('accounting_issued_invoice_pdf', { id: invoice.id }) }}" target="_blank" rel="noopener" title="PDF"><i class="fa fa-file-pdf-o"></i></a></td>
                         </tr>
                     {% endfor %}
