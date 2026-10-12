@@ -37,7 +37,7 @@
     {{ csa.page_header(
         'Contabilidad · Facturas',
         'Para la gestoría · ' ~ quarter.label,
-        'Las facturas recibidas del trimestre, renombradas, con el libro de facturas y el libro de caja (todos los movimientos de cada cuenta, con factura o sin ella). Se descarga en un ZIP para subirlo a la carpeta de la gestoría.'
+        'Las facturas recibidas y emitidas del trimestre, renombradas, con el libro de cada una y el libro de caja (todos los movimientos de cada cuenta, con factura o sin ella). Se descarga en un ZIP para subirlo a la carpeta de la gestoría.'
     ) }}
 
     <div class="prl-toolbar">
@@ -55,7 +55,7 @@
             <button type="submit" class="prl-btn"><i class="fa fa-calendar"></i> Ver</button>
         </form>
         <div class="spacer"></div>
-        {% if rows is not empty %}
+        {% if rows is not empty or issued is not empty %}
             <a href="{{ path('accounting_accountant_export_download', { year: quarter.year, quarter: quarter.quarter }) }}" class="prl-btn prl-btn--primary">
                 <i class="fa fa-download"></i> Descargar el ZIP
             </a>
@@ -69,6 +69,7 @@
         {{ csa.callout(withWarnings ~ (withWarnings == 1 ? ' factura lleva' : ' facturas llevan') ~ ' una observación (abajo). Va igual en el ZIP, con la observación en el libro, para que la gestoría lo sepa.', 'info', 'info-circle') }}
     {% endif %}
 
+    <h2 class="acc-subhead">Recibidas</h2>
     <div class="prl-toolbar">
         <div class="counters">
             <b>{{ rows|length }}</b> {{ rows|length == 1 ? 'factura' : 'facturas' }} · <b>{{ total|number_format(2, ',', '.') }} €</b>
@@ -106,6 +107,48 @@
                             </td>
                             <td class="acc-small"><a href="{{ path('accounting_invoice_review', { id: invoice.id }) }}">{{ names[invoice.id] }}</a></td>
                             <td class="acc-num">{{ invoice.total is not null ? invoice.total|number_format(2, ',', '.') ~ ' €' : '—' }}</td>
+                            <td class="acc-small">
+                                {% for warning in row.warnings %}
+                                    {{ csa.badge(warning, 'ochre') }}
+                                {% else %}
+                                    <span class="acc-muted">—</span>
+                                {% endfor %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+    <h2 class="acc-subhead" style="margin-top: var(--csa-sp-6, 24px);">Emitidas</h2>
+    <div class="prl-toolbar">
+        <div class="counters">
+            <b>{{ issued|length }}</b> {{ issued|length == 1 ? 'factura' : 'facturas' }} · <b>{{ issuedTotal|number_format(2, ',', '.') }} €</b>
+        </div>
+    </div>
+    <div class="prl-table-wrap">
+        {% if issued is empty %}
+            <div class="prl-empty">No hay facturas emitidas con fecha de este trimestre.</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th class="tight">Fecha</th>
+                        <th>Cliente</th>
+                        <th>Fichero en el ZIP</th>
+                        <th class="tight acc-num">Total</th>
+                        <th>Observaciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in issued %}
+                        {% set invoice = row.invoice %}
+                        <tr>
+                            <td class="tight">{{ invoice.issueDate|date('d/m/Y') }}</td>
+                            <td>{{ invoice.customerName|split("\n")|first }}<br><span class="acc-muted acc-small">fra. {{ invoice.numberLabel }}</span></td>
+                            <td class="acc-small"><a href="{{ path('accounting_issued_invoice_show', { id: invoice.id }) }}">{{ issuedNames[invoice.id] }}</a></td>
+                            <td class="acc-num">{{ invoice.total|number_format(2, ',', '.') }} €</td>
                             <td class="acc-small">
                                 {% for warning in row.warnings %}
                                     {{ csa.badge(warning, 'ochre') }}

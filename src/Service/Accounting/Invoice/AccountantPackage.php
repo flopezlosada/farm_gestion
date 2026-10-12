@@ -4,6 +4,7 @@ namespace App\Service\Accounting\Invoice;
 
 use App\Entity\ReceivedInvoice;
 use App\Repository\ReceivedInvoiceRepository;
+use App\Service\Accounting\IssuedInvoice\IssuedInvoiceBook;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -11,9 +12,10 @@ use ZipStream\ZipStream;
 
 /**
  * Lo que se le entrega a la gestoría cada trimestre: las facturas recibidas, cada
- * una renombrada como se hace hoy a mano («<Proveedor> Fact <nº> pago tarjeta»), el
- * libro de facturas recibidas y el libro de caja (todos los movimientos de cada
- * cuenta, con factura o sin ella), los dos en hoja de cálculo.
+ * una renombrada como se hace hoy a mano («<Proveedor> Fact <nº> pago tarjeta»), las
+ * emitidas en PDF («FRA 10-2026 IMIDRA 30.06.2026»), el libro de cada una y el libro
+ * de caja (todos los movimientos de cada cuenta, con factura o sin ella), los libros
+ * en hoja de cálculo.
  *
  * Sustituye a copiar y renombrar a mano las facturas de una carpeta del Dropbox a la
  * de «Envíos gestoría». La subida a la carpeta compartida de la gestoría sigue siendo
@@ -40,11 +42,13 @@ class AccountantPackage
      * @param ReceivedInvoiceRepository $invoices Para las facturas del trimestre.
      * @param InvoiceFileStore          $files    Donde están los documentos.
      * @param QuarterCashBook           $cashBook Todos los movimientos de cada cuenta.
+     * @param IssuedInvoiceBook         $issued   Las facturas que emite la asociación.
      */
     public function __construct(
         private readonly ReceivedInvoiceRepository $invoices,
         private readonly InvoiceFileStore $files,
         private readonly QuarterCashBook $cashBook,
+        private readonly IssuedInvoiceBook $issued,
     ) {
     }
 
@@ -89,7 +93,34 @@ class AccountantPackage
             }
         }
 
+        $this->addIssued($zip, $quarter);
+
         $zip->finish();
+    }
+
+    /**
+     * Las emitidas del trimestre: su libro y sus PDF, tal como se guardaron al
+     * emitirlas. Sin emitidas, nada: ni un libro vacío.
+     */
+    private function addIssued(ZipStream $zip, InvoiceQuarter $quarter): void
+    {
+        $issued = $this->issued->invoicesOf($quarter);
+        if ($issued === []) {
+            return;
+        }
+
+        $names = IssuedInvoiceBook::fileNames($issued);
+        $paths = [];
+        foreach ($issued as $invoice) {
+            $paths[$invoice->getId()] = $this->issued->pdfPath($invoice);
+        }
+
+        $this->addSpreadsheet($zip, sprintf('Libro facturas emitidas %s.xlsx', $quarter->label()), $this->issued->ledger($quarter, $issued, $names, $paths));
+        foreach ($issued as $invoice) {
+            if ($paths[$invoice->getId()] !== null) {
+                $zip->addFileFromPath(fileName: 'Facturas emitidas '.$quarter->label().'/'.$names[$invoice->getId()], path: $paths[$invoice->getId()]);
+            }
+        }
     }
 
     /**
@@ -120,12 +151,8 @@ class AccountantPackage
      */
     public function ledger(InvoiceQuarter $quarter, array $invoices, array $names, array $paths): Spreadsheet
     {
-        $book = new Spreadsheet();
+        $book = LedgerSheet::start('Recibidas '.$quarter->label(), self::COLUMNS);
         $sheet = $book->getActiveSheet();
-        $sheet->setTitle('Recibidas '.$quarter->label());
-        $sheet->fromArray(self::COLUMNS, null, 'A1');
-        $sheet->getStyle('A1:N1')->getFont()->setBold(true);
-        $sheet->freezePane('A2');
 
         $row = 2;
         foreach ($invoices as $invoice) {
@@ -153,17 +180,7 @@ class AccountantPackage
             }
         }
 
-        $last = $row - 1;
-        $sheet->setCellValue('A'.$row, 'Total');
-        $sheet->getStyle('A'.$row.':N'.$row)->getFont()->setBold(true);
-        foreach (self::MONEY_COLUMNS as $col) {
-            $sheet->setCellValue($col.$row, $last >= 2 ? sprintf('=SUM(%1$s2:%1$s%2$d)', $col, $last) : 0);
-            $sheet->getStyle($col.'2:'.$col.$row)->getNumberFormat()->setFormatCode('#,##0.00 €');
-        }
-        $sheet->getStyle('A2:A'.$last)->getNumberFormat()->setFormatCode('dd/mm/yyyy');
-        foreach (range('A', 'N') as $col) {
-            $sheet->getColumnDimension($col)->setAutoSize(true);
-        }
+        LedgerSheet::finish($sheet, $row, self::COLUMNS, self::MONEY_COLUMNS);
 
         return $book;
     }
@@ -235,9 +252,7 @@ class AccountantPackage
             $name .= ' pago tarjeta';
         }
 
-        // Fuera lo que un sistema de ficheros no admite: «194/26» sería una carpeta.
-        $name = (string) preg_replace('/[\\\\\/:*?"<>|\x00-\x1F]+/u', '-', $name);
-        $name = trim((string) preg_replace('/\s+/u', ' ', $name), ' .-');
+        $name = LedgerSheet::safeFileName($name);
 
         return mb_substr($name !== '' ? $name : 'Factura', 0, self::MAX_NAME);
     }

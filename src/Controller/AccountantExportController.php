@@ -6,6 +6,7 @@ use App\Repository\ReceivedInvoiceRepository;
 use App\Service\Accounting\Invoice\AccountantPackage;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\Invoice\InvoiceQuarter;
+use App\Service\Accounting\IssuedInvoice\IssuedInvoiceBook;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\HeaderUtils;
 use Symfony\Component\HttpFoundation\Request;
@@ -35,6 +36,7 @@ class AccountantExportController extends AbstractController
         AccountantPackage $package,
         InvoiceFileStore $files,
         ReceivedInvoiceRepository $invoices,
+        IssuedInvoiceBook $issuedBook,
     ): Response {
         $quarter = $this->quarterFrom($request);
         $rows = array_map(static fn ($invoice) => [
@@ -42,8 +44,16 @@ class AccountantExportController extends AbstractController
             'warnings' => AccountantPackage::warnings($invoice, $files->pathTo($invoice->getFileName())),
         ], $package->invoicesOf($quarter));
 
+        $issued = array_map(static fn ($invoice) => [
+            'invoice' => $invoice,
+            'warnings' => IssuedInvoiceBook::warnings($invoice, $issuedBook->pdfPath($invoice)),
+        ], $issuedBook->invoicesOf($quarter));
+
         return $this->render('accounting/accountant_export.html.twig', [
             'quarter' => $quarter,
+            'issued' => $issued,
+            'issuedNames' => IssuedInvoiceBook::fileNames(array_column($issued, 'invoice')),
+            'issuedTotal' => array_sum(array_map(static fn (array $r): float => (float) $r['invoice']->getTotal(), $issued)),
             'rows' => $rows,
             'names' => AccountantPackage::fileNames(array_column($rows, 'invoice')),
             'total' => array_sum(array_map(static fn (array $r): float => (float) $r['invoice']->getTotal(), $rows)),
@@ -54,8 +64,8 @@ class AccountantExportController extends AbstractController
     }
 
     /**
-     * El ZIP del trimestre: el libro de facturas recibidas y los documentos
-     * renombrados. Sale en flujo: no se monta entero ni en memoria ni en disco.
+     * El ZIP del trimestre: los libros de facturas recibidas, de emitidas y de caja,
+     * y los documentos renombrados. Sale en flujo: no se monta entero ni en memoria ni en disco.
      */
     #[Route('/download', name: 'accounting_accountant_export_download', methods: ['GET'])]
     public function download(Request $request, AccountantPackage $package): Response
@@ -70,8 +80,8 @@ class AccountantExportController extends AbstractController
         $response->headers->set('Content-Type', 'application/zip');
         $response->headers->set('Content-Disposition', HeaderUtils::makeDisposition(
             HeaderUtils::DISPOSITION_ATTACHMENT,
-            sprintf('Gestoría facturas recibidas %s.zip', $quarter->label()),
-            sprintf('Gestoria facturas recibidas %s.zip', $quarter->label()),
+            sprintf('Gestoría facturas %s.zip', $quarter->label()),
+            sprintf('Gestoria facturas %s.zip', $quarter->label()),
         ));
 
         return $response;
