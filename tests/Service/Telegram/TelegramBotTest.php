@@ -423,6 +423,23 @@ class TelegramBotTest extends KernelTestCase
         $this->assertStringContainsString('no lo guardo', $this->lastReply());
     }
 
+    /** Lo que ya se resolvió en la web manda: una factura descartada allí no se borra desde el móvil. */
+    public function testUnaFacturaDescartadaEnLaWebNoSeBorraDesdeTelegram(): void
+    {
+        $this->linkAs(555000024);
+        $bot = $this->bot();
+        $bot->handle($this->update($this->pdfMessage(555000024), 555000024));
+        $id = (int) $this->onlySubmission()->getId();
+        $this->invoicesFrom()[0]->discard();
+        $this->em->flush();
+
+        $bot->handle($this->press(555000024, 's:' . $id . ':x'));
+
+        $this->assertSame(['Esa factura ya la han descartado desde la web.'], $this->answers);
+        $this->assertCount(1, $this->invoicesFrom(), 'la fila sigue: descartar no es borrar');
+        $this->assertTrue($this->onlySubmission()->isRouted());
+    }
+
     /** Si el apartado ya no deja deshacerlo, no se mueve y se dice por qué. */
     public function testSiNoSePuedeDeshacerNoSeMueve(): void
     {

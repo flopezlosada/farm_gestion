@@ -9,6 +9,7 @@ use App\Service\Accounting\Invoice\InvoiceReadQueue;
 use App\Service\AppSettings;
 use App\Service\Telegram\TelegramApiException;
 use App\Service\Telegram\TelegramInput;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\File\File;
@@ -118,12 +119,17 @@ class InvoiceDestination implements TelegramDestination
 
     public function undo(string $ref): ?string
     {
-        $invoice = $this->em->find(ReceivedInvoice::class, (int) $ref);
+        // Con bloqueo: si en la web la están confirmando ahora mismo, se espera a que
+        // acabe y se ve ya anotada, en vez de borrar una factura con su apunte.
+        $invoice = $this->em->find(ReceivedInvoice::class, (int) $ref, LockMode::PESSIMISTIC_WRITE);
         if ($invoice === null) {
             return null;
         }
-        if ($invoice->getAccountEntry() !== null) {
-            return 'Esa factura ya está anotada en el libro. Corrígela desde la web.';
+        if (!$invoice->isOpen()) {
+            // Anotada o descartada: alguien ya la ha resuelto en la web, y eso manda.
+            return $invoice->getStatus() === ReceivedInvoice::STATUS_DISCARDED
+                ? 'Esa factura ya la han descartado desde la web.'
+                : 'Esa factura ya está anotada en el libro. Corrígela desde la web.';
         }
 
         $fileName = $invoice->getFileName();
