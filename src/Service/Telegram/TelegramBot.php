@@ -3,10 +3,13 @@
 namespace App\Service\Telegram;
 
 use App\Entity\TelegramLink;
+use App\Entity\TelegramSubmission;
 use App\Entity\User;
 use App\Repository\TelegramLinkRepository;
+use App\Repository\TelegramSubmissionRepository;
 use App\Service\Ai\GeminiException;
 use App\Service\Telegram\Destination\TelegramDestination;
+use App\Service\Telegram\Destination\TelegramRejected;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
@@ -20,12 +23,18 @@ use Symfony\Component\RateLimiter\RateLimiterFactory;
  * su destino ({@see TelegramDestination}: facturas, y lo que venga).
  *
  * CÓMO SE ELIGE DESTINO:
- * - Se quedan los que aceptan esa clase de mensaje y a esa persona.
- * - Si queda uno, va ahí sin más: no se gasta una consulta a Gemini en una
+ * - Se quedan los que aceptan esa clase de mensaje y a esa persona. Si no queda
+ *   ninguno, se dice y no se guarda nada (ni se descarga).
+ * - Si no, el envío se guarda primero tal cual ({@see TelegramSubmission}), para
+ *   poder corregir después adónde va.
+ * - Si queda un destino, va ahí sin más: no se gasta una consulta a Gemini en una
  *   pregunta con una sola respuesta.
- * - Si quedan varios, decide {@see TelegramClassifier} mirando el contenido.
- * - Si no queda ninguno, o el contenido no encaja en ninguno, se dice y no se
- *   guarda nada.
+ * - Si quedan varios, opina {@see TelegramClassifier}. Si lo tiene claro, va ahí;
+ *   si duda (o no puede opinar), se le pregunta a quien lo mandó con botones, y
+ *   mientras tanto queda pendiente en la web.
+ * - Vaya donde vaya sin preguntar, se le cuenta lo que se ha entendido con un
+ *   botón «Es otra cosa», por si el bot se equivocó, y otro «Correcto» para
+ *   darlo por bueno y que no quede nada por pulsar.
  *
  * Llegue el mensaje por el webhook (servidor) o por getUpdates (local), pasa por
  * aquí. Añadir una opción al bot es añadir un destino, sin tocar esta clase.
@@ -50,6 +59,8 @@ class TelegramBot
      * @param TelegramLinkRepository        $links        Quién está vinculado.
      * @param iterable<TelegramDestination> $destinations Lo que sabe hacer.
      * @param TelegramClassifier            $classifier   Para elegir cuando hay varios.
+     * @param TelegramSubmissionRouter      $router       Adónde va cada envío, y cómo se corrige.
+     * @param TelegramSubmissionRepository  $submissions  Los envíos, para los botones.
      * @param EntityManagerInterface        $em           Para guardar el vínculo.
      * @param CacheItemPoolInterface        $seen         Mensajes ya atendidos.
      * @param RateLimiterFactory            $limiter      Cuántos mensajes por cuenta y hora.
@@ -61,6 +72,8 @@ class TelegramBot
         #[AutowireIterator('app.telegram_destination')]
         private readonly iterable $destinations,
         private readonly TelegramClassifier $classifier,
+        private readonly TelegramSubmissionRouter $router,
+        private readonly TelegramSubmissionRepository $submissions,
         private readonly EntityManagerInterface $em,
         #[Autowire(service: 'cache.app')]
         private readonly CacheItemPoolInterface $seen,
@@ -96,8 +109,9 @@ class TelegramBot
                 'update_id' => $update['update_id'] ?? null,
                 'error' => $e::class . ': ' . $e->getMessage(),
             ]);
-            $chatId = $update['message']['chat']['id'] ?? null;
-            if ($chatId !== null && ($update['message']['chat']['type'] ?? null) === 'private') {
+            $chat = $update['message']['chat'] ?? $update['callback_query']['message']['chat'] ?? [];
+            $chatId = $chat['id'] ?? null;
+            if ($chatId !== null && ($chat['type'] ?? null) === 'private') {
                 (new TelegramChat($this->api, (string) $chatId, $this->logger))->say('Algo ha fallado al guardar lo que me has mandado. Vuelve a mandármelo dentro de un rato.');
             }
         }
@@ -131,6 +145,12 @@ class TelegramBot
      */
     private function attend(array $update): void
     {
+        if (\is_array($update['callback_query'] ?? null)) {
+            $this->press($update['callback_query']);
+
+            return;
+        }
+
         $message = $update['message'] ?? null;
         // Sólo chats privados: en un grupo, «quién manda» no es tan obvio, y el bot
         // no tiene por qué estar en ninguno.
@@ -174,58 +194,227 @@ class TelegramBot
 
         $input->setDownloader(fn (string $fileId): string => $this->api->download($fileId));
         try {
-            $this->dispatch($input, $link, $chat);
+            $this->dispatch($input, $link, $chat, (string) $message['chat']['id']);
         } finally {
             $input->cleanUp();
         }
     }
 
     /**
-     * Elige destino y se lo pasa.
+     * Guarda el envío y lo manda a su destino, o pregunta adónde va.
      *
-     * @param TelegramInput $input Lo recibido.
-     * @param TelegramLink  $link  Quién lo manda.
-     * @param TelegramChat  $chat  Para contestar.
+     * @param TelegramInput $input  Lo recibido.
+     * @param TelegramLink  $link   Quién lo manda.
+     * @param TelegramChat  $chat   Para contestar.
+     * @param string        $chatId Su chat.
      */
-    private function dispatch(TelegramInput $input, TelegramLink $link, TelegramChat $chat): void
+    private function dispatch(TelegramInput $input, TelegramLink $link, TelegramChat $chat, string $chatId): void
     {
         $user = $link->getUser();
-        $candidates = [];
-        foreach ($this->destinations as $destination) {
-            if ($destination->accepts($input, $user)) {
-                $candidates[] = $destination;
-            }
-        }
-
+        $candidates = $this->router->candidates($input, $user);
         if ($candidates === []) {
             $chat->say("Eso no sé qué hacer con ello.\n\n" . $this->help($user));
 
             return;
         }
 
-        $chosen = $candidates[0];
-        if (\count($candidates) > 1) {
-            if (!$this->classifier->isAvailable()) {
-                $chat->say('Ahora mismo no puedo distinguir qué es lo que me mandas. Avisa a quien lleva la web.');
+        try {
+            $submission = $this->router->record($input, $link, $chatId);
+        } catch (TelegramApiException|TelegramRejected $e) {
+            $this->logger->warning('Telegram: no se pudo guardar un envío', ['error' => $e->getMessage()]);
+            $chat->say($e->getMessage());
 
-                return;
-            }
-            try {
-                $chosen = $this->classifier->choose($input, $candidates);
-            } catch (GeminiException|TelegramApiException $e) {
-                $this->logger->warning('Telegram: no se pudo clasificar un mensaje', ['error' => $e->getMessage()]);
-                $chat->say('Ahora mismo no puedo mirarlo. Vuelve a mandármelo dentro de un rato.');
+            return;
+        }
 
-                return;
-            }
-            if ($chosen === null) {
-                $chat->say("No sé qué es esto, así que no lo he guardado.\n\n" . $this->help($user));
+        // Ya está guardado: si algo falla de aquí en adelante, no se le pide que lo
+        // reenvíe (saldría repetido), queda pendiente en la web.
+        try {
+            $this->place($submission, $input, $candidates);
+        } catch (\Throwable $e) {
+            $this->logger->error('Telegram: fallo al colocar un envío', ['submission' => $submission->getId(), 'error' => $e::class . ': ' . $e->getMessage()]);
+            $chat->say('Algo ha fallado al guardarlo, pero lo tengo apuntado y lo revisarán desde la web. No hace falta que lo mandes otra vez.');
+        }
+    }
 
-                return;
+    /**
+     * Lo coloca en su destino o pregunta adónde va.
+     *
+     * @param TelegramSubmission        $submission El envío, ya guardado.
+     * @param TelegramInput             $input      Lo recibido.
+     * @param list<TelegramDestination> $candidates Destinos posibles (uno o más).
+     */
+    private function place(TelegramSubmission $submission, TelegramInput $input, array $candidates): void
+    {
+        if (\count($candidates) === 1) {
+            $this->routeAlone($submission, $candidates[0], $candidates);
+
+            return;
+        }
+
+        if (!$this->classifier->isAvailable()) {
+            $this->router->ask($submission, $candidates, '¿Qué es esto?');
+
+            return;
+        }
+        try {
+            $classification = $this->classifier->classify($input, $candidates);
+        } catch (GeminiException|TelegramApiException $e) {
+            $this->logger->warning('Telegram: no se pudo clasificar un mensaje', ['error' => $e->getMessage()]);
+            $this->router->ask($submission, $candidates, '¿Qué es esto?');
+
+            return;
+        }
+
+        $guess = $classification->destination;
+        if ($guess !== null && $classification->isClear()) {
+            $this->routeAlone($submission, $guess, $candidates);
+
+            return;
+        }
+
+        $this->router->ask(
+            $submission,
+            $guess !== null ? [$guess, ...$this->others($candidates, $guess)] : $candidates,
+            $guess !== null
+                ? sprintf('Creo que es «%s», pero no estoy seguro. ¿Qué es?', $guess->label())
+                : 'No sé qué es esto. ¿Es alguna de estas cosas?',
+        );
+    }
+
+    /**
+     * Lo manda a un destino sin preguntar. Si ese destino no lo admite, se le
+     * ofrecen los otros posibles; si no hay otros, se descarta diciendo por qué.
+     *
+     * @param TelegramSubmission        $submission  El envío.
+     * @param TelegramDestination       $destination Adónde.
+     * @param list<TelegramDestination> $candidates  Todos los posibles.
+     */
+    private function routeAlone(TelegramSubmission $submission, TelegramDestination $destination, array $candidates): void
+    {
+        $refused = $this->router->route($submission, $destination);
+        if ($refused === null) {
+            return;
+        }
+
+        $others = $this->others($candidates, $destination);
+        if ($others === []) {
+            $this->router->refuse($submission, $refused);
+
+            return;
+        }
+        $this->router->ask($submission, $others, $refused . "\n\n¿Es alguna de estas cosas?");
+    }
+
+    /**
+     * Los destinos de la lista menos uno.
+     *
+     * @param list<TelegramDestination> $candidates Todos.
+     * @param TelegramDestination       $except     El que sobra.
+     *
+     * @return list<TelegramDestination>
+     */
+    private function others(array $candidates, TelegramDestination $except): array
+    {
+        return array_values(array_filter($candidates, static fn (TelegramDestination $d): bool => $d !== $except));
+    }
+
+    /**
+     * Alguien ha pulsado un botón de un envío: colocarlo, descartarlo, «Es otra
+     * cosa», «Estaba bien» o «Correcto». Sólo vale para quien lo mandó, y mientras siga
+     * vinculado.
+     *
+     * @param array<string, mixed> $callback La pulsación, tal como la manda Telegram.
+     */
+    private function press(array $callback): void
+    {
+        $callbackId = (string) ($callback['id'] ?? '');
+        $fromId = (string) ($callback['from']['id'] ?? '');
+        if ($callbackId === '' || $fromId === '' || ($callback['message']['chat']['type'] ?? null) !== 'private') {
+            return;
+        }
+        if (!$this->limiter->create($fromId)->consume()->isAccepted()) {
+            $this->answer($callbackId, 'Espera un poco y vuelve a intentarlo.');
+
+            return;
+        }
+
+        $parsed = TelegramSubmissionRouter::parseCallback((string) ($callback['data'] ?? ''));
+        $submission = $parsed !== null ? $this->submissions->find($parsed['id']) : null;
+        $link = $this->links->findLinked($fromId);
+        if ($parsed === null || $submission === null || $link === null || !$link->getUser()->isEnabled()
+            || $submission->getUser()->getId() !== $link->getUser()->getId()) {
+            $this->answer($callbackId, 'Este botón ya no sirve.');
+
+            return;
+        }
+
+        // Se contesta pase lo que pase: si no, el botón se queda «cargando».
+        $problem = 'Algo ha fallado. Inténtalo dentro de un rato.';
+        try {
+            $problem = match ($parsed['action']) {
+                'o' => $this->offerAlternatives($submission),
+                'k' => $this->showRouted($submission),
+                'c' => $this->settle($submission),
+                'x' => $this->router->discard($submission),
+                'r' => $this->routeTo($submission, (string) $parsed['key']),
+            };
+        } finally {
+            $this->answer($callbackId, $problem);
+        }
+    }
+
+    /** «Es otra cosa»: los otros destinos posibles. */
+    private function offerAlternatives(TelegramSubmission $submission): ?string
+    {
+        if (!$submission->isRouted()) {
+            return 'Ese envío ya no está guardado en ningún sitio.';
+        }
+        $this->router->offerAlternatives($submission);
+
+        return null;
+    }
+
+    /** «Estaba bien»: vuelve a lo que había. */
+    private function showRouted(TelegramSubmission $submission): ?string
+    {
+        if ($submission->isRouted()) {
+            $this->router->showRouted($submission);
+        }
+
+        return null;
+    }
+
+    /** «Correcto»: se quitan los botones; lo colocado se queda donde está. */
+    private function settle(TelegramSubmission $submission): ?string
+    {
+        if ($submission->isRouted()) {
+            $this->router->settle($submission);
+        }
+
+        return null;
+    }
+
+    /** Un botón con un destino: sólo uno de los que esta persona puede usar para esto. */
+    private function routeTo(TelegramSubmission $submission, string $key): ?string
+    {
+        foreach ($this->router->candidatesFor($submission) as $destination) {
+            if ($destination->key() === $key) {
+                return $this->router->route($submission, $destination);
             }
         }
 
-        $chosen->handle($input, $link, $chat);
+        return 'Eso ya no está disponible.';
+    }
+
+    /** Contesta a la pulsación; si falla, no importa: lo hecho, hecho está. */
+    private function answer(string $callbackId, ?string $text): void
+    {
+        try {
+            $this->api->answerCallbackQuery($callbackId, $text);
+        } catch (TelegramApiException $e) {
+            $this->logger->info('Telegram: no se pudo responder a un botón', ['error' => $e->getMessage()]);
+        }
     }
 
     /**

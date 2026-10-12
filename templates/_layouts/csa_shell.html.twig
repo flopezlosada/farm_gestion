@@ -265,7 +265,9 @@
                                 {{ _self.nav_link('Novedades', path('news_manage'), 'fa-bullhorn',
                                    route starts with 'news') }}
                                 {{ _self.nav_link('Bot de Telegram', path('telegram_index'), 'fa-paper-plane-o',
-                                   route starts with 'telegram') }}
+                                   route starts with 'telegram' and not (route starts with 'telegram_submission')) }}
+                                {{ _self.nav_link('Envíos al bot', path('telegram_submissions'), 'fa-inbox',
+                                   route starts with 'telegram_submission') }}
                             </div>
                         </div>
                     {% endif %}

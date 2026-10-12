@@ -49,6 +49,7 @@
     {% endif %}
 
     <div class="prl-toolbar">
+        <a href="{{ path('telegram_submissions') }}" class="prl-btn"><i class="fa fa-inbox"></i> Envíos al bot</a>
         {{ form_start(form, { attr: { class: 'tg-invite', 'data-csa-dropdowns': '1' } }) }}
             {{ form_widget(form.user, { attr: { class: 'csa-select' } }) }}
             <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-user-plus"></i> Invitar</button>
