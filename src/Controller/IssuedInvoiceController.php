@@ -250,9 +250,7 @@ class IssuedInvoiceController extends AbstractController
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            if ($invoice->hasExemptLines() && $invoice->getExemptionNote() === null) {
-                $invoice->setExemptionNote($settings->getString(AppSettings::ISSUED_INVOICE_EXEMPTION));
-            }
+            $invoice->fillExemptionNote($settings->getString(AppSettings::ISSUED_INVOICE_EXEMPTION));
             $em->persist($invoice);
             $em->flush();
             $this->addFlash('success', $done);

@@ -394,6 +394,19 @@ class IssuedInvoice
         return self::fromCents($this->totalCents());
     }
 
+    /**
+     * Si lleva líneas exentas y aún no dice por qué, el motivo de siempre de la
+     * asociación. No pisa uno que ya se haya escrito.
+     *
+     * @param string|null $default Motivo configurado (Configuración, «Facturas emitidas»).
+     */
+    public function fillExemptionNote(?string $default): void
+    {
+        if ($this->hasExemptLines() && $this->exemptionNote === null) {
+            $this->setExemptionNote($default);
+        }
+    }
+
     public function hasExemptLines(): bool
     {
         return $this->lines->exists(static fn (int $i, IssuedInvoiceLine $l): bool => $l->isExempt());
