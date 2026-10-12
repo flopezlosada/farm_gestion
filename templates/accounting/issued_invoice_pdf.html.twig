@@ -1,0 +1,128 @@
+{# ============================================================
+ # El PDF de una factura emitida (dompdf). La disposición es la de las facturas
+ # que hacía la asociación a mano: emisor y cliente arriba, tabla de fecha,
+ # concepto e importe, y el pie con bases e IVA.
+ #
+ # CSS sencillo a propósito: dompdf no entiende flex ni grid; tablas y floats sí.
+ #
+ # Recibe: invoice, issuer (texto, una línea por dato), payment (texto), logo
+ # (data: URI o null).
+ # ============================================================ #}
+{% macro money(amount) %}{{ amount|number_format(2, ',', '.') }} €{% endmacro %}
+{% import _self as m %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Factura {{ invoice.numberLabel }}</title>
+<style>
+    @page { margin: 18mm 16mm 20mm 16mm; }
+    body { font-family: 'DejaVu Sans', sans-serif; font-size: 9.5pt; color: #1c1d1a; }
+    .head { width: 100%; border-collapse: collapse; margin-bottom: 8mm; }
+    .head td { vertical-align: top; width: 50%; font-size: 9pt; line-height: 1.45; }
+    .head b { font-size: 9.5pt; }
+    .logo { height: 22mm; margin-bottom: 6mm; }
+    .lines { width: 100%; border-collapse: collapse; border: 1px solid #555; }
+    .lines th { background: #d9d9d9; border: 1px solid #555; padding: 3px 6px; font-size: 8.5pt; text-transform: uppercase; }
+    .lines td { border-left: 1px solid #555; border-right: 1px solid #555; padding: 5px 8px; vertical-align: top; }
+    .lines .date { width: 18mm; text-align: center; }
+    .lines .amount { width: 28mm; text-align: right; white-space: nowrap; }
+    .neg { color: #b3261e; }
+    .desc { padding-bottom: 4mm !important; }
+    .note { padding-top: 4mm !important; font-size: 8.5pt; }
+    .totals td { padding-top: 1px; padding-bottom: 1px; }
+    .totals .label { text-align: right; font-weight: bold; padding-right: 10mm; }
+    .totals tr.first td { padding-top: 6mm; }
+    .totals tr.total td { font-weight: bold; padding-bottom: 4mm; }
+    .bottom td { border-bottom: 1px solid #555; }
+    .legal { font-size: 7.5pt; text-align: center; padding: 4mm 10mm 2mm !important; }
+    .foot { position: fixed; bottom: -12mm; left: 0; right: 0; text-align: center; font-size: 7.5pt; color: #888; }
+    .watermark { position: fixed; top: 95mm; left: 0; right: 0; text-align: center; font-size: 72pt; color: #b0b0b0; opacity: 0.25; z-index: -1; transform: rotate(-30deg); }
+    .pre { white-space: pre-line; }
+</style>
+</head>
+<body>
+{% if not invoice.issued %}
+    <div class="watermark">BORRADOR</div>
+{% endif %}
+
+{% if logo %}<img class="logo" src="{{ logo }}" alt="">{% endif %}
+
+<table class="head">
+    <tr>
+        <td>
+            <b>FACTURA EMITIDA Nº: {{ invoice.issued ? invoice.numberLabel : 'BORRADOR' }}</b><br>
+            <span class="pre">{{ issuer }}</span>
+        </td>
+        <td>
+            <b>DATOS DEL CLIENTE:</b><br>
+            {% for line in invoice.customerLines %}
+                {% if loop.first %}<b class="pre">{{ line }}</b>{% else %}{{ line }}{% endif %}<br>
+            {% else %}
+                (sin cliente)
+            {% endfor %}
+        </td>
+    </tr>
+</table>
+
+{% set note = invoice.customerNoteForPrint %}
+<table class="lines">
+    <thead>
+        <tr><th class="date">Fecha</th><th>Concepto</th><th class="amount">Importe</th></tr>
+    </thead>
+    <tbody>
+        {% if invoice.description %}
+            <tr>
+                <td class="date">{{ invoice.issueDate ? invoice.issueDate|date('d/m/y') : '' }}</td>
+                <td class="desc pre">{{ invoice.description }}</td>
+                <td class="amount"></td>
+            </tr>
+        {% endif %}
+        {% if invoice.rectifies %}
+            {# Lo exige la ley y no depende de lo que se escriba en la descripción. #}
+            <tr>
+                <td class="date"></td>
+                <td class="desc"><b>Rectifica la factura nº {{ invoice.rectifies.numberLabel }}{% if invoice.rectifies.issueDate %}, de {{ invoice.rectifies.issueDate|date('d/m/Y') }}{% endif %}.</b></td>
+                <td class="amount"></td>
+            </tr>
+        {% endif %}
+        {% for line in invoice.lines %}
+            <tr>
+                <td class="date">{{ loop.first and not invoice.description and invoice.issueDate ? invoice.issueDate|date('d/m/y') : '' }}</td>
+                <td class="pre">{{ line.concept }}{% if line.exempt %} (exenta de IVA){% endif %}</td>
+                <td class="amount{{ line.amount < 0 ? ' neg' }}">{{ m.money(line.amount) }}</td>
+            </tr>
+        {% endfor %}
+        {% if note %}
+            <tr><td class="date"></td><td class="note pre">{{ note }}</td><td class="amount"></td></tr>
+        {% endif %}
+        {% if payment %}
+            <tr><td class="date"></td><td class="note pre">{{ payment }}</td><td class="amount"></td></tr>
+        {% endif %}
+        {% if invoice.hasExemptLines and invoice.exemptionNote %}
+            <tr><td class="date"></td><td class="legal">{{ invoice.exemptionNote }}</td><td class="amount"></td></tr>
+        {% endif %}
+    </tbody>
+    <tbody class="totals">
+        <tr class="first">
+            <td class="date"></td><td class="label">SUBTOTAL</td>
+            <td class="amount{{ invoice.subtotal < 0 ? ' neg' }}">{{ m.money(invoice.subtotal) }}</td>
+        </tr>
+        {% set breakdown = invoice.taxBreakdown %}
+        {% for row in breakdown %}
+            <tr>
+                <td class="date"></td>
+                <td class="label">IVA {{ row.rate }}%{% if breakdown|length > 1 and row.rate != '0' %} s/ {{ m.money(row.base) }}{% endif %}</td>
+                <td class="amount{{ row.tax < 0 ? ' neg' }}">{{ m.money(row.tax) }}</td>
+            </tr>
+        {% endfor %}
+        <tr class="total bottom">
+            <td class="date"></td><td class="label">TOTAL FACTURA</td>
+            <td class="amount{{ invoice.total < 0 ? ' neg' }}">{{ m.money(invoice.total) }}</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="foot">{{ issuer|split("\n")|first }}</div>
+</body>
+</html>

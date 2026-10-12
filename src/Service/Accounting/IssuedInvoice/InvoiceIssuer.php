@@ -16,12 +16,17 @@ use Doctrine\ORM\EntityManagerInterface;
  * la vez: el último número se lee con las filas bloqueadas y la factura también,
  * todo en una transacción. Por si algo se colase, la base de datos tiene además un
  * índice único sobre serie, año y número.
+ *
+ * El PDF se genera y se guarda dentro de esa misma transacción: si falla, la
+ * factura no queda emitida, y no hay factura emitida sin su PDF.
  */
 class InvoiceIssuer
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly IssuedInvoiceRepository $invoices,
+        private readonly IssuedInvoicePdf $pdf,
+        private readonly IssuedInvoiceArchive $archive,
     ) {
     }
 
@@ -48,7 +53,11 @@ class InvoiceIssuer
 
                 return sprintf('Esta factura ya estaba emitida con el número %s.', $invoice->getNumberLabel());
             }
-            if (($problems = $invoice->issueProblems()) !== []) {
+            $problems = $invoice->issueProblems();
+            if (!$this->pdf->hasIssuer()) {
+                $problems[] = 'Faltan los datos de la asociación (razón social, CIF y dirección): se ponen en Configuración, «Facturas emitidas».';
+            }
+            if ($problems !== []) {
                 $connection->rollBack();
 
                 return implode(' ', $problems);
@@ -58,6 +67,7 @@ class InvoiceIssuer
             $next = $this->invoices->lastNumberLocked($invoice->getSeries(), $year) + 1;
             $invoice->issue($next, $by, new \DateTimeImmutable());
             $this->em->flush();
+            $this->archive->store($invoice, $this->pdf->render($invoice));
             $connection->commit();
 
             return null;

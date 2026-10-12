@@ -14,7 +14,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * Nace como BORRADOR, sin número: se puede cambiar o tirar sin dejar huecos en la
  * numeración. Al EMITIRLA ({@see issue()}) recibe el siguiente número de su serie
  * y año, copia los datos del cliente y ya no se toca: lo que haya que corregir se
- * corrige con una rectificativa ({@see rectifying()}), que es lo que pide la ley.
+ * corrige con una rectificativa ({@see rectificationOf()}), que es lo que pide la ley.
  *
  * Tres series, como las lleva la asociación: la ordinaria («10/2026»), la X para lo
  * que no es formación («X-02/2025») y la de rectificativas («RECT-01/2026»). Cada
@@ -36,7 +36,7 @@ class IssuedInvoice
     /** Lo que no es formación: «X-02/2025». */
     public const SERIES_X = 'x';
 
-    /** Rectificativas: «RECT-01/2026». Sólo se llega aquí desde {@see rectifying()}. */
+    /** Rectificativas: «RECT-01/2026». Sólo se llega aquí desde {@see rectificationOf()}. */
     public const SERIES_RECTIFYING = 'rect';
 
     /** Las series que se eligen al hacer una factura; la de rectificativas no. */
@@ -196,7 +196,7 @@ class IssuedInvoice
     public function __construct(string $series = self::SERIES_ORDINARY, string $source = self::SOURCE_WEB, ?User $createdBy = null)
     {
         if (!\in_array($series, self::CHOOSABLE_SERIES, true)) {
-            throw new \InvalidArgumentException(sprintf('Serie «%s» desconocida; las rectificativas se crean con rectifying().', $series));
+            throw new \InvalidArgumentException(sprintf('Serie «%s» desconocida; las rectificativas se crean con rectificationOf().', $series));
         }
         $this->series = $series;
         $this->source = $source;
@@ -209,7 +209,7 @@ class IssuedInvoice
      * sus líneas en negativo: tal cual, la anula entera; para corregir una parte,
      * se dejan sólo las líneas que cambian.
      */
-    public static function rectifying(self $original, ?User $createdBy = null): self
+    public static function rectificationOf(self $original, ?User $createdBy = null): self
     {
         if (!$original->isIssued()) {
             throw new \LogicException('Sólo se rectifica una factura emitida.');
@@ -220,7 +220,6 @@ class IssuedInvoice
         $invoice->rectifies = $original;
         $invoice->customer = $original->customer;
         $invoice->exemptionNote = $original->exemptionNote;
-        $invoice->description = sprintf('Rectificación de la factura %s: ', $original->getNumberLabel());
         foreach ($original->lines as $line) {
             $invoice->addLine($line->negated());
         }
@@ -303,6 +302,41 @@ class IssuedInvoice
             self::SERIES_RECTIFYING => sprintf('RECT-%02d/%d', $this->number, $this->year),
             default => sprintf('%d/%d', $this->number, $this->year),
         };
+    }
+
+    /**
+     * Los datos del cliente como van en la cabecera, una línea cada cosa: los que
+     * se copiaron al emitirla o, en borrador, los de su ficha. La provincia sólo
+     * si no es el propio municipio («28013 Madrid», no «28013 Madrid / Madrid»).
+     *
+     * @return list<string> Vacío si aún no tiene cliente.
+     */
+    public function customerLines(): array
+    {
+        $c = $this->customer;
+        if (!$this->isIssued() && $c === null) {
+            return [];
+        }
+        [$name, $taxId, $address, $postalCode, $town, $province] = $this->isIssued()
+            ? [$this->customerName, $this->customerTaxId, $this->customerAddress, $this->customerPostalCode, $this->customerTown, $this->customerProvince]
+            : [$c->getName(), $c->getTaxId(), $c->getAddress(), $c->getPostalCode(), $c->getTown(), $c->getProvince()];
+
+        $place = trim(($postalCode ?? '') . ' ' . ($town ?? ''));
+        $lines = [
+            (string) $name,
+            $taxId !== null ? 'CIF: ' . $taxId : null,
+            $address,
+            $place !== '' ? $place : null,
+            $province !== null && mb_strtolower($province) !== mb_strtolower((string) $town) ? $province : null,
+        ];
+
+        return array_values(array_filter($lines, static fn (?string $l): bool => $l !== null && $l !== ''));
+    }
+
+    /** Lo que el cliente pide que diga cada factura suya: la copia al emitir o, en borrador, su ficha. */
+    public function customerNoteForPrint(): ?string
+    {
+        return $this->isIssued() ? $this->customerNote : $this->customer?->getInvoiceNote();
     }
 
     /**

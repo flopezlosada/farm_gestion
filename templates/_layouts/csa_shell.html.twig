@@ -497,8 +497,10 @@
                             <div class="csa-navgroup__items">
                                 {{ _self.nav_link('Cómo vamos', path('accounting_index'), 'fa-line-chart',
                                    route == 'accounting_index') }}
-                                {{ _self.nav_link('Facturas', path('accounting_invoices'), 'fa-file-text-o',
+                                {{ _self.nav_link('Facturas recibidas', path('accounting_invoices'), 'fa-file-text-o',
                                    route starts with 'accounting_invoice') }}
+                                {{ _self.nav_link('Facturas emitidas', path('accounting_issued_invoices'), 'fa-file-text',
+                                   route starts with 'accounting_issued_invoice') }}
                                 {{ _self.nav_link('Para la gestoría', path('accounting_accountant_export'), 'fa-briefcase',
                                    route starts with 'accounting_accountant') }}
                                 {{ _self.nav_link('Libro', path('accounting_ledger'), 'fa-list',
@@ -509,6 +511,8 @@
                                    route starts with 'accounting_budget') }}
                                 {{ _self.nav_link('Proveedores', path('accounting_providers'), 'fa-truck',
                                    route starts with 'accounting_provider') }}
+                                {{ _self.nav_link('Clientes', path('accounting_customers'), 'fa-users',
+                                   route starts with 'accounting_customer') }}
                                 {{ _self.nav_link('Cuentas', path('accounting_accounts'), 'fa-university',
                                    route starts with 'accounting_account' and not (route starts with 'accounting_accountant')) }}
                                 {{ _self.nav_link('Partidas', path('accounting_categories'), 'fa-tags',

@@ -1,0 +1,129 @@
+{# ============================================================
+ # Las facturas que emite la asociación: los borradores arriba (están por
+ # terminar) y lo emitido en el año.
+ #
+ # El controller pasa: drafts, issued, year, hasIssuer.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
+
+{% block title %}Contabilidad · Facturas emitidas{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Facturas emitidas</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+    <style>
+        .acc-subhead { font-size: 15px; font-weight: 600; margin: 0 0 var(--csa-sp-3, 12px); color: var(--csa-ink); }
+    </style>
+{% endblock %}
+
+{% macro customer_name(invoice) %}{{ (invoice.issued ? invoice.customerName : (invoice.customer ? invoice.customer.name : '—'))|split("\n")|first }}{% endmacro %}
+
+{% block csa_main %}
+{% import _self as m %}
+{% set total = issued|reduce((sum, i) => sum + i.total, 0) %}
+<div class="prl">
+
+    {{ csa.page_header('Contabilidad', 'Facturas emitidas', 'Se hacen en borrador; al emitirlas reciben número y su PDF queda guardado tal cual.') }}
+
+    {% if not hasIssuer %}
+        <div class="csa-alert csa-alert--warning" role="status" style="margin-bottom: var(--csa-sp-5);">
+            <i class="csa-alert__icon fa fa-exclamation-triangle" aria-hidden="true"></i>
+            <div class="csa-alert__body">Faltan los datos de la asociación (razón social, CIF y dirección) para la cabecera de las facturas. Sin ellos se pueden hacer borradores, pero no emitir.{% if is_granted('ROLE_ADMIN') %} Se ponen en <a href="{{ path('settings_index') }}">Configuración</a>, «Facturas emitidas».{% endif %}</div>
+        </div>
+    {% endif %}
+
+    <div class="prl-stats">
+        <div class="prl-stat"><b>{{ issued|length }}</b><span>emitidas en {{ year }}</span></div>
+        <div class="prl-stat"><b>{{ fmt.money(total) }}</b><span>facturado en {{ year }}, IVA incluido</span></div>
+        <div class="prl-stat"><b>{{ drafts|length }}</b><span>{{ drafts|length == 1 ? 'borrador' : 'borradores' }}</span></div>
+    </div>
+
+    <div class="prl-toolbar">
+        <div class="counters">
+            <a href="{{ path('accounting_issued_invoices', { year: year - 1 }) }}" class="prl-btn" title="Año anterior"><i class="fa fa-chevron-left"></i></a>
+            <b>{{ year }}</b>
+            <a href="{{ path('accounting_issued_invoices', { year: year + 1 }) }}" class="prl-btn" title="Año siguiente"><i class="fa fa-chevron-right"></i></a>
+        </div>
+        <div class="spacer"></div>
+        <a href="{{ path('accounting_customers') }}" class="prl-btn"><i class="fa fa-users"></i> Clientes</a>
+        {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+            <a href="{{ path('accounting_issued_invoice_new') }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Nueva factura</a>
+        {% endif %}
+    </div>
+
+    {% if drafts is not empty %}
+        <h2 class="acc-subhead">Borradores</h2>
+        <div class="prl-table-wrap" style="margin-bottom: var(--csa-sp-6);">
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th class="tight">Serie</th>
+                        <th class="tight">Fecha</th>
+                        <th>Cliente</th>
+                        <th class="tight acc-num">Total</th>
+                        <th class="tight">Desde</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for invoice in drafts %}
+                        <tr>
+                            <td class="tight"><a href="{{ path('accounting_issued_invoice_show', { id: invoice.id }) }}">{{ invoice.seriesLabel }}</a></td>
+                            <td class="tight">{{ invoice.issueDate ? invoice.issueDate|date('d/m/Y') : '—' }}</td>
+                            <td><a href="{{ path('accounting_issued_invoice_show', { id: invoice.id }) }}">{{ m.customer_name(invoice) }}</a></td>
+                            <td class="acc-num">{{ fmt.money(invoice.total) }}</td>
+                            <td class="tight acc-muted">{{ invoice.source == 'telegram' ? 'Telegram' : 'web' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+
+    <h2 class="acc-subhead">Emitidas en {{ year }}</h2>
+    <div class="prl-table-wrap">
+        {% if issued is empty %}
+            <div class="prl-empty">Ninguna factura emitida en {{ year }}.</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th class="tight">Nº</th>
+                        <th class="tight">Fecha</th>
+                        <th>Cliente</th>
+                        <th class="tight acc-num">Base</th>
+                        <th class="tight acc-num">IVA</th>
+                        <th class="tight acc-num">Total</th>
+                        <th class="tight"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for invoice in issued %}
+                        <tr>
+                            <td class="tight"><a href="{{ path('accounting_issued_invoice_show', { id: invoice.id }) }}">{{ invoice.numberLabel }}</a></td>
+                            <td class="tight">{{ invoice.issueDate|date('d/m/Y') }}</td>
+                            <td>{{ m.customer_name(invoice) }}</td>
+                            <td class="acc-num">{{ fmt.money(invoice.subtotal) }}</td>
+                            <td class="acc-num">{{ fmt.money(invoice.taxTotal) }}</td>
+                            <td class="acc-num">{{ fmt.money(invoice.total) }}</td>
+                            <td class="tight"><a href="{{ path('accounting_issued_invoice_pdf', { id: invoice.id }) }}" target="_blank" rel="noopener" title="PDF"><i class="fa fa-file-pdf-o"></i></a></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

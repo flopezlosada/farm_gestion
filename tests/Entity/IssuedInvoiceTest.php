@@ -118,13 +118,14 @@ class IssuedInvoiceTest extends TestCase
         $original = $this->imidra();
         $original->issue(10, null, new \DateTimeImmutable());
 
-        $rect = IssuedInvoice::rectifying($original);
+        $rect = IssuedInvoice::rectificationOf($original);
 
         $this->assertTrue($rect->isRectifying());
         $this->assertSame($original, $rect->getRectifies());
         $this->assertSame($original->getCustomer(), $rect->getCustomer());
         $this->assertSame('-3139.12', $rect->getTotal());
-        $this->assertStringStartsWith('Rectificación de la factura 10/2026', (string) $rect->getDescription());
+        // La referencia a la original la pone el PDF siempre; la descripción queda para el motivo.
+        $this->assertNull($rect->getDescription());
 
         $rect->setIssueDate(new \DateTimeImmutable('2026-07-10'));
         $rect->issue(1, null, new \DateTimeImmutable());
@@ -136,7 +137,7 @@ class IssuedInvoiceTest extends TestCase
     {
         $original = $this->imidra();
         $original->issue(10, null, new \DateTimeImmutable());
-        $rect = IssuedInvoice::rectifying($original);
+        $rect = IssuedInvoice::rectificationOf($original);
         $rect->setIssueDate(new \DateTimeImmutable('2026-07-10'));
         foreach ($rect->getLines()->toArray() as $line) {
             $line->setAmount(ltrim($line->getAmount(), '-'));
@@ -148,7 +149,7 @@ class IssuedInvoiceTest extends TestCase
     public function testUnBorradorNoSeRectifica(): void
     {
         $this->expectException(\LogicException::class);
-        IssuedInvoice::rectifying($this->imidra());
+        IssuedInvoice::rectificationOf($this->imidra());
     }
 
     /** La serie de rectificativas no se elige a mano. */
@@ -156,6 +157,29 @@ class IssuedInvoiceTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         new IssuedInvoice(IssuedInvoice::SERIES_RECTIFYING);
+    }
+
+    /** La cabecera del cliente: una línea cada dato, y la provincia sólo si no es el municipio. */
+    public function testLaCabeceraDelClienteNoRepiteMadrid(): void
+    {
+        $invoice = $this->imidra();
+        $invoice->getCustomer()->setProvince('Madrid');
+
+        $this->assertSame(['IMIDRA', 'CIF: S7800035C', 'C/ Leganitos, 47, 3ª planta', '28013 Madrid'], $invoice->customerLines());
+
+        $invoice->getCustomer()->setTown('Alcalá de Henares');
+        $this->assertSame('Madrid', $invoice->customerLines()[4]);
+    }
+
+    /** Emitida, la cabecera sale de la copia: cambiar la ficha no la toca. */
+    public function testLaCabeceraDeUnaEmitidaSaleDeLaCopia(): void
+    {
+        $invoice = $this->imidra();
+        $invoice->issue(10, null, new \DateTimeImmutable());
+        $invoice->getCustomer()->setName('Otro nombre')->setInvoiceNote('otra nota');
+
+        $this->assertSame('IMIDRA', $invoice->customerLines()[0]);
+        $this->assertSame("Códigos DIR3:\nOG A13003089", $invoice->customerNoteForPrint());
     }
 
     /** La base de datos devuelve «21.00»; se trata como «21». */

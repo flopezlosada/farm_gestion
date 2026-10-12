@@ -1,0 +1,90 @@
+{# ============================================================
+ # La ficha de un cliente: sus datos y las facturas que se le han emitido.
+ #
+ # El controller pasa: customer, invoices.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
+
+{% set short_name = customer.name|split("\n")|first %}
+
+{% block title %}{{ short_name }} · Clientes{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_customers') }}">Clientes</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ short_name }}</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+    <style>
+        .acc-facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 24px; margin: 0 0 var(--csa-sp-6, 32px); font-size: 14px; }
+        .acc-facts dt { color: var(--csa-ink-soft, #6b6b6b); }
+        .acc-facts dd { margin: 0; white-space: pre-line; }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+{% set place = [customer.postalCode, customer.town]|filter(v => v)|join(' ') %}
+<div class="prl">
+
+    {{ csa.page_header('Contabilidad · Clientes', short_name, customer.taxId ? 'CIF ' ~ customer.taxId : 'Sin CIF: hasta que lo tenga no se le puede emitir una factura.') }}
+
+    <div class="prl-toolbar">
+        <div class="spacer"></div>
+        {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+            <a href="{{ path('accounting_customer_edit', { id: customer.id }) }}" class="prl-btn"><i class="fa fa-pencil"></i> Cambiar datos</a>
+            <a href="{{ path('accounting_issued_invoice_new', { customer: customer.id }) }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Nueva factura</a>
+        {% endif %}
+    </div>
+
+    <dl class="acc-facts">
+        <dt>Razón social</dt>
+        <dd>{{ customer.name }}</dd>
+        <dt>Dirección</dt>
+        <dd>{{ [customer.address, place, customer.province]|filter(v => v)|join(' · ') ?: '—' }}</dd>
+        <dt>Correo</dt>
+        <dd>{{ customer.email ?? '—' }}</dd>
+        <dt>En todas sus facturas</dt>
+        <dd>{{ customer.invoiceNote ?? '—' }}</dd>
+    </dl>
+
+    <div class="prl-table-wrap">
+        {% if invoices is empty %}
+            <div class="prl-empty">No se le ha emitido ninguna factura.</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th class="tight">Nº</th>
+                        <th class="tight">Fecha</th>
+                        <th>Concepto</th>
+                        <th class="tight acc-num">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for invoice in invoices %}
+                        <tr>
+                            <td class="tight"><a href="{{ path('accounting_issued_invoice_show', { id: invoice.id }) }}">{{ invoice.numberLabel }}</a></td>
+                            <td class="tight">{{ invoice.issueDate|date('d/m/Y') }}</td>
+                            {% set first_line = invoice.lines|first %}
+                            <td>{{ (invoice.description ?? (first_line ? first_line.concept : '—'))|u.truncate(90, '…') }}</td>
+                            <td class="acc-num">{{ fmt.money(invoice.total) }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,75 @@
+{# ============================================================
+ # Los clientes con lo que se les ha facturado en el año.
+ #
+ # El controller pasa: rows (customer, invoices, total), year.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
+
+{% block title %}Contabilidad · Clientes{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Clientes</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header('Contabilidad', 'Clientes', 'A quién le factura la asociación y cuánto en ' ~ year ~ '. Se dan de alta una vez y se eligen al hacer cada factura.') }}
+
+    <div class="prl-toolbar">
+        <div class="counters">
+            <a href="{{ path('accounting_customers', { year: year - 1 }) }}" class="prl-btn" title="Año anterior"><i class="fa fa-chevron-left"></i></a>
+            <b>{{ year }}</b>
+            <a href="{{ path('accounting_customers', { year: year + 1 }) }}" class="prl-btn" title="Año siguiente"><i class="fa fa-chevron-right"></i></a>
+        </div>
+        <div class="spacer"></div>
+        <a href="{{ path('accounting_issued_invoices') }}" class="prl-btn"><i class="fa fa-file-text"></i> Facturas emitidas</a>
+        {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+            <a href="{{ path('accounting_customer_new') }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Nuevo cliente</a>
+        {% endif %}
+    </div>
+
+    <div class="prl-table-wrap">
+        {% if rows is empty %}
+            <div class="prl-empty">Todavía no hay clientes.</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th>Cliente</th>
+                        <th class="tight">CIF</th>
+                        <th class="tight">Municipio</th>
+                        <th class="tight acc-num">Facturas</th>
+                        <th class="tight acc-num">Total {{ year }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                        <tr>
+                            <td><a href="{{ path('accounting_customer_show', { id: row.customer.id }) }}">{{ row.customer.name|split("\n")|first }}</a></td>
+                            <td class="tight">{{ row.customer.taxId ?? '—' }}</td>
+                            <td class="tight">{{ row.customer.town ?? '—' }}</td>
+                            <td class="acc-num">{{ row.invoices }}</td>
+                            <td class="acc-num">{{ row.invoices > 0 ? fmt.money(row.total) : '—' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}
