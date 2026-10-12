@@ -46,7 +46,7 @@ class TelegramSubmissionController extends AbstractController
         $options = [];
         $labels = [];
         foreach ([...$pending, ...$recent] as $submission) {
-            $candidates = $router->candidatesFor($submission);
+            $candidates = $router->candidatesFor($submission, $this->actor());
             $options[$submission->getId()] = $candidates;
             foreach ($candidates as $destination) {
                 $labels[$destination->key()] = $destination->label();
@@ -107,13 +107,13 @@ class TelegramSubmissionController extends AbstractController
 
         $key = (string) $request->request->get('destination');
         $destination = null;
-        foreach ($router->candidatesFor($submission) as $candidate) {
+        foreach ($router->candidatesFor($submission, $this->actor()) as $candidate) {
             if ($candidate->key() === $key) {
                 $destination = $candidate;
             }
         }
         if ($destination === null) {
-            $this->addFlash('danger', 'Ese apartado no admite este envío, o la persona que lo mandó no puede usarlo.');
+            $this->addFlash('danger', 'Ese apartado no admite este envío, o no tienes permiso para usarlo.');
 
             return $this->redirectToRoute('telegram_submissions');
         }

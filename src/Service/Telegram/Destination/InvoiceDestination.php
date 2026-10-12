@@ -56,6 +56,11 @@ class InvoiceDestination implements TelegramDestination
         return 'invoice';
     }
 
+    public function section(): string
+    {
+        return 'contabilidad';
+    }
+
     public function label(): string
     {
         return 'Factura recibida';

@@ -4,8 +4,11 @@ namespace App\Form;
 
 use App\Entity\Partner;
 use App\Entity\User;
+use App\Service\Telegram\Destination\TelegramDestination;
+use App\Service\Telegram\TelegramPermissions;
 use App\Validator\StrongPassword;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
+use Symfony\Component\DependencyInjection\Attribute\AutowireIterator;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
@@ -29,9 +32,31 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
  * sección (o partir su rol) es tocar solo ese array, ni el resto del form ni
  * la plantilla. La traducción nivel → strings de rol (y la inversa, para
  * precargar el form en edición) la hacen los listeners de eventos.
+ *
+ * Debajo del nivel de cada área van las casillas del bot de Telegram: una por
+ * cada cosa que el bot sabe hacer en esa área ({@see TelegramDestination}), con su
+ * propio permiso. Son independientes del nivel web: se puede dejar a alguien
+ * mandar tickets a contabilidad sin darle acceso a la contabilidad. Salen de los
+ * apartados que existan, así que uno nuevo aparece aquí sin tocar este form.
  */
 class UserType extends AbstractType
 {
+    /** Prefijo de las casillas del bot: `bot_invoice`. */
+    private const BOT_FIELD_PREFIX = 'bot_';
+
+    /** @var list<TelegramDestination> */
+    private readonly array $botActions;
+
+    /**
+     * @param iterable<TelegramDestination> $telegramDestinations Lo que sabe hacer el bot.
+     */
+    public function __construct(
+        #[AutowireIterator('app.telegram_destination')]
+        iterable $telegramDestinations = [],
+    ) {
+        $this->botActions = [...$telegramDestinations];
+    }
+
     /** Niveles de acceso por sección (valores internos del selector). */
     public const LEVEL_NONE = 'none';
     public const LEVEL_READ = 'read';
@@ -107,6 +132,9 @@ class UserType extends AbstractType
         foreach (self::SECTIONS as $key => $section) {
             $builder->add('access_' . $key, ChoiceType::class, self::accessFieldOptions($section));
         }
+        foreach ($this->botActions as $action) {
+            $builder->add(self::BOT_FIELD_PREFIX . $action->key(), CheckboxType::class, self::botFieldOptions($action));
+        }
 
         // El vínculo con socix sólo se establece al crear la cuenta. Es 1:1 y
         // permanente (una cuenta es de una persona concreta), así que en
@@ -146,6 +174,13 @@ class UserType extends AbstractType
                     ['data' => self::levelFromRoles($section, $roles)],
                 ));
             }
+
+            foreach ($this->botActions as $action) {
+                $form->add(self::BOT_FIELD_PREFIX . $action->key(), CheckboxType::class, array_merge(
+                    self::botFieldOptions($action),
+                    ['data' => \in_array(TelegramPermissions::roleFor($action), $roles, true)],
+                ));
+            }
         });
 
         // Volcado: traduce los niveles elegidos a strings de rol y los escribe
@@ -155,7 +190,7 @@ class UserType extends AbstractType
             if (!$user instanceof User) {
                 return;
             }
-            $user->setRoles(self::composeRoles($event->getForm()));
+            $user->setRoles($this->composeRoles($event->getForm()));
         });
     }
 
@@ -177,6 +212,20 @@ class UserType extends AbstractType
             'mapped' => false,
             'required' => false,
             'label' => 'Administrador (acceso a todo)',
+        ];
+    }
+
+    /**
+     * Opciones de la casilla de una acción del bot. Lleva su área en `data-section`
+     * para que la plantilla la pinte debajo del nivel de esa área.
+     */
+    private static function botFieldOptions(TelegramDestination $action): array
+    {
+        return [
+            'mapped' => false,
+            'required' => false,
+            'label' => 'Bot: ' . $action->label(),
+            'attr' => ['data-section' => $action->section()],
         ];
     }
 
@@ -247,11 +296,12 @@ class UserType extends AbstractType
      *
      * @return string[]
      */
-    private static function composeRoles(FormInterface $form): array
+    private function composeRoles(FormInterface $form): array
     {
         $roles = [];
 
         if ($form->get('is_admin')->getData()) {
+            // Admin puede con todo, el bot incluido: no hace falta guardar nada más.
             $roles[] = 'ROLE_ADMIN';
         } else {
             foreach (self::SECTIONS as $key => $section) {
@@ -261,6 +311,11 @@ class UserType extends AbstractType
                     $roles[] = $section['edit'] ?? $section['read'];
                 } elseif ($level === self::LEVEL_READ) {
                     $roles[] = $section['read'];
+                }
+            }
+            foreach ($this->botActions as $action) {
+                if ($form->get(self::BOT_FIELD_PREFIX . $action->key())->getData()) {
+                    $roles[] = TelegramPermissions::roleFor($action);
                 }
             }
         }
@@ -273,7 +328,7 @@ class UserType extends AbstractType
         // mano: persistirlos duplicaría el rol en la columna.
         $user = $form->getData();
         if ($user instanceof User) {
-            $managed = self::managedRoles();
+            $managed = $this->managedRoles();
             $derived = ['ROLE_USER', 'ROLE_PARTNER', 'ROLE_WORKER'];
             foreach ($user->getRoles() as $role) {
                 if (!\in_array($role, $managed, true) && !\in_array($role, $derived, true)) {
@@ -288,12 +343,12 @@ class UserType extends AbstractType
     }
 
     /**
-     * Roles que este formulario controla (puede asignar o quitar): admin y los
-     * de cada sección. Todo lo demás que tenga el usuario se respeta.
+     * Roles que este formulario controla (puede asignar o quitar): admin, los
+     * de cada sección y los del bot. Todo lo demás que tenga el usuario se respeta.
      *
      * @return string[]
      */
-    private static function managedRoles(): array
+    private function managedRoles(): array
     {
         $managed = ['ROLE_ADMIN'];
         foreach (self::SECTIONS as $section) {
@@ -301,6 +356,9 @@ class UserType extends AbstractType
             if ($section['edit'] !== null) {
                 $managed[] = $section['edit'];
             }
+        }
+        foreach ($this->botActions as $action) {
+            $managed[] = TelegramPermissions::roleFor($action);
         }
 
         return $managed;

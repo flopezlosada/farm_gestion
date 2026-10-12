@@ -14,7 +14,6 @@ use Doctrine\ORM\EntityManagerInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
-use Symfony\Component\DependencyInjection\Attribute\AutowireIterator;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 
 /**
@@ -23,15 +22,15 @@ use Symfony\Component\RateLimiter\RateLimiterFactory;
  * su destino ({@see TelegramDestination}: facturas, y lo que venga).
  *
  * CÓMO SE ELIGE DESTINO:
- * - Se quedan los que aceptan esa clase de mensaje y a esa persona. Si no queda
+ * - Se quedan los que esa persona tiene permiso para usar
+ *   ({@see TelegramPermissions}) y que aceptan esa clase de mensaje. Si no queda
  *   ninguno, se dice y no se guarda nada (ni se descarga).
  * - Si no, el envío se guarda primero tal cual ({@see TelegramSubmission}), para
  *   poder corregir después adónde va.
- * - Si queda un destino, va ahí sin más: no se gasta una consulta a Gemini en una
- *   pregunta con una sola respuesta.
- * - Si quedan varios, opina {@see TelegramClassifier}. Si lo tiene claro, va ahí;
- *   si duda (o no puede opinar), se le pregunta a quien lo mandó con botones, y
- *   mientras tanto queda pendiente en la web.
+ * - Opina {@see TelegramClassifier}, aunque sólo quede un destino: puede decir que
+ *   no es de ninguno. Si lo tiene claro, va ahí; si duda (o no puede opinar), se
+ *   le pregunta a quien lo mandó con botones, y mientras tanto queda pendiente en
+ *   la web.
  * - Vaya donde vaya sin preguntar, se le cuenta lo que se ha entendido con un
  *   botón «Es otra cosa», por si el bot se equivocó, y otro «Correcto» para
  *   darlo por bueno y que no quede nada por pulsar.
@@ -57,8 +56,7 @@ class TelegramBot
     /**
      * @param TelegramBotApi                $api          API del bot.
      * @param TelegramLinkRepository        $links        Quién está vinculado.
-     * @param iterable<TelegramDestination> $destinations Lo que sabe hacer.
-     * @param TelegramClassifier            $classifier   Para elegir cuando hay varios.
+     * @param TelegramClassifier            $classifier   Para saber qué es lo que llega.
      * @param TelegramSubmissionRouter      $router       Adónde va cada envío, y cómo se corrige.
      * @param TelegramSubmissionRepository  $submissions  Los envíos, para los botones.
      * @param EntityManagerInterface        $em           Para guardar el vínculo.
@@ -69,8 +67,6 @@ class TelegramBot
     public function __construct(
         private readonly TelegramBotApi $api,
         private readonly TelegramLinkRepository $links,
-        #[AutowireIterator('app.telegram_destination')]
-        private readonly iterable $destinations,
         private readonly TelegramClassifier $classifier,
         private readonly TelegramSubmissionRouter $router,
         private readonly TelegramSubmissionRepository $submissions,
@@ -242,16 +238,14 @@ class TelegramBot
      *
      * @param TelegramSubmission        $submission El envío, ya guardado.
      * @param TelegramInput             $input      Lo recibido.
-     * @param list<TelegramDestination> $candidates Destinos posibles (uno o más).
+     * @param list<TelegramDestination> $candidates Destinos que esta persona puede usar para esto (uno o más).
      */
     private function place(TelegramSubmission $submission, TelegramInput $input, array $candidates): void
     {
-        if (\count($candidates) === 1) {
-            $this->routeAlone($submission, $candidates[0], $candidates);
-
-            return;
-        }
-
+        // Se clasifica aunque sólo haya un apartado posible: con permisos por
+        // apartado es lo normal, y mandarlo directo metería la foto de una lechuga
+        // en la bandeja de facturas de quien sólo puede mandar facturas. El
+        // clasificador puede contestar «ninguno», y entonces se pregunta.
         if (!$this->classifier->isAvailable()) {
             $this->router->ask($submission, $candidates, '¿Qué es esto?');
 
@@ -482,7 +476,7 @@ class TelegramBot
     private function help(User $user): string
     {
         $lines = [];
-        foreach ($this->destinations as $destination) {
+        foreach ($this->router->allowed($user) as $destination) {
             $line = $destination->help($user);
             if ($line !== null) {
                 $lines[] = '• ' . $line;

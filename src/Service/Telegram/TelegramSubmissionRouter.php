@@ -33,6 +33,7 @@ class TelegramSubmissionRouter
      * @param TelegramBotApi                $api          Para contestar a quien lo mandó.
      * @param EntityManagerInterface        $em           Para guardar.
      * @param LoggerInterface               $logger       Rastro de lo que falla.
+     * @param TelegramPermissions           $permissions  Quién puede usar cada apartado.
      */
     public function __construct(
         #[AutowireIterator('app.telegram_destination')]
@@ -41,7 +42,27 @@ class TelegramSubmissionRouter
         private readonly TelegramBotApi $api,
         private readonly EntityManagerInterface $em,
         private readonly LoggerInterface $logger,
+        private readonly TelegramPermissions $permissions,
     ) {
+    }
+
+    /**
+     * Los apartados que esta persona tiene permiso para usar, sea lo que sea lo que
+     * mande. De aquí sale todo lo que el bot le ofrece: lo que clasifica, los botones
+     * y la ayuda.
+     *
+     * @return list<TelegramDestination>
+     */
+    public function allowed(User $user): array
+    {
+        $found = [];
+        foreach ($this->destinations as $destination) {
+            if ($this->permissions->allows($user, $destination)) {
+                $found[] = $destination;
+            }
+        }
+
+        return $found;
     }
 
     /**
@@ -73,17 +94,23 @@ class TelegramSubmissionRouter
     }
 
     /**
-     * Los apartados a los que podría ir este envío, según su forma y quién lo mandó.
+     * Los apartados a los que podría ir este envío, según su forma y los permisos de
+     * quien decide: quien lo mandó, si es desde Telegram; quien lo coloca, si es
+     * desde la web. Administración puede llevar a facturas lo que mandó alguien sin
+     * ese permiso; la factura sigue siendo de quien la mandó.
+     *
+     * @param User|null $decider Quién lo coloca desde la web; null = quien lo mandó.
      *
      * @return list<TelegramDestination>
      */
-    public function candidatesFor(TelegramSubmission $submission): array
+    public function candidatesFor(TelegramSubmission $submission, ?User $decider = null): array
     {
-        return $this->candidates($this->inputFor($submission), $submission->getUser());
+        return $this->candidates($this->inputFor($submission), $decider ?? $submission->getUser());
     }
 
     /**
-     * Los apartados a los que podría ir lo recibido, según su forma y quién lo manda.
+     * Los apartados a los que podría ir lo recibido: los que esta persona puede usar
+     * y que admiten esa forma de mensaje.
      *
      * @param TelegramInput $input Lo recibido.
      * @param User          $user  Quién lo manda.
@@ -93,7 +120,7 @@ class TelegramSubmissionRouter
     public function candidates(TelegramInput $input, User $user): array
     {
         $found = [];
-        foreach ($this->destinations as $destination) {
+        foreach ($this->allowed($user) as $destination) {
             if ($destination->accepts($input, $user)) {
                 $found[] = $destination;
             }

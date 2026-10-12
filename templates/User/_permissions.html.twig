@@ -6,11 +6,19 @@
  # Espera `permform` = la vista del form de usuario (UserType). Recorre
  # sus campos `access_*`, así que añadir una sección (registro SECTIONS
  # de UserType) no toca esta plantilla.
+ #
+ # Debajo de cada sección, las casillas del bot de Telegram de esa área
+ # (campos `bot_*`, con su área en `data-section`): permisos sueltos,
+ # independientes del nivel de la web.
  # ============================================================ #}
 <style>
 .perm-rows { display: flex; flex-direction: column; gap: var(--csa-sp-1); margin-top: var(--csa-sp-4); }
-.perm-row { display: flex; align-items: center; justify-content: space-between; gap: var(--csa-sp-4); padding: 10px 0; border-bottom: 1px solid var(--csa-rule); }
-.perm-row:last-child { border-bottom: 0; }
+.perm-block { padding: 10px 0; border-bottom: 1px solid var(--csa-rule); }
+.perm-block:last-child { border-bottom: 0; }
+.perm-row { display: flex; align-items: center; justify-content: space-between; gap: var(--csa-sp-4); flex-wrap: wrap; }
+.perm-bot { display: flex; flex-wrap: wrap; gap: var(--csa-sp-2) var(--csa-sp-5); margin-top: var(--csa-sp-2); padding-left: var(--csa-sp-3); }
+.perm-bot label { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; font-weight: 400; color: var(--csa-ink-soft); cursor: pointer; }
+.perm-bot .fa { color: var(--csa-ink-muted); }
 .perm-row__label { font-size: 14px; font-weight: 500; color: var(--csa-ink); }
 
 /* Control segmentado: radios ocultos + labels-botón; el activo resaltado.
@@ -32,20 +40,40 @@
 <label class="csa-toggle">
     {{ form_widget(permform.is_admin, { attr: { class: 'csa-toggle__input' } }) }}
     <span class="csa-toggle__track"><span class="csa-toggle__thumb"></span></span>
-    <span class="csa-toggle__text">Administrador <small>acceso a todo; ignora los niveles de abajo</small></span>
+    <span class="csa-toggle__text">Administrador <small>acceso a todo, bot incluido; ignora lo de abajo</small></span>
 </label>
 
 <div class="perm-rows">
     {% for child in permform %}
         {% if child.vars.name starts with 'access_' %}
-            <div class="perm-row">
-                <span class="perm-row__label">{{ child.vars.label }}</span>
-                <div class="csa-seg">
-                    {% for opt in child %}
-                        {{ form_widget(opt, { attr: { class: 'csa-seg__input' } }) }}
-                        <label class="csa-seg__btn" for="{{ opt.vars.id }}">{{ opt.vars.label }}</label>
-                    {% endfor %}
+            {% set section_key = child.vars.name|slice(7) %}
+            <div class="perm-block">
+                <div class="perm-row">
+                    <span class="perm-row__label">{{ child.vars.label }}</span>
+                    <div class="csa-seg">
+                        {% for opt in child %}
+                            {{ form_widget(opt, { attr: { class: 'csa-seg__input' } }) }}
+                            <label class="csa-seg__btn" for="{{ opt.vars.id }}">{{ opt.vars.label }}</label>
+                        {% endfor %}
+                    </div>
                 </div>
+                {% set bot_fields = [] %}
+                {% for bot in permform %}
+                    {% if bot.vars.name starts with 'bot_' and bot.vars.attr['data-section']|default('') == section_key %}
+                        {% set bot_fields = bot_fields|merge([bot]) %}
+                    {% endif %}
+                {% endfor %}
+                {% if bot_fields is not empty %}
+                    <div class="perm-bot">
+                        {% for bot in bot_fields %}
+                            <label for="{{ bot.vars.id }}">
+                                {{ form_widget(bot) }}
+                                <i class="fa fa-paper-plane-o" aria-hidden="true"></i>
+                                {{ bot.vars.label }}
+                            </label>
+                        {% endfor %}
+                    </div>
+                {% endif %}
             </div>
         {% endif %}
     {% endfor %}
