@@ -2,7 +2,11 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\AccountEntry;
+use App\Entity\BudgetCategory;
+use App\Entity\BudgetCategoryGroup;
 use App\Entity\Customer;
+use App\Entity\FinancialAccount;
 use App\Entity\IssuedInvoice;
 use App\Entity\IssuedInvoiceLine;
 use App\Entity\Setting;
@@ -180,6 +184,69 @@ class IssuedInvoiceControllerTest extends AbstractAuthenticatedTest
         $this->assertTrue($rectification->isDraft());
         $this->assertSame(IssuedInvoice::SERIES_RECTIFYING, $rectification->getSeries());
         $this->assertSame('-121.00', $rectification->getTotal(), 'tal cual, anula la original entera');
+    }
+
+    /**
+     * Una emitida se liga al apunte del banco en que se cobró: la ficha lo propone
+     * por su importe exacto, se liga, deja de proponerse y se puede desligar. Uno
+     * de otro importe no se acepta aunque se mande a mano.
+     */
+    public function testUnaEmitidaSeLigaASuCobro(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->configureIssuer();
+        $invoice = $this->draft();
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/issued-invoices/%d', $invoice->getId()));
+        $client->submit($crawler->filter('form[action$="/issue"]')->form());
+
+        $em = $this->em();
+        $suffix = bin2hex(random_bytes(3));
+        $account = (new FinancialAccount())->setName('Banco de prueba ' . $suffix)->setKind(FinancialAccount::KIND_BANK)
+            ->setOpeningBalance('0.00')->setOpeningDate(new \DateTimeImmutable('2091-01-01'))->setActive(true)->setSortOrder(99);
+        $group = (new BudgetCategoryGroup())->setName('INGRESOS PRUEBA ' . $suffix)->setKind(BudgetCategoryGroup::KIND_INCOME)->setSortOrder(99);
+        $category = (new BudgetCategory())->setGroup($group)->setName('Formación')->setSortOrder(1);
+        // El cobro llega tres semanas después; el otro es de un céntimo menos.
+        $payment = (new AccountEntry())->setAccount($account)->setCategory($category)
+            ->setDate(new \DateTimeImmutable('2091-03-26'))->setConcept('trf. cooperativa')->setAmount('121.00');
+        $other = (new AccountEntry())->setAccount($account)->setCategory($category)
+            ->setDate(new \DateTimeImmutable('2091-03-26'))->setConcept('trf. otra')->setAmount('120.99');
+        array_map([$em, 'persist'], [$account, $group, $category, $payment, $other]);
+        $em->flush();
+        [$paymentId, $otherId] = [$payment->getId(), $other->getId()];
+
+        try {
+            $crawler = $client->request('GET', sprintf('/gestion/accounting/issued-invoices/%d', $invoice->getId()));
+            $this->assertCount(1, $crawler->filter('form[action$="/payment"]'), 'sólo el apunte de su importe exacto');
+            $form = $crawler->filter('form[action$="/payment"]')->form();
+
+            $client->request('POST', $form->getUri(), ['_token' => $form['_token']->getValue(), 'entry' => $otherId]);
+            $this->assertFalse($this->em()->find(IssuedInvoice::class, $invoice->getId())->isPaid(), 'otro importe no se liga');
+
+            $client->submit($form);
+            $this->assertResponseRedirects();
+            $this->em()->clear();
+            $this->assertSame($paymentId, $this->em()->find(IssuedInvoice::class, $invoice->getId())->getAccountEntry()?->getId());
+
+            $crawler = $client->request('GET', sprintf('/gestion/accounting/issued-invoices/%d', $invoice->getId()));
+            $this->assertSelectorTextContains('.csa-alert--success', 'Cobrada el 26/03/2091');
+            $this->assertCount(0, $crawler->filter('form[action$="/payment"]'));
+
+            $client->submit($crawler->filter('form[action$="/payment/remove"]')->form());
+            $this->em()->clear();
+            $this->assertFalse($this->em()->find(IssuedInvoice::class, $invoice->getId())->isPaid());
+            $this->assertNotNull($this->em()->find(AccountEntry::class, $paymentId), 'el apunte sigue en el libro');
+        } finally {
+            $em = $this->em();
+            $em->clear();
+            foreach ([[AccountEntry::class, $paymentId], [AccountEntry::class, $otherId], [BudgetCategory::class, $category->getId()],
+                      [BudgetCategoryGroup::class, $group->getId()], [FinancialAccount::class, $account->getId()]] as [$class, $id]) {
+                if (($row = $em->find($class, $id)) !== null) {
+                    $em->remove($row);
+                    $em->flush();
+                }
+            }
+        }
     }
 
     /** Un borrador se puede tirar: no tiene número, no deja hueco. */

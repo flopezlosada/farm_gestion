@@ -2,11 +2,13 @@
 
 namespace App\Controller;
 
+use App\Entity\AccountEntry;
 use App\Entity\Customer;
 use App\Entity\IssuedInvoice;
 use App\Entity\IssuedInvoiceLine;
 use App\Entity\User;
 use App\Form\IssuedInvoiceType;
+use App\Repository\AccountEntryRepository;
 use App\Repository\IssuedInvoiceRepository;
 use App\Service\Accounting\IssuedInvoice\InvoiceIssuer;
 use App\Service\Accounting\IssuedInvoice\IssuedInvoiceArchive;
@@ -70,14 +72,65 @@ class IssuedInvoiceController extends AbstractController
 
     /** Ver una factura: el borrador para revisarlo y emitirlo, la emitida tal como salió. */
     #[Route('/{id}', name: 'accounting_issued_invoice_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(IssuedInvoice $invoice, IssuedInvoiceRepository $invoices, IssuedInvoicePdf $pdf): Response
+    public function show(IssuedInvoice $invoice, IssuedInvoiceRepository $invoices, IssuedInvoicePdf $pdf, AccountEntryRepository $entries): Response
     {
         return $this->render('accounting/issued_invoice_show.html.twig', [
             'invoice' => $invoice,
             'problems' => $invoice->isDraft() ? $invoice->issueProblems() : [],
             'hasIssuer' => $pdf->hasIssuer(),
             'rectifications' => $invoice->isIssued() ? $invoices->findRectificationsOf($invoice) : [],
+            'paymentCandidates' => $this->paymentCandidates($invoice, $entries),
         ]);
+    }
+
+    /**
+     * Ligar la factura al apunte en que se cobró. Sólo se acepta uno de los que
+     * propone la ficha: así no se liga un apunte de otro importe ni uno que ya
+     * explica otra factura.
+     */
+    #[Route('/{id}/payment', name: 'accounting_issued_invoice_payment', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
+    public function payment(Request $request, IssuedInvoice $invoice, AccountEntryRepository $entries, EntityManagerInterface $em): Response
+    {
+        $back = $this->redirectToRoute('accounting_issued_invoice_show', ['id' => $invoice->getId()]);
+        if (!$this->isCsrfTokenValid('payment-invoice-' . $invoice->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('danger', 'La página había caducado. Vuelve a intentarlo.');
+
+            return $back;
+        }
+
+        $entryId = $request->request->getInt('entry');
+        $entry = current(array_filter(
+            $this->paymentCandidates($invoice, $entries),
+            static fn (AccountEntry $e): bool => $e->getId() === $entryId,
+        ));
+        if ($entry === false) {
+            $this->addFlash('warning', 'Ese apunte ya no casa con la factura: puede que se haya ligado a otra o que ya esté cobrada.');
+
+            return $back;
+        }
+
+        $invoice->markPaid($entry);
+        $em->flush();
+        $this->addFlash('success', sprintf('Cobrada el %s en %s.', $entry->getDate()->format('d/m/Y'), $entry->getAccount()->getName()));
+
+        return $back;
+    }
+
+    /** Deshacer el cobro: el apunte ligado no era el suyo. El apunte sigue en el libro. */
+    #[Route('/{id}/payment/remove', name: 'accounting_issued_invoice_payment_remove', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
+    public function paymentRemove(Request $request, IssuedInvoice $invoice, EntityManagerInterface $em): Response
+    {
+        if ($this->isCsrfTokenValid('payment-remove-invoice-' . $invoice->getId(), (string) $request->request->get('_token'))) {
+            $invoice->unmarkPaid();
+            $em->flush();
+            $this->addFlash('success', 'La factura vuelve a estar sin cobrar. El apunte sigue en el libro.');
+        } else {
+            $this->addFlash('danger', 'La página había caducado. Vuelve a intentarlo.');
+        }
+
+        return $this->redirectToRoute('accounting_issued_invoice_show', ['id' => $invoice->getId()]);
     }
 
     /** Cambiar un borrador. Una emitida no se cambia: se rectifica. */
@@ -212,6 +265,22 @@ class IssuedInvoiceController extends AbstractController
             'invoice' => $invoice,
             'exemptionDefault' => $settings->getString(AppSettings::ISSUED_INVOICE_EXEMPTION),
         ]);
+    }
+
+    /**
+     * Apuntes que pueden ser el cobro de una emitida todavía sin cobrar: su total
+     * exacto (negativo en una rectificativa, que se devuelve) desde poco antes de su
+     * fecha hasta {@see AccountEntryRepository::COLLECTION_DAYS_AFTER} días después.
+     *
+     * @return list<AccountEntry>
+     */
+    private function paymentCandidates(IssuedInvoice $invoice, AccountEntryRepository $entries): array
+    {
+        if (!$invoice->isIssued() || $invoice->isPaid() || IssuedInvoice::toCents($invoice->getTotal()) === 0) {
+            return [];
+        }
+
+        return $entries->findPaymentCandidates($invoice->getTotal(), $invoice->getIssueDate(), 5, AccountEntryRepository::COLLECTION_DAYS_AFTER);
     }
 
     private function actor(): ?User

@@ -5,6 +5,7 @@ namespace App\Repository;
 use App\Entity\AccountEntry;
 use App\Entity\BudgetCategoryGroup;
 use App\Entity\FinancialAccount;
+use App\Entity\IssuedInvoice;
 use App\Entity\ReceivedInvoice;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\ORM\QueryBuilder;
@@ -281,8 +282,16 @@ class AccountEntryRepository extends ServiceEntityRepository
     public const PAYMENT_DAYS_AFTER = 45;
 
     /**
-     * Apuntes que pueden ser el pago de una factura que llega a la bandeja: el mismo
-     * importe exacto, en fechas cercanas, que aún no tienen factura. El que más se
+     * Días después para el COBRO de una factura emitida: quien paga es otro y a su
+     * ritmo; los clientes son sobre todo organismos públicos, que pagan tras aprobar
+     * el gasto (IMIDRA tardó 28 días en la 10/2026).
+     */
+    public const COLLECTION_DAYS_AFTER = 90;
+
+    /**
+     * Apuntes que pueden ser el pago de una factura (recibida: un gasto; emitida: un
+     * cobro, en positivo): el mismo importe exacto, en fechas cercanas, que aún no
+     * explica ninguna otra factura, ni recibida ni emitida. El que más se
      * acerca en fecha, primero.
      *
      * Es lo que evita contar un gasto dos veces: el movimiento lo trae el banco (el
@@ -293,11 +302,12 @@ class AccountEntryRepository extends ServiceEntityRepository
      *
      * @param string             $amount Importe con signo, como en el apunte (un gasto es negativo).
      * @param \DateTimeInterface $date   Fecha de la factura.
-     * @param int                $limit  Cuántos como mucho.
+     * @param int                $limit     Cuántos como mucho.
+     * @param int                $daysAfter Hasta cuántos días después de la factura buscar.
      *
      * @return list<AccountEntry>
      */
-    public function findPaymentCandidates(string $amount, \DateTimeInterface $date, int $limit = 3): array
+    public function findPaymentCandidates(string $amount, \DateTimeInterface $date, int $limit = 3, int $daysAfter = self::PAYMENT_DAYS_AFTER): array
     {
         $day = \DateTimeImmutable::createFromInterface($date);
 
@@ -306,17 +316,19 @@ class AccountEntryRepository extends ServiceEntityRepository
             ->innerJoin('e.category', 'c')->addSelect('c')
             ->innerJoin('c.group', 'g')
             ->leftJoin(ReceivedInvoice::class, 'ri', 'WITH', 'ri.accountEntry = e')
+            ->leftJoin(IssuedInvoice::class, 'ii', 'WITH', 'ii.accountEntry = e')
             ->addSelect('ABS(DATE_DIFF(e.date, :day)) AS HIDDEN distance')
             ->andWhere('e.amount = :amount')
             ->andWhere('e.date BETWEEN :from AND :to')
             ->andWhere('ri.id IS NULL')
+            ->andWhere('ii.id IS NULL')
             ->andWhere('g.kind != :transfer')
             ->andWhere('a.active = true')
             ->andWhere('c.active = true')
             ->setParameter('amount', $amount)
             ->setParameter('day', $day->format('Y-m-d'))
             ->setParameter('from', $day->modify(sprintf('-%d days', self::PAYMENT_DAYS_BEFORE))->format('Y-m-d'))
-            ->setParameter('to', $day->modify(sprintf('+%d days', self::PAYMENT_DAYS_AFTER))->format('Y-m-d'))
+            ->setParameter('to', $day->modify(sprintf('+%d days', $daysAfter))->format('Y-m-d'))
             ->setParameter('transfer', BudgetCategoryGroup::KIND_TRANSFER)
             ->orderBy('distance', 'ASC')
             ->addOrderBy('e.id', 'ASC')

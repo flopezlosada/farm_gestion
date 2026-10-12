@@ -129,6 +129,16 @@ class IssuedInvoice
     #[Assert\Valid]
     private Collection $lines;
 
+    /**
+     * El apunte del banco en que se cobró (o, en una rectificativa, en que se
+     * devolvió). No es parte de la factura, así que se liga y desliga aunque esté
+     * emitida. SET NULL: si el apunte se borra, la factura vuelve a estar sin cobrar.
+     *
+     * @ORM\OneToOne(targetEntity="AccountEntry")
+     * @ORM\JoinColumn(name="account_entry_id", nullable=true, unique=true, onDelete="SET NULL")
+     */
+    private ?AccountEntry $accountEntry = null;
+
     // Datos del cliente tal como quedaron al emitirla. Antes, null.
 
     /** @ORM\Column(name="customer_name", type="string", length=255, nullable=true) */
@@ -632,6 +642,40 @@ class IssuedInvoice
     public function getUpdatedAt(): ?\DateTimeInterface
     {
         return $this->updatedAt;
+    }
+
+    /**
+     * Liga la factura al apunte en que se cobró. Sólo una emitida (un borrador no se
+     * cobra) y sólo por su importe exacto, con su signo: así una rectificativa casa
+     * con la devolución y no con un cobro.
+     *
+     * @param AccountEntry $entry Apunte del libro que la cobra.
+     */
+    public function markPaid(AccountEntry $entry): void
+    {
+        if (!$this->isIssued()) {
+            throw new \LogicException('Un borrador no se cobra: hay que emitirlo antes.');
+        }
+        if (self::toCents($entry->getAmount()) !== $this->totalCents()) {
+            throw new \LogicException(sprintf('El apunte es de %s y la factura de %s.', $entry->getAmount(), $this->getTotal()));
+        }
+        $this->accountEntry = $entry;
+    }
+
+    /** Deshace {@see markPaid()}: el apunte no era su cobro. */
+    public function unmarkPaid(): void
+    {
+        $this->accountEntry = null;
+    }
+
+    public function isPaid(): bool
+    {
+        return $this->accountEntry !== null;
+    }
+
+    public function getAccountEntry(): ?AccountEntry
+    {
+        return $this->accountEntry;
     }
 
     /** Una factura emitida no se cambia: se rectifica. */
