@@ -80,6 +80,30 @@ class IssuedInvoiceRepository extends ServiceEntityRepository
     }
 
     /**
+     * Las emitidas con fecha entre dos días, ambos incluidos, con sus líneas: lo
+     * que va al libro de facturas emitidas. Por fecha y, el mismo día, por serie y
+     * número.
+     *
+     * @return list<IssuedInvoice>
+     */
+    public function findIssuedBetween(\DateTimeInterface $from, \DateTimeInterface $to): array
+    {
+        return $this->createQueryBuilder('i')
+            ->addSelect('l')
+            ->leftJoin('i.lines', 'l')
+            ->andWhere('i.status = :issued')
+            ->andWhere('i.issueDate BETWEEN :from AND :to')
+            ->setParameter('issued', IssuedInvoice::STATUS_ISSUED)
+            ->setParameter('from', \DateTimeImmutable::createFromInterface($from)->setTime(0, 0), 'date_immutable')
+            ->setParameter('to', \DateTimeImmutable::createFromInterface($to)->setTime(0, 0), 'date_immutable')
+            ->orderBy('i.issueDate', 'ASC')
+            ->addOrderBy('i.series', 'ASC')
+            ->addOrderBy('i.number', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Las rectificativas que tiene una factura.
      *
      * @return list<IssuedInvoice>

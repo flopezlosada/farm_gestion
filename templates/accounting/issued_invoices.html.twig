@@ -23,9 +23,6 @@
     {{ parent() }}
     {% include 'partner/_listing_styles.html.twig' %}
     {% include 'accounting/_styles.html.twig' %}
-    <style>
-        .acc-subhead { font-size: 15px; font-weight: 600; margin: 0 0 var(--csa-sp-3, 12px); color: var(--csa-ink); }
-    </style>
 {% endblock %}
 
 {% macro customer_name(invoice) %}{{ (invoice.issued ? invoice.customerName : (invoice.customer ? invoice.customer.name : '—'))|split("\n")|first }}{% endmacro %}
