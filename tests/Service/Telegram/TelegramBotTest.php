@@ -438,6 +438,8 @@ class TelegramBotTest extends KernelTestCase
         $this->assertSame(['Esa factura ya la han descartado desde la web.'], $this->answers);
         $this->assertCount(1, $this->invoicesFrom(), 'la fila sigue: descartar no es borrar');
         $this->assertTrue($this->onlySubmission()->isRouted());
+        $this->assertStringEndsWith('Esa factura ya la han descartado desde la web.', $this->lastReply(), 'lo dice en el mensaje, no sólo en un aviso que se va');
+        $this->assertSame([], $this->lastButtons(), 'ya no hay nada que corregir desde el móvil');
     }
 
     /** Si el apartado ya no deja deshacerlo, no se mueve y se dice por qué. */
@@ -455,6 +457,8 @@ class TelegramBotTest extends KernelTestCase
         $this->assertSame(['Ya está publicada.'], $this->answers);
         $this->assertSame('gallery', $this->onlySubmission()->getDestination());
         $this->assertSame([], $this->invoicesFrom());
+        $this->assertStringEndsWith('Ya está publicada.', $this->lastReply());
+        $this->assertSame([], $this->lastButtons());
     }
 
     /** Los botones de un envío sólo valen para quien lo mandó. */
