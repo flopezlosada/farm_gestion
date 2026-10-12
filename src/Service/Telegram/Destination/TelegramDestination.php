@@ -15,8 +15,9 @@ use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
  * si compite con otras por el mismo mensaje, {@see \App\Service\Telegram\TelegramClassifier}
  * elige entre ellas leyendo su {@see description()}.
  *
- * Cada destino comprueba sus permisos en {@see accepts()}: estar vinculado al bot no
- * da más derechos que los que esa persona tiene en la web.
+ * Quién puede usarlo no lo decide el apartado: cada uno tiene su permiso, que se
+ * marca a mano en la ficha de cada cuenta ({@see \App\Service\Telegram\TelegramPermissions}).
+ * Sin él, el bot ni lo ofrece, ni lo propone al clasificar, ni lo menciona en la ayuda.
  *
  * Cada apartado GUARDA ({@see commit()}) y sabe DESHACER lo que guardó
  * ({@see undo()}). El bot guarda sin preguntar cuando lo tiene claro y le cuenta a
@@ -34,6 +35,13 @@ interface TelegramDestination
     public function label(): string;
 
     /**
+     * El área de la app a la que pertenece: una clave de
+     * {@see \App\Form\UserType::SECTIONS} (`contabilidad`, `granja`…). Agrupa su
+     * permiso en la ficha de la cuenta, junto al acceso a esa área.
+     */
+    public function section(): string;
+
+    /**
      * Qué es lo que recibe, para que el clasificador sepa distinguirlo de lo de los
      * demás destinos. Una o dos frases concretas: «Factura o ticket de compra
      * emitido por un proveedor, con importe», no «documentos».
@@ -41,9 +49,9 @@ interface TelegramDestination
     public function description(): string;
 
     /**
-     * Si podría ser suyo y esta persona puede usarlo: por la forma del mensaje
-     * (foto, voz…), por si su sección está encendida y por los permisos. Sin mirar el
-     * contenido: eso lo hace el clasificador cuando hay más de un candidato.
+     * Si podría ser suyo: por la forma del mensaje (foto, voz…) y por si su sección
+     * está encendida. Sin mirar el contenido, que lo mira el clasificador, ni el
+     * permiso de la persona, que lo mira el router.
      *
      * @param TelegramInput $input Lo recibido.
      * @param User          $user  Quién lo manda.
@@ -73,8 +81,9 @@ interface TelegramDestination
     public function undo(string $ref): ?string;
 
     /**
-     * Una línea para la ayuda: qué se le puede mandar. Null si esta persona no
-     * puede usarlo ahora (sección apagada, sin permiso), para no prometer nada.
+     * Una línea para la ayuda: qué se le puede mandar. Null si ahora no se puede
+     * usar (sección apagada), para no prometer nada. Sólo se pregunta a los
+     * apartados para los que esa persona tiene permiso.
      *
      * @param User $user Quién pregunta.
      */

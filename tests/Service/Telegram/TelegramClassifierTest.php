@@ -139,6 +139,11 @@ class TelegramClassifierTest extends TestCase
                 return $this->key;
             }
 
+            public function section(): string
+            {
+                return 'contabilidad';
+            }
+
             public function label(): string
             {
                 return ucfirst($this->key);

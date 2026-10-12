@@ -23,6 +23,7 @@ use App\Service\Telegram\TelegramBotApi;
 use App\Service\Telegram\TelegramClassifier;
 use App\Service\Telegram\TelegramFileStore;
 use App\Service\Telegram\TelegramInput;
+use App\Service\Telegram\TelegramPermissions;
 use App\Service\Telegram\TelegramSubmissionRouter;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\NullLogger;
@@ -75,7 +76,7 @@ class TelegramBotTest extends KernelTestCase
     private array $downloads = [];
 
     /** Lo que contesta Gemini al clasificar. */
-    private string $classification = TelegramClassifier::NONE;
+    private string $classification = 'invoice';
 
     /** @var list<int> */
     private array $invoices = [];
@@ -104,7 +105,9 @@ class TelegramBotTest extends KernelTestCase
             ->setEmail('telegram-' . $suffix . '@test.org')
             ->setPassword('x')
             ->setEnabled(true)
-            ->setPasswordSet(true);
+            ->setPasswordSet(true)
+            // Permiso para los dos apartados de estos tests; los de permisos lo cambian.
+            ->setRoles(['ROLE_BOT_INVOICE', 'ROLE_BOT_GALLERY']);
         $this->em->persist($this->user);
         $this->em->flush();
     }
@@ -250,7 +253,7 @@ class TelegramBotTest extends KernelTestCase
         $this->assertStringContainsString('ya no vale', $this->lastReply());
     }
 
-    /** Con un solo destino posible, va directo y sin preguntar a Gemini. */
+    /** Un PDF que el clasificador ve claro como factura va a la bandeja. */
     public function testUnPdfDeAlguienVinculadoAcabaEnLaBandejaDeFacturas(): void
     {
         $this->linkAs(555000004);
@@ -273,6 +276,72 @@ class TelegramBotTest extends KernelTestCase
         $this->assertSame('invoice', $submission->getDestination());
         $this->assertSame((string) $invoices[0]->getId(), $submission->getTargetRef());
         $this->assertNotNull(static::getContainer()->get(TelegramFileStore::class)->pathTo($submission->getFileName()), 'el envío guarda su propia copia');
+    }
+
+    /** Sin permiso para ningún apartado, el bot no ofrece nada ni descarga lo que llegue. */
+    public function testSinPermisoNoSeLeOfreceNada(): void
+    {
+        $this->linkAs(555000030);
+        $this->allowOnly([]);
+
+        $this->bot(withGallery: true)->handle($this->update($this->pdfMessage(555000030), 555000030));
+
+        $this->assertStringContainsString('no tengo nada encendido para ti', $this->lastReply());
+        $this->assertSame([], $this->downloads);
+        $this->assertSame([], $this->submissionsFrom());
+    }
+
+    /** La ayuda sólo nombra lo que esa persona puede usar. */
+    public function testLaAyudaSoloNombraLoQuePuedeUsar(): void
+    {
+        $this->linkAs(555000031);
+        $this->allowOnly(['ROLE_BOT_GALLERY']);
+
+        $this->bot(withGallery: true)->handle($this->update(['text' => 'hola'], 555000031));
+
+        $this->assertStringContainsString('Fotos para la galería', $this->lastReply());
+        $this->assertStringNotContainsString('Facturas y tickets', $this->lastReply());
+    }
+
+    /** Lo que no puede usar no se le propone: ni al clasificar ni en los botones. */
+    public function testSoloSeOfreceLoQuePuedeUsar(): void
+    {
+        $this->linkAs(555000032);
+        $this->allowOnly(['ROLE_BOT_GALLERY']);
+        $this->classification = TelegramClassifier::NONE;
+
+        $this->bot(withGallery: true)->handle($this->update($this->pdfMessage(555000032), 555000032));
+
+        $this->assertSame(['Galería', 'Nada de esto: descártalo'], $this->lastButtons());
+        $this->assertSame([], $this->invoicesFrom());
+    }
+
+    /**
+     * Con un solo apartado posible también se clasifica: si no es de ese apartado,
+     * no se mete ahí, se pregunta.
+     */
+    public function testConUnSoloApartadoTambienSeClasifica(): void
+    {
+        $this->linkAs(555000033);
+        $this->classification = TelegramClassifier::NONE;
+
+        $this->bot()->handle($this->update($this->pdfMessage(555000033), 555000033));
+
+        $this->assertSame([], $this->invoicesFrom(), 'lo que no es una factura no entra en la bandeja');
+        $this->assertStringContainsString('No sé qué es esto', $this->lastReply());
+        $this->assertSame(['Factura recibida', 'Nada de esto: descártalo'], $this->lastButtons());
+        $this->assertTrue($this->onlySubmission()->isPending());
+    }
+
+    /** Admin puede con todos los apartados sin que se le marque ninguno. */
+    public function testAdminPuedeConTodo(): void
+    {
+        $this->linkAs(555000034);
+        $this->allowOnly(['ROLE_ADMIN']);
+
+        $this->bot()->handle($this->update($this->pdfMessage(555000034), 555000034));
+
+        $this->assertCount(1, $this->invoicesFrom());
     }
 
     /** Las mismas reglas que la subida web: un fichero que no es factura ni foto no se guarda. */
@@ -631,6 +700,11 @@ class TelegramBotTest extends KernelTestCase
                     return 'gallery';
                 }
 
+                public function section(): string
+                {
+                    return 'blog';
+                }
+
                 public function label(): string
                 {
                     return 'Galería';
@@ -668,9 +742,8 @@ class TelegramBotTest extends KernelTestCase
         return new TelegramBot(
             $api,
             static::getContainer()->get(TelegramLinkRepository::class),
-            $destinations,
             new TelegramClassifier(new GeminiClient($gemini, 'clave', ['modelo-a'])),
-            new TelegramSubmissionRouter($destinations, static::getContainer()->get(TelegramFileStore::class), $api, $this->em, new NullLogger()),
+            new TelegramSubmissionRouter($destinations, static::getContainer()->get(TelegramFileStore::class), $api, $this->em, new NullLogger(), static::getContainer()->get(TelegramPermissions::class)),
             static::getContainer()->get(TelegramSubmissionRepository::class),
             $this->em,
             $this->seen,
@@ -731,6 +804,13 @@ class TelegramBotTest extends KernelTestCase
         $this->em->flush();
 
         return $code;
+    }
+
+    /** Deja a la persona de los tests sólo con estos roles. */
+    private function allowOnly(array $roles): void
+    {
+        $this->user->setRoles($roles);
+        $this->em->flush();
     }
 
     private function linkAs(int $telegramId): void

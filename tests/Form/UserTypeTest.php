@@ -4,6 +4,10 @@ namespace App\Tests\Form;
 
 use App\Entity\User;
 use App\Form\UserType;
+use App\Service\Telegram\Destination\TelegramDestination;
+use App\Service\Telegram\Destination\TelegramOutcome;
+use App\Service\Telegram\TelegramInput;
+use Symfony\Component\Form\PreloadedExtension;
 use Symfony\Component\Form\Test\TypeTestCase;
 
 /**
@@ -17,6 +21,54 @@ use Symfony\Component\Form\Test\TypeTestCase;
  */
 class UserTypeTest extends TypeTestCase
 {
+    /** El form con un apartado del bot de contabilidad, como el de facturas. */
+    protected function getExtensions(): array
+    {
+        $invoices = new class() implements TelegramDestination {
+            public function key(): string
+            {
+                return 'invoice';
+            }
+
+            public function section(): string
+            {
+                return 'contabilidad';
+            }
+
+            public function label(): string
+            {
+                return 'Factura recibida';
+            }
+
+            public function description(): string
+            {
+                return '';
+            }
+
+            public function accepts(TelegramInput $input, User $user): bool
+            {
+                return true;
+            }
+
+            public function commit(TelegramInput $input, User $user): TelegramOutcome
+            {
+                throw new \LogicException('No se usa en este test.');
+            }
+
+            public function undo(string $ref): ?string
+            {
+                return null;
+            }
+
+            public function help(User $user): ?string
+            {
+                return null;
+            }
+        };
+
+        return [new PreloadedExtension([new UserType([$invoices])], [])];
+    }
+
     /** Datos base del form sin ningún acceso marcado. */
     private function baseSubmit(array $overrides = []): array
     {
@@ -166,5 +218,51 @@ class UserTypeTest extends TypeTestCase
         $checked = array_values(array_filter($albergue->children, fn ($opt) => $opt->vars['checked']));
         $this->assertCount(1, $checked, 'Debe haber exactamente un radio marcado.');
         $this->assertSame(UserType::LEVEL_EDIT, $checked[0]->vars['value']);
+    }
+
+    /** El permiso del bot se guarda suelto: no da acceso a la contabilidad en la web. */
+    public function testBotPermissionIsStoredOnItsOwn(): void
+    {
+        $roles = $this->submit(['bot_invoice' => true])->getRoles();
+
+        $this->assertContains('ROLE_BOT_INVOICE', $roles);
+        $this->assertNotContains('ROLE_GESTION_CONTABILIDAD', $roles);
+    }
+
+    /** Al abrir la ficha, la casilla sale marcada y colocada en su área. */
+    public function testBotPermissionPreloadsUnderItsSection(): void
+    {
+        $form = $this->factory->create(UserType::class, (new User())->setRoles(['ROLE_BOT_INVOICE']), [
+            'require_password' => false,
+            'include_partner' => false,
+        ]);
+
+        $this->assertTrue($form->get('bot_invoice')->getData());
+        $view = $form->createView()->children['bot_invoice'];
+        $this->assertTrue($view->vars['checked'], 'la vista tiene que salir marcada, no sólo getData()');
+        $this->assertSame('contabilidad', $view->vars['attr']['data-section']);
+    }
+
+    /** Desmarcarla quita el permiso; lo demás que tenga se queda. */
+    public function testUnmarkingRemovesBotPermission(): void
+    {
+        $user = (new User())->setRoles(['ROLE_BOT_INVOICE', 'ROLE_GESTION_GRANJA']);
+        $form = $this->factory->create(UserType::class, $user, [
+            'require_password' => false,
+            'include_partner' => false,
+        ]);
+        $form->submit($this->baseSubmit(['access_granja' => UserType::LEVEL_EDIT, 'bot_invoice' => false]));
+
+        $this->assertNotContains('ROLE_BOT_INVOICE', $user->getRoles());
+        $this->assertContains('ROLE_GESTION_GRANJA', $user->getRoles());
+    }
+
+    /** Admin ya puede con todo el bot: no se guardan permisos sueltos que sobran. */
+    public function testAdminDoesNotStoreBotPermissions(): void
+    {
+        $roles = $this->submit(['is_admin' => true, 'bot_invoice' => true])->getRoles();
+
+        $this->assertContains('ROLE_ADMIN', $roles);
+        $this->assertNotContains('ROLE_BOT_INVOICE', $roles);
     }
 }

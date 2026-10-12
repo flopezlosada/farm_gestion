@@ -8,8 +8,8 @@ use App\Service\Telegram\Destination\TelegramDestination;
 use Symfony\Component\Mime\MimeTypes;
 
 /**
- * Decide a qué destino va lo que ha llegado al bot cuando hay más de uno posible:
- * le enseña a Gemini el fichero (si lo entiende), el texto o pie de foto, y la
+ * Decide a qué destino va lo que ha llegado al bot, también cuando sólo hay uno
+ * posible (puede no ser de ninguno): le enseña a Gemini el fichero (si lo entiende), el texto o pie de foto, y la
  * descripción de cada candidato, y Gemini elige uno o ninguno.
  *
  * Elige SÓLO entre los candidatos: la respuesta está atada a sus claves en el
@@ -58,7 +58,7 @@ class TelegramClassifier
     {
     }
 
-    /** Si se puede clasificar: sin Gemini, con varios candidatos no hay forma de elegir. */
+    /** Si se puede clasificar: sin Gemini no hay forma de saber qué es, y se pregunta. */
     public function isAvailable(): bool
     {
         return $this->gemini->isConfigured();
