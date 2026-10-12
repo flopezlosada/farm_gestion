@@ -16,11 +16,27 @@
     .acc-group-row > td { font-weight: 600; background: rgba(0, 0, 0, 0.05); }
     .acc-cat-row > td:first-child { padding-left: 24px; }
     .acc-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0; }
-    .acc-filters .csa-input { min-width: 120px; }
+    /* .csa-input es de ancho completo (formularios); en una barra de filtros cada
+       control ocupaba su propia línea. Aquí miden lo que su contenido. */
+    .acc-filters .csa-input { width: auto; flex: 0 1 auto; min-width: 120px; }
+    .acc-filters .acc-filter-date { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--csa-ink-soft, #6b6b6b); }
+    /* Los conceptos del banco son tiras sin espacios (bel-liq.rem.devol2026…): sin
+       esto se salían de su celda y se montaban sobre la partida. */
+    .acc-wrap td { overflow-wrap: anywhere; }
 
     /* Rejillas de doce meses (el resumen del año y el presupuesto). */
     .acc-grid { font-size: 12px; }
     .acc-grid td, .acc-grid th { padding: 6px 8px; }
+    /* El listado normal usa table-layout: fixed, que reparte el ancho a partes
+       iguales: en una rejilla de catorce columnas la de partidas no cabía (nombres
+       en cuatro líneas, grupos pisando enero). Se le da su ancho y el resto de
+       columnas, cifras cortas, se reparten lo que queda. */
+    .acc-grid th:first-child { width: 190px; }
+    /* La rejilla que se ESCRIBE (presupuesto) lleva casillas de 74px que no caben
+       en un reparto a partes iguales: ahí cada columna mide lo que necesita y la
+       rejilla se desliza en horizontal. */
+    .acc-grid--inputs.prl-table { table-layout: auto; }
+    .acc-grid-wrap { overflow-x: auto; }
     .acc-grid .zero { color: rgba(0, 0, 0, 0.2); }
     .acc-total-col { background: rgba(0, 0, 0, 0.03); font-weight: 600; }
 
@@ -35,13 +51,14 @@
         .acc-grid.prl-table tbody td { display: table-cell; padding: 6px 8px; border-bottom: 0; }
         .acc-grid.prl-table tbody td::before { content: none; }
     }
-    /* Tira de doce meses (caja de la portada, saldo de una cuenta). */
-    .acc-months { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 4px; }
+    /* Tira de doce meses (caja de la portada, saldo de una cuenta), en cuatro
+       columnas: una fila por trimestre. Doce en fila no caben en una tarjeta de la
+       portada y las cifras («33,8k») se pisaban. */
+    .acc-months { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
     .acc-months .m { text-align: center; font-size: 11px; padding: 6px 2px; border-radius: 6px; background: rgba(0, 0, 0, 0.03); }
     .acc-months .m.proj { border: 1px dashed rgba(0, 0, 0, 0.18); background: transparent; }
     .acc-months .m .v { display: block; font-weight: 600; font-size: 12px; }
     .acc-months .m.low { background: rgba(179, 38, 30, 0.1); }
-    @media (max-width: 900px) { .acc-months { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
     /* Ficha con su documento al lado (apunte, factura): documento a la izquierda, datos a la derecha. */
     .ent-show { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--csa-sp-6, 32px); align-items: start; }
     .ent-show--solo { grid-template-columns: minmax(0, 720px); }
