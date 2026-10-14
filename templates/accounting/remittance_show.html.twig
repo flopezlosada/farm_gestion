@@ -63,10 +63,10 @@
     ) }}
 
     <div class="prl-stats">
-        <div class="prl-stat"><b>{{ remittance.lines|length }}</b><span>recibos</span></div>
-        <div class="prl-stat"><b>{{ fmt.money(remittance.total) }}</b><span>en total</span></div>
+        <div class="prl-stat"><div class="v">{{ remittance.lines|length }}</div><div class="l">recibos</div></div>
+        <div class="prl-stat"><div class="v">{{ fmt.money(remittance.total) }}</div><div class="l">en total</div></div>
         {% if remittance.draft %}
-            <div class="prl-stat"><b>{{ warned }}</b><span>{{ warned == 1 ? 'recibo' : 'recibos' }} con avisos</span></div>
+            <div class="prl-stat"><div class="v">{{ warned }}</div><div class="l">{{ warned == 1 ? 'recibo' : 'recibos' }} con avisos</div></div>
         {% endif %}
     </div>
 

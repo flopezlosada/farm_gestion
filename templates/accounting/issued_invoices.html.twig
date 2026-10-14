@@ -42,9 +42,9 @@
     {% endif %}
 
     <div class="prl-stats">
-        <div class="prl-stat"><b>{{ issued|length }}</b><span>emitidas en {{ year }}</span></div>
-        <div class="prl-stat"><b>{{ fmt.money(total) }}</b><span>facturado en {{ year }}, IVA incluido</span></div>
-        <div class="prl-stat"><b>{{ drafts|length }}</b><span>{{ drafts|length == 1 ? 'borrador' : 'borradores' }}</span></div>
+        <div class="prl-stat"><div class="v">{{ issued|length }}</div><div class="l">emitidas en {{ year }}</div></div>
+        <div class="prl-stat"><div class="v">{{ fmt.money(total) }}</div><div class="l">facturado en {{ year }}, IVA incluido</div></div>
+        <div class="prl-stat"><div class="v">{{ drafts|length }}</div><div class="l">{{ drafts|length == 1 ? 'borrador' : 'borradores' }}</div></div>
     </div>
 
     <div class="prl-toolbar">
