@@ -20,7 +20,7 @@ class BasketFeeExpectations
     }
 
     /**
-     * Lo que suman las cestas activas en el mes, por familia: verdura más huevos de
+     * Lo que suman las cestas activas en el mes, por familia: verdura, huevos y transporte de
      * cada cesta, a cargo de quien la paga (el pagador si lo hay, si no quien la
      * recibe). Una sola consulta para todas.
      *
@@ -49,7 +49,10 @@ class BasketFeeExpectations
         $fees = [];
         foreach ($shares as $share) {
             $head = RemittanceReview::familyHead($share->getPayerPartner() ?? $share->getPartner());
-            $cents = IssuedInvoice::toCents((string) $share->getMonthPrice()) + IssuedInvoice::toCents((string) ($share->getEggMonthPrice() ?? '0'));
+            $cents = array_sum(array_map(
+                static fn (?string $price): int => IssuedInvoice::toCents($price ?? '0'),
+                [$share->getMonthPrice(), $share->getEggMonthPrice(), $share->getTransportPrice()],
+            ));
             $fees[$head->getId()] = ['partner' => $head, 'cents' => ($fees[$head->getId()]['cents'] ?? 0) + $cents];
         }
 

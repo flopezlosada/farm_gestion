@@ -45,7 +45,7 @@ class BasketFeeExpectationsTest extends KernelTestCase
         return $partner;
     }
 
-    private function share(Partner $partner, string $veg, string $eggs, string $start, ?string $end = null, bool $active = true, ?Partner $payer = null): void
+    private function share(Partner $partner, string $veg, string $eggs, string $start, ?string $end = null, bool $active = true, ?Partner $payer = null, ?string $transport = null): void
     {
         $share = new PartnerBasketShare();
         $share->setPartner($partner);
@@ -54,6 +54,7 @@ class BasketFeeExpectationsTest extends KernelTestCase
         $share->setAmount(1);
         $share->setMonthPrice($veg);
         $share->setEggMonthPrice($eggs);
+        $share->setTransportPrice($transport);
         $share->setStartDate(new \DateTime($start));
         $share->setEndDate($end !== null ? new \DateTime($end) : null);
         $share->setPayerPartner($payer);
@@ -70,7 +71,7 @@ class BasketFeeExpectationsTest extends KernelTestCase
         $carlos = $this->partner('FeeTest Carlos');
         $dani = $this->partner('FeeTest Dani');
 
-        $this->share($ana, '50.00', '15.00', '2098-01-01');                 // cuenta: 65
+        $this->share($ana, '50.00', '15.00', '2098-01-01', transport: '5.00'); // verdura + huevos + transporte: 70
         $this->share($hija, '27.50', '0.00', '2098-03-20');                 // alta a mitad de mes, a la familia de Ana
         $this->share($carlos, '43.50', '0.00', '2098-01-01', payer: $bea);  // la paga Bea
         $this->share($dani, '60.00', '0.00', '2098-01-01', '2098-02-28');   // baja antes del mes
@@ -80,7 +81,7 @@ class BasketFeeExpectationsTest extends KernelTestCase
 
         $fees = static::getContainer()->get(BasketFeeExpectations::class)->forMonth(new \DateTimeImmutable('2098-03-15'));
 
-        $this->assertSame(9250, $fees[$ana->getId()]['cents']);
+        $this->assertSame(9750, $fees[$ana->getId()]['cents'], 'El transporte también se cobra.');
         $this->assertSame($ana, $fees[$ana->getId()]['partner']);
         $this->assertArrayNotHasKey($hija->getId(), $fees, 'La cesta de la hija cuenta en la familia, no aparte.');
         $this->assertSame(4350, $fees[$bea->getId()]['cents'], 'Sólo lo que paga por Carlos: su propia cesta está cerrada.');
