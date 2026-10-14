@@ -9,9 +9,11 @@ use App\Entity\RemittanceLine;
 use App\Entity\User;
 use App\Form\RemittanceImportType;
 use App\Form\RemittanceLineType;
+use App\Repository\PartnerRepository;
 use App\Repository\RemittanceRepository;
 use App\Service\Accounting\Invoice\LedgerSheet;
 use App\Service\Accounting\Remittance\BasketFeeExpectations;
+use App\Service\Accounting\Remittance\MandatesToPartners;
 use App\Service\Accounting\Remittance\RemittancePartnerMatcher;
 use App\Service\Accounting\Remittance\RemittancePeriodText;
 use App\Service\Accounting\Remittance\RemittanceReview;
@@ -44,9 +46,6 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 #[IsGranted('ROLE_GESTION_CONTABILIDAD')]
 class RemittanceController extends AbstractController
 {
-    /** Prefijo de los mandatos nuevos si la remesa no da otro. */
-    private const DEFAULT_MANDATE_PREFIX = 'CUOTA MENSUAL';
-
     /** Cuántos meses hay de una remesa a la siguiente, por tipo, para proponer el mes. */
     private const MONTHS_TO_NEXT = [
         Remittance::KIND_BASKET => 1,
@@ -170,7 +169,7 @@ class RemittanceController extends AbstractController
 
     /** Una remesa: sus recibos, y en un borrador lo que hay que revisar antes de enviarla. */
     #[Route('/{id}', name: 'accounting_remittance_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(Remittance $remittance, RemittanceRepository $remittances, RemittanceReview $review, BasketFeeExpectations $fees, ValidatorInterface $validator): Response
+    public function show(Remittance $remittance, RemittanceRepository $remittances, RemittanceReview $review, BasketFeeExpectations $fees, ValidatorInterface $validator, MandatesToPartners $transfer, PartnerRepository $partners): Response
     {
         $previous = $remittances->findLatestOfKind($remittance->getKind(), $remittance->getPeriod());
         $remittances->loadLinesWithPartners($remittance, $previous);
@@ -183,6 +182,9 @@ class RemittanceController extends AbstractController
             'warnings' => $review->lineWarnings($remittance, $expected),
             'withoutLine' => $review->familiesWithoutLine($remittance, $expected),
             'changes' => $review->changesFrom($previous, $remittance),
+            // Una enviada dice con qué cuenta y mandato se cobró: lo que las fichas
+            // aún no tienen, o tienen distinto.
+            'toPartners' => $remittance->isSent() ? $transfer->plan($remittance, $partners->findWithMandate()) : null,
         ]);
     }
 
@@ -221,6 +223,41 @@ class RemittanceController extends AbstractController
         $remittance->markSent($this->actor());
         $em->flush();
         $this->addFlash('success', 'Remesa dada por enviada. Ya no se puede cambiar.');
+
+        return $back;
+    }
+
+    /**
+     * Pasar a las fichas de socixs la cuenta y el mandato con que se les cobró en una
+     * remesa enviada. Sólo rellena lo que falta; lo que no coincide lo enseña.
+     */
+    #[Route('/{id}/to-partners', name: 'accounting_remittance_to_partners', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
+    #[IsGranted('ROLE_GESTION_SOCIXS_EDIT')]
+    public function toPartners(Request $request, Remittance $remittance, RemittanceRepository $remittances, PartnerRepository $partners, MandatesToPartners $transfer, EntityManagerInterface $em): Response
+    {
+        $back = $this->redirectToRoute('accounting_remittance_show', ['id' => $remittance->getId()]);
+        if (!$this->isCsrfTokenValid('remittance-to-partners-' . $remittance->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('danger', 'La página había caducado. Vuelve a intentarlo.');
+
+            return $back;
+        }
+        if (!$remittance->isSent()) {
+            $this->addFlash('warning', 'Sólo se pasan a las fichas los datos de una remesa enviada.');
+
+            return $back;
+        }
+
+        $remittances->loadLinesWithPartners($remittance);
+        $plan = $transfer->plan($remittance, $partners->findWithMandate());
+        $transfer->apply($remittance, $plan);
+        $em->flush();
+
+        $this->addFlash('success', sprintf(
+            'Fichas actualizadas: %d %s y %d %s. Lo que no coincide sigue abajo, sin cambiar.',
+            \count($plan['mandates']), \count($plan['mandates']) === 1 ? 'mandato' : 'mandatos',
+            \count($plan['ibans']), \count($plan['ibans']) === 1 ? 'cuenta' : 'cuentas',
+        ));
 
         return $back;
     }
@@ -349,7 +386,7 @@ class RemittanceController extends AbstractController
     {
         $sample = $remittance->getLines()->first() ?: null;
         $prefix = $sample !== null ? rtrim((string) preg_replace('/\d+\s*$/', '', $sample->getMandateReference())) : '';
-        $mandate = $remittances->nextMandateReference($prefix !== '' ? $prefix : self::DEFAULT_MANDATE_PREFIX);
+        $mandate = $remittances->nextMandateReference($prefix !== '' ? $prefix : RemittanceRepository::DEFAULT_MANDATE_PREFIX);
 
         $line->setMandateReference($mandate)
             ->setMandateSignedOn(new \DateTimeImmutable('today'))

@@ -1,0 +1,43 @@
+{# ============================================================
+ # Sección «Cobro» del alta y la edición de socix: la cuenta y el mandato de
+ # domiciliación. Sin mandato no entra en la remesa (paga de otra forma).
+ #
+ # Recibe: form, num (número de la sección), next_mandate (la siguiente
+ # referencia libre, para proponerla a quien aún no tiene).
+ # ============================================================ #}
+{% embed '_components/csa_form_section.html.twig' with {
+    num: num,
+    title: 'Cobro',
+    subtitle: 'La cuenta y el mandato de domiciliación que firmó. Sin mandato no se le pasa recibo: paga de otra forma. Si paga la cesta de otra persona, el mandato va en la ficha de quien paga.'
+} %}
+    {% block body %}
+        {% import '_macros/csa.html.twig' as csa %}
+        <div class="csa-form-grid">
+            {{ csa.field(form.iban, 'Cuenta (IBAN)', { full: true }) }}
+            {{ csa.field(form.mandateReference, 'Referencia del mandato', {
+                hint: form.mandateReference.vars.value ? 'no se cambia nunca: el banco la conoce así' : 'la siguiente libre es ' ~ next_mandate
+            }) }}
+            {{ csa.field(form.mandateSignedOn, 'Firmado el') }}
+        </div>
+        {% if not form.mandateReference.vars.value %}
+            <p style="margin: var(--csa-sp-3, 12px) 0 0;">
+                <button type="button" class="csa-btn csa-btn--ghost csa-btn--sm"
+                        data-fill-mandate="{{ next_mandate }}"
+                        data-fill-target="{{ form.mandateReference.vars.id }}"
+                        data-fill-date="{{ form.mandateSignedOn.vars.id }}"
+                        data-today="{{ 'now'|date('Y-m-d') }}">
+                    <i class="fa fa-magic" aria-hidden="true"></i> Darle mandato nuevo ({{ next_mandate }}, firmado hoy)
+                </button>
+            </p>
+            <script>
+                document.querySelectorAll('[data-fill-mandate]').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        document.getElementById(btn.dataset.fillTarget).value = btn.dataset.fillMandate;
+                        var date = document.getElementById(btn.dataset.fillDate);
+                        if (!date.value) { date.value = btn.dataset.today; }
+                    });
+                });
+            </script>
+        {% endif %}
+    {% endblock %}
+{% endembed %}

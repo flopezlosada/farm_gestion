@@ -6,19 +6,22 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Gedmo\Mapping\Annotation as Gedmo;
 
 /**
  * @ORM\Table(name="partner", uniqueConstraints={
  *     @ORM\UniqueConstraint(name="UNIQ_partner_celular", columns={"celular"}),
- *     @ORM\UniqueConstraint(name="UNIQ_partner_email", columns={"email"})
+ *     @ORM\UniqueConstraint(name="UNIQ_partner_email", columns={"email"}),
+ *     @ORM\UniqueConstraint(name="UNIQ_partner_mandate_reference", columns={"mandate_reference"})
  * })
  * @ORM\Entity(repositoryClass="App\Repository\PartnerRepository")
  * @ORM\HasLifecycleCallbacks
  */
 #[UniqueEntity(fields: ['celular'], message: 'Ya existe un socio con ese teléfono.')]
 #[UniqueEntity(fields: ['email'], message: 'Ya existe un socio con ese correo electrónico.')]
+#[UniqueEntity(fields: ['mandateReference'], message: 'Esa referencia de mandato ya la tiene otrx socix: el banco no deja repetirla.', groups: ['billing'])]
 class Partner
 {
     /**
@@ -78,7 +81,25 @@ class Partner
      * @ORM\Column(type="string", length=34, nullable=true)
      */
     #[Assert\Length(max: 34)]
+    #[Assert\Iban(message: 'Esa cuenta no es un IBAN válido.', groups: ['billing'])]
     private ?string $iban = null;
+
+    /**
+     * La referencia del mandato de domiciliación que firmó quien paga («CUOTA
+     * MENSUAL 200»). Tenerla es pagar por domiciliación: quien no la tiene no entra
+     * en la remesa. No se reutiliza nunca, ni tras una baja: lo prohíbe el banco.
+     *
+     * @ORM\Column(name="mandate_reference", type="string", length=35, nullable=true)
+     */
+    #[Assert\Length(max: 35)]
+    private ?string $mandateReference = null;
+
+    /**
+     * El día en que firmó el mandato: va en cada recibo.
+     *
+     * @ORM\Column(name="mandate_signed_on", type="date_immutable", nullable=true)
+     */
+    private ?\DateTimeImmutable $mandateSignedOn = null;
 
     /**
      * Observaciones libres sobre el socio (ej. cuotas especiales, acuerdos,
@@ -556,9 +577,63 @@ class Partner
 
     public function setIban(?string $iban): self
     {
-        $this->iban = $iban !== null ? strtoupper(preg_replace('/\s+/', '', $iban)) : null;
+        $iban = RemittanceLine::normalizeIban($iban);
+        $this->iban = $iban !== '' ? $iban : null;
 
         return $this;
+    }
+
+    public function getMandateReference(): ?string
+    {
+        return $this->mandateReference;
+    }
+
+    public function setMandateReference(?string $mandateReference): self
+    {
+        $mandateReference = $mandateReference !== null ? trim(preg_replace('/\s+/', ' ', $mandateReference)) : null;
+        $this->mandateReference = $mandateReference !== '' ? $mandateReference : null;
+
+        return $this;
+    }
+
+    public function getMandateSignedOn(): ?\DateTimeImmutable
+    {
+        return $this->mandateSignedOn;
+    }
+
+    public function setMandateSignedOn(?\DateTimeInterface $mandateSignedOn): self
+    {
+        $this->mandateSignedOn = $mandateSignedOn !== null ? \DateTimeImmutable::createFromInterface($mandateSignedOn)->setTime(0, 0) : null;
+
+        return $this;
+    }
+
+    /** Si paga por domiciliación: tiene mandato completo (referencia y fecha) y cuenta. */
+    public function hasDirectDebit(): bool
+    {
+        return $this->mandateReference !== null && $this->mandateSignedOn !== null && $this->iban !== null;
+    }
+
+    /**
+     * Un mandato va entero: la referencia sin la fecha de firma (o al revés) no se
+     * puede mandar al banco, y una cuenta hace falta para cargarle nada.
+     *
+     * Grupo `billing`, como la validez del IBAN: sólo lo aplica el formulario de
+     * gestión, que enseña esos campos. El perfil que edita el propio socix no los
+     * enseña, y un IBAN viejo mal escrito le impediría guardar sin saber por qué.
+     */
+    #[Assert\Callback(groups: ['billing'])]
+    public function validateMandate(ExecutionContextInterface $context): void
+    {
+        if ($this->mandateReference !== null && $this->mandateSignedOn === null) {
+            $context->buildViolation('Falta la fecha en que firmó el mandato.')->atPath('mandateSignedOn')->addViolation();
+        }
+        if ($this->mandateReference === null && $this->mandateSignedOn !== null) {
+            $context->buildViolation('Falta la referencia del mandato.')->atPath('mandateReference')->addViolation();
+        }
+        if ($this->mandateReference !== null && $this->iban === null) {
+            $context->buildViolation('Con mandato hace falta la cuenta en que se carga.')->atPath('iban')->addViolation();
+        }
     }
 
     public function getNotes(): ?string

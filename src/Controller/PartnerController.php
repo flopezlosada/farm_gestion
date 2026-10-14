@@ -20,6 +20,7 @@ use App\Repository\BasketRepository;
 use App\Repository\NotificationLogRepository;
 use App\Repository\PartnerRepository;
 use App\Repository\PushSubscriptionRepository;
+use App\Repository\RemittanceRepository;
 use App\Service\Delivery\CohortChoiceBuilder;
 use App\Repository\WeeklyBasketGroupRepository;
 use App\Security\MagicLinkMailer;
@@ -258,7 +259,7 @@ class PartnerController extends AbstractController
 
 
     #[Route("/new", name: "partner_new", methods: ["GET","POST"])]
-    public function new(Request $request, EntityManagerInterface $entityManager): Response
+    public function new(Request $request, EntityManagerInterface $entityManager, RemittanceRepository $remittances): Response
     {
         $partner = new Partner();
         // Alta sólo con datos de persona: la cesta Y el grupo de recogida se
@@ -286,6 +287,7 @@ class PartnerController extends AbstractController
             'partner' => $partner,
             'entity' => $partner,
             'form' => $form->createView(),
+            'next_mandate' => $remittances->nextMandateReference(),
         ]);
     }
 
@@ -702,7 +704,8 @@ class PartnerController extends AbstractController
         Request $request,
         Partner $partner,
         EntityManagerInterface $entityManager,
-        NodeShareCoherence $coherence
+        NodeShareCoherence $coherence,
+        RemittanceRepository $remittances,
     ): Response {
         // Sólo se contrasta si el grupo CAMBIA: un socio que ya arrastre una
         // cesta incoherente (dato viejo) tiene que poder seguir editándose para
@@ -733,6 +736,7 @@ class PartnerController extends AbstractController
                     'partner' => $partner,
                     'entity' => $partner,
                     'form' => $this->createForm(PartnerType::class, $partner)->createView(),
+                    'next_mandate' => $remittances->nextMandateReference(),
                 ]);
             }
 
@@ -756,6 +760,7 @@ class PartnerController extends AbstractController
             'partner' => $partner,
             'entity' => $partner,
             'form' => $form->createView(),
+            'next_mandate' => $remittances->nextMandateReference(),
         ]);
     }
 
