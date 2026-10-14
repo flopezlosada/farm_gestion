@@ -465,6 +465,24 @@
                                 <dd class="prt-defs__value">{{ partner.sharePayment.name }}</dd>
                             </div>
                         {% endif %}
+                        {# Cobro: sin mandato no entra en la remesa. La cuenta, enmascarada:
+                         # entera sólo hace falta en el formulario de edición. #}
+                        <div class="prt-defs__row">
+                            <dt class="prt-defs__label">Domiciliación</dt>
+                            <dd class="prt-defs__value{% if not partner.mandateReference %} prt-defs__value--muted{% endif %}">
+                                {% if partner.mandateReference %}
+                                    {{ partner.mandateReference }}{% if partner.mandateSignedOn %} · firmado el {{ partner.mandateSignedOn|date('d/m/Y') }}{% endif %}
+                                {% else %}
+                                    Sin mandato: no se le pasa recibo
+                                {% endif %}
+                            </dd>
+                        </div>
+                        <div class="prt-defs__row">
+                            <dt class="prt-defs__label">Cuenta</dt>
+                            <dd class="prt-defs__value{% if not partner.iban %} prt-defs__value--muted{% endif %}">
+                                {{ partner.iban ? partner.iban|slice(0, 4) ~ ' … ' ~ partner.iban|slice(-4) : '—' }}
+                            </dd>
+                        </div>
                         {% if partner.weeklyBasketGroup and partner.weeklyBasketGroup.node %}
                             <div class="prt-defs__row">
                                 <dt class="prt-defs__label">Nodo de recogida</dt>

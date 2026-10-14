@@ -42,6 +42,21 @@ class PartnerType extends AbstractType
             ->add('state',EntityType::class, array('class' => 'App\Entity\State', 'required' => true, 'placeholder' => "Selecciona provincia"))
             ->add('city', EntityType::class, array("label" => "Municipio", 'class' => 'App\Entity\City', 'required' => true))
             ->add('share_payment', null, array('label'=>'Forma de pago', 'required'=>true))
+
+            // Cobro por domiciliación: sin mandato no entra en la remesa.
+            ->add('iban', TextType::class, [
+                'required' => false,
+                'attr' => ['maxlength' => 42, 'autocomplete' => 'off', 'spellcheck' => 'false', 'placeholder' => 'ES00 0000 0000 0000 0000 0000'],
+            ])
+            ->add('mandateReference', TextType::class, [
+                'required' => false,
+                'attr' => ['maxlength' => 35, 'autocomplete' => 'off'],
+            ])
+            ->add('mandateSignedOn', DateType::class, [
+                'required' => false,
+                'widget' => 'single_text',
+                'input' => 'datetime_immutable',
+            ])
         ;
 
         if ($options['include_pickup_group']) {
@@ -57,6 +72,8 @@ class PartnerType extends AbstractType
             // pertenece al flujo de cesta ("añadir cesta"), que lo pide cuando
             // el socio aún no tiene. La edición sí lo expone.
             'include_pickup_group' => true,
+            // `billing`: la cuenta y el mandato, que sólo enseña este formulario.
+            'validation_groups' => ['Default', 'billing'],
         ]);
         $resolver->setAllowedTypes('include_pickup_group', 'bool');
     }
