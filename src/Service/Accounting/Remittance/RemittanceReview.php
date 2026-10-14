@@ -48,7 +48,7 @@ class RemittanceReview
         $warnings = [];
         foreach ($remittance->getLines() as $line) {
             $partner = $line->getPartner();
-            $root = $partner !== null ? self::familyHead($partner) : null;
+            $root = $partner !== null ? $partner->getFamilyHead() : null;
             $warnings[(int) $line->getId()] = array_values(array_filter([
                 $partner === null ? 'Sin socix: no se puede contrastar con sus cestas.' : null,
                 $partner?->getStatus() === Partner::STATUS_BAJA ? 'Está de baja.' : null,
@@ -128,11 +128,6 @@ class RemittanceReview
         return $rows;
     }
 
-    /** Quien encabeza la familia de un socix: su principal, o él mismo si lo es. */
-    public static function familyHead(Partner $partner): Partner
-    {
-        return $partner->getParent() ?? $partner;
-    }
 
     /**
      * El aviso cuando lo que se cobra a una familia no es lo que suman sus cestas.
@@ -165,7 +160,7 @@ class RemittanceReview
         $charged = [];
         foreach ($remittance->getLines() as $line) {
             if ($line->getPartner() !== null) {
-                $id = self::familyHead($line->getPartner())->getId();
+                $id = $line->getPartner()->getFamilyHead()->getId();
                 $charged[$id] = ($charged[$id] ?? 0) + IssuedInvoice::toCents($line->getAmount());
             }
         }
@@ -182,7 +177,7 @@ class RemittanceReview
     {
         $totals = [];
         foreach ($remittance->getLines() as $line) {
-            $head = $line->getPartner() !== null ? self::familyHead($line->getPartner()) : null;
+            $head = $line->getPartner() !== null ? $line->getPartner()->getFamilyHead() : null;
             $key = $head !== null ? 'p' . $head->getId() : 'm' . mb_strtoupper($line->getMandateReference());
             $totals[$key] = [
                 'name' => $totals[$key]['name'] ?? ($head?->getLegalName() ?: $line->getDebtorName()),

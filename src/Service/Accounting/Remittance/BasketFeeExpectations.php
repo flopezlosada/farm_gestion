@@ -48,7 +48,7 @@ class BasketFeeExpectations
 
         $fees = [];
         foreach ($shares as $share) {
-            $head = RemittanceReview::familyHead($share->getPayerPartner() ?? $share->getPartner());
+            $head = $share->getEffectivePayer()->getFamilyHead();
             $cents = array_sum(array_map(
                 static fn (?string $price): int => IssuedInvoice::toCents($price ?? '0'),
                 [$share->getMonthPrice(), $share->getEggMonthPrice(), $share->getTransportPrice()],

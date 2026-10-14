@@ -310,6 +310,8 @@
                                    (route starts with 'partner_' and not (route starts with 'partner_basket_share')) and route != 'partner_evolution') }}
                                 {{ _self.nav_link('Evolución', path('partner_evolution'), 'fa-line-chart',
                                    route == 'partner_evolution') }}
+                                {{ _self.nav_link('Cuotas del mes', path('monthly_fee_index'), 'fa-calculator',
+                                   route starts with 'monthly_fee') }}
                                 {{ _self.nav_link('Tarifas', path('fee_rate_index'), 'fa-eur',
                                    route starts with 'fee_rate') }}
                                 {{ _self.nav_link('Iniciativas', path('donation_initiative_index'), 'fa-heart-o',

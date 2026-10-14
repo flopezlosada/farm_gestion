@@ -1105,6 +1105,16 @@ class Partner
         return $this->parent;
     }
 
+    /**
+     * Quien encabeza su familia: su principal, o él mismo si lo es. Es a quien se le
+     * pasa el recibo de todo lo de la familia: la cesta cuelga de un miembro y el
+     * recibo puede ir a nombre de otro.
+     */
+    public function getFamilyHead(): self
+    {
+        return $this->parent ?? $this;
+    }
+
     public function setParent(?self $parent): self
     {
         $this->parent = $parent;
