@@ -29,11 +29,13 @@ final class RemittancePeriodText
             return $text;
         }
 
+        // Las cifras se reconocen sin otra cifra pegada, no por frontera de palabra: en
+        // «REC202608» no hay frontera entre la C y el 2, y la fecha no se cambiaba.
         $mm = static fn (int $m): string => sprintf('%02d', $m);
         $numeric = [
-            '/\b' . $fromYear . $mm($fromMonth) . '\b/' => $toYear . $mm($toMonth),
-            '/\b' . $fromYear . '-' . $mm($fromMonth) . '\b/' => $toYear . '-' . $mm($toMonth),
-            '/\b' . $mm($fromMonth) . '([\/.-])' . $fromYear . '\b/' => $mm($toMonth) . '${1}' . $toYear,
+            '/(?<!\d)' . $fromYear . $mm($fromMonth) . '(?!\d)/' => $toYear . $mm($toMonth),
+            '/(?<!\d)' . $fromYear . '-' . $mm($fromMonth) . '(?!\d)/' => $toYear . '-' . $mm($toMonth),
+            '/(?<!\d)' . $mm($fromMonth) . '([\/.-])' . $fromYear . '(?!\d)/' => $mm($toMonth) . '${1}' . $toYear,
         ];
         $text = (string) preg_replace(array_keys($numeric), array_values($numeric), $text);
 
@@ -43,7 +45,7 @@ final class RemittancePeriodText
             $text,
         );
 
-        return $fromYear === $toYear ? $text : (string) preg_replace('/\b' . $fromYear . '\b/', (string) $toYear, $text);
+        return $fromYear === $toYear ? $text : (string) preg_replace('/(?<!\d)' . $fromYear . '(?!\d)/', (string) $toYear, $text);
     }
 
     /**
