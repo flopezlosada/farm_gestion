@@ -310,6 +310,8 @@
                                    (route starts with 'partner_' and not (route starts with 'partner_basket_share')) and route != 'partner_evolution') }}
                                 {{ _self.nav_link('Evolución', path('partner_evolution'), 'fa-line-chart',
                                    route == 'partner_evolution') }}
+                                {{ _self.nav_link('Iniciativas', path('donation_initiative_index'), 'fa-heart-o',
+                                   route starts with 'donation_initiative') }}
                             </div>
                         </div>
                     {% endif %}

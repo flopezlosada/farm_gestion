@@ -959,6 +959,9 @@
                 </section>
             {% endif %}
 
+            {# Lo que paga de más o de menos sobre la tarifa. #}
+            {% include 'partner/_fee_card.html.twig' %}
+
             {# Histórico de eventos de pertenencia. Siempre visible, aunque
              # esté vacío, para que se sepa que la sección existe. #}
             {% set event_meta = {

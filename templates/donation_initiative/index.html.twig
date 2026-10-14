@@ -1,0 +1,89 @@
+{# ============================================================
+ # Las iniciativas a las que se destina lo que se paga de más, con
+ # cuántas personas aportan y cuánto suman este mes.
+ #
+ # El controller pasa: initiatives, totals (por id: people, cents), month.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
+
+{% set open_count = initiatives|filter(i => i.open)|length %}
+{% set people = totals|reduce((sum, t) => sum + t.people, 0) %}
+{% set cents = totals|reduce((sum, t) => sum + t.cents, 0) %}
+
+{% block title %}Socios · Iniciativas{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_index') }}">Socios</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Iniciativas</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header('Socios', 'Iniciativas', 'A dónde puede ir lo que unx socix paga de más: las cestas para la RSP, por ejemplo. Cada persona se acoge con la cantidad que quiere desde el bloque «Cuota» de su ficha.') }}
+
+    <div class="prl-stats">
+        <div class="prl-stat prl-stat--active"><div class="v">{{ open_count }}</div><div class="l">{{ open_count == 1 ? 'abierta' : 'abiertas' }}</div></div>
+        <div class="prl-stat"><div class="v">{{ people }}</div><div class="l">{{ people == 1 ? 'persona aporta' : 'personas aportan' }} en {{ month|format_date(pattern: 'MMMM', locale: 'es') }}</div></div>
+        <div class="prl-stat"><div class="v">{{ fmt.money(cents / 100) }}</div><div class="l">al mes en total</div></div>
+    </div>
+
+    <div class="prl-toolbar">
+        <div class="counters"><b>{{ initiatives|length }}</b> {{ initiatives|length == 1 ? 'iniciativa' : 'iniciativas' }}</div>
+        <div class="spacer"></div>
+        {% if is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
+            <a href="{{ path('donation_initiative_new') }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Nueva iniciativa</a>
+        {% endif %}
+    </div>
+
+    <div class="prl-table-wrap">
+        {% if initiatives is empty %}
+            <div class="prl-empty">Todavía no hay ninguna. Crea la primera para que lxs socixs puedan destinarle lo que pagan de más.</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th>Iniciativa</th>
+                        <th class="tight">Estado</th>
+                        <th class="tight acc-num">Personas</th>
+                        <th class="tight acc-num">Al mes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for i in initiatives %}
+                        {% set t = totals[i.id] ?? { people: 0, cents: 0 } %}
+                        <tr>
+                            <td data-label="Iniciativa">
+                                <a href="{{ path('donation_initiative_show', { id: i.id }) }}"><b>{{ i.name }}</b></a>
+                                {% if i.description %}<br><span class="acc-muted acc-small">{{ i.description|u.truncate(110, '…') }}</span>{% endif %}
+                            </td>
+                            <td class="tight" data-label="Estado">
+                                {% if i.open %}
+                                    <span class="prl-chip prl-chip--ok"><span class="dot"></span>Abierta</span>
+                                {% else %}
+                                    <span class="prl-chip prl-chip--neutral"><span class="dot"></span>Cerrada</span>
+                                {% endif %}
+                            </td>
+                            <td class="acc-num" data-label="Personas">{{ t.people }}</td>
+                            <td class="acc-num" data-label="Al mes">{{ t.cents > 0 ? fmt.money(t.cents / 100) : '—' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

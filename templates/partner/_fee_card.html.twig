@@ -1,0 +1,107 @@
+{# ============================================================
+ # Bloque «Cuota» de la ficha: lo que el socix paga de más o de menos
+ # sobre la tarifa (y a qué iniciativa va), con los que valen este mes
+ # arriba, los programados después y los terminados plegados.
+ #
+ # Recibe: partner, fee_adjustments (todos los suyos), this_month (día 1).
+ # ============================================================ #}
+{% import 'accounting/_money.html.twig' as fmt %}
+
+{% set can_edit_fee = is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
+{% set current = fee_adjustments|filter(a => a.appliesTo(this_month)) %}
+{% set upcoming = fee_adjustments|filter(a => a.isUpcomingIn(this_month)) %}
+{% set past = fee_adjustments|filter(a => a.isOverBy(this_month)) %}
+{% set month_total = current|reduce((sum, a) => sum + a.amount, 0) %}
+
+{% macro row(a, this_month, can_edit) %}
+    {% import 'accounting/_money.html.twig' as fmt %}
+    <li class="fee-adj">
+        <div class="fee-adj__main">
+            <span class="fee-adj__amount {{ a.increase ? 'is-up' : 'is-down' }}">{{ fmt.money(a.amount, true) }}</span>
+            <span class="fee-adj__what">
+                {{ a.reason }}
+                {% if a.initiative %}<a class="prl-chip prl-chip--ok" href="{{ path('donation_initiative_show', { id: a.initiative.id }) }}"><span class="dot"></span>{{ a.initiative.name }}</a>{% endif %}
+            </span>
+        </div>
+        <div class="fee-adj__when">
+            {% if a.untilMonth and a.untilMonth == a.fromMonth %}
+                sólo en {{ a.fromMonth|format_date(pattern: 'MMMM yyyy', locale: 'es') }}
+            {% else %}
+                desde {{ a.fromMonth|format_date(pattern: 'MMMM yyyy', locale: 'es') }}{{ a.untilMonth ? ' hasta ' ~ a.untilMonth|format_date(pattern: 'MMMM yyyy', locale: 'es') : ', sin fin' }}
+            {% endif %}
+            {% if can_edit %}
+                <span class="fee-adj__actions">
+                    {# Sólo uno que vale este mes y sigue después: terminarlo es que este sea el último. #}
+                    {% if a.appliesTo(this_month) and (a.untilMonth is null or a.untilMonth > this_month) %}
+                        <form method="post" action="{{ path('fee_adjustment_end', { id: a.id }) }}"
+                              onsubmit="return confirm('Vale este mes por última vez. ¿Seguro?');">
+                            <input type="hidden" name="_token" value="{{ csrf_token('end-fee-adjustment-' ~ a.id) }}">
+                            <input type="hidden" name="month" value="{{ this_month|date('Y-m') }}">
+                            <button type="submit" class="fee-link">Terminar este mes</button>
+                        </form>
+                    {% endif %}
+                    <form method="post" action="{{ path('fee_adjustment_delete', { id: a.id }) }}"
+                          onsubmit="return confirm('¿Quitarlo? Hazlo sólo si se puso por error: para uno que ya no vale, termínalo.');">
+                        <input type="hidden" name="_token" value="{{ csrf_token('delete-fee-adjustment-' ~ a.id) }}">
+                        <button type="submit" class="fee-link fee-link--danger">Quitar</button>
+                    </form>
+                </span>
+            {% endif %}
+        </div>
+    </li>
+{% endmacro %}
+
+<style>
+    .fee-adjs { list-style: none; margin: 0; padding: 0; }
+    .fee-adj { padding: 10px 0; border-top: 1px solid var(--csa-rule, #e6e4dd); }
+    .fee-adj:first-child { border-top: 0; padding-top: 0; }
+    .fee-adj__main { display: flex; align-items: baseline; gap: 12px; }
+    .fee-adj__amount { font-family: var(--csa-serif); font-variation-settings: "opsz" 30; font-weight: 500; font-size: 17px;
+                       letter-spacing: -0.02em; font-variant-numeric: lining-nums tabular-nums; white-space: nowrap; min-width: 84px; }
+    .fee-adj__amount.is-down { color: var(--prl-terra-d, #a34a2a); }
+    .fee-adj__what { flex: 1; }
+    .fee-adj__what .prl-chip { margin-left: 6px; text-decoration: none; }
+    .fee-adj__when { margin: 3px 0 0 96px; font-size: 12px; color: var(--csa-ink-soft, #6b6b6b); display: flex; flex-wrap: wrap; gap: 4px 14px; }
+    .fee-adj__actions { display: inline-flex; gap: 12px; }
+    .fee-adj__actions form { display: inline; }
+    .fee-link { background: none; border: 0; padding: 0; font-size: 12px; color: var(--csa-ink-soft, #6b6b6b); text-decoration: underline; cursor: pointer; }
+    .fee-link--danger { color: var(--prl-terra-d, #a34a2a); }
+    .fee-sub { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--csa-ink-faint, #999); margin: 16px 0 8px; }
+    .fee-past summary { cursor: pointer; font-size: 12px; color: var(--csa-ink-soft, #6b6b6b); margin-top: 14px; }
+    @media (max-width: 600px) { .fee-adj__when { margin-left: 0; } }
+</style>
+
+<section class="prt-card" id="cuota" style="margin-top: 18px;">
+    <header class="prt-card__head">
+        <h2 class="prt-card__title"><span class="accent"></span>Cuota</h2>
+        {% if current is not empty %}
+            <span class="prt-card__head-meta">{{ fmt.money(month_total, true) }} al mes sobre la tarifa</span>
+        {% endif %}
+    </header>
+    <div class="prt-card__body">
+        {% if fee_adjustments is empty %}
+            <p class="prt-defs__value--muted" style="margin: 0;">Paga la tarifa de su cesta, sin nada de más ni de menos.</p>
+        {% else %}
+            {% if current is not empty %}
+                <ul class="fee-adjs">{% for a in current %}{{ _self.row(a, this_month, can_edit_fee) }}{% endfor %}</ul>
+            {% else %}
+                <p class="prt-defs__value--muted" style="margin: 0;">Este mes paga la tarifa, sin nada de más ni de menos.</p>
+            {% endif %}
+            {% if upcoming is not empty %}
+                <div class="fee-sub">Programados</div>
+                <ul class="fee-adjs">{% for a in upcoming %}{{ _self.row(a, this_month, can_edit_fee) }}{% endfor %}</ul>
+            {% endif %}
+            {% if past is not empty %}
+                <details class="fee-past">
+                    <summary>{{ past|length }} {{ past|length == 1 ? 'terminado' : 'terminados' }}</summary>
+                    <ul class="fee-adjs" style="margin-top: 8px;">{% for a in past %}{{ _self.row(a, this_month, false) }}{% endfor %}</ul>
+                </details>
+            {% endif %}
+        {% endif %}
+    </div>
+    {% if can_edit_fee %}
+        <footer class="prt-card__foot">
+            <a href="{{ path('fee_adjustment_new', { id: partner.id }) }}" class="prt-btn"><i class="fa fa-sliders"></i> Ajustar la cuota</a>
+        </footer>
+    {% endif %}
+</section>

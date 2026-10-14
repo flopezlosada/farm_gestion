@@ -6,6 +6,7 @@ use App\Custom\WeekOfMonth;
 use App\Entity\BasketShare;
 use App\Entity\EggAmount;
 use App\Entity\EggPeriod;
+use App\Entity\FeeAdjustment;
 use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketExtra;
@@ -17,6 +18,7 @@ use App\Form\PartnerType;
 use App\Entity\Basket;
 use App\Entity\BasketComponent;
 use App\Repository\BasketRepository;
+use App\Repository\FeeAdjustmentRepository;
 use App\Repository\NotificationLogRepository;
 use App\Repository\PartnerRepository;
 use App\Repository\PushSubscriptionRepository;
@@ -302,6 +304,7 @@ class PartnerController extends AbstractController
         NotificationPreferences $notificationPreferences,
         PushSubscriptionRepository $pushSubscriptions,
         EntityManagerInterface $em,
+        FeeAdjustmentRepository $feeAdjustments,
     ): Response {
         $events = $partnerEventRepository->findForPartner($partner);
 
@@ -373,6 +376,8 @@ class PartnerController extends AbstractController
             'relocate_weeks' => $relocationOptions->weeksForPartner($partner),
             'relocate_groups' => $relocationOptions->groupsForPartner($partner),
             'donated_baskets' => $donatedBaskets,
+            'fee_adjustments' => $feeAdjustments->findForPartner($partner),
+            'this_month' => FeeAdjustment::month(new \DateTimeImmutable('today')),
             // Cuenta utilizable por email canónico (puede ser la de un familiar
             // con buzón compartido, a diferencia de linked_user que va por la
             // relación User->Partner). Alimenta la tarjeta "Acceso a la web".
