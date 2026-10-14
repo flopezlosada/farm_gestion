@@ -1,0 +1,98 @@
+{# ============================================================
+ # Las remesas de recibos: preparar la siguiente de cada tipo, importar
+ # las ya enviadas y la lista de todas, la más reciente arriba.
+ #
+ # El controller pasa: remittances, next (por tipo: from, period).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
+
+{% set can_edit = is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+
+{% block title %}Contabilidad · Remesas{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Remesas</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+    <style>
+        .rem-prepare { display: flex; flex-wrap: wrap; gap: var(--csa-sp-3, 12px); margin-bottom: var(--csa-sp-6, 24px); }
+        .rem-prepare form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--csa-rule); border-radius: 8px; background: var(--csa-surface, #fff); }
+        .rem-prepare b { font-weight: 600; }
+        .rem-prepare input[type=month] { height: 32px; padding: 0 8px; border: 1px solid var(--csa-rule); border-radius: 6px; }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header('Contabilidad', 'Remesas', 'Los recibos domiciliados que se suben a Fiare. Cada remesa sale de la anterior: se revisa, se descarga el Excel y se da por enviada.') }}
+
+    {% if can_edit %}
+        <div class="rem-prepare">
+            {% for kind, n in next %}
+                {% if kind == 'basket' or n.from %}
+                    <form method="post" action="{{ path('accounting_remittance_prepare') }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('prepare-remittance') }}">
+                        <input type="hidden" name="kind" value="{{ kind }}">
+                        <b>{{ n.from ? n.from.kindLabel : 'Cuotas de cesta' }}</b>
+                        <input type="month" name="period" value="{{ n.period|date('Y-m') }}" aria-label="Mes">
+                        <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Preparar</button>
+                        <span class="acc-muted">{{ n.from ? 'copia de «' ~ n.from.label ~ '»' : 'vacía: importa antes la última enviada' }}</span>
+                    </form>
+                {% endif %}
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <div class="prl-toolbar">
+        <div class="counters"><b>{{ remittances|length }}</b> {{ remittances|length == 1 ? 'remesa' : 'remesas' }}</div>
+        <div class="spacer"></div>
+        {% if can_edit %}
+            <a href="{{ path('accounting_remittance_import') }}" class="prl-btn"><i class="fa fa-upload"></i> Importar una enviada</a>
+        {% endif %}
+    </div>
+
+    <div class="prl-table-wrap">
+        {% if remittances is empty %}
+            <div class="prl-empty">Todavía no hay ninguna. Empieza importando el Excel de la última remesa que se envió al banco.</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th class="tight">Mes</th>
+                        <th>Remesa</th>
+                        <th class="tight">Tipo</th>
+                        <th class="tight acc-num">Recibos</th>
+                        <th class="tight acc-num">Total</th>
+                        <th class="tight">Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in remittances %}
+                        <tr>
+                            <td class="tight">{{ r.period|date('m/Y') }}</td>
+                            <td><a href="{{ path('accounting_remittance_show', { id: r.id }) }}">{{ r.label }}</a></td>
+                            <td class="tight acc-muted">{{ r.kindLabel }}</td>
+                            <td class="acc-num">{{ r.lines|length }}</td>
+                            <td class="acc-num">{{ fmt.money(r.total) }}</td>
+                            <td class="tight{{ r.sent ? ' acc-muted' }}">{{ r.draft ? 'Borrador' : (r.imported ? 'Enviada (importada)' : 'Enviada') }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

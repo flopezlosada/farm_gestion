@@ -1,0 +1,55 @@
+{# ============================================================
+ # Subir un Excel de recibos ya enviado al banco.
+ #
+ # El controller pasa: form.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Importar remesa · Remesas{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_remittances') }}">Remesas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Importar</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Contabilidad · Remesas', 'Importar una remesa enviada', 'El Excel de recibos tal como se subió a Fiare. Queda como enviada, y la siguiente se prepara a partir de él.') }}
+
+    {{ form_start(form, { attr: { class: 'csa-form-narrow', 'data-csa-dropdowns': '1' } }) }}
+
+        {{ form_errors(form) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'El fichero', subtitle: 'Tiene que llevar la fila de títulos de siempre: NOMBRE DEUDOR, CUENTA CARGO, REFERENCIA MANDATO, FECHA FIRMA MANDATO, REFERENCIA ADEUDO, TIPO DE ADEUDO e IMPORTE. Si alguna fila no se entiende, no se importa nada.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.file, 'Excel de recibos', { full: true, widget_class: '' }) }}
+                        {{ csa.field(form.kind, 'Qué se cobró') }}
+                        {{ csa.field(form.period, 'Mes', { hint: 'vacío: el del nombre del fichero' }) }}
+                        {{ csa.field(form.label, 'Nombre', { full: true, hint: 'vacío: el del fichero' }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('accounting_remittances') }) }}
+                    <button type="submit" class="csa-btn csa-btn--primary">Importar</button>
+                </div>
+            </div>
+
+        </div>
+
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
+{% endblock %}
