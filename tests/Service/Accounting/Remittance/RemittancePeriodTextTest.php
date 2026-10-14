@@ -23,6 +23,8 @@ class RemittancePeriodTextTest extends TestCase
         yield 'mm/aaaa' => ['CUOTA 08/2026', '2026-08', '2026-09', 'CUOTA 09/2026'];
         yield 'mm.aaaa con cambio de año' => ['CUOTA 12.2025', '2025-12', '2026-01', 'CUOTA 01.2026'];
         yield 'sólo el año, semestral' => ['1ª Cuota SEMESTRAL 2025', '2025-10', '2026-04', '1ª Cuota SEMESTRAL 2026'];
+        yield 'el año pegado a letras' => ['SEM2025-3', '2025-10', '2026-04', 'SEM2026-3'];
+        yield 'una cifra más larga no es la fecha' => ['REF 12026081', '2026-08', '2026-09', 'REF 12026081'];
         yield 'el número del mandato no es una fecha' => ['CUOTA MENSUAL 200', '2026-08', '2026-09', 'CUOTA MENSUAL 200'];
         yield 'otro mes no se toca' => ['Recibos JULIO 2026', '2026-08', '2026-09', 'Recibos JULIO 2026'];
         yield 'mismo mes' => ['Recibos AGOSTO 2026', '2026-08', '2026-08', 'Recibos AGOSTO 2026'];
