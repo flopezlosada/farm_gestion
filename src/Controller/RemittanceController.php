@@ -14,10 +14,12 @@ use App\Repository\RemittanceRepository;
 use App\Service\Accounting\Invoice\LedgerSheet;
 use App\Service\Accounting\Remittance\BasketFeeExpectations;
 use App\Service\Accounting\Remittance\MandatesToPartners;
+use App\Service\Accounting\Remittance\RemittanceFromFees;
 use App\Service\Accounting\Remittance\RemittancePartnerMatcher;
 use App\Service\Accounting\Remittance\RemittancePeriodText;
 use App\Service\Accounting\Remittance\RemittanceReview;
 use App\Service\Accounting\Remittance\RemittanceSheet;
+use App\Service\Partner\Fee\MonthlyFeeCalculator;
 use Doctrine\ORM\EntityManagerInterface;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -163,6 +165,56 @@ class RemittanceController extends AbstractController
         $this->addFlash('success', $latest !== null
             ? sprintf('Borrador preparado con los %d recibos de «%s». Revisa los avisos antes de descargarla.', $remittance->getLines()->count(), $latest->getLabel())
             : 'Borrador vacío: es la primera de su tipo. Añade los recibos uno a uno.');
+
+        return $this->redirectToRoute('accounting_remittance_show', ['id' => $remittance->getId()]);
+    }
+
+    /**
+     * Preparar la remesa de cuotas de un mes desde el cálculo de las cuotas: un recibo
+     * por cada persona que se puede cobrar, con los datos de su ficha. Sustituye a
+     * copiar la del mes anterior, que arrastraba lo que hubiera cambiado.
+     */
+    #[Route('/from-fees', name: 'accounting_remittance_from_fees', methods: ['POST'])]
+    #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
+    public function fromFees(Request $request, RemittanceRepository $remittances, MonthlyFeeCalculator $calculator, RemittanceFromFees $builder, EntityManagerInterface $em): Response
+    {
+        $period = \DateTimeImmutable::createFromFormat('!Y-m', (string) $request->request->get('period'));
+        // Se vuelve a la pantalla desde la que se pidió: las cuotas del mes o la lista.
+        $back = $request->request->get('from') === 'fees' && $period !== false
+            ? $this->redirectToRoute('monthly_fee_index', ['month' => $period->format('Y-m')])
+            : $this->redirectToRoute('accounting_remittances');
+        if (!$this->isCsrfTokenValid('remittance-from-fees', (string) $request->request->get('_token'))) {
+            $this->addFlash('danger', 'La página había caducado. Vuelve a intentarlo.');
+
+            return $back;
+        }
+        if ($period === false) {
+            $this->addFlash('warning', 'Elige el mes.');
+
+            return $back;
+        }
+        $existing = $remittances->findOneBy(['kind' => Remittance::KIND_BASKET, 'period' => Remittance::firstOfMonth($period)]);
+        if ($existing !== null) {
+            $this->addFlash('warning', sprintf('Ya hay una remesa de cuotas de %s: «%s». Si hay que rehacerla, tira el borrador antes.', $period->format('m/Y'), $existing->getLabel()));
+
+            return $this->redirectToRoute('accounting_remittance_show', ['id' => $existing->getId()]);
+        }
+
+        $fees = $calculator->forMonth($period);
+        $remittance = $builder->build($fees, $this->actor());
+        if ($remittance->getLines()->isEmpty()) {
+            $this->addFlash('warning', 'No hay ninguna cuota que se pueda cobrar ese mes: mira lo que falta en «Cuotas del mes».');
+
+            return $back;
+        }
+        $em->persist($remittance);
+        $em->flush();
+
+        $left = \count($fees->getStatements()) - $remittance->getLines()->count();
+        $this->addFlash('success', sprintf('Borrador con %d recibos (%s €).', $remittance->getLines()->count(), number_format((float) $remittance->getTotal(), 2, ',', '.')));
+        if ($left > 0) {
+            $this->addFlash('warning', sprintf('%d %s no se pueden cobrar todavía y no van en la remesa: están en «Cuotas del mes» con el motivo.', $left, $left === 1 ? 'cuota' : 'cuotas'));
+        }
 
         return $this->redirectToRoute('accounting_remittance_show', ['id' => $remittance->getId()]);
     }

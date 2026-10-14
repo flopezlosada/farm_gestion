@@ -36,19 +36,29 @@
 {% block csa_main %}
 <div class="prl">
 
-    {{ csa.page_header('Contabilidad', 'Remesas', 'Los recibos domiciliados que se suben a Fiare. Cada remesa sale de la anterior: se revisa, se descarga el Excel y se da por enviada.') }}
+    {{ csa.page_header('Contabilidad', 'Remesas', 'Los recibos domiciliados que se suben a Fiare. La de cuotas de cesta sale del cálculo de las cuotas del mes; se revisa, se descarga el Excel y se da por enviada.') }}
 
     {% if can_edit %}
         <div class="rem-prepare">
             {% for kind, n in next %}
-                {% if kind == 'basket' or n.from %}
+                {% if kind == 'basket' %}
+                    {# Las cuotas de cesta salen del cálculo (tarifas, cestas y ajustes de
+                     # cada ficha), no de copiar el mes anterior. #}
+                    <form method="post" action="{{ path('accounting_remittance_from_fees') }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('remittance-from-fees') }}">
+                        <b>Cuotas de cesta</b>
+                        <input type="month" name="period" value="{{ n.period|date('Y-m') }}" aria-label="Mes">
+                        <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-calculator"></i> Preparar desde las cuotas</button>
+                        <a class="acc-muted" href="{{ path('monthly_fee_index', { month: n.period|date('Y-m') }) }}">ver las cuotas del mes</a>
+                    </form>
+                {% elseif n.from %}
                     <form method="post" action="{{ path('accounting_remittance_prepare') }}">
                         <input type="hidden" name="_token" value="{{ csrf_token('prepare-remittance') }}">
                         <input type="hidden" name="kind" value="{{ kind }}">
-                        <b>{{ n.from ? n.from.kindLabel : 'Cuotas de cesta' }}</b>
+                        <b>{{ n.from.kindLabel }}</b>
                         <input type="month" name="period" value="{{ n.period|date('Y-m') }}" aria-label="Mes">
                         <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Preparar</button>
-                        <span class="acc-muted">{{ n.from ? 'copia de «' ~ n.from.label ~ '»' : 'vacía: importa antes la última enviada' }}</span>
+                        <span class="acc-muted">copia de «{{ n.from.label }}»</span>
                     </form>
                 {% endif %}
             {% endfor %}

@@ -85,6 +85,20 @@
         </div>
         <div class="spacer"></div>
         <a href="{{ path('fee_rate_index') }}" class="prl-btn"><i class="fa fa-eur"></i> Tarifas</a>
+        {% if is_granted('FEATURE_CONTABILIDAD') and is_granted('ROLE_GESTION_CONTABILIDAD') %}
+            {% if remittance %}
+                <a href="{{ path('accounting_remittance_show', { id: remittance.id }) }}" class="prl-btn"><i class="fa fa-exchange"></i> {{ remittance.draft ? 'Borrador de la remesa' : 'Remesa enviada' }}</a>
+            {% elseif is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+                <form method="post" action="{{ path('accounting_remittance_from_fees') }}" style="display: inline;">
+                    <input type="hidden" name="_token" value="{{ csrf_token('remittance-from-fees') }}">
+                    <input type="hidden" name="period" value="{{ month|date('Y-m') }}">
+                    <input type="hidden" name="from" value="fees">
+                    <button type="submit" class="prl-btn prl-btn--primary"{{ chargeable is empty ? ' disabled title="Ninguna cuota se puede cobrar todavía"' }}>
+                        <i class="fa fa-calculator"></i> Preparar la remesa ({{ chargeable|length }})
+                    </button>
+                </form>
+            {% endif %}
+        {% endif %}
     </div>
 
     <div class="prl-table-wrap">
