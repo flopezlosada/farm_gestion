@@ -125,6 +125,32 @@ class RemittanceSheetTest extends TestCase
         ], $read['problems']);
     }
 
+    /**
+     * Como el Excel real de agosto: notas escritas a mano debajo de los recibos (sólo
+     * texto en la primera columna), un total con su rótulo en otra columna, y un
+     * recibo a cero que se envió así. Ni las notas son recibos ni el cero impide
+     * importarlo; el cero lo frena el borrador siguiente.
+     */
+    public function testLasNotasNoSonRecibosYElCeroSeImporta(): void
+    {
+        $path = $this->xlsx([
+            RemittanceSheet::COLUMNS,
+            ['ANA', 'ES9121000418450200051332', 'CUOTA MENSUAL 200', '01/11/2022', 'R-1', 'RCUR', 65],
+            ['LUIS', 'ES7921000813610123456789', 'CUOTA MENSUAL 201', '01/11/2022', 'R-2', 'RCUR', 0],
+            [null, null, null, null, null, 'TOTAL', 65],
+            ['Ojo: Luis está de vacaciones este mes'],
+            ['SOL', 'ES1000492352082414205416', 'CUOTA MENSUAL 202', '01/11/2022', 'R-3', 'RCUR', 40],
+            ['pendiente cobrar la de julio'],
+        ]);
+
+        $read = (new RemittanceSheet())->read($path);
+
+        $this->assertSame([], $read['problems']);
+        $this->assertSame(['ANA', 'LUIS', 'SOL'], array_map(static fn (RemittanceLine $l): string => $l->getDebtorName(), $read['lines']));
+        $this->assertSame('0.00', $read['lines'][1]->getAmount());
+        $this->assertContains('el importe tiene que ser mayor que cero.', $read['lines'][1]->problems(), 'El borrador que salga de aquí no se envía con el cero.');
+    }
+
     public function testNoEsUnaHojaDeCalculo(): void
     {
         $path = tempnam(sys_get_temp_dir(), 'remesa') . '.xlsx';

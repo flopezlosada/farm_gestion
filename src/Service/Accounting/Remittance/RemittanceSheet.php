@@ -94,8 +94,9 @@ final class RemittanceSheet
             $cell = static fn (string $col): mixed => $row[$columns[$col]] ?? null;
             $name = trim((string) $cell(self::COL_NAME));
             $iban = RemittanceLine::normalizeIban((string) $cell(self::COL_IBAN));
-            if ($iban === '' && ($name === '' || str_starts_with(mb_strtoupper($name), 'TOTAL'))) {
-                continue; // fila vacía o de totales
+            $isNote = trim((string) $cell(self::COL_MANDATE)) === '' && trim((string) $cell(self::COL_AMOUNT)) === '';
+            if ($iban === '' && ($name === '' || $isNote || str_starts_with(mb_strtoupper($name), 'TOTAL'))) {
+                continue; // fila vacía, de totales o una nota escrita debajo de los recibos
             }
 
             $rowNumber = $index + 1;
@@ -118,8 +119,11 @@ final class RemittanceSheet
                 ->setSequenceType($this->sequence((string) $cell(self::COL_SEQUENCE)))
                 ->setAmount($amount);
             // Lo que el banco no admitiría (o la base no cabe) se dice aquí, no al
-            // guardar. La fecha de firma vacía se deja pasar: se avisa al prepararla.
-            foreach (array_diff($line->problems(), ['falta la fecha de firma del mandato.']) as $problem) {
+            // guardar. Dos cosas se dejan pasar porque lo leído ya se envió así: la
+            // fecha de firma vacía y el importe a cero (un mes sin cuota). Se copian
+            // al borrador siguiente, que no se envía hasta corregirlas.
+            $tolerated = ['falta la fecha de firma del mandato.', 'el importe tiene que ser mayor que cero.'];
+            foreach (array_diff($line->problems(), $tolerated) as $problem) {
                 $problems[] = sprintf('Fila %d (%s): %s', $rowNumber, $name !== '' ? $name : 'sin nombre', $problem);
             }
             if (\strlen($line->getIban()) > 34) {
