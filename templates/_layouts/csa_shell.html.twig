@@ -310,6 +310,8 @@
                                    (route starts with 'partner_' and not (route starts with 'partner_basket_share')) and route != 'partner_evolution') }}
                                 {{ _self.nav_link('Evolución', path('partner_evolution'), 'fa-line-chart',
                                    route == 'partner_evolution') }}
+                                {{ _self.nav_link('Tarifas', path('fee_rate_index'), 'fa-eur',
+                                   route starts with 'fee_rate') }}
                             </div>
                         </div>
                     {% endif %}
