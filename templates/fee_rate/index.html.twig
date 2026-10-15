@@ -1,0 +1,164 @@
+{# ============================================================
+ # Las tarifas: lo que cuesta al mes cada cesta de verdura y cada docena
+ # de huevos, desde cuándo, lo que ya está programado y el historial.
+ #
+ # El controller pasa: groups (veg, egg: concept, current, next, shared),
+ # missing (conceptos sin precio hoy), history (todos, el más reciente
+ # primero), today.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
+
+{% set can_edit = is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
+{% set group_titles = { veg: 'Verdura', egg: 'Huevos' } %}
+{% set group_icons = { veg: 'fa-leaf', egg: 'fa-circle-o' } %}
+{% set concept_count = groups.veg|length + groups.egg|length %}
+
+{% block title %}Socios · Tarifas{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_index') }}">Socios</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Tarifas</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+    <style>
+        .fee-group { margin-bottom: var(--csa-sp-6, 28px); }
+        .fee-group__title { display: flex; align-items: center; gap: 8px; }
+        .fee-group__title .fa { color: var(--prl-sage-d); font-size: 13px; }
+        .fee-concept { font-weight: 600; color: var(--csa-ink); }
+        .fee-hint { display: block; font-size: 12px; margin-top: 2px; }
+        /* La cifra que importa de cada fila: lo que vale hoy. */
+        .fee-price { font-family: var(--csa-serif); font-variation-settings: "opsz" 30; font-weight: 500;
+                     font-size: 19px; letter-spacing: -0.02em; font-variant-numeric: lining-nums tabular-nums; }
+        .fee-since { display: block; font-size: 11px; }
+        .fee-none { color: var(--prl-terra-d); font-weight: 600; }
+        .fee-history summary { cursor: pointer; font-size: 13px; color: var(--csa-ink-soft); margin-bottom: var(--csa-sp-3, 12px); }
+        .fee-history form { display: inline; }
+        .fee-link-btn { background: none; border: 0; padding: 0; color: var(--prl-terra-d); cursor: pointer; font-size: 12px; }
+        .fee-link-btn:hover { text-decoration: underline; }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header('Socios', 'Tarifas', 'Lo que cuesta al mes cada cesta y cada docena de huevos, igual para todo el mundo. Lo que cada socix paga de más o de menos va aparte, en su ficha.') }}
+
+    {% if missing is not empty %}
+        {{ csa.callout(
+            (missing|length == 1 ? 'Falta el precio de ' : 'Faltan los precios de ')
+                ~ (missing|map(c => c.label|lower)|join(', ', ' y '))
+                ~ (missing|length == 1 ? '. Sin él' : '. Sin ellos') ~ ' no se puede calcular la cuota de quien lo tenga.',
+            'warning', 'exclamation-triangle'
+        ) }}
+    {% endif %}
+
+    <div class="prl-toolbar">
+        <div class="counters"><b>{{ concept_count - missing|length }}</b> de {{ concept_count }} con precio hoy</div>
+        <div class="spacer"></div>
+        {% if can_edit %}
+            <a href="{{ path('fee_rate_new') }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Nuevo precio</a>
+        {% endif %}
+    </div>
+
+    {% for key, rows in groups %}
+        <section class="fee-group">
+            <h2 class="acc-subhead fee-group__title"><i class="fa {{ group_icons[key] }}" aria-hidden="true"></i> {{ group_titles[key] }}</h2>
+            <div class="prl-table-wrap">
+                <table class="prl-table">
+                    <thead>
+                        <tr>
+                            <th>Concepto</th>
+                            <th class="tight acc-num">Hoy</th>
+                            {% if key == 'veg' %}<th class="tight acc-num">Compartida</th>{% endif %}
+                            <th class="tight">Próximo cambio</th>
+                            {% if can_edit %}<th class="tight"></th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                            <tr>
+                                <td data-label="Concepto">
+                                    <span class="fee-concept">{{ row.concept.label }}</span>
+                                    <span class="fee-hint acc-muted">{{ row.concept.hint }}</span>
+                                </td>
+                                <td class="acc-num" data-label="Hoy">
+                                    {% if row.current %}
+                                        <span class="fee-price">{{ fmt.money(row.current.price) }}</span>
+                                        <span class="fee-since acc-muted">desde {{ row.current.validFrom|date('d/m/Y') }}</span>
+                                    {% else %}
+                                        <span class="fee-none">Sin precio</span>
+                                    {% endif %}
+                                </td>
+                                {% if key == 'veg' %}
+                                    <td class="acc-num" data-label="Compartida">{{ row.shared is not null ? fmt.money(row.shared) : '—' }}</td>
+                                {% endif %}
+                                <td data-label="Próximo cambio">
+                                    {% if row.next %}
+                                        <span class="prl-chip prl-chip--warn"><span class="dot"></span>{{ fmt.money(row.next.price) }} desde {{ row.next.validFrom|date('d/m/Y') }}</span>
+                                    {% else %}
+                                        <span class="acc-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                {% if can_edit %}
+                                    <td class="tight">
+                                        <a href="{{ path('fee_rate_new', { concept: row.concept.value }) }}" class="prl-btn">{{ row.current ? 'Cambiar precio' : 'Poner precio' }}</a>
+                                    </td>
+                                {% endif %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    {% endfor %}
+
+    {% if history is not empty %}
+        <details class="fee-history">
+            <summary>Historial: {{ history|length }} {{ history|length == 1 ? 'precio' : 'precios' }}</summary>
+            <div class="prl-table-wrap">
+                <table class="prl-table">
+                    <thead>
+                        <tr>
+                            <th class="tight">Desde</th>
+                            <th>Concepto</th>
+                            <th class="tight acc-num">Precio</th>
+                            <th class="tight">Puesto por</th>
+                            {% if can_edit %}<th class="tight"></th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rate in history %}
+                            <tr>
+                                <td class="tight" data-label="Desde">{{ rate.validFrom|date('d/m/Y') }}{% if rate.validFrom > today %} <span class="acc-muted">(programado)</span>{% endif %}</td>
+                                <td data-label="Concepto">{{ rate.concept.label }}</td>
+                                <td class="acc-num" data-label="Precio">{{ fmt.money(rate.price) }}</td>
+                                <td class="tight acc-muted" data-label="Puesto por">{{ [rate.createdBy ? rate.createdBy.displayName : null, rate.createdAt ? rate.createdAt|date('d/m/Y') : null]|filter(v => v)|join(', ')|default('—') }}</td>
+                                {% if can_edit %}
+                                    <td class="tight">
+                                        <form method="post" action="{{ path('fee_rate_delete', { id: rate.id }) }}"
+                                              onsubmit="return confirm('¿Quitar este precio? Vuelve a valer el anterior desde su fecha. Hazlo sólo si se puso por error.');">
+                                            <input type="hidden" name="_token" value="{{ csrf_token('delete-fee-rate-' ~ rate.id) }}">
+                                            <button type="submit" class="fee-link-btn">Quitar</button>
+                                        </form>
+                                    </td>
+                                {% endif %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </details>
+    {% endif %}
+
+</div>
+{% endblock %}
