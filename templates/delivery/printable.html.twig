@@ -26,11 +26,19 @@
     {%- if n == n|round -%}{{ n|number_format(0) }}{%- else -%}{{ n|number_format(1, ',', '.') }}{%- endif -%}
 {% endmacro %}
 
+{# Nombre de la fila + sus anotaciones: de qué nodo viene si es un traslado, y
+   quién paga la cesta cuando no la paga quien la recoge. #}
+{% macro name(row) %}
+    {{- row.name -}}
+    {%- if row.relocated_from is defined and row.relocated_from %} <small>(de {{ row.relocated_from }})</small>{% endif -%}
+    {%- if row.payer is defined and row.payer %} <small>(la paga {{ row.payer }})</small>{% endif -%}
+{% endmacro %}
+
 {% macro datarow(row, color) %}
     {% import _self as m %}
     <tr>
         <td class="t-loc" style="background: {{ color }};">{{ row.locality }}</td>
-        <td class="t-name">{{ row.name }}{% if row.relocated_from is defined and row.relocated_from %} <small>(de {{ row.relocated_from }})</small>{% endif %}</td>
+        <td class="t-name">{{ m.name(row) }}</td>
         <td class="t-code">{{ row.code }}</td>
         <td class="t-cl">{{ row.cestas > 0 ? 'CESTAS' : '' }}</td>
         <td class="t-q">{{ m.qty(row.cestas) }}</td>
@@ -167,7 +175,7 @@
                 {% for row in sheet.shared.rows %}
                     <tr class="{{ row.pair_end ? 'pair-end' : '' }}">
                         <td class="t-loc" style="background: {{ row.color }};">{{ row.locality }}</td>
-                        <td class="t-name">{{ row.name }}</td>
+                        <td class="t-name">{{ m.name(row) }}</td>
                         <td class="t-code">{{ row.code }}</td>
                         <td class="t-cl">{{ row.cestas > 0 ? 'CESTAS' : '' }}</td>
                         <td class="t-q">{{ m.qty(row.cestas) }}</td>

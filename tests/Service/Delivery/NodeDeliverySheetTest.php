@@ -290,6 +290,29 @@ class NodeDeliverySheetTest extends TestCase
         $this->assertSame(1.0, $result['totals']['docenas']);
     }
 
+    /**
+     * Cuando la cesta la paga otrx socix (donación), la fila lleva el nombre de
+     * reparto de quien paga; las demás filas, null. Así el listado enseña al
+     * donante sin que haya que trucar el nombre de reparto del hogar.
+     */
+    public function testRowCarriesPayerOnlyWhenSomeoneElsePays(): void
+    {
+        $this->populateFullNodeScenario();
+        $donor = (new Partner())->setDisplayName('Patricia');
+        $this->setId($donor, 99);
+        $this->pbsByPartner[1]->setPayerPartner($donor);
+
+        $rows = array_merge(...array_map(
+            static fn (array $mod): array => $mod['rows'],
+            $this->buildSheet()['groups'][1]['modalities'],
+        ));
+        $payers = array_column($rows, 'payer', 'name');
+
+        $this->assertSame('Patricia', $payers['Cris y Paco']);
+        $this->assertNull($payers['Miguel y Paloma']);
+        $this->assertNull($payers['Raquel']);
+    }
+
     private function buildSheet(): array
     {
         $wbs = array_values($this->wbs);

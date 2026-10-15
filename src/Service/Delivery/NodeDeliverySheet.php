@@ -195,6 +195,7 @@ class NodeDeliverySheet
             partnerId: $partner?->getId(),
             sharePartnerId: $partner?->getSharePartner()?->getId(),
             relocatedFromLabel: $wb->getRelocatedFromLabel(),
+            payerName: $pbs?->getPayerPartner()?->getNameForDelivery(),
         );
     }
 
@@ -445,7 +446,7 @@ class NodeDeliverySheet
      * mismo socio entre semanas distintas (lo usa el listado mensual en matriz);
      * es null en entregas sin socio detrás (extra de no-suscriptor, voluntario).
      *
-     * @return array{name:string, code:string, cestas:float, egg_spec:?string, egg_count:int, locality:string, relocated_from:?string, partner_id:?int}
+     * @return array{name:string, code:string, cestas:float, egg_spec:?string, egg_count:int, locality:string, relocated_from:?string, partner_id:?int, payer:?string}
      */
     private function row(DeliveryLine $line): array
     {
@@ -460,6 +461,7 @@ class NodeDeliverySheet
             'locality' => $this->localityForRow($line),
             'relocated_from' => $line->relocatedFromLabel,
             'partner_id' => $line->partnerId,
+            'payer' => $line->payerName,
         ];
     }
 
