@@ -757,8 +757,12 @@ class PartnerController extends AbstractController
             /*
              * aquí actualizo el grupo del socio para la última cesta si es que ya ha sido creada
              */
+            // findBasketByWeekYear devuelve false si esta semana no tiene cesta
+            // (calendario sin generar, o la base de tests): no hay nada que actualizar.
             $basket = $entityManager->getRepository(\App\Entity\Basket::class)->findBasketByWeekYear(date('Y-m-d'));//número de cesta actual
-            $partner_weekly_basket = $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->findOneBy(array("basket" => $basket->getId(), 'partner' => $partner));//para ver si ya la he creado, si está en la tabla weekly_basket la cesta actual para este socio
+            $partner_weekly_basket = $basket
+                ? $entityManager->getRepository(\App\Entity\WeeklyBasket::class)->findOneBy(array("basket" => $basket->getId(), 'partner' => $partner))//para ver si ya la he creado, si está en la tabla weekly_basket la cesta actual para este socio
+                : null;
             if ($partner_weekly_basket) {
                 $partner_weekly_basket->setWeeklyBasketGroup($partner->getWeeklyBasketGroup());
                 $entityManager->persist($partner_weekly_basket);
