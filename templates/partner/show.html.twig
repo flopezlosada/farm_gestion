@@ -115,6 +115,11 @@
                     <span>Alta {{ partner.inscriptionDate|format_date('long', locale='es') }}</span>
                 {% endif %}
 
+                {% if partner.displayName %}
+                    <span class="sep">·</span>
+                    <span title="Nombre en el listado de reparto" data-partner-display-name>En el listado: {{ partner.displayName }}</span>
+                {% endif %}
+
                 {# Nodo y grupo ya no van aquí: están en su propia
                  # "pickup card" coloreada justo debajo del hero, para
                  # darles el destaque que merecen como dato operativo. #}
