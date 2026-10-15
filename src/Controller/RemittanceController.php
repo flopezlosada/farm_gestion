@@ -129,7 +129,8 @@ class RemittanceController extends AbstractController
 
     /**
      * Preparar la remesa de un mes: copia de la última anterior del mismo tipo, en
-     * borrador. Si no hay ninguna anterior, nace vacía.
+     * borrador. Si no hay ninguna anterior, nace vacía. La de cuotas de cesta no se
+     * copia: sale del cálculo, en fromFees().
      */
     #[Route('/prepare', name: 'accounting_remittance_prepare', methods: ['POST'])]
     #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
@@ -146,6 +147,13 @@ class RemittanceController extends AbstractController
         $period = \DateTimeImmutable::createFromFormat('!Y-m', (string) $request->request->get('period'));
         if (!isset(Remittance::KIND_LABELS[$kind]) || $period === false) {
             $this->addFlash('warning', 'Elige el tipo y el mes.');
+
+            return $back;
+        }
+        if ($kind === Remittance::KIND_BASKET) {
+            // Copiar la anterior arrastraría altas, bajas y cambios de cesta sin
+            // aplicar: la de cuotas de cesta sólo sale del cálculo (fromFees).
+            $this->addFlash('warning', 'La remesa de cuotas de cesta se prepara desde las cuotas del mes.');
 
             return $back;
         }
