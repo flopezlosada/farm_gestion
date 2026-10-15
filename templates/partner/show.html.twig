@@ -336,19 +336,20 @@
 
                 <span class="prt-actionbar__sep"></span>
 
-                <button type="button" class="prt-btn prt-btn--warn"
-                        onclick="document.getElementById('confirm-partner-show-1').showModal()">
-                    <i class="fa fa-pause"></i> Pausar
-                </button>
-                {{ csa.confirm_dialog('confirm-partner-show-1', {
-                    variant: 'warning',
-                    eyebrow: 'Cambio reversible',
-                    title: 'Pausar a este socix',
-                    body: 'Dejará de recibir cesta pero seguirá siendo socix; podrás reactivarle más adelante.',
-                    confirm_label: 'Pausar',
-                    action: path('partner_pause', { id: partner.id }),
-                    csrf_token: csrf_token('partner_pause'),
-                }) }}
+                {% if pauses is not empty %}
+                    {# Pausa programada a futuro: la ficha sigue activa hasta ese día. #}
+                    <button type="button" class="prt-btn prt-btn--warn"
+                            title="Pausa programada desde el {{ (pauses|first).startsOn|date('d/m/Y') }}"
+                            onclick="document.getElementById('resume-dialog').showModal()">
+                        <i class="fa fa-clock-o"></i> Pausa desde el {{ (pauses|first).startsOn|date('d/m/Y') }}
+                    </button>
+                {% else %}
+                    <button type="button" class="prt-btn prt-btn--warn"
+                            onclick="document.getElementById('pause-dialog').showModal()">
+                        <i class="fa fa-pause"></i> Pausar
+                    </button>
+                {% endif %}
+                {{ include('partner/_pause_dialogs.html.twig') }}
 
                 <button type="button" class="prt-btn prt-btn--danger"
                         onclick="document.getElementById('confirm-partner-show-2').showModal()">
@@ -365,12 +366,22 @@
                 }) }}
 
             {% elseif partner.status == 'PAUSADO' %}
-                <form method="post" action="{{ path('partner_promote', { id: partner.id }) }}" style="display: inline;">
-                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('partner_promote') }}">
-                    <button type="submit" class="prt-btn" title="Salir de la pausa y volver a recibir cesta">
+                {% if pauses is not empty %}
+                    <button type="button" class="prt-btn" title="Salir de la pausa y volver a recibir cesta"
+                            onclick="document.getElementById('resume-dialog').showModal()">
                         <i class="fa fa-play"></i> Reanudar
                     </button>
-                </form>
+                    {{ include('partner/_pause_dialogs.html.twig') }}
+                {% else %}
+                    {# Pausadx sin periodo (no debería pasar tras sembrar las pausas):
+                       reanudar hoy sigue funcionando y deja el estado coherente. #}
+                    <form method="post" action="{{ path('partner_promote', { id: partner.id }) }}" style="display: inline;">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('partner_promote') }}">
+                        <button type="submit" class="prt-btn" title="Salir de la pausa y volver a recibir cesta">
+                            <i class="fa fa-play"></i> Reanudar
+                        </button>
+                    </form>
+                {% endif %}
                 <button type="button" class="prt-btn prt-btn--danger"
                         onclick="document.getElementById('confirm-partner-show-2').showModal()">
                     <i class="fa fa-times"></i> Dar de baja

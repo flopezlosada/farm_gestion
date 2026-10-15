@@ -301,6 +301,9 @@ class AppSettings
     public const CRON_ADMIN_DELIVERY_SUMMARY = 'cron.admin_delivery_summary';
     public const CRON_PURGE_USAGE_HITS = 'cron.purge_usage_hits';
 
+    /** Tarea que pone las fichas en pausa o activas según las fechas de sus pausas (app:sync-partner-pauses). */
+    public const CRON_SYNC_PARTNER_PAUSES = 'cron.sync_partner_pauses';
+
     /** Tarea que avisa de convenios, registros y seguros próximos a caducar (app:send-obligation-notices). */
     public const CRON_OBLIGATION_NOTICE = 'cron.obligation_notice';
 
@@ -579,6 +582,20 @@ class AppSettings
             // es un susto. Cabe en `requires` —que inhibe la tarea entera—
             // porque el único canal es el correo.
             'requires' => [self::FEATURE_VENCIMIENTOS, self::EMAIL_ENABLED, self::EMAIL_OBLIGATION_NOTICE],
+            'depends_on' => [],
+        ],
+        // De madrugada, antes de que nadie mire las fichas. Sin canales: no avisa a
+        // nadie, sólo cambia el estado. El reparto y las cuotas no la esperan (leen
+        // las pausas directamente), así que no es dependencia de ninguna otra.
+        self::CRON_SYNC_PARTNER_PAUSES => [
+            'command' => 'app:sync-partner-pauses',
+            'channels' => [],
+            'needs_recipient' => false,
+            'confirm' => false,
+            'dry' => true,
+            'schedule' => ['freq' => 'daily', 'hour' => 1],
+            'max_delay_hours' => 36,
+            'requires' => [],
             'depends_on' => [],
         ],
         self::CRON_PURGE_USAGE_HITS => [
@@ -930,6 +947,12 @@ class AppSettings
             'group' => 'Tareas programadas',
             'label' => 'Enviar el resumen a administración',
             'help' => 'Manda a administración el resumen periódico de cambios en el reparto (app:send-admin-delivery-changes-summary). Independiente del email del resumen.',
+            'default' => true,
+        ],
+        self::CRON_SYNC_PARTNER_PAUSES => [
+            'group' => 'Tareas programadas',
+            'label' => 'Aplicar las pausas programadas',
+            'help' => 'Cada madrugada pone en pausa a quien empieza una pausa ese día y reactiva a quien vuelve (app:sync-partner-pauses). El reparto y las cuotas ya respetan las fechas de la pausa aunque esté apagada; lo que se retrasa es el estado de la ficha y los filtros por estado.',
             'default' => true,
         ],
         self::CRON_PURGE_USAGE_HITS => [

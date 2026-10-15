@@ -9,8 +9,10 @@ use App\Entity\IssuedInvoice;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerEvent;
+use App\Entity\PartnerPause;
 use App\Repository\FeeAdjustmentRepository;
 use App\Repository\FeeRateRepository;
+use App\Repository\PartnerPauseRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -19,26 +21,32 @@ use Doctrine\ORM\EntityManagerInterface;
  * Cada cesta paga por las SEMANAS DE REPARTO del mes en que la tuvo, contadas sobre
  * el ciclo semanal global (un {@see Basket} por viernes): quien pasa de semanal a
  * quincenal el día 15 paga la parte de semanal por las semanas que lo fue y el resto
- * como quincenal. En pausa o de baja no se cobra (los periodos salen de los eventos
- * de pausa, reanudación, baja y vuelta de su ficha). Si una tarifa cambia a mitad de
+ * como quincenal. En pausa o de baja no se cobra: las pausas salen de sus periodos
+ * ({@see PartnerPause}, los mismos que lee el reparto, también los programados) y las
+ * bajas de los eventos de baja y vuelta de su ficha. Si una tarifa cambia a mitad de
  * mes, cada semana usa la que valía ese día.
  *
  * Las semanas cerradas por un festivo o los cambios puntuales de una semana NO
  * descuentan: la cuota es mensual y se paga por la cesta, no por cada reparto.
  *
  * Todo en unas pocas consultas, sea cual sea el número de socixs: semanas del mes,
- * cestas, tarifas, ajustes y eventos.
+ * cestas, tarifas, ajustes, pausas y eventos.
  */
 final class MonthlyFeeCalculator
 {
-    /** Lo que deja de cobrarse desde que pasa y vuelve a cobrarse desde que pasa. */
-    private const STOPS = [PartnerEvent::TYPE_PAUSE, PartnerEvent::TYPE_LEAVE];
-    private const RESTARTS = [PartnerEvent::TYPE_RESUME, PartnerEvent::TYPE_JOIN];
+    /**
+     * Lo que deja de cobrarse desde que pasa y vuelve a cobrarse desde que pasa. Las
+     * pausas NO van aquí: tienen sus periodos propios, con fechas que pueden estar por
+     * llegar, y sus eventos sólo se registran cuando el estado cambia.
+     */
+    private const STOPS = [PartnerEvent::TYPE_LEAVE];
+    private const RESTARTS = [PartnerEvent::TYPE_JOIN];
 
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly FeeRateRepository $rates,
         private readonly FeeAdjustmentRepository $adjustments,
+        private readonly PartnerPauseRepository $pauses,
     ) {
     }
 
@@ -55,21 +63,26 @@ final class MonthlyFeeCalculator
             $this->rates->schedule(),
             $this->adjustments->findApplyingTo($month),
             $this->stopEvents($end),
+            $this->pauses->findTouching($month, $end),
         );
     }
 
     /**
      * El cálculo, sin tocar la base: con las semanas del mes, las cestas que pudieron
-     * estar en marcha, las tarifas, los ajustes del mes y los eventos de pausa y baja.
+     * estar en marcha, las tarifas, los ajustes del mes, los eventos de baja y las pausas.
      *
      * @param list<\DateTimeImmutable>  $weeks
      * @param list<PartnerBasketShare>  $shares
      * @param list<FeeAdjustment>       $adjustments
-     * @param list<PartnerEvent>        $events      Pausas, bajas, reanudaciones y vueltas, en orden.
+     * @param list<PartnerEvent>        $events      Bajas y vueltas, en orden.
+     * @param list<PartnerPause>        $pauses      Pausas que tocan el mes.
      */
-    public static function compute(\DateTimeImmutable $month, array $weeks, array $shares, FeeSchedule $schedule, array $adjustments, array $events): MonthlyFees
+    public static function compute(\DateTimeImmutable $month, array $weeks, array $shares, FeeSchedule $schedule, array $adjustments, array $events, array $pauses = []): MonthlyFees
     {
         $stops = self::stopPeriods($events);
+        foreach ($pauses as $pause) {
+            $stops[MonthlyFees::keyOf($pause->getPartner())][] = [$pause->getStartsOn(), $pause->getResumesOn()];
+        }
         $statements = [];
         $statementFor = static function (Partner $payer) use (&$statements): FeeStatement {
             return $statements[MonthlyFees::keyOf($payer)] ??= new FeeStatement($payer);
@@ -215,7 +228,7 @@ final class MonthlyFeeCalculator
     }
 
     /**
-     * Los eventos de pausa, baja, reanudación y vuelta hasta el final del mes, en orden.
+     * Los eventos de baja y vuelta hasta el final del mes, en orden.
      *
      * @return list<PartnerEvent>
      */
@@ -231,8 +244,8 @@ final class MonthlyFeeCalculator
     }
 
     /**
-     * Los periodos en que cada socix no recogía cesta (pausa o baja), de sus eventos:
-     * desde una pausa o baja hasta la reanudación o vuelta siguiente, [desde, hasta).
+     * Los periodos en que cada socix estuvo de baja, de sus eventos: desde una baja
+     * hasta la vuelta siguiente, [desde, hasta).
      *
      * @param list<PartnerEvent> $events En orden.
      *

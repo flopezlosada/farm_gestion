@@ -5,6 +5,7 @@ namespace App\EventSubscriber;
 use App\Entity\Partner;
 use App\Entity\PartnerEvent;
 use App\Entity\WeeklyBasket;
+use App\Service\Partner\PartnerPauser;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -16,7 +17,12 @@ use Symfony\Component\Workflow\Event\EnteredEvent;
  *   - Crea un PartnerEvent del tipo correspondiente (PAUSE, RESUME, LEAVE,
  *     RESUME-tras-baja como JOIN) con el actor que la disparó.
  *   - Cuando la transición es 'leave', borra los WeeklyBasket futuros del
- *     socio para que no aparezca en los listados de reparto venideros.
+ *     socio para que no aparezca en los listados de reparto venideros, y
+ *     cierra sus pausas ({@see PartnerPauser::closeForLeave}).
+ *
+ * El evento se fecha con `occurred_at` del contexto de la transición si viene
+ * ({@see self::CONTEXT_OCCURRED_AT}): una pausa con fecha se registra el día en
+ * que empieza, no el día en que alguien la anotó o la tarea diaria la aplicó.
  *
  * La persistencia se ata al flush actual; el caller hace flush después de
  * disparar la transición. Si nunca hace flush, no se graba el evento, lo
@@ -24,6 +30,9 @@ use Symfony\Component\Workflow\Event\EnteredEvent;
  */
 class PartnerLifecycleSubscriber implements EventSubscriberInterface
 {
+    /** Clave del contexto de la transición con la fecha real del cambio (\DateTimeInterface). */
+    public const CONTEXT_OCCURRED_AT = 'occurred_at';
+
     /** Mapa transición -> tipo de PartnerEvent que registramos. */
     private const TRANSITION_TO_EVENT_TYPE = [
         'pause' => PartnerEvent::TYPE_PAUSE,
@@ -35,6 +44,7 @@ class PartnerLifecycleSubscriber implements EventSubscriberInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly Security $security,
+        private readonly PartnerPauser $pauser,
     ) {
     }
 
@@ -62,7 +72,8 @@ class PartnerLifecycleSubscriber implements EventSubscriberInterface
 
         $froms = $event->getTransition()->getFroms();
 
-        $partnerEvent = new PartnerEvent($partner, $type);
+        $occurredAt = $event->getContext()[self::CONTEXT_OCCURRED_AT] ?? null;
+        $partnerEvent = new PartnerEvent($partner, $type, $occurredAt instanceof \DateTimeInterface ? $occurredAt : null);
         $partnerEvent->setActor($this->resolveActor());
         $partnerEvent->setPayload([
             'transition' => $name,
@@ -73,6 +84,7 @@ class PartnerLifecycleSubscriber implements EventSubscriberInterface
 
         if ($name === 'leave') {
             $this->dropFutureWeeklyBaskets($partner);
+            $this->pauser->closeForLeave($partner, $partnerEvent->getOccurredAt());
         }
     }
 

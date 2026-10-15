@@ -21,6 +21,7 @@ use App\Repository\BasketRepository;
 use App\Repository\FeeAdjustmentRepository;
 use App\Service\Partner\Fee\MonthlyFeeCalculator;
 use App\Repository\NotificationLogRepository;
+use App\Repository\PartnerPauseRepository;
 use App\Repository\PartnerRepository;
 use App\Repository\PushSubscriptionRepository;
 use App\Repository\RemittanceRepository;
@@ -38,6 +39,7 @@ use App\Service\Delivery\SharedPairDeliveryEditor;
 use App\Service\Delivery\SharedPairException;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Partner\BasketPricing;
+use App\Service\Partner\PartnerPauser;
 use App\Service\Partner\PartnerShareEventRecorder;
 use App\Service\Notification\NotificationPreferences;
 use App\Service\Partner\SharedBasketCohortSync;
@@ -309,6 +311,7 @@ class PartnerController extends AbstractController
         EntityManagerInterface $em,
         FeeAdjustmentRepository $feeAdjustments,
         MonthlyFeeCalculator $feeCalculator,
+        PartnerPauseRepository $pauseRepository,
     ): Response {
         $events = $partnerEventRepository->findForPartner($partner);
 
@@ -380,6 +383,9 @@ class PartnerController extends AbstractController
             'relocate_weeks' => $relocationOptions->weeksForPartner($partner),
             'relocate_groups' => $relocationOptions->groupsForPartner($partner),
             'donated_baskets' => $donatedBaskets,
+            // La pausa en curso y las programadas: la ficha enseña sus fechas y
+            // ofrece recortarlas o anularlas.
+            'pauses' => $pauseRepository->findNotEndedBefore($partner, new \DateTimeImmutable('today')),
             'fee_adjustments' => $feeAdjustments->findForPartner($partner),
             'this_month' => FeeAdjustment::month(new \DateTimeImmutable('today')),
             'fee_statement' => $feeCalculator->forMonth(new \DateTimeImmutable('today'))->forPartner($partner),
@@ -971,34 +977,40 @@ class PartnerController extends AbstractController
         return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
     }
 
+    /**
+     * Vuelta a la actividad: tras una baja, reincorpora al momento; si está en
+     * pausa (o tiene una programada), la recorta para que vuelva a recibir cesta
+     * desde la fecha que se indique (hoy si no se indica). Anular una pausa que
+     * aún no ha empezado es lo mismo con la fecha de su inicio o anterior.
+     */
     #[Route("/{id}/promote", name: "partner_promote", methods: ["POST"])]
     public function promote(
         Request $request,
         Partner $partner,
         #[Target('partner_lifecycle')] WorkflowInterface $workflow,
         EntityManagerInterface $entityManager,
+        PartnerPauser $pauser,
     ): Response {
         if (!$this->isCsrfTokenValid('partner_promote', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
             return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
         }
 
-        $transition = match (true) {
-            $workflow->can($partner, 'rejoin') => 'rejoin',
-            $workflow->can($partner, 'resume') => 'resume',
-            default => null,
-        };
-
-        if ($transition === null) {
-            $this->addFlash('warning', sprintf(
-                '%s %s ya está activx.',
-                $partner->getName(),
-                $partner->getSurname()
-            ));
+        if (!$workflow->can($partner, 'rejoin')) {
+            $on = self::dateFrom($request, 'resume_on') ?? new \DateTimeImmutable('today');
+            try {
+                $cancelled = $pauser->resume($partner, $on);
+            } catch (\DomainException $e) {
+                $this->addFlash('warning', $e->getMessage());
+                return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
+            }
+            $this->addFlash('success', $cancelled
+                ? sprintf('Pausa de %s %s anulada: sigue recibiendo cesta.', $partner->getName(), $partner->getSurname())
+                : sprintf('%s %s vuelve a recibir cesta desde el %s.', $partner->getName(), $partner->getSurname(), $on->format('d/m/Y')));
             return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
         }
 
-        $workflow->apply($partner, $transition);
+        $workflow->apply($partner, 'rejoin');
         $entityManager->flush();
 
         $this->addFlash('success', sprintf('%s %s vuelve a estar activx.', $partner->getName(), $partner->getSurname()));
@@ -1061,6 +1073,7 @@ class PartnerController extends AbstractController
         PartnerRepository $partnerRepository,
         #[Target('partner_lifecycle')] WorkflowInterface $workflow,
         EntityManagerInterface $em,
+        PartnerPauser $pauser,
     ): Response {
         if (!$this->isCsrfTokenValid('partner_bulk_transition_apply', $request->request->get('_token', ''))) {
             $this->addFlash('error', 'Token CSRF inválido. Vuelve a intentarlo.');
@@ -1082,13 +1095,24 @@ class PartnerController extends AbstractController
         $partners = $partnerRepository->findBy(['id' => $ids]);
         $copy = self::BULK_TRANSITIONS[$transition];
 
+        // Pausar y reactivar en lote valen desde hoy y pasan por las pausas con
+        // fecha, igual que desde la ficha: si no, el reparto no se enteraría.
+        $today = new \DateTimeImmutable('today');
         $applied = 0;
         $skipped = 0;
         foreach ($partners as $partner) {
-            if ($workflow->can($partner, $transition)) {
-                $workflow->apply($partner, $transition);
+            if (!$workflow->can($partner, $transition)) {
+                $skipped++;
+                continue;
+            }
+            try {
+                match ($transition) {
+                    'pause' => $pauser->pause($partner, $today, null, 'gestor:' . $this->getUser()->getId()),
+                    'resume' => $pauser->resume($partner, $today),
+                    default => $workflow->apply($partner, $transition),
+                };
                 $applied++;
-            } else {
+            } catch (\DomainException) {
                 $skipped++;
             }
         }
@@ -1106,32 +1130,51 @@ class PartnerController extends AbstractController
     }
 
     /**
-     * Pausa temporal del socio: deja de recibir cesta pero sigue siendo socix.
-     * Útil para vacaciones, baja médica, etc. El borrado de WeeklyBasket futuros
-     * NO se dispara (a diferencia de "leave"); la pausa es reversible vía promote.
+     * Pausa temporal del socio: deja de recibir cesta pero sigue siendo socix
+     * (vacaciones, baja médica…). Desde una fecha obligatoria, que puede ser
+     * futura, hasta otra opcional: el día en que vuelve. Las entregas ya
+     * congeladas dentro del periodo desaparecen del reparto; la suscripción no se
+     * toca, así que reactivar no obliga a rehacer la cesta.
      */
     #[Route("/{id}/pause", name: "partner_pause", methods: ["POST"])]
     public function pause(
         Request $request,
         Partner $partner,
-        #[Target('partner_lifecycle')] WorkflowInterface $workflow,
-        EntityManagerInterface $entityManager,
+        PartnerPauser $pauser,
     ): Response {
         if (!$this->isCsrfTokenValid('partner_pause', (string) $request->request->get('_csrf_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
             return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
         }
 
-        if (!$workflow->can($partner, 'pause')) {
-            $this->addFlash('warning', 'Solo se puede pausar a un socix activx.');
+        $from = self::dateFrom($request, 'pause_from');
+        if ($from === null) {
+            $this->addFlash('warning', 'Indica desde qué día se pausa.');
+            return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
+        }
+        $until = self::dateFrom($request, 'pause_until');
+
+        try {
+            $pause = $pauser->pause($partner, $from, $until, 'gestor:' . $this->getUser()->getId());
+        } catch (\DomainException $e) {
+            $this->addFlash('warning', $e->getMessage());
             return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
         }
 
-        $workflow->apply($partner, 'pause');
-        $entityManager->flush();
-
-        $this->addFlash('success', sprintf('%s %s queda en pausa.', $partner->getName(), $partner->getSurname()));
+        $this->addFlash('success', sprintf('%s %s queda en pausa %s.', $partner->getName(), $partner->getSurname(), PartnerPauser::describe($pause)));
         return $this->redirectToRoute('partner_show', ['id' => $partner->getId()]);
+    }
+
+    /**
+     * Una fecha Y-m-d de un campo del formulario, o null si viene vacía o no es
+     * una fecha de verdad (2026-02-30 no pasa).
+     */
+    private static function dateFrom(Request $request, string $field): ?\DateTimeImmutable
+    {
+        $raw = trim((string) $request->request->get($field, ''));
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $raw);
+
+        return $date !== false && $date->format('Y-m-d') === $raw ? $date : null;
     }
 
     #[Route("/{id}/add_basket", name: "partner_add_basket", methods: ["GET","POST"])]

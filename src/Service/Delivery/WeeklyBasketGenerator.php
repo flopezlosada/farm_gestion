@@ -19,6 +19,7 @@ use App\Entity\WeeklyBasketStatus;
 use App\Entity\BasketShare;
 use App\Repository\NodeRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
+use App\Service\Partner\PartnerPauseCalendar;
 use App\Service\Partner\PartnerShareEventRecorder;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -36,6 +37,10 @@ use Doctrine\ORM\EntityManagerInterface;
  * indirecta: al resolver la fecha física de cada partner vía
  * NodeDeliveryDate, los ciclos cancelados devuelven null y el partner se
  * salta; los trasladados congelan la fecha movida en delivery_date.
+ *
+ * Respeta las pausas del socix ({@see PartnerPauseCalendar}): en un día en
+ * pausa no se le materializa ni se le dibuja nada, ni su cesta, ni huevos, ni
+ * cambios puntuales o extras que caigan en ese día.
  *
  * Lo que NO hace todavía: balancear A/B vía
  * PartnerBasketShare.delivery_group, emitir PartnerEvent.
@@ -70,6 +75,7 @@ class WeeklyBasketGenerator
         private readonly NodeRepository $nodeRepository,
         private readonly EggDeliveryResolver $eggResolver,
         private readonly WeeklyBasketComposer $composer,
+        private readonly PartnerPauseCalendar $pauseCalendar,
     ) {
     }
 
@@ -203,6 +209,12 @@ class WeeklyBasketGenerator
      * Si no (datos legacy sin node_id), asume Torremocha implícito y
      * devuelve la fecha del Basket.
      *
+     * Devuelve null también si ese día el socix está en PAUSA: es el punto por
+     * el que pasan la generación, la proyección, los calendarios y los huevos
+     * extra, así que la pausa vale para todos sin repetir la pregunta. Lo que no
+     * pasa por aquí (cambios puntuales que entran, cestas extra) lo barre
+     * {@see withoutPausedDeliveries} al final de cada camino.
+     *
      * Límite conocido: el fallback sin nodo NO consulta excepciones, así
      * que un partner en un WBG sin nodo asignado ignoraría un cierre. En
      * la práctica todos los WBG operativos tienen nodo; los huérfanos son
@@ -210,16 +222,80 @@ class WeeklyBasketGenerator
      *
      * @param Basket $basket
      * @param PartnerBasketShare $share
-     * @return \DateTimeInterface|null Null si el nodo no reparte en este Basket (biweekly fuera de fase o excepción que cancela).
+     * @return \DateTimeInterface|null Null si el nodo no reparte en este Basket (biweekly fuera de fase o excepción que cancela) o si el socix está en pausa ese día.
      */
     private function resolvePhysicalDeliveryDate(Basket $basket, PartnerBasketShare $share): ?\DateTimeInterface
     {
-        $node = $share->getPartner()->getWeeklyBasketGroup()?->getNode();
-        if ($node === null) {
-            return $basket->getDate();
-        }
+        $partner = $share->getPartner();
+        $date = $this->nodeDateFor($basket, $partner);
 
-        return $this->nodeDeliveryDate->physicalDateFor($basket, $node);
+        return $date !== null && !$this->pauseCalendar->isPausedOn($partner, $date) ? $date : null;
+    }
+
+    /**
+     * La fecha en que el nodo del socix reparte ese Basket (la del Basket si no
+     * tiene nodo), o null si su nodo no reparte. Sin mirar pausas.
+     */
+    private function nodeDateFor(Basket $basket, Partner $partner): ?\DateTimeInterface
+    {
+        $node = $partner->getWeeklyBasketGroup()?->getNode();
+
+        return $node === null ? $basket->getDate() : $this->nodeDeliveryDate->physicalDateFor($basket, $node);
+    }
+
+    /**
+     * ¿El socix está en pausa el día en que le tocaría ese Basket? Si su nodo no
+     * reparte esa semana se mira la fecha del Basket.
+     */
+    private function isPausedForBasket(Partner $partner, Basket $basket): bool
+    {
+        // La fecha del nodo cuesta una consulta: sólo se calcula si hay pausas que mirar.
+        return $this->pauseCalendar->hasPauses($partner)
+            && $this->pauseCalendar->isPausedOn($partner, $this->nodeDateFor($basket, $partner) ?? $basket->getDate());
+    }
+
+    /**
+     * ¿La entrega cae en un día en que su socix está en pausa?
+     *
+     * @param WeeklyBasket $wb Entrega con socix y fecha física ya fijadas.
+     */
+    private function isPausedDelivery(WeeklyBasket $wb): bool
+    {
+        $partner = $wb->getPartner();
+        $date = $wb->getDeliveryDate() ?? $wb->getBasket()?->getDate();
+
+        return $partner !== null && $date !== null && $this->pauseCalendar->isPausedOn($partner, $date);
+    }
+
+    /**
+     * Quita de una proyección las entregas de socixs en pausa ese día. Es el
+     * barrido de los caminos que no pasan por {@see resolvePhysicalDeliveryDate}:
+     * un cambio puntual que trae la cesta a una semana en pausa, o una cesta extra
+     * planificada antes de pausar.
+     *
+     * @param list<array{weeklyBasket: WeeklyBasket, items: array}> $deliveries
+     * @return list<array{weeklyBasket: WeeklyBasket, items: array}>
+     */
+    private function withoutPausedDeliveries(array $deliveries): array
+    {
+        return array_values(array_filter(
+            $deliveries,
+            fn (array $delivery): bool => !$this->isPausedDelivery($delivery['weeklyBasket']),
+        ));
+    }
+
+    /**
+     * Contraparte en piedra de {@see withoutPausedDeliveries}: borra las entregas ya
+     * persistidas de esta semana cuyo socix está en pausa ese día.
+     */
+    private function dropPausedDeliveries(Basket $basket): void
+    {
+        foreach ($this->em->getRepository(WeeklyBasket::class)->findBy(['basket' => $basket->getId()]) as $wb) {
+            if ($this->isPausedDelivery($wb)) {
+                $this->em->remove($wb);
+            }
+        }
+        $this->em->flush();
     }
 
     /**
@@ -512,6 +588,7 @@ class WeeklyBasketGenerator
 
         $this->applyComponentIntents($basket, $outgoing, $incoming);
         $this->applyBasketExtras($basket, $status);
+        $this->dropPausedDeliveries($basket);
 
         return [$weekly, $half, $biweekly, $monthly, $onlyEgg];
     }
@@ -706,7 +783,14 @@ class WeeklyBasketGenerator
         $this->moveSharedToHalf($monthly, $half);
         $this->moveSharedToHalf($onlyEgg, $half);
 
-        return [$weekly, $half, $biweekly, $monthly, $onlyEgg];
+        // Quien está en pausa esa semana no es candidatx: ni cuenta en la estimación
+        // del nodo ni se le ofrece esa semana para cambios.
+        $notPaused = fn (array $shares): array => array_values(array_filter(
+            $shares,
+            fn (PartnerBasketShare $share): bool => !$this->isPausedForBasket($share->getPartner(), $basket),
+        ));
+
+        return array_map($notPaused, [$weekly, $half, $biweekly, $monthly, $onlyEgg]);
     }
 
     /**
@@ -1017,7 +1101,10 @@ class WeeklyBasketGenerator
 
         // Overrides de CESTA EXTRA: suman su delta al dibujar (creando la entrada si al socio
         // no le tocaba esa semana). Pase final, contraparte de applyBasketExtras en piedra.
-        return $this->applyBasketExtrasToProjection($node, $basket, $relocatedOutPartnerIds, $deliveries);
+        $deliveries = $this->applyBasketExtrasToProjection($node, $basket, $relocatedOutPartnerIds, $deliveries);
+
+        // Lo que entró por un cambio puntual o una extra en un día de pausa, fuera.
+        return $this->withoutPausedDeliveries($deliveries);
     }
 
     /**
@@ -1525,17 +1612,24 @@ class WeeklyBasketGenerator
      * actual del socio.
      *
      * @param Partner            $partner
-     * @param \DateTimeInterface $from Fecha (inclusive) desde la que reconciliar.
+     * @param \DateTimeInterface      $from  Fecha (inclusive) desde la que reconciliar.
+     * @param \DateTimeInterface|null $until Fecha (exclusive) hasta la que reconciliar; null = sin límite.
+     *        Una pausa sólo cambia su periodo: acotar evita rehacer (y perder las ediciones
+     *        a mano de) las semanas posteriores.
      * @return array<int,bool> basketId => si el socio quedó CON entrega esa semana (true) o no (false).
      */
-    public function reconcilePartnerFrom(Partner $partner, \DateTimeInterface $from): array
+    public function reconcilePartnerFrom(Partner $partner, \DateTimeInterface $from, ?\DateTimeInterface $until = null): array
     {
-        $baskets = $this->em->createQuery(
+        $query = $this->em->createQuery(
             'SELECT DISTINCT b FROM ' . Basket::class . ' b
              JOIN ' . WeeklyBasket::class . ' wb WITH wb.basket = b
-             WHERE b.date >= :from
+             WHERE b.date >= :from' . ($until !== null ? ' AND b.date < :until' : '') . '
              ORDER BY b.date ASC'
-        )->setParameter('from', $from->format('Y-m-d'))->getResult();
+        )->setParameter('from', $from->format('Y-m-d'));
+        if ($until !== null) {
+            $query->setParameter('until', $until->format('Y-m-d'));
+        }
+        $baskets = $query->getResult();
 
         $result = [];
         foreach ($baskets as $basket) {
