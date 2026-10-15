@@ -1,0 +1,150 @@
+{# ============================================================
+ # Las cuotas de un mes: lo que paga cada persona (sus cestas por las
+ # semanas que las tuvo, más sus ajustes) y lo que falta para cobrarlo.
+ # Es la vista previa de la remesa del mes.
+ #
+ # El controller pasa: fees (MonthlyFees), statements (las de la pestaña),
+ # counts (all, problems), filter.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
+
+{% set month = fees.month %}
+{% set prev = month|date_modify('-1 month') %}
+{% set next = month|date_modify('+1 month') %}
+{% set chargeable = fees.chargeable %}
+{% set chargeable_cents = chargeable|reduce((sum, s) => sum + s.cents, 0) %}
+{% set avatar_palette = ['sage', 'ochre', 'terra', 'ink'] %}
+
+{% block title %}Socios · Cuotas de {{ month|format_date(pattern: 'MMMM yyyy', locale: 'es') }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_index') }}">Socios</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Cuotas</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+    <style>
+        .mf-month { display: inline-flex; align-items: center; gap: 8px; }
+        .mf-month b { font-size: 15px; min-width: 150px; text-align: center; text-transform: capitalize; }
+        .mf-lines { margin: 0; padding: 0; list-style: none; font-size: 12.5px; line-height: 1.45; }
+        .mf-lines li + li { margin-top: 2px; }
+        .mf-part { color: var(--prl-ochre-d); font-size: 11.5px; }
+        .mf-who { color: var(--csa-ink-soft, #6b6b6b); }
+        .mf-total { font-family: var(--csa-serif); font-variation-settings: "opsz" 30; font-weight: 500; font-size: 17px;
+                    letter-spacing: -0.02em; font-variant-numeric: lining-nums tabular-nums; }
+        .mf-problems { margin: 4px 0 0; padding-left: 16px; color: var(--prl-terra-d); font-size: 12px; }
+        .mf-adj { color: var(--csa-ink-soft, #6b6b6b); }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header('Socios', 'Cuotas del mes',
+        'Lo que paga cada persona: la tarifa de sus cestas por las semanas del mes en que las tuvo, más lo que paga de más o de menos. En pausa o de baja no se cobra. Es lo que saldría en la remesa.') }}
+
+    {% if fees.weeks is empty %}
+        {{ csa.callout('Este mes no tiene semanas de reparto dadas de alta: no se puede calcular ninguna cuota.', 'danger', 'exclamation-triangle') }}
+    {% elseif fees.missingConcepts is not empty %}
+        <p class="csa-callout csa-callout--warning">
+            <i class="csa-callout__icon fa fa-exclamation-triangle"></i>
+            <span>
+                Falta el precio de {{ fees.missingConcepts|map(c => c.label|lower)|join(', ', ' y ') }}:
+                las cuotas que lo llevan no se pueden calcular.
+                {% if is_granted('ROLE_GESTION_SOCIXS_EDIT') %}<a href="{{ path('fee_rate_index') }}">Poner las tarifas</a>{% endif %}
+            </span>
+        </p>
+    {% endif %}
+
+    <div class="prl-stats">
+        <div class="prl-stat"><div class="v">{{ counts.all }}</div><div class="l">{{ counts.all == 1 ? 'persona paga' : 'personas pagan' }}</div></div>
+        <div class="prl-stat prl-stat--active"><div class="v">{{ fmt.money(chargeable_cents / 100) }}</div><div class="l">a cobrar por domiciliación ({{ chargeable|length }})</div></div>
+        <div class="prl-stat {{ counts.problems > 0 ? 'prl-stat--leave' }}"><div class="v">{{ counts.problems }}</div><div class="l">no se pueden cobrar aún</div></div>
+        <div class="prl-stat"><div class="v">{{ fees.weeks|length }}</div><div class="l">semanas de reparto</div></div>
+    </div>
+
+    <nav class="prl-tabs" role="tablist">
+        <a href="{{ path('monthly_fee_index', { month: month|date('Y-m') }) }}" class="{{ filter == 'all' ? 'active' }}">Todas <span class="count">{{ counts.all }}</span></a>
+        <a href="{{ path('monthly_fee_index', { month: month|date('Y-m'), show: 'problems' }) }}" class="{{ filter == 'problems' ? 'active' }}">Con algo pendiente <span class="count">{{ counts.problems }}</span></a>
+    </nav>
+
+    <div class="prl-toolbar">
+        <div class="counters mf-month">
+            <a href="{{ path('monthly_fee_index', { month: prev|date('Y-m'), show: filter }) }}" class="prl-btn" title="Mes anterior"><i class="fa fa-chevron-left"></i></a>
+            <b>{{ month|format_date(pattern: 'MMMM yyyy', locale: 'es') }}</b>
+            <a href="{{ path('monthly_fee_index', { month: next|date('Y-m'), show: filter }) }}" class="prl-btn" title="Mes siguiente"><i class="fa fa-chevron-right"></i></a>
+        </div>
+        <div class="spacer"></div>
+        <a href="{{ path('fee_rate_index') }}" class="prl-btn"><i class="fa fa-eur"></i> Tarifas</a>
+    </div>
+
+    <div class="prl-table-wrap">
+        {% if statements is empty %}
+            <div class="prl-empty">{{ filter == 'problems' ? 'Todas las cuotas de este mes se pueden cobrar.' : 'Nadie tiene cesta ni ajustes este mes.' }}</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th>Quién paga</th>
+                        <th>Cestas</th>
+                        <th class="tight acc-num">Ajustes</th>
+                        <th class="tight acc-num">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in statements %}
+                        {% set payer = s.payer %}
+                        <tr>
+                            <td class="prl-cell-person" data-label="Quién paga">
+                                <div class="prl-person">
+                                    <span class="prl-person__avatar prl-person__avatar--{{ avatar_palette[(payer.id|default(0)) % 4] }}" aria-hidden="true">{{ (payer.name|first|upper) ~ (payer.surname|first|default('')|upper) }}</span>
+                                    <div class="prl-person__body">
+                                        <a class="prl-person__name" href="{{ path('partner_show', { id: payer.id }) }}#cuota">{{ payer.legalName }}</a>
+                                        {% if s.coveredPartners is not empty %}
+                                            <span class="prl-person__meta">paga también: {{ s.coveredPartners|map(p => p.legalName)|join(', ') }}</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% if s.problems is not empty %}
+                                    <ul class="mf-problems">{% for p in s.problems %}<li>{{ p }}</li>{% endfor %}</ul>
+                                {% endif %}
+                            </td>
+                            <td data-label="Cestas">
+                                {% if s.lines is empty %}
+                                    <span class="acc-muted">—</span>
+                                {% else %}
+                                    <ul class="mf-lines">
+                                        {% for l in s.lines %}
+                                            <li>
+                                                {{ l.label }} · <b>{{ fmt.money(l.total) }}</b>
+                                                {% if l.share.partner != payer %}<span class="mf-who">({{ l.share.partner.legalName }})</span>{% endif %}
+                                                {% if l.partial %}<span class="mf-part">{{ l.weeks }} de {{ l.monthWeeks }} semanas</span>{% endif %}
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                {% endif %}
+                            </td>
+                            <td class="acc-num mf-adj" data-label="Ajustes">
+                                {% if s.adjustments is empty %}—{% else %}
+                                    <span title="{{ s.adjustments|map(a => a.reason ~ (a.initiative ? ' → ' ~ a.initiative.name : ''))|join(' · ') }}">{{ fmt.money(s.adjustmentsCents / 100, true) }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="acc-num" data-label="Total"><span class="mf-total">{{ fmt.money(s.total) }}</span></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

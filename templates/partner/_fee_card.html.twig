@@ -66,6 +66,12 @@
     .fee-adj__actions form { display: inline; }
     .fee-link { background: none; border: 0; padding: 0; font-size: 12px; color: var(--csa-ink-soft, #6b6b6b); text-decoration: underline; cursor: pointer; }
     .fee-link--danger { color: var(--prl-terra-d, #a34a2a); }
+    .fee-month { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--csa-rule, #e6e4dd); }
+    .fee-month__label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--csa-ink-faint, #999); }
+    .fee-month__total { font-family: var(--csa-serif); font-variation-settings: "opsz" 30; font-weight: 500; font-size: 24px;
+                        letter-spacing: -0.02em; font-variant-numeric: lining-nums tabular-nums; }
+    .fee-month__detail { font-size: 12px; color: var(--csa-ink-soft, #6b6b6b); }
+    .fee-month__problem { flex-basis: 100%; font-size: 12px; color: var(--prl-terra-d, #a34a2a); }
     .fee-sub { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--csa-ink-faint, #999); margin: 16px 0 8px; }
     .fee-past summary { cursor: pointer; font-size: 12px; color: var(--csa-ink-soft, #6b6b6b); margin-top: 14px; }
     @media (max-width: 600px) { .fee-adj__when { margin-left: 0; } }
@@ -79,6 +85,22 @@
         {% endif %}
     </header>
     <div class="prt-card__body">
+        {# Lo que paga este mes, calculado: tarifa de sus cestas + ajustes. #}
+        {% if fee_statement %}
+            <div class="fee-month">
+                {% if fee_statement.payer == partner %}
+                    <span class="fee-month__label">{{ this_month|format_date(pattern: 'MMMM', locale: 'es')|capitalize }}</span>
+                    <span class="fee-month__total">{{ fmt.money(fee_statement.total) }}</span>
+                    <span class="fee-month__detail">
+                        {% if fee_statement.adjustments is empty %}la tarifa de sus cestas{% else %}{{ fmt.money(fee_statement.basketsCents / 100) }} de cestas {{ fee_statement.adjustmentsCents >= 0 ? '+' : '−' }} {{ fmt.money((fee_statement.adjustmentsCents|abs) / 100) }} de ajustes{% endif %}
+                        · <a href="{{ path('monthly_fee_index') }}">ver el mes</a>
+                    </span>
+                    {% for p in fee_statement.problems %}<span class="fee-month__problem">{{ p }}</span>{% endfor %}
+                {% else %}
+                    <span class="fee-month__detail">Su cesta la paga <a href="{{ path('partner_show', { id: fee_statement.payer.id }) }}#cuota">{{ fee_statement.payer.legalName }}</a>: va en su recibo.</span>
+                {% endif %}
+            </div>
+        {% endif %}
         {% if fee_adjustments is empty %}
             <p class="prt-defs__value--muted" style="margin: 0;">Paga la tarifa de su cesta, sin nada de más ni de menos.</p>
         {% else %}

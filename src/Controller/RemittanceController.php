@@ -397,7 +397,7 @@ class RemittanceController extends AbstractController
         if ($partner === null) {
             return;
         }
-        $fee = $fees->forMonth($remittance->getPeriod())[RemittanceReview::familyHead($partner)->getId()] ?? null;
+        $fee = $fees->forMonth($remittance->getPeriod())[$partner->getFamilyHead()->getId()] ?? null;
         $line->setPartner($partner)
             ->setDebtorName(mb_strtoupper($partner->getLegalName()))
             ->setIban($partner->getIban())

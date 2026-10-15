@@ -19,6 +19,7 @@ use App\Entity\Basket;
 use App\Entity\BasketComponent;
 use App\Repository\BasketRepository;
 use App\Repository\FeeAdjustmentRepository;
+use App\Service\Partner\Fee\MonthlyFeeCalculator;
 use App\Repository\NotificationLogRepository;
 use App\Repository\PartnerRepository;
 use App\Repository\PushSubscriptionRepository;
@@ -307,6 +308,7 @@ class PartnerController extends AbstractController
         PushSubscriptionRepository $pushSubscriptions,
         EntityManagerInterface $em,
         FeeAdjustmentRepository $feeAdjustments,
+        MonthlyFeeCalculator $feeCalculator,
     ): Response {
         $events = $partnerEventRepository->findForPartner($partner);
 
@@ -380,6 +382,7 @@ class PartnerController extends AbstractController
             'donated_baskets' => $donatedBaskets,
             'fee_adjustments' => $feeAdjustments->findForPartner($partner),
             'this_month' => FeeAdjustment::month(new \DateTimeImmutable('today')),
+            'fee_statement' => $feeCalculator->forMonth(new \DateTimeImmutable('today'))->forPartner($partner),
             // Cuenta utilizable por email canónico (puede ser la de un familiar
             // con buzón compartido, a diferencia de linked_user que va por la
             // relación User->Partner). Alimenta la tarjeta "Acceso a la web".
