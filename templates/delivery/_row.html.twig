@@ -28,6 +28,9 @@
         {% if wb.partner.displayName and wb.partner.displayName != wb.partner.legalName %}
             <small>{{ wb.partner.legalName }}</small>
         {% endif %}
+        {% if share and share.payerPartner %}
+            <small data-payer>la paga {{ share.payerPartner.nameForDelivery }}</small>
+        {% endif %}
         {% if reloc %}<span class="reloc">de {{ reloc }}</span>{% endif %}
     </td>
     <td class="dlv-cell-mod">

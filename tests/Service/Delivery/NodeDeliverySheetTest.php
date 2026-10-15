@@ -129,7 +129,7 @@ class NodeDeliverySheetTest extends TestCase
                             [
                                 'label' => 'Quincenales y mensuales',
                                 'rows' => [
-                                    ['name' => 'Victoria y David', 'code' => 'QH', 'cestas' => 1.0, 'egg_spec' => '1M', 'egg_count' => 6, 'locality' => 'Bustarviejo', 'relocated_from' => null, 'partner_id' => 4],
+                                    ['name' => 'Victoria y David', 'code' => 'QH', 'cestas' => 1.0, 'egg_spec' => '1M', 'egg_count' => 6, 'locality' => 'Bustarviejo', 'relocated_from' => null, 'partner_id' => 4, 'payer' => null],
                                 ],
                             ],
                         ],
@@ -144,19 +144,19 @@ class NodeDeliverySheetTest extends TestCase
                             [
                                 'label' => 'Semanales',
                                 'rows' => [
-                                    ['name' => 'Cris y Paco', 'code' => 'SH', 'cestas' => 1.0, 'egg_spec' => '1D', 'egg_count' => 12, 'locality' => 'Torremocha', 'relocated_from' => null, 'partner_id' => 1],
+                                    ['name' => 'Cris y Paco', 'code' => 'SH', 'cestas' => 1.0, 'egg_spec' => '1D', 'egg_count' => 12, 'locality' => 'Torremocha', 'relocated_from' => null, 'partner_id' => 1, 'payer' => null],
                                 ],
                             ],
                             [
                                 'label' => 'Quincenales y mensuales',
                                 'rows' => [
-                                    ['name' => 'Miguel y Paloma', 'code' => 'Q', 'cestas' => 1.0, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha', 'relocated_from' => null, 'partner_id' => 2],
+                                    ['name' => 'Miguel y Paloma', 'code' => 'Q', 'cestas' => 1.0, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha', 'relocated_from' => null, 'partner_id' => 2, 'payer' => null],
                                 ],
                             ],
                             [
                                 'label' => 'Solo huevos',
                                 'rows' => [
-                                    ['name' => 'Raquel', 'code' => 'H', 'cestas' => 0.0, 'egg_spec' => '1D+1M', 'egg_count' => 18, 'locality' => 'Torremocha', 'relocated_from' => null, 'partner_id' => 3],
+                                    ['name' => 'Raquel', 'code' => 'H', 'cestas' => 0.0, 'egg_spec' => '1D+1M', 'egg_count' => 18, 'locality' => 'Torremocha', 'relocated_from' => null, 'partner_id' => 3, 'payer' => null],
                                 ],
                             ],
                         ],
@@ -164,9 +164,9 @@ class NodeDeliverySheetTest extends TestCase
                 ],
                 'shared' => [
                     'rows' => [
-                        ['name' => 'Eduardo y Pilar', 'code' => 'SC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha', 'relocated_from' => null, 'partner_id' => 6, 'color' => '#85c0e0', 'pair_end' => false],
-                        ['name' => 'Pilar y Eduardo', 'code' => 'SC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha', 'relocated_from' => null, 'partner_id' => 5, 'color' => '#85c0e0', 'pair_end' => true],
-                        ['name' => 'Hilde', 'code' => 'QC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Bustarviejo', 'relocated_from' => null, 'partner_id' => 7, 'color' => '#e0a585', 'pair_end' => true],
+                        ['name' => 'Eduardo y Pilar', 'code' => 'SC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha', 'relocated_from' => null, 'partner_id' => 6, 'payer' => null, 'color' => '#85c0e0', 'pair_end' => false],
+                        ['name' => 'Pilar y Eduardo', 'code' => 'SC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Torremocha', 'relocated_from' => null, 'partner_id' => 5, 'payer' => null, 'color' => '#85c0e0', 'pair_end' => true],
+                        ['name' => 'Hilde', 'code' => 'QC', 'cestas' => 0.5, 'egg_spec' => null, 'egg_count' => 0, 'locality' => 'Bustarviejo', 'relocated_from' => null, 'partner_id' => 7, 'payer' => null, 'color' => '#e0a585', 'pair_end' => true],
                     ],
                     'subtotal_cestas' => 1.5,
                     'subtotal_eggs' => null,
@@ -288,6 +288,29 @@ class NodeDeliverySheetTest extends TestCase
         // Totales: 1 + 2 = 3 cestas, 1 docena.
         $this->assertSame(3.0, $result['totals']['cestas']);
         $this->assertSame(1.0, $result['totals']['docenas']);
+    }
+
+    /**
+     * Cuando la cesta la paga otrx socix (donación), la fila lleva el nombre de
+     * reparto de quien paga; las demás filas, null. Así el listado enseña al
+     * donante sin que haya que trucar el nombre de reparto del hogar.
+     */
+    public function testRowCarriesPayerOnlyWhenSomeoneElsePays(): void
+    {
+        $this->populateFullNodeScenario();
+        $donor = (new Partner())->setDisplayName('Patricia');
+        $this->setId($donor, 99);
+        $this->pbsByPartner[1]->setPayerPartner($donor);
+
+        $rows = array_merge(...array_map(
+            static fn (array $mod): array => $mod['rows'],
+            $this->buildSheet()['groups'][1]['modalities'],
+        ));
+        $payers = array_column($rows, 'payer', 'name');
+
+        $this->assertSame('Patricia', $payers['Cris y Paco']);
+        $this->assertNull($payers['Miguel y Paloma']);
+        $this->assertNull($payers['Raquel']);
     }
 
     private function buildSheet(): array

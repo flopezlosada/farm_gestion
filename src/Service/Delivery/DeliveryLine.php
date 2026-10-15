@@ -35,6 +35,9 @@ final class DeliveryLine
      * @param bool        $isHelper Si la línea es la cesta de un voluntario del albergue
      *        (no un socio): va a su propia sección "Albergue", no a "Cestas extra" aunque
      *        no tenga modalidad. Ver {@see HelperDeliveryResolver} y {@see NodeDeliverySheet::shape}.
+     * @param string|null $payerName Nombre de reparto de quien paga la cesta cuando no es quien
+     *        la recoge (la paga otrx socix, típicamente una donación); null = la paga el propio hogar.
+     *        Se pinta junto al nombre para que el listado no tenga que trucar el nombre de reparto.
      */
     public function __construct(
         public readonly string $nameForDelivery,
@@ -50,6 +53,7 @@ final class DeliveryLine
         public readonly ?int $sharePartnerId,
         public readonly ?string $relocatedFromLabel = null,
         public readonly bool $isHelper = false,
+        public readonly ?string $payerName = null,
     ) {
     }
 }

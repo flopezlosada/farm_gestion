@@ -1374,6 +1374,7 @@ class WeeklyBasketGenerator
             sharePartnerId: $partner?->getSharePartner()?->getId(),
             // Trasladado (override de nodo): etiqueta "Nodo · Grupo" de casa, null si no.
             relocatedFromLabel: $wb->getRelocatedFromLabel(),
+            payerName: $pbs?->getPayerPartner()?->getNameForDelivery(),
         );
     }
 
