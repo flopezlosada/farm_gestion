@@ -5,9 +5,9 @@ namespace App\EventSubscriber;
 use App\Entity\Partner;
 use App\Entity\PartnerEvent;
 use App\Entity\WeeklyBasket;
+use App\Service\Partner\PartnerEventActor;
 use App\Service\Partner\PartnerPauser;
 use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Workflow\Event\EnteredEvent;
 
@@ -43,7 +43,7 @@ class PartnerLifecycleSubscriber implements EventSubscriberInterface
 
     public function __construct(
         private readonly EntityManagerInterface $em,
-        private readonly Security $security,
+        private readonly PartnerEventActor $actor,
         private readonly PartnerPauser $pauser,
     ) {
     }
@@ -74,7 +74,7 @@ class PartnerLifecycleSubscriber implements EventSubscriberInterface
 
         $occurredAt = $event->getContext()[self::CONTEXT_OCCURRED_AT] ?? null;
         $partnerEvent = new PartnerEvent($partner, $type, $occurredAt instanceof \DateTimeInterface ? $occurredAt : null);
-        $partnerEvent->setActor($this->resolveActor());
+        $partnerEvent->setActor($this->actor->resolve());
         $partnerEvent->setPayload([
             'transition' => $name,
             'from' => $froms[0] ?? null,
@@ -111,21 +111,5 @@ class PartnerLifecycleSubscriber implements EventSubscriberInterface
         foreach ($futureBaskets as $wb) {
             $this->em->remove($wb);
         }
-    }
-
-    /**
-     * Cadena identificadora para PartnerEvent::actor. Si hay un usuario en
-     * sesión, "gestor:{id}"; si no, "system" (transición programática).
-     */
-    private function resolveActor(): string
-    {
-        $user = $this->security->getUser();
-        if ($user === null) {
-            return PartnerEvent::ACTOR_SYSTEM;
-        }
-        if (method_exists($user, 'getId') && $user->getId() !== null) {
-            return 'gestor:' . $user->getId();
-        }
-        return 'gestor:' . $user->getUserIdentifier();
     }
 }

@@ -5,7 +5,6 @@ namespace App\Service\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerEvent;
 use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Bundle\SecurityBundle\Security;
 
 /**
  * Centraliza la emisión de PartnerEvent::TYPE_BASKET_START y TYPE_BASKET_END
@@ -24,7 +23,7 @@ class PartnerShareEventRecorder
 {
     public function __construct(
         private readonly EntityManagerInterface $em,
-        private readonly Security $security,
+        private readonly PartnerEventActor $actor,
     ) {
     }
 
@@ -96,7 +95,7 @@ class PartnerShareEventRecorder
             PartnerEvent::TYPE_BASKET_CHANGE,
             $occurredAt ?? $newShare->getStartDate(),
         );
-        $event->setActor($actor ?? $this->resolveActor());
+        $event->setActor($actor ?? $this->actor->resolve());
         $event->setPayload([
             'from' => $this->snapshotShare($oldShare),
             'to'   => $this->snapshotShare($newShare),
@@ -135,7 +134,7 @@ class PartnerShareEventRecorder
         ?string $actor,
     ): PartnerEvent {
         $event = new PartnerEvent($share->getPartner(), $type, $occurredAt);
-        $event->setActor($actor ?? $this->resolveActor());
+        $event->setActor($actor ?? $this->actor->resolve());
         $event->setPayload([
             'basket_share_id' => $share->getBasketShare()?->getId(),
             'delivery_group' => $share->getDeliveryGroup(),
@@ -143,21 +142,5 @@ class PartnerShareEventRecorder
         $this->em->persist($event);
 
         return $event;
-    }
-
-    /**
-     * Misma convención de actor que PartnerLifecycleSubscriber::resolveActor.
-     */
-    private function resolveActor(): string
-    {
-        $user = $this->security->getUser();
-        if ($user === null) {
-            return PartnerEvent::ACTOR_SYSTEM;
-        }
-        if (method_exists($user, 'getId') && $user->getId() !== null) {
-            return 'gestor:' . $user->getId();
-        }
-
-        return 'gestor:' . $user->getUserIdentifier();
     }
 }

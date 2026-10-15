@@ -1012,7 +1012,8 @@
                 'WEEK_SWAP':              { label: 'Cambio puntual de viernes', cls: 'swap'   },
                 'NODE_CHANGE':            { label: 'Cambio de nodo',            cls: 'swap'   },
                 'BASKET_EXTRA':           { label: 'Cesta extra',               cls: 'basket' },
-                'BASKET_EXTRA_REMOVED':   { label: 'Cesta extra quitada',       cls: 'pause'  }
+                'BASKET_EXTRA_REMOVED':   { label: 'Cesta extra quitada',       cls: 'pause'  },
+                'PROFILE_UPDATE':         { label: 'Ficha editada',             cls: 'swap'   }
             } %}
 
             {# Resumen legible de los huevos de un snapshot del payload
@@ -1124,6 +1125,16 @@
                                         <div class="prt-timeline__detail">
                                             {% if payload.basket_date %}<b>{{ payload.basket_date|date('d/m/Y') }}</b>{% endif %}
                                             {% if parts is not empty %} · {{ parts|join(', ') }}{% endif %}
+                                        </div>
+                                    {% elseif event.type == 'PROFILE_UPDATE' %}
+                                        {# Un renglón por campo. DNI, IBAN y notas se guardan sin
+                                           valores (sólo que cambiaron): no llevan from/to. #}
+                                        <div class="prt-timeline__detail" data-profile-changes>
+                                            {% for c in payload.changes|default([]) %}
+                                                <div>
+                                                    {{ c.label }}{% if 'to' in c|keys %}: <b>{{ c.from ?? '—' }}</b> → <b>{{ c.to ?? '—' }}</b>{% else %}: cambiado{% endif %}
+                                                </div>
+                                            {% endfor %}
                                         </div>
                                     {% endif %}
 
