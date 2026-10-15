@@ -12,6 +12,7 @@ use App\Entity\FeeRate;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerEvent;
+use App\Entity\PartnerPause;
 use App\Service\Partner\Fee\FeeSchedule;
 use App\Service\Partner\Fee\FeeStatement;
 use App\Service\Partner\Fee\MonthlyFeeCalculator;
@@ -117,12 +118,9 @@ class MonthlyFeeCalculatorTest extends TestCase
             new FeeAdjustment($dani, '-10', 'no llega', new \DateTimeImmutable('2026-08-01'), new \DateTimeImmutable('2026-08-01')),
             new FeeAdjustment($ana, '-99', 'ya terminó', new \DateTimeImmutable('2026-05-01'), new \DateTimeImmutable('2026-07-01')),
         ];
-        $events = [
-            new PartnerEvent($dani, PartnerEvent::TYPE_PAUSE, new \DateTimeImmutable('2026-08-10 12:00')),
-            new PartnerEvent($dani, PartnerEvent::TYPE_RESUME, new \DateTimeImmutable('2026-08-25 09:00')),
-        ];
+        $pauses = [new PartnerPause($dani, new \DateTimeImmutable('2026-08-10'), new \DateTimeImmutable('2026-08-25'))];
 
-        $fees = MonthlyFeeCalculator::compute(new \DateTimeImmutable('2026-08-01'), self::weeks(), $shares, self::schedule(), $adjustments, $events);
+        $fees = MonthlyFeeCalculator::compute(new \DateTimeImmutable('2026-08-01'), self::weeks(), $shares, self::schedule(), $adjustments, [], $pauses);
         $statements = $fees->getStatements();
 
         // Ana: 100 de verdura + 20 de una docena semanal + 20 a la RSP. El ajuste que
@@ -176,27 +174,62 @@ class MonthlyFeeCalculatorTest extends TestCase
         $this->assertCount(1, $fees->getChargeable());
     }
 
-    /** Una pausa sin reanudar no cobra hasta final de mes; la baja, igual. */
-    public function testLosPeriodosSinCobrarSalenDeLosEventos(): void
+    /** Una baja sin vuelta no cobra hasta final de mes; con vuelta, sólo hasta ella. */
+    public function testLosPeriodosDeBajaSalenDeLosEventos(): void
     {
         $ana = self::partner('Ana');
         $bea = self::partner('Bea');
         $periods = MonthlyFeeCalculator::stopPeriods([
-            new PartnerEvent($ana, PartnerEvent::TYPE_PAUSE, new \DateTimeImmutable('2026-06-29 10:00')),
-            new PartnerEvent($ana, PartnerEvent::TYPE_RESUME, new \DateTimeImmutable('2026-06-29 18:00')),
-            new PartnerEvent($ana, PartnerEvent::TYPE_PAUSE, new \DateTimeImmutable('2026-08-03')),
+            new PartnerEvent($ana, PartnerEvent::TYPE_LEAVE, new \DateTimeImmutable('2026-06-29 10:00')),
+            new PartnerEvent($ana, PartnerEvent::TYPE_JOIN, new \DateTimeImmutable('2026-06-29 18:00')),
+            new PartnerEvent($ana, PartnerEvent::TYPE_LEAVE, new \DateTimeImmutable('2026-08-03')),
             new PartnerEvent($bea, PartnerEvent::TYPE_LEAVE, new \DateTimeImmutable('2026-08-20')),
-            new PartnerEvent($bea, PartnerEvent::TYPE_RESUME, new \DateTimeImmutable('2026-08-22')),
+            new PartnerEvent($bea, PartnerEvent::TYPE_JOIN, new \DateTimeImmutable('2026-08-22')),
         ]);
 
         $ana = $periods[spl_object_id($ana)];
         $this->assertCount(2, $ana);
-        $this->assertNull($ana[1][1], 'La pausa del 3 de agosto sigue abierta.');
+        $this->assertNull($ana[1][1], 'La baja del 3 de agosto sigue abierta.');
         $this->assertSame('2026-08-20', $periods[spl_object_id($bea)][0][0]->format('Y-m-d'));
         $this->assertSame('2026-08-22', $periods[spl_object_id($bea)][0][1]->format('Y-m-d'));
 
         $fees = MonthlyFeeCalculator::compute(new \DateTimeImmutable('2026-08-01'), self::weeks(), [self::share(self::partner('Ana'), BasketShare::ID_WEEKLY)], self::schedule(), [], []);
         $this->assertSame('100.00', $fees->getStatements()[0]->getTotal(), 'Sin eventos se cobra el mes entero.');
+    }
+
+    /**
+     * Una pausa programada (aún no empezada, sin evento PAUSE todavía) ya descuenta: las
+     * cuotas de un mes se preparan antes de que llegue, y leen el mismo periodo que el
+     * reparto. Una pausa sin vuelta no cobra hasta final de mes.
+     */
+    public function testLasPausasProgramadasYaDescuentan(): void
+    {
+        $ana = self::partner('Ana');
+        $bea = self::partner('Bea');
+        $pauses = [
+            new PartnerPause($ana, new \DateTimeImmutable('2026-08-15')),
+            new PartnerPause($bea, new \DateTimeImmutable('2026-07-01'), new \DateTimeImmutable('2026-08-08')),
+        ];
+
+        $fees = MonthlyFeeCalculator::compute(new \DateTimeImmutable('2026-08-01'), self::weeks(), [self::share($ana, BasketShare::ID_WEEKLY), self::share($bea, BasketShare::ID_WEEKLY)], self::schedule(), [], [], $pauses);
+
+        $this->assertSame('50.00', self::of($fees->getStatements(), $ana)->getTotal(), 'Recoge el 7 y el 14; desde el 15, nada.');
+        $this->assertSame('75.00', self::of($fees->getStatements(), $bea)->getTotal(), 'Vuelve el 8: el 7 no, el 14, 21 y 28 sí.');
+    }
+
+    /**
+     * Un evento PAUSE suelto ya no cuenta para las cuotas: las pausas sólo salen de sus
+     * periodos. Si contara, una pausa se descontaría dos veces o con la fecha en que se
+     * anotó en vez de la suya.
+     */
+    public function testLosEventosDePausaNoCuentan(): void
+    {
+        $ana = self::partner('Ana');
+        $fees = MonthlyFeeCalculator::compute(new \DateTimeImmutable('2026-08-01'), self::weeks(), [self::share($ana, BasketShare::ID_WEEKLY)], self::schedule(), [], [
+            new PartnerEvent($ana, PartnerEvent::TYPE_PAUSE, new \DateTimeImmutable('2026-08-10')),
+        ]);
+
+        $this->assertSame('100.00', self::of($fees->getStatements(), $ana)->getTotal());
     }
 
     /** Sin semanas de reparto dadas de alta no hay nada que prorratear: nadie paga. */

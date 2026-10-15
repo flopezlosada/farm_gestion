@@ -18,12 +18,19 @@ use Symfony\Component\Workflow\Event\EnteredEvent;
  *   - Cuando la transición es 'leave', borra los WeeklyBasket futuros del
  *     socio para que no aparezca en los listados de reparto venideros.
  *
+ * El evento se fecha con `occurred_at` del contexto de la transición si viene
+ * ({@see self::CONTEXT_OCCURRED_AT}): una pausa con fecha se registra el día en
+ * que empieza, no el día en que alguien la anotó o la tarea diaria la aplicó.
+ *
  * La persistencia se ata al flush actual; el caller hace flush después de
  * disparar la transición. Si nunca hace flush, no se graba el evento, lo
  * cual es coherente con que tampoco se haya guardado el cambio de status.
  */
 class PartnerLifecycleSubscriber implements EventSubscriberInterface
 {
+    /** Clave del contexto de la transición con la fecha real del cambio (\DateTimeInterface). */
+    public const CONTEXT_OCCURRED_AT = 'occurred_at';
+
     /** Mapa transición -> tipo de PartnerEvent que registramos. */
     private const TRANSITION_TO_EVENT_TYPE = [
         'pause' => PartnerEvent::TYPE_PAUSE,
@@ -62,7 +69,8 @@ class PartnerLifecycleSubscriber implements EventSubscriberInterface
 
         $froms = $event->getTransition()->getFroms();
 
-        $partnerEvent = new PartnerEvent($partner, $type);
+        $occurredAt = $event->getContext()[self::CONTEXT_OCCURRED_AT] ?? null;
+        $partnerEvent = new PartnerEvent($partner, $type, $occurredAt instanceof \DateTimeInterface ? $occurredAt : null);
         $partnerEvent->setActor($this->resolveActor());
         $partnerEvent->setPayload([
             'transition' => $name,

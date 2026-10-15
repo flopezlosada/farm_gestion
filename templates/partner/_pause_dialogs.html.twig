@@ -1,0 +1,69 @@
+{#
+ # Diálogos de pausa de la ficha: pausar con fechas y reactivar desde una fecha.
+ # Variables: partner, pauses (la pausa en curso y las programadas, en orden).
+ # Abren con los botones de la barra de acciones (ids pause-dialog / resume-dialog).
+ #}
+{% set _today = 'now'|date('Y-m-d') %}
+{% set _next = pauses|first %}
+
+<dialog id="pause-dialog" class="csa-modal csa-modal--warning" aria-labelledby="pause-dialog-title">
+    <form method="post" action="{{ path('partner_pause', { id: partner.id }) }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token('partner_pause') }}">
+        <button class="csa-modal__close" type="button" aria-label="Cerrar" onclick="this.closest('dialog').close()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+        </button>
+        <header class="csa-modal__header">
+            <div class="csa-modal__heading">
+                <span class="csa-modal__eyebrow">Cambio reversible</span>
+                <h2 class="csa-modal__title" id="pause-dialog-title">Pausar a este socix</h2>
+            </div>
+        </header>
+        <div class="csa-modal__body">
+            <p>No recibirá cesta en esas fechas, pero sigue siendo socix y conserva su cesta. Si no sabes cuándo vuelve, deja la vuelta en blanco y reactívale cuando toque.</p>
+            <div class="xtb-row">
+                <label class="xtb-note">Sin cesta desde
+                    <input type="date" name="pause_from" value="{{ _today }}" required>
+                </label>
+                <label class="xtb-note">Vuelve el (opcional)
+                    <input type="date" name="pause_until" min="{{ _today }}">
+                </label>
+            </div>
+        </div>
+        <footer class="csa-modal__footer">
+            <button type="button" class="csa-modal__btn csa-modal__btn--ghost" onclick="this.closest('dialog').close()">Cancelar</button>
+            <button type="submit" class="csa-modal__btn csa-modal__btn--primary">Pausar</button>
+        </footer>
+    </form>
+</dialog>
+
+{% if _next %}
+    <dialog id="resume-dialog" class="csa-modal csa-modal--info" aria-labelledby="resume-dialog-title">
+        <form method="post" action="{{ path('partner_promote', { id: partner.id }) }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('partner_promote') }}">
+            <button class="csa-modal__close" type="button" aria-label="Cerrar" onclick="this.closest('dialog').close()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+            </button>
+            <header class="csa-modal__header">
+                <div class="csa-modal__heading">
+                    <span class="csa-modal__eyebrow">{{ _next.startsOn|date('Y-m-d') > _today ? 'Pausa programada' : 'En pausa' }}</span>
+                    <h2 class="csa-modal__title" id="resume-dialog-title">Reactivar a este socix</h2>
+                </div>
+            </header>
+            <div class="csa-modal__body">
+                <p>
+                    Pausa {{ _next.startsOn|date('Y-m-d') > _today ? 'programada ' : '' }}desde el {{ _next.startsOn|date('d/m/Y') }}{% if _next.resumesOn %}, vuelve el {{ _next.resumesOn|date('d/m/Y') }}{% else %}, sin fecha de vuelta{% endif %}.
+                    Vuelve a recibir cesta desde el día que indiques. Si es antes de que empiece la pausa, la pausa se anula.
+                </p>
+                <div class="xtb-row">
+                    <label class="xtb-note">Vuelve desde
+                        <input type="date" name="resume_on" value="{{ _today }}" min="{{ _today }}" required>
+                    </label>
+                </div>
+            </div>
+            <footer class="csa-modal__footer">
+                <button type="button" class="csa-modal__btn csa-modal__btn--ghost" onclick="this.closest('dialog').close()">Cancelar</button>
+                <button type="submit" class="csa-modal__btn csa-modal__btn--primary">Reactivar</button>
+            </footer>
+        </form>
+    </dialog>
+{% endif %}

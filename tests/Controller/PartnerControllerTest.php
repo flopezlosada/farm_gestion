@@ -10,6 +10,7 @@ use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
 use App\Entity\PartnerEvent;
+use App\Entity\PartnerPause;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
 use App\Service\Delivery\DeliveryShiftApplier;
@@ -820,5 +821,50 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
         self::assertNotEmpty($values, 'El select no ofrece ninguna opción.');
 
         return $values[0];
+    }
+    /**
+     * La pausa con fechas desde la ficha: el diálogo lleva su token, una pausa
+     * programada deja la ficha activa y la anuncia, y una segunda que se cruce se
+     * rechaza sin crear nada.
+     */
+    public function testPausarConFechasDesdeLaFicha(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $partner = (new Partner())->setname('Pausa Ficha');
+        $em->persist($partner);
+        $em->flush();
+        $id = $partner->getId();
+        $from = (new \DateTimeImmutable('today'))->modify('+30 days');
+
+        $show = $client->request('GET', sprintf('/gestion/partner/%d', $id));
+        $token = $show->filter('#pause-dialog input[name="_csrf_token"]')->attr('value');
+        $this->assertNotEmpty($token, 'La ficha de unx socix activx ofrece el diálogo de pausa.');
+
+        $client->request('POST', sprintf('/gestion/partner/%d/pause', $id), [
+            '_csrf_token' => $token,
+            'pause_from' => $from->format('Y-m-d'),
+            'pause_until' => $from->modify('+14 days')->format('Y-m-d'),
+        ]);
+        $this->assertResponseRedirects(sprintf('/gestion/partner/%d', $id));
+
+        $em->clear();
+        $this->assertSame(Partner::STATUS_ACTIVO, $em->find(Partner::class, $id)->getStatus(), 'Programada a futuro: la ficha sigue activa.');
+        $this->assertCount(1, $em->getRepository(PartnerPause::class)->findBy(['partner' => $id]));
+
+        $client->request('GET', sprintf('/gestion/partner/%d', $id));
+        $this->assertStringContainsString('Pausa desde el ' . $from->format('d/m/Y'), $client->getResponse()->getContent(), 'La ficha anuncia la pausa programada.');
+
+        $client->request('POST', sprintf('/gestion/partner/%d/pause', $id), [
+            '_csrf_token' => $token,
+            'pause_from' => $from->modify('+7 days')->format('Y-m-d'),
+        ]);
+        $em->clear();
+        $this->assertCount(1, $em->getRepository(PartnerPause::class)->findBy(['partner' => $id]), 'Una pausa que se cruza no se crea.');
+
+        $client->request('POST', sprintf('/gestion/partner/%d/pause', $id), ['_csrf_token' => $token, 'pause_from' => '2026-02-30']);
+        $em->clear();
+        $this->assertCount(1, $em->getRepository(PartnerPause::class)->findBy(['partner' => $id]), 'Una fecha imposible no pausa.');
     }
 }
