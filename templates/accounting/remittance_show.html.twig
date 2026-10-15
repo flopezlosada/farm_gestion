@@ -9,7 +9,8 @@
  # En las dos, lo que cambia respecto a la remesa anterior del mismo tipo.
  #
  # El controller pasa: remittance, previous, problems, warnings (por id de
- # recibo), withoutLine, changes.
+ # recibo), withoutLine, changes, toPartners (en una enviada: qué falta
+ # o no coincide en las fichas).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -47,6 +48,9 @@
         .rem-box { margin-bottom: var(--csa-sp-5, 20px); }
         .rem-box ul { margin: 4px 0 0; padding-left: 18px; }
         .rem-inline-form { display: inline; }
+        .rem-box details summary { cursor: pointer; font-size: 13px; margin: 8px 0; }
+        .rem-diff { font-size: 12.5px; line-height: 1.5; columns: 2 420px; column-gap: 32px; }
+        .rem-diff li { break-inside: avoid; }
     </style>
 {% endblock %}
 
@@ -107,6 +111,44 @@
                 <div class="csa-alert__body">Los recibos están completos. Revisa los avisos, descarga el Excel, súbelo a Fiare y vuelve a marcarla como enviada.</div>
             </div>
         {% endif %}
+    {% endif %}
+
+    {% if toPartners %}
+        {% set fillable = toPartners.mandates|length + toPartners.ibans|length %}
+        <h2 class="acc-subhead">Con las fichas</h2>
+        <p class="acc-muted">La cuenta y el mandato con que se cobró a cada socix. Para cobrar desde aquí, cada ficha tiene que tenerlos.</p>
+        <div class="rem-box">
+            {% if fillable > 0 %}
+                <div class="csa-alert csa-alert--info" role="status">
+                    <i class="csa-alert__icon fa fa-id-card-o" aria-hidden="true"></i>
+                    <div class="csa-alert__body">
+                        {{ toPartners.mandates|length }} {{ toPartners.mandates|length == 1 ? 'ficha no tiene' : 'fichas no tienen' }} mandato
+                        y {{ toPartners.ibans|length }} {{ toPartners.ibans|length == 1 ? 'no tiene' : 'no tienen' }} cuenta: se pueden rellenar con los de esta remesa.
+                        {% if can_edit and is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
+                            <form method="post" action="{{ path('accounting_remittance_to_partners', { id: remittance.id }) }}" style="margin-top: 10px;"
+                                  onsubmit="return confirm('Se copiarán a las fichas que no los tengan. Lo que ya tienen no se toca.');">
+                                <input type="hidden" name="_token" value="{{ csrf_token('remittance-to-partners-' ~ remittance.id) }}">
+                                <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-arrow-right"></i> Pasarlos a las fichas</button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
+            {% elseif toPartners.differences is empty %}
+                <div class="csa-alert csa-alert--success" role="status">
+                    <i class="csa-alert__icon fa fa-check" aria-hidden="true"></i>
+                    <div class="csa-alert__body">Todas las fichas enlazadas tienen la cuenta y el mandato de esta remesa.</div>
+                </div>
+            {% endif %}
+            {% if toPartners.unlinked > 0 %}
+                <p class="acc-muted">{{ toPartners.unlinked }} {{ toPartners.unlinked == 1 ? 'recibo no está enlazado' : 'recibos no están enlazados' }} a ningún socix: sus datos no van a ninguna ficha.</p>
+            {% endif %}
+            {% if toPartners.differences is not empty %}
+                <details{{ fillable == 0 ? ' open' }}>
+                    <summary><b>{{ toPartners.differences|length }}</b> {{ toPartners.differences|length == 1 ? 'cosa no coincide' : 'cosas no coinciden' }} con lo que ya tienen las fichas (no se cambian solas)</summary>
+                    <ul class="rem-diff">{% for d in toPartners.differences %}<li>{{ d }}</li>{% endfor %}</ul>
+                </details>
+            {% endif %}
+        </div>
     {% endif %}
 
     {% if withoutLine is not empty %}

@@ -690,4 +690,18 @@ class PartnerRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * Las fichas que ya tienen mandato de domiciliación: para no dar a nadie una
+     * referencia que es de otrx.
+     *
+     * @return list<Partner>
+     */
+    public function findWithMandate(): array
+    {
+        return $this->createQueryBuilder('p')
+            ->andWhere('p.mandateReference IS NOT NULL')
+            ->getQuery()
+            ->getResult();
+    }
 }
