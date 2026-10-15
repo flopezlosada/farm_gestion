@@ -8,6 +8,7 @@ use App\Entity\FinancialAccount;
 use App\Repository\BudgetCategoryRepository;
 use App\Repository\FinancialAccountRepository;
 use App\Service\Accounting\LedgerCategoryMap;
+use App\Service\Accounting\TransferPairer;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -30,6 +31,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * que TODAS las etiquetas de partida se reconocen y que todas las cuentas existen:
  * si algo falla, lo lista y no escribe, porque media importación es peor que
  * ninguna.
+ *
+ * En el Excel un traspaso son dos filas sueltas; aquí se casan las dos mitades
+ * ({@see TransferPairer}) y se listan las que no casan, que quedan como traspasos
+ * sin pareja para revisarlos a mano.
  */
 #[AsCommand(
     name: 'app:import-accounting',
@@ -42,6 +47,7 @@ class ImportAccountingCommand extends Command
         private readonly LedgerCategoryMap $categoryMap,
         private readonly FinancialAccountRepository $accounts,
         private readonly BudgetCategoryRepository $categories,
+        private readonly TransferPairer $transferPairer,
     ) {
         parent::__construct();
     }
@@ -88,6 +94,7 @@ class ImportAccountingCommand extends Command
         }
 
         $this->summarize($io, $prepared);
+        $this->reportUnpaired($io, $this->transferPairer->pair($prepared));
 
         if (!$force) {
             $io->warning('Simulación. Repite con --force para escribir.');
@@ -267,6 +274,33 @@ class ImportAccountingCommand extends Command
     private function truncate(string $value, int $max): string
     {
         return mb_substr($value, 0, $max);
+    }
+
+    /**
+     * Lista las mitades de traspaso que no han encontrado pareja. No impide importar:
+     * en el libro hay traspasos cuyas dos mitades no cuadran, y eso hay que verlo,
+     * no esconderlo.
+     *
+     * @param AccountEntry[] $unpaired
+     */
+    private function reportUnpaired(SymfonyStyle $io, array $unpaired): void
+    {
+        if ($unpaired === []) {
+            $io->text('Todos los traspasos tienen su pareja.');
+
+            return;
+        }
+
+        $io->warning(sprintf('%d mitades de traspaso sin pareja: se importan sueltas.', \count($unpaired)));
+        $io->table(['Fecha', 'Cuenta', 'Importe €', 'Concepto'], array_map(
+            static fn (AccountEntry $e): array => [
+                $e->getDate()?->format('d/m/Y'),
+                $e->getAccount()?->getName(),
+                $e->getAmount(),
+                $e->getConcept(),
+            ],
+            $unpaired
+        ));
     }
 
     /**
