@@ -209,4 +209,47 @@ class PartnerPauserTest extends KernelTestCase
         $this->expectException(\DomainException::class);
         $this->pauser()->pause($partner, self::day('2094-01-01'), self::day('2094-01-10'), 'gestor:1', self::day('2094-01-10'));
     }
+
+    /**
+     * Alargar una pausa (reactivar más tarde de lo previsto) quita también las entregas
+     * congeladas del tramo añadido: si sólo se rehiciera desde la vuelta nueva, esas
+     * semanas seguirían en el listado con la ficha en pausa.
+     */
+    public function testAlargarUnaPausaQuitaLasEntregasDelTramoAnadido(): void
+    {
+        self::bootKernel();
+        $partner = $this->weeklyPartner('Pausa Alargada');
+        $added = $this->basket('2093-04-17');
+        $this->generator()->generateForBasket($added);
+        $today = self::day('2093-04-01');
+        $this->pauser()->pause($partner, self::day('2093-04-05'), self::day('2093-04-12'), 'gestor:1', $today);
+        $this->assertNotNull($this->stone($partner, $added), 'El 17 queda fuera de la pausa del 5 al 12.');
+
+        $this->pauser()->resume($partner, self::day('2093-04-20'), $today);
+
+        $this->assertNull($this->stone($partner, $added), 'Ahora vuelve el 20: la entrega del 17 sobra.');
+    }
+
+    /**
+     * Dar de baja a quien está en pausa cierra la pausa: al volver al alta recibe cesta
+     * (y paga) sin que la tarea diaria le vuelva a pausar.
+     */
+    public function testLaBajaCierraLaPausa(): void
+    {
+        self::bootKernel();
+        $partner = $this->weeklyPartner('Pausa y Baja');
+        $this->pauser()->pause($partner, new \DateTimeImmutable('yesterday'), null, 'gestor:1');
+        $this->assertSame(Partner::STATUS_PAUSADO, $partner->getStatus());
+
+        $workflow = static::getContainer()->get('state_machine.partner_lifecycle');
+        $workflow->apply($partner, 'leave');
+        $this->em()->flush();
+        $workflow->apply($partner, 'rejoin');
+        $this->em()->flush();
+
+        $pause = $this->em()->getRepository(PartnerPause::class)->findOneBy(['partner' => $partner]);
+        $this->assertSame((new \DateTimeImmutable('today'))->format('Y-m-d'), $pause?->getResumesOn()?->format('Y-m-d'), 'Termina el día de la baja.');
+        $this->assertFalse($this->pauser()->syncStatus($partner, new \DateTimeImmutable('today')), 'Ya de vuelta, nada que volver a pausar.');
+        $this->assertSame(Partner::STATUS_ACTIVO, $partner->getStatus());
+    }
 }

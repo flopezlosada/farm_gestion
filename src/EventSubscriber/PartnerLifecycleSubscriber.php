@@ -5,6 +5,7 @@ namespace App\EventSubscriber;
 use App\Entity\Partner;
 use App\Entity\PartnerEvent;
 use App\Entity\WeeklyBasket;
+use App\Service\Partner\PartnerPauser;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -16,7 +17,8 @@ use Symfony\Component\Workflow\Event\EnteredEvent;
  *   - Crea un PartnerEvent del tipo correspondiente (PAUSE, RESUME, LEAVE,
  *     RESUME-tras-baja como JOIN) con el actor que la disparó.
  *   - Cuando la transición es 'leave', borra los WeeklyBasket futuros del
- *     socio para que no aparezca en los listados de reparto venideros.
+ *     socio para que no aparezca en los listados de reparto venideros, y
+ *     cierra sus pausas ({@see PartnerPauser::closeForLeave}).
  *
  * El evento se fecha con `occurred_at` del contexto de la transición si viene
  * ({@see self::CONTEXT_OCCURRED_AT}): una pausa con fecha se registra el día en
@@ -42,6 +44,7 @@ class PartnerLifecycleSubscriber implements EventSubscriberInterface
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly Security $security,
+        private readonly PartnerPauser $pauser,
     ) {
     }
 
@@ -81,6 +84,7 @@ class PartnerLifecycleSubscriber implements EventSubscriberInterface
 
         if ($name === 'leave') {
             $this->dropFutureWeeklyBaskets($partner);
+            $this->pauser->closeForLeave($partner, $partnerEvent->getOccurredAt());
         }
     }
 

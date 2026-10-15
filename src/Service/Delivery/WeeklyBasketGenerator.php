@@ -1612,17 +1612,24 @@ class WeeklyBasketGenerator
      * actual del socio.
      *
      * @param Partner            $partner
-     * @param \DateTimeInterface $from Fecha (inclusive) desde la que reconciliar.
+     * @param \DateTimeInterface      $from  Fecha (inclusive) desde la que reconciliar.
+     * @param \DateTimeInterface|null $until Fecha (exclusive) hasta la que reconciliar; null = sin límite.
+     *        Una pausa sólo cambia su periodo: acotar evita rehacer (y perder las ediciones
+     *        a mano de) las semanas posteriores.
      * @return array<int,bool> basketId => si el socio quedó CON entrega esa semana (true) o no (false).
      */
-    public function reconcilePartnerFrom(Partner $partner, \DateTimeInterface $from): array
+    public function reconcilePartnerFrom(Partner $partner, \DateTimeInterface $from, ?\DateTimeInterface $until = null): array
     {
-        $baskets = $this->em->createQuery(
+        $query = $this->em->createQuery(
             'SELECT DISTINCT b FROM ' . Basket::class . ' b
              JOIN ' . WeeklyBasket::class . ' wb WITH wb.basket = b
-             WHERE b.date >= :from
+             WHERE b.date >= :from' . ($until !== null ? ' AND b.date < :until' : '') . '
              ORDER BY b.date ASC'
-        )->setParameter('from', $from->format('Y-m-d'))->getResult();
+        )->setParameter('from', $from->format('Y-m-d'));
+        if ($until !== null) {
+            $query->setParameter('until', $until->format('Y-m-d'));
+        }
+        $baskets = $query->getResult();
 
         $result = [];
         foreach ($baskets as $basket) {

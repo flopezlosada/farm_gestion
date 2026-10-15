@@ -71,7 +71,7 @@ class PartnerPauser
         }
 
         $this->em->persist($pause);
-        $this->apply($partner, max($today, $pause->getStartsOn()), $today);
+        $this->apply($partner, max($today, $pause->getStartsOn()), $today, $pause->getResumesOn());
 
         return $pause;
     }
@@ -103,7 +103,7 @@ class PartnerPauser
             if ($partner->getStatus() !== Partner::STATUS_PAUSADO) {
                 throw new \DomainException('No tiene ninguna pausa en curso ni programada.');
             }
-            $this->apply($partner, $today, $today);
+            $this->apply($partner, $today, $today, null);
 
             return false;
         }
@@ -112,16 +112,21 @@ class PartnerPauser
             throw new \DomainException(sprintf('Esa vuelta se cruzaría con la siguiente pausa (%s).', self::describe($next)));
         }
 
-        // Lo que hay que rehacer empieza donde cambia algo: la vuelta nueva o el
-        // inicio de la pausa anulada, y nunca antes de hoy (lo pasado no se toca).
+        // Lo que hay que rehacer es el tramo que cambia, entre la vuelta vieja y la
+        // nueva (en los dos sentidos: recortar devuelve entregas, alargar las quita),
+        // o la pausa entera si se anula; y nunca antes de hoy (lo pasado no se toca).
         $cancelled = $on <= $pause->getStartsOn();
-        $from = $cancelled ? $pause->getStartsOn() : $on;
+        $oldResume = $pause->getResumesOn();
         if ($cancelled) {
+            [$from, $until] = [$pause->getStartsOn(), $oldResume];
             $this->em->remove($pause);
         } else {
+            [$from, $until] = $oldResume === null
+                ? [$on, null]
+                : [min($on, $oldResume), max($on, $oldResume)];
             $pause->setResumesOn($on);
         }
-        $this->apply($partner, max($today, $from), $today);
+        $this->apply($partner, max($today, $from), $today, $until);
 
         return $cancelled;
     }
@@ -169,14 +174,36 @@ class PartnerPauser
     }
 
     /**
-     * Graba, olvida lo que el calendario tenía en memoria, rehace las semanas
-     * congeladas desde $from y deja el estado como toca hoy.
+     * Cierra las pausas de quien causa baja: la en curso termina ese día y las
+     * programadas se borran. Si no, al volver al alta seguiría "en pausa" para el
+     * reparto y las cuotas, y la tarea diaria le volvería a pausar. Lo llama el
+     * subscriber del ciclo de vida al entrar en BAJA; no hace flush.
+     *
+     * @param Partner            $partner Socix que causa baja.
+     * @param \DateTimeInterface $day     Día de la baja.
      */
-    private function apply(Partner $partner, \DateTimeImmutable $from, \DateTimeImmutable $today): void
+    public function closeForLeave(Partner $partner, \DateTimeInterface $day): void
+    {
+        $day = PartnerPause::day($day);
+        foreach ($this->pauses->findNotEndedBefore($partner, $day) as $pause) {
+            if ($pause->getStartsOn() >= $day) {
+                $this->em->remove($pause);
+            } else {
+                $pause->setResumesOn($day);
+            }
+        }
+        $this->calendar->reset();
+    }
+
+    /**
+     * Graba, olvida lo que el calendario tenía en memoria, rehace las semanas
+     * congeladas de [$from, $until) y deja el estado como toca hoy.
+     */
+    private function apply(Partner $partner, \DateTimeImmutable $from, \DateTimeImmutable $today, ?\DateTimeImmutable $until): void
     {
         $this->em->flush();
         $this->calendar->reset();
-        $this->generator->reconcilePartnerFrom($partner, $from);
+        $this->generator->reconcilePartnerFrom($partner, $from, $until);
         $this->syncStatus($partner, $today);
         $this->em->flush();
     }
