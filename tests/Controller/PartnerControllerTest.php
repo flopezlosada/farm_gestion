@@ -401,8 +401,11 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
         $this->assertStringContainsString('Nombre de reparto: — → Familia del Huerto', $detail);
         $this->assertStringContainsString('DNI: cambiado', $detail);
 
-        // Limpieza (los eventos caen en cascada con el socio).
+        // Limpieza (los eventos caen en cascada con el socio). Se vacía el EM
+        // antes: guarda los PartnerEvent que cargó la ficha y, borrado el socio,
+        // el siguiente flush los encontraría apuntando a una entidad desconocida.
         $em = static::getContainer()->get('doctrine')->getManager();
+        $em->clear();
         $em->remove($em->find(Partner::class, $partnerId));
         $em->flush();
         $em->remove($em->find(WeeklyBasketGroup::class, $groupId));
