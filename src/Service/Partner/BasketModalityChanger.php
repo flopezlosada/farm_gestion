@@ -168,22 +168,11 @@ class BasketModalityChanger
             return null;
         }
 
-        $mateNew = new PartnerBasketShare();
-        $mateNew->setPartner($mate);
-        // De la pareja:
+        // De su casa, todo lo que ya tenía; de la pareja, lo que la define.
+        $mateNew = $mateOld->successor();
         $mateNew->setBasketShare($new->getBasketShare());
         $mateNew->setDayMonthOrder($new->getDayMonthOrder());
         $mateNew->setDeliveryGroup($new->getDeliveryGroup());
-        // De su casa:
-        $mateNew->setEggAmount($mateOld->getEggAmount());
-        $mateNew->setEggPeriod($mateOld->getEggPeriod());
-        $mateNew->setEggDayMonthOrder($mateOld->getEggDayMonthOrder());
-        $mateNew->setMonthPrice($mateOld->getMonthPrice());
-        $mateNew->setEggMonthPrice($mateOld->getEggMonthPrice());
-        $mateNew->setAmount($mateOld->getAmount());
-        $mateNew->setVegetablesBasketAmount($mateOld->getVegetablesBasketAmount());
-        $mateNew->setTransportPrice($mateOld->getTransportPrice());
-        $mateNew->setPayerPartner($mateOld->getPayerPartner());
 
         // Sin volver a cascadear: si no, los dos hogares se arrastrarían el uno al otro.
         $this->applyChange($mateNew, $effective, $actor, cascadeToMate: false);

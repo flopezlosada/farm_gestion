@@ -172,6 +172,8 @@ class BasketModalityChangerTest extends TestCase
         $mateOld->setDeliveryGroup('B');
         $mateOld->setMonthPrice('42.00');
         $mateOld->setEggMonthPrice('7.00');
+        $mateOld->setTransportPrice('5.00');
+        $mateOld->setPayerPartner($one);
 
         $new = $this->share($one, BasketShare::ID_MONTHLY_SHARED);
         $new->setDayMonthOrder(3);
@@ -196,6 +198,8 @@ class BasketModalityChangerTest extends TestCase
         // ...y lo de su casa se queda en su casa: compartir cesta no es compartir cuota.
         $this->assertSame('42.00', $outcome->mate->getMonthPrice());
         $this->assertSame('7.00', $outcome->mate->getEggMonthPrice());
+        $this->assertSame('5.00', $outcome->mate->getTransportPrice());
+        $this->assertSame($one, $outcome->mate->getPayerPartner(), 'Quien paga la cesta del otro hogar sigue pagándola.');
 
         // Su histórico también se parte: la suya vieja se cierra en la víspera.
         $this->assertSame('2026-09-30', $mateOld->getEndDate()->format('Y-m-d'));

@@ -170,16 +170,8 @@ class PartnerBasketShareController extends AbstractController
         BasketPricing $basketPricing,
         SharedBasketChangeNotifier $notifier,
     ): Response {
-        $new = new PartnerBasketShare();
-        $new->setPartner($partnerBasketShare->getPartner());
-        $new->setBasketShare($partnerBasketShare->getBasketShare());
-        $new->setAmount($partnerBasketShare->getAmount());
-        $new->setEggAmount($partnerBasketShare->getEggAmount());
-        $new->setEggPeriod($partnerBasketShare->getEggPeriod());
-        $new->setDeliveryGroup($partnerBasketShare->getDeliveryGroup());
-        $new->setDayMonthOrder($partnerBasketShare->getDayMonthOrder());
-        $new->setEggDayMonthOrder($partnerBasketShare->getEggDayMonthOrder());
         // start_date queda vacío: admin introduce la fecha EFECTIVA del cambio.
+        $new = $partnerBasketShare->successor();
 
         // Turno de viernes traducido a fechas físicas reales del nodo del socio
         // (ver CohortChoiceBuilder). El turno A/B sólo aplica a quincenales en

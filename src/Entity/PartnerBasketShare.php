@@ -258,6 +258,35 @@ class PartnerBasketShare
     }
 
     /**
+     * La cesta que continúa a esta cuando cambia: el mismo socix con todo lo que la
+     * define y se cobra —modalidad, cantidad, huevos, turno, transporte y quién la
+     * paga—, sin fechas. Quien cambia algo lo sobrescribe después; lo que no toca
+     * sigue igual. Copiarlo campo a campo en cada sitio perdía lo que se olvidaba:
+     * cambiar la modalidad dejaba la cesta sin transporte y sin su pagador.
+     *
+     * @return self La cesta nueva, sin persistir.
+     */
+    public function successor(): self
+    {
+        $next = new self();
+        $next->partner = $this->partner;
+        $next->basket_share = $this->basket_share;
+        $next->amount = $this->amount;
+        $next->vegetables_basket_amount = $this->vegetables_basket_amount;
+        $next->egg_amount = $this->egg_amount;
+        $next->egg_period = $this->egg_period;
+        $next->delivery_group = $this->delivery_group;
+        $next->day_month_order = $this->day_month_order;
+        $next->egg_day_month_order = $this->egg_day_month_order;
+        $next->month_price = $this->month_price;
+        $next->egg_month_price = $this->egg_month_price;
+        $next->transport_price = $this->transport_price;
+        $next->payer_partner = $this->payer_partner;
+
+        return $next;
+    }
+
+    /**
      * @return \DateTime
      */
     public function getCreated(): ?\DateTime
