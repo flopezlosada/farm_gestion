@@ -501,6 +501,8 @@
                                    route starts with 'accounting_invoice') }}
                                 {{ _self.nav_link('Facturas emitidas', path('accounting_issued_invoices'), 'fa-file-text',
                                    route starts with 'accounting_issued_invoice') }}
+                                {{ _self.nav_link('Remesas', path('accounting_remittances'), 'fa-exchange',
+                                   route starts with 'accounting_remittance') }}
                                 {{ _self.nav_link('Para la gestoría', path('accounting_accountant_export'), 'fa-briefcase',
                                    route starts with 'accounting_accountant') }}
                                 {{ _self.nav_link('Libro', path('accounting_ledger'), 'fa-list',
