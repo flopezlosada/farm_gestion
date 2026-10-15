@@ -2,6 +2,8 @@
 
 namespace App\Controller;
 
+use App\Entity\Remittance;
+use App\Repository\RemittanceRepository;
 use App\Service\Partner\Fee\FeeStatement;
 use App\Service\Partner\Fee\MonthlyFeeCalculator;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -25,7 +27,7 @@ class MonthlyFeeController extends AbstractController
     private const FILTERS = ['all', 'problems'];
 
     #[Route('', name: 'monthly_fee_index', methods: ['GET'])]
-    public function index(Request $request, MonthlyFeeCalculator $calculator): Response
+    public function index(Request $request, MonthlyFeeCalculator $calculator, RemittanceRepository $remittances): Response
     {
         $month = \DateTimeImmutable::createFromFormat('!Y-m', (string) $request->query->get('month')) ?: new \DateTimeImmutable('first day of this month');
         $filter = \in_array($request->query->get('show'), self::FILTERS, true) ? $request->query->get('show') : 'all';
@@ -38,6 +40,8 @@ class MonthlyFeeController extends AbstractController
             'statements' => $filter === 'problems' ? $problems : $statements,
             'counts' => ['all' => \count($statements), 'problems' => \count($problems)],
             'filter' => $filter,
+            // La remesa de cuotas de este mes, si ya se preparó: para ir a ella en vez de prepararla otra vez.
+            'remittance' => $remittances->findOneBy(['kind' => Remittance::KIND_BASKET, 'period' => $fees->month]),
         ]);
     }
 }

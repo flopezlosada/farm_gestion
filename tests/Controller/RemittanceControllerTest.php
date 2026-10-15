@@ -9,6 +9,7 @@ use App\Service\Accounting\Remittance\RemittanceSheet;
 use Doctrine\ORM\EntityManagerInterface;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
@@ -61,12 +62,25 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
 
     private function remittance(string $period): ?Remittance
     {
-        return $this->em()->getRepository(Remittance::class)->findOneBy(['kind' => Remittance::KIND_BASKET, 'period' => new \DateTimeImmutable($period . '-01')]);
+        return $this->em()->getRepository(Remittance::class)->findOneBy(['kind' => Remittance::KIND_MEMBERSHIP, 'period' => new \DateTimeImmutable($period . '-01')]);
+    }
+
+    /** Importa el Excel de agosto como remesa de cuota de socix enviada. */
+    private function importAugust(KernelBrowser $client): void
+    {
+        $crawler = $client->request('GET', '/gestion/accounting/remittances/import');
+        $form = $crawler->filter('form[name="remittance_import"]')->form();
+        $form['remittance_import[kind]'] = Remittance::KIND_MEMBERSHIP;
+        $upload = ['remittance_import' => ['file' => new UploadedFile($this->augustExcel(), '08. Recibos AGOSTO 2096.xlsx', null, null, true)]];
+        $client->request('POST', '/gestion/accounting/remittances/import', $form->getPhpValues(), $upload);
     }
 
     /** El Excel de agosto como se hace a mano: tres recibos, uno con la cuenta mal. */
     private function augustExcel(): string
     {
+        if ($this->file !== null) {
+            return $this->file;
+        }
         $book = new Spreadsheet();
         $book->getActiveSheet()->fromArray([
             RemittanceSheet::COLUMNS,
@@ -111,11 +125,7 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
         $this->enableModule();
 
         // 1. Importar agosto: el mes y el nombre salen del nombre del fichero.
-        $crawler = $client->request('GET', '/gestion/accounting/remittances/import');
-        $form = $crawler->filter('form[name="remittance_import"]')->form();
-        $form['remittance_import[kind]'] = Remittance::KIND_BASKET;
-        $upload = ['remittance_import' => ['file' => new UploadedFile($this->augustExcel(), '08. Recibos AGOSTO 2096.xlsx', null, null, true)]];
-        $client->request('POST', '/gestion/accounting/remittances/import', $form->getPhpValues(), $upload);
+        $this->importAugust($client);
         $this->assertResponseRedirects();
         $august = $this->remittance('2096-08');
         $this->assertNotNull($august, 'El mes sale del nombre del fichero.');
@@ -124,9 +134,7 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
         $this->assertSame('138.50', $august->getTotal());
 
         // Importar otra vez el mismo mes no duplica.
-        $client->request('POST', '/gestion/accounting/remittances/import', $form->getPhpValues(), [
-            'remittance_import' => ['file' => new UploadedFile($this->file, '08. Recibos AGOSTO 2096.xlsx', null, null, true)],
-        ]);
+        $this->importAugust($client);
         $this->assertResponseIsSuccessful();
         $this->assertSelectorTextContains('body', 'Ya hay una remesa');
 
@@ -180,6 +188,7 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
     {
         $client = $this->createAuthenticatedClient();
         $this->enableModule();
+        $this->importAugust($client);
         $crawler = $client->request('GET', '/gestion/accounting/remittances');
         $prepare = $crawler->filter('form[action="/gestion/accounting/remittances/prepare"]')->first()->form();
 
@@ -194,5 +203,31 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
         $this->assertMatchesRegularExpression('/^\S.* \d+$/', $mandate);
         $this->assertSame('FRST', $crawler->filter('#remittance_line_sequenceType option[selected]')->attr('value'));
         $this->assertStringEndsWith(' 209610', (string) $crawler->filter('#remittance_line_debitReference')->attr('value'));
+    }
+
+    /**
+     * La de cuotas de cesta no se copia de la anterior: la lista sólo ofrece
+     * prepararla desde las cuotas, y la acción de copiar la rechaza aunque se
+     * le mande a mano.
+     */
+    public function testLaDeCuotasDeCestaNoSeCopiaDeLaAnterior(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->importAugust($client);
+
+        $crawler = $client->request('GET', '/gestion/accounting/remittances');
+        $this->assertCount(1, $crawler->filter('form[action="/gestion/accounting/remittances/from-fees"]'));
+        $this->assertCount(0, $crawler->filter('form[action="/gestion/accounting/remittances/prepare"] input[name="kind"][value="basket"]'));
+
+        $prepare = $crawler->filter('form[action="/gestion/accounting/remittances/prepare"]')->first()->form();
+        $prepare['kind']->setValue(Remittance::KIND_BASKET);
+        $prepare['period'] = '2096-09';
+        $client->submit($prepare);
+        $this->assertResponseRedirects('/gestion/accounting/remittances');
+        $this->assertNull(
+            $this->em()->getRepository(Remittance::class)->findOneBy(['kind' => Remittance::KIND_BASKET, 'period' => new \DateTimeImmutable('2096-09-01')]),
+            'No nace una remesa de cesta copiada.'
+        );
     }
 }
