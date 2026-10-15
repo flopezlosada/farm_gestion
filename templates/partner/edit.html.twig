@@ -83,6 +83,8 @@
                 {% endblock %}
             {% endembed %}
 
+            {% include 'partner/_billing_section.html.twig' with { num: '5' } %}
+
             <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
                 <div>
                     {# Eliminar SOLO en fichas pendientes de confirmar (importadas del

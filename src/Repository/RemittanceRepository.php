@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Entity\Partner;
 use App\Entity\Remittance;
 use App\Entity\RemittanceLine;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -84,20 +85,26 @@ class RemittanceRepository extends ServiceEntityRepository
         return $this->count(['kind' => $kind, 'period' => Remittance::firstOfMonth($period)]) > 0;
     }
 
+    /** Prefijo de los mandatos nuevos cuando no hay otro del que partir. */
+    public const DEFAULT_MANDATE_PREFIX = 'CUOTA MENSUAL';
+
     /**
      * El número siguiente para un mandato nuevo con ese prefijo («CUOTA MENSUAL 214»):
-     * uno más que el mayor usado en cualquier remesa. Nunca rellena huecos, porque el
-     * banco prohíbe reutilizar la referencia de un mandato, aunque sea de una baja.
+     * uno más que el mayor usado en cualquier remesa o ficha de socix. Nunca rellena
+     * huecos, porque el banco prohíbe reutilizar la referencia de un mandato, aunque
+     * sea de una baja.
      */
-    public function nextMandateReference(string $prefix): string
+    public function nextMandateReference(string $prefix = self::DEFAULT_MANDATE_PREFIX): string
     {
         $prefix = rtrim($prefix) . ' ';
-        $references = $this->getEntityManager()->createQueryBuilder()
-            ->select('DISTINCT l.mandateReference')
-            ->from(RemittanceLine::class, 'l')
-            ->andWhere('l.mandateReference LIKE :prefix')->setParameter('prefix', addcslashes($prefix, '%_') . '%')
+        $like = addcslashes($prefix, '%_') . '%';
+        $used = fn (string $entity, string $field): array => $this->getEntityManager()->createQueryBuilder()
+            ->select(sprintf('DISTINCT e.%s', $field))
+            ->from($entity, 'e')
+            ->andWhere(sprintf('e.%s LIKE :prefix', $field))->setParameter('prefix', $like)
             ->getQuery()
             ->getSingleColumnResult();
+        $references = [...$used(RemittanceLine::class, 'mandateReference'), ...$used(Partner::class, 'mandateReference')];
 
         $numbers = array_map(
             static fn (string $ref): int => (int) substr($ref, \strlen($prefix)),

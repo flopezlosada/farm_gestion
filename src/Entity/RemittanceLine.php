@@ -166,16 +166,25 @@ class RemittanceLine
         return !\in_array($this->sequenceType, [self::SEQUENCE_FINAL, self::SEQUENCE_ONE_OFF], true);
     }
 
-    /** «ES12 …… 3456»: para listados, donde la cuenta entera no hace falta. */
+    /** «ES12 … 3456»: para listados, donde la cuenta entera no hace falta. */
     public function getMaskedIban(): string
     {
-        return \strlen($this->iban) < 8 ? $this->iban : substr($this->iban, 0, 4) . ' … ' . substr($this->iban, -4);
+        return self::maskIban($this->iban);
     }
 
-    /** Un IBAN tal como se guarda: mayúsculas y sin espacios. */
+    /** Cualquier cuenta como «ES12 … 3456». */
+    public static function maskIban(string $iban): string
+    {
+        return \strlen($iban) < 8 ? $iban : substr($iban, 0, 4) . ' … ' . substr($iban, -4);
+    }
+
+    /**
+     * Un IBAN tal como se guarda: mayúsculas, sólo letras y cifras. Un IBAN no lleva
+     * signos, y los Excel hechos a mano traen espacios, guiones o un punto al final.
+     */
     public static function normalizeIban(?string $iban): string
     {
-        return strtoupper((string) preg_replace('/\s+/', '', (string) $iban));
+        return (string) preg_replace('/[^A-Z0-9]/', '', strtoupper((string) $iban));
     }
 
     /** Un recibo de una remesa ya enviada es lo que se cobró: no se cambia. */
