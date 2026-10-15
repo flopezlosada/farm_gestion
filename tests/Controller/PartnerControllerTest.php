@@ -310,6 +310,12 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
         $reloaded = $em->getRepository(PartnerBasketShare::class)->find($shareId);
         $this->assertSame($payer->getId(), $reloaded->getPayerPartner()?->getId(), 'set_payer debe fijar el pagador externo.');
         $this->assertSame($receptor->getId(), $reloaded->getPartner()->getId(), 'El receptor de la cesta no debe cambiar.');
+        $payerEvents = $em->getRepository(PartnerEvent::class)
+            ->findBy(['partner' => $receptor->getId(), 'type' => PartnerEvent::TYPE_PROFILE_UPDATE]);
+        $this->assertNotEmpty($payerEvents, 'Cambiar quién paga la cesta debe quedar en el histórico de la ficha.');
+        $lastChange = end($payerEvents)->getPayload()['changes'][0];
+        $this->assertSame('payer_partner', $lastChange['field']);
+        $this->assertSame($payer->getNameForDelivery(), $lastChange['to']);
 
         // Quitar pagador (vuelve a pagarla ella misma). El token de clear_payer
         // se renderiza en la ficha cuando hay pagador externo asignado.
@@ -323,11 +329,96 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
         $reloaded = $em->getRepository(PartnerBasketShare::class)->find($shareId);
         $this->assertNull($reloaded->getPayerPartner(), 'clear_payer debe revertir a la propia socix.');
 
-        // db_test no hace rollback: restaura el pagador original si lo había.
+        // db_test no hace rollback: restaura el pagador original si lo había, y
+        // quita del histórico los cambios de pagador que ha dejado el test.
         if ($originalPayerId !== null) {
             $reloaded->setPayerPartner($em->getRepository(Partner::class)->find($originalPayerId));
             $em->flush();
         }
+        $this->removeProfileUpdates($em, $receptor->getId());
+    }
+
+    /**
+     * Guardar la ficha deja en el histórico qué campos cambiaron, de qué valor a
+     * cuál y quién lo hizo; guardarla sin tocar nada no deja rastro. El socio
+     * lleva los null que tienen las fichas reales (DNI, teléfono, cárnicos), y
+     * fecha de inscripción, que el formulario devuelve como objeto nuevo aunque
+     * no cambie. Del DNI sólo se apunta que cambió, sin el valor.
+     */
+    public function testEditRecordsProfileChangesInHistory(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $group = (new WeeklyBasketGroup())->setName('TEST Grupo historial ' . uniqid())->setColor('#cccccc');
+        $state = $em->getRepository(\App\Entity\State::class)->findOneBy([]);
+        $partner = (new Partner())
+            ->setName('TEST')
+            ->setSurname('Historial ' . uniqid())
+            ->setStatus(Partner::STATUS_ACTIVO)
+            ->setEmail('historial-' . uniqid() . '@example.org')
+            ->setState($state)
+            ->setCity($em->getRepository(\App\Entity\City::class)->findOneBy(['state' => $state]))
+            ->setSharePayment($em->getRepository(\App\Entity\SharePayment::class)->findOneBy([]));
+        $partner->setWeeklyBasketGroup($group);
+        $partner->setInscriptionDate(new \DateTime('2020-01-01'));
+        $em->persist($group);
+        $em->persist($partner);
+        $em->flush();
+        [$partnerId, $groupId] = [$partner->getId(), $group->getId()];
+
+        $profileUpdates = static fn () => static::getContainer()->get('doctrine')->getManager()
+            ->getRepository(PartnerEvent::class)
+            ->findBy(['partner' => $partnerId, 'type' => PartnerEvent::TYPE_PROFILE_UPDATE]);
+
+        // Guardar sin cambios: ningún evento.
+        $form = $client->request('GET', sprintf('/gestion/partner/%d/edit', $partnerId))->filter('form[name="partner"]')->form();
+        $client->submit($form);
+        $this->assertResponseRedirects();
+        $this->assertSame([], $profileUpdates(), 'Guardar la ficha sin tocar nada no es un cambio.');
+
+        // Cambiar el nombre de reparto y el DNI: un evento con los dos cambios.
+        $form = $client->request('GET', sprintf('/gestion/partner/%d/edit', $partnerId))->filter('form[name="partner"]')->form();
+        $form['partner[displayName]'] = 'Familia del Huerto';
+        $form['partner[DNI]'] = '00000000T';
+        $client->submit($form);
+        $this->assertResponseRedirects();
+
+        $events = $profileUpdates();
+        $this->assertCount(1, $events);
+        $changes = array_column($events[0]->getPayload()['changes'], null, 'field');
+        $this->assertSame(
+            ['field' => 'display_name', 'label' => 'Nombre de reparto', 'from' => null, 'to' => 'Familia del Huerto'],
+            $changes['display_name'],
+        );
+        $this->assertSame(['field' => 'DNI', 'label' => 'DNI'], $changes['DNI'], 'Del DNI no se guarda el valor.');
+        $this->assertCount(2, $changes);
+        $this->assertStringStartsWith('gestor:', $events[0]->getActor());
+
+        // La ficha lo enseña en el histórico.
+        $show = $client->request('GET', sprintf('/gestion/partner/%d', $partnerId));
+        $detail = $show->filter('[data-profile-changes]')->text();
+        $this->assertStringContainsString('Nombre de reparto: — → Familia del Huerto', $detail);
+        $this->assertStringContainsString('DNI: cambiado', $detail);
+
+        // Limpieza (los eventos caen en cascada con el socio).
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $em->remove($em->find(Partner::class, $partnerId));
+        $em->flush();
+        $em->remove($em->find(WeeklyBasketGroup::class, $groupId));
+        $em->flush();
+    }
+
+    /**
+     * Borra los PROFILE_UPDATE de un socio de fixtures: db_test no hace rollback
+     * y los tests que tocan su ficha no deben dejarle histórico.
+     */
+    private function removeProfileUpdates(EntityManagerInterface $em, int $partnerId): void
+    {
+        foreach ($em->getRepository(PartnerEvent::class)->findBy(['partner' => $partnerId, 'type' => PartnerEvent::TYPE_PROFILE_UPDATE]) as $event) {
+            $em->remove($event);
+        }
+        $em->flush();
     }
 
     /**

@@ -58,6 +58,13 @@ class PartnerEvent
      */
     public const TYPE_BASKET_EXTRA_REMOVED = 'BASKET_EXTRA_REMOVED';
 
+    /**
+     * Edición de la ficha: cambian datos de la persona (nombre, nombre de reparto,
+     * contacto, grupo de recogida…) o quién paga su cesta. El payload lleva la
+     * lista de cambios; ver App\EventListener\PartnerProfileChangeListener.
+     */
+    public const TYPE_PROFILE_UPDATE = 'PROFILE_UPDATE';
+
     public const TYPES = [
         self::TYPE_JOIN,
         self::TYPE_LEAVE,
@@ -73,6 +80,7 @@ class PartnerEvent
         self::TYPE_BASKET_UNSKIP,
         self::TYPE_BASKET_EXTRA,
         self::TYPE_BASKET_EXTRA_REMOVED,
+        self::TYPE_PROFILE_UPDATE,
     ];
 
     public const ACTOR_SYSTEM = 'system';
@@ -119,6 +127,9 @@ class PartnerEvent
      *                              "from_group_name":"Vallecas","to_group_name":"Madrid",
      *                              "basket_id":7}
      *   - BASKET_START / BASKET_END: {"basket_share_id":1,"delivery_group":"A"}
+     *   - PROFILE_UPDATE:         {"changes":[{"field":"display_name","label":"Nombre de reparto",
+     *                              "from":"Ana","to":"Ana y Luis"},{"field":"iban","label":"IBAN"}]}
+     *     (sin from/to en los campos que no guardan valores: DNI, IBAN, notas.)
      * @ORM\Column(type="json", nullable=true)
      */
     private ?array $payload = null;
