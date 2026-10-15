@@ -1,0 +1,82 @@
+{# ============================================================
+ # Una iniciativa: para qué es, quién aporta este mes y cuánto.
+ #
+ # El controller pasa: initiative, contributions (ajustes que valen este
+ # mes y van a ella), total (people, cents), month.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
+
+{% set can_edit = is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
+
+{% block title %}{{ initiative.name }} · Iniciativas{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_index') }}">Socios</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('donation_initiative_index') }}">Iniciativas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ initiative.name }}</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header('Socios · Iniciativas', initiative.name, initiative.description ?: 'Lo que lxs socixs le destinan cada mes, además de su cuota.') }}
+
+    <div class="prl-stats">
+        <div class="prl-stat {{ initiative.open ? 'prl-stat--active' : '' }}"><div class="v">{{ initiative.open ? 'Abierta' : 'Cerrada' }}</div><div class="l">{{ initiative.open ? 'se puede elegir' : 'no se ofrece a nadie más' }}</div></div>
+        <div class="prl-stat"><div class="v">{{ total.people }}</div><div class="l">{{ total.people == 1 ? 'persona aporta' : 'personas aportan' }}</div></div>
+        <div class="prl-stat"><div class="v">{{ fmt.money(total.cents / 100) }}</div><div class="l">al mes, en {{ month|format_date(pattern: 'MMMM', locale: 'es') }}</div></div>
+    </div>
+
+    <div class="prl-toolbar">
+        <div class="counters"><b>{{ contributions|length }}</b> {{ contributions|length == 1 ? 'aportación' : 'aportaciones' }} este mes</div>
+        <div class="spacer"></div>
+        {% if can_edit %}
+            <a href="{{ path('donation_initiative_edit', { id: initiative.id }) }}" class="prl-btn"><i class="fa fa-pencil"></i> Cambiar</a>
+        {% endif %}
+    </div>
+
+    <div class="prl-table-wrap">
+        {% if contributions is empty %}
+            <div class="prl-empty">
+                Nadie aporta este mes.
+                {% if initiative.open %}Para acoger a alguien, en su ficha: bloque «Cuota» → «Ajustar la cuota» → paga de más y elige esta iniciativa.{% endif %}
+            </div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th>Socix</th>
+                        <th class="tight acc-num">Al mes</th>
+                        <th class="tight">Desde</th>
+                        <th class="tight">Hasta</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in contributions %}
+                        <tr>
+                            <td data-label="Socix"><a href="{{ path('partner_show', { id: a.partner.id }) }}#cuota">{{ a.partner.legalName }}</a></td>
+                            <td class="acc-num" data-label="Al mes">{{ fmt.money(a.amount) }}</td>
+                            <td class="tight" data-label="Desde">{{ a.fromMonth|format_date(pattern: 'MMM yyyy', locale: 'es') }}</td>
+                            <td class="tight acc-muted" data-label="Hasta">{{ a.untilMonth ? a.untilMonth|format_date(pattern: 'MMM yyyy', locale: 'es') : 'sin fin' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}
