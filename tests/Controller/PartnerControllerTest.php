@@ -110,6 +110,43 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * La ficha enseña el nombre de reparto cuando lo hay, y no pinta nada
+     * cuando no: el listado de cestas usa ese nombre y, sin verlo en la ficha,
+     * quien gestiona no sabe por qué el listado dice otra cosa que el nombre
+     * legal.
+     */
+    public function testPartnerShowDisplaysDeliveryNameOnlyWhenSet(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+
+        $partner = (new Partner())
+            ->setname('TEST')
+            ->setSurname('Nombre Reparto ' . uniqid())
+            ->setStatus(Partner::STATUS_ACTIVO)
+            ->setDisplayName('Familia del Huerto');
+        $em->persist($partner);
+        $em->flush();
+        $partnerId = $partner->getId();
+
+        $crawler = $client->request('GET', sprintf('/gestion/partner/%d', $partnerId));
+        $this->assertResponseIsSuccessful();
+        $this->assertStringContainsString('Familia del Huerto', $crawler->filter('[data-partner-display-name]')->text());
+
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $em->find(Partner::class, $partnerId)->setDisplayName(null);
+        $em->flush();
+
+        $crawler = $client->request('GET', sprintf('/gestion/partner/%d', $partnerId));
+        $this->assertResponseIsSuccessful();
+        $this->assertCount(0, $crawler->filter('[data-partner-display-name]'));
+
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $em->remove($em->find(Partner::class, $partnerId));
+        $em->flush();
+    }
+
+    /**
      * GET del calendario de recogida de un socio devuelve 200 (lectura v0).
      */
     public function testDeliveryCalendarReturnsOk(): void
