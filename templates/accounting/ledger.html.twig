@@ -72,7 +72,7 @@
             {% endif %}
         </div>
         <div class="spacer"></div>
-        <a href="{{ path('accounting_index') }}" class="prl-btn"><i class="fa fa-line-chart"></i> Cómo vamos</a>
+        <a href="{{ path('accounting_report') }}" class="prl-btn"><i class="fa fa-line-chart"></i> Cómo vamos</a>
         {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
             <a href="{{ path('accounting_transfer_new') }}" class="prl-btn"><i class="fa fa-exchange"></i> Traspaso</a>
             <a href="{{ path('accounting_entry_new', account ? { account: account.id } : {}) }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Anotar apunte</a>
