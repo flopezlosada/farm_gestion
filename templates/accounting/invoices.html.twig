@@ -42,6 +42,8 @@
         'Sube la factura o el ticket y se lee sola. Sólo tienes que revisar lo leído y confirmarlo: el apunte se crea con un clic.'
     ) }}
 
+    {% include 'accounting/_invoice_tabs.html.twig' with { active: 'received' } %}
+
     {# ============ AVISO DE LA COLA ============ #}
     <div class="inv-queue">
         {% if queue.count > 0 and not queue.enabled %}

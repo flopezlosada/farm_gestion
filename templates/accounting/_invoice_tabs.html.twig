@@ -1,0 +1,6 @@
+{# Pestañas recibidas | emitidas: en el menú son una sola entrada, «Facturas».
+ # Recibe: active ('received' | 'issued'). Necesita partner/_listing_styles. #}
+<nav class="prl-tabs" role="tablist">
+    <a href="{{ path('accounting_invoices') }}" class="{{ active == 'received' ? 'active' : '' }}">Recibidas</a>
+    <a href="{{ path('accounting_issued_invoices') }}" class="{{ active == 'issued' ? 'active' : '' }}">Emitidas</a>
+</nav>

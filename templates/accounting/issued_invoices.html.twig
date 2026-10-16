@@ -34,6 +34,8 @@
 
     {{ csa.page_header('Contabilidad', 'Facturas emitidas', 'Se hacen en borrador; al emitirlas reciben número y su PDF queda guardado tal cual.') }}
 
+    {% include 'accounting/_invoice_tabs.html.twig' with { active: 'issued' } %}
+
     {% if not hasIssuer %}
         <div class="csa-alert csa-alert--warning" role="status" style="margin-bottom: var(--csa-sp-5);">
             <i class="csa-alert__icon fa fa-exclamation-triangle" aria-hidden="true"></i>

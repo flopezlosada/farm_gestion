@@ -69,6 +69,29 @@ class AccountEntryRepository extends ServiceEntityRepository
     }
 
     /**
+     * Fecha del último apunte de cada cuenta: `[accountId => fecha]`. Las cuentas sin
+     * apuntes no salen. Es «hasta dónde está el libro al día» de cada cuenta, en una
+     * sola consulta para todas.
+     *
+     * @return array<int, \DateTimeImmutable>
+     */
+    public function lastDateByAccount(): array
+    {
+        $rows = $this->createQueryBuilder('e')
+            ->select('IDENTITY(e.account) AS accountId', 'MAX(e.date) AS lastDate')
+            ->groupBy('e.account')
+            ->getQuery()
+            ->getScalarResult();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[(int) $row['accountId']] = new \DateTimeImmutable($row['lastDate']);
+        }
+
+        return $out;
+    }
+
+    /**
      * Cuántos apuntes hay en cada partida: `[categoryId => nº]`. Igual que el de
      * cuentas, dice qué partidas están en uso y cuáles se pueden retirar sin ruido.
      *

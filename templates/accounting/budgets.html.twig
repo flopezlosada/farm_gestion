@@ -4,7 +4,8 @@
  # De un mismo año hay varios a propósito: el que aprobó la asamblea y las revisiones
  # que se hacen cuando la realidad se separa de lo previsto. Todos se conservan.
  #
- # El controller pasa: rows (budget, income, expense, result, lines).
+ # El controller pasa: rows (budget, income, expense, result, lines), y para la
+ # tarjeta del coste de la cesta: year, basketCost, baskets, committedMonthlyFees.
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -17,6 +18,8 @@
     <a href="{{ path('dashboard') }}">Inicio</a>
     <span class="csa-topbar__crumbs-sep">/</span>
     <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_reports') }}">Informes</a>
     <span class="csa-topbar__crumbs-sep">/</span>
     <span class="csa-topbar__crumb-active">Presupuestos</span>
 {% endblock %}
@@ -39,7 +42,7 @@
     <div class="prl-toolbar">
         <div class="counters"><b>{{ rows|length }}</b> presupuesto{{ rows|length == 1 ? '' : 's' }}</div>
         <div class="spacer"></div>
-        <a href="{{ path('accounting_index') }}" class="prl-btn"><i class="fa fa-line-chart"></i> Cómo vamos</a>
+        <a href="{{ path('accounting_report') }}" class="prl-btn"><i class="fa fa-line-chart"></i> Cómo vamos</a>
         {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
             <a href="{{ path('accounting_budget_new') }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Nuevo presupuesto</a>
         {% endif %}
@@ -103,6 +106,41 @@
                 </tbody>
             </table>
         {% endif %}
+    </div>
+
+    {# ============ COSTE POR CESTA ============ #}
+    <div style="margin-top: 18px; max-width: 640px;">
+    {% embed '_components/csa_card.html.twig' with { title: 'Cuánto tiene que costar la cesta', subtitle: 'Repartiendo el coste de ' ~ year ~ ' según el presupuesto aprobado', accent: 'green' } %}
+        {% block body %}
+            {% if basketCost.expenses == 0 %}
+                <p style="margin: 0; font-size: 13px;" class="acc-muted">No hay presupuesto aprobado de {{ year }} con el que hacer la cuenta.</p>
+            {% else %}
+                <p style="margin: 0 0 10px; font-size: 13px;">
+                    Los gastos previstos del año suman
+                    <b>{{ basketCost.expenses|number_format(2, ',', '.') }} €</b>. Descontando los huevos,
+                    que se cobran aparte ({{ basketCost.eggExpenses|number_format(2, ',', '.') }} €),
+                    quedan <b>{{ basketCost.toCover|number_format(2, ',', '.') }} €</b> que tienen que salir
+                    de las cestas.
+                </p>
+                <p style="margin: 0 0 10px; font-size: 13px;">
+                    Hoy hay <b>{{ baskets|number_format(2, ',', '.') }}</b> cestas completas equivalentes
+                    activas, que comprometen <b>{{ committedMonthlyFees|number_format(2, ',', '.') }} €</b> al mes.
+                </p>
+                {% if basketCost.pricePerBasketNeeded %}
+                    <p style="margin: 0; font-size: 15px;">
+                        Con esas cestas, cada una tendría que aportar
+                        <b>{{ basketCost.pricePerBasketNeeded|number_format(2, ',', '.') }} €</b> al mes.
+                    </p>
+                {% endif %}
+                {% if basketCost.basketsNeeded %}
+                    <p style="margin: 6px 0 0; font-size: 13px;" class="acc-muted">
+                        Manteniendo los 100 € de la cesta semanal harían falta
+                        {{ basketCost.basketsNeeded|number_format(2, ',', '.') }} cestas.
+                    </p>
+                {% endif %}
+            {% endif %}
+        {% endblock %}
+    {% endembed %}
     </div>
 
 </div>

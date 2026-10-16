@@ -60,6 +60,18 @@ final class InvoiceQuarter
         return $this->from()->modify('+3 months -1 day');
     }
 
+    /**
+     * Último día para entregar el trimestre a la gestoría: los modelos trimestrales se
+     * presentan del 1 al 20 del mes siguiente, y los del cuarto trimestre hasta el 30
+     * de enero.
+     */
+    public function deliveryDeadline(): \DateTimeImmutable
+    {
+        $nextMonth = $this->to()->modify('first day of next month');
+
+        return $nextMonth->setDate((int) $nextMonth->format('Y'), (int) $nextMonth->format('n'), $this->quarter === 4 ? 30 : 20);
+    }
+
     /** Como lo escribe la asociación en sus carpetas: «3T2026». */
     public function label(): string
     {
