@@ -52,6 +52,9 @@ class BudgetCategoryType extends AbstractType
             ->add('active', CheckboxType::class, [
                 'required' => false,
             ])
+            ->add('requiresInvoice', CheckboxType::class, [
+                'required' => false,
+            ])
             ->add('submit', SubmitType::class, ['label' => 'Guardar']);
     }
 
