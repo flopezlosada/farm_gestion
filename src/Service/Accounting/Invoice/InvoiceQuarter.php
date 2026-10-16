@@ -35,6 +35,16 @@ final class InvoiceQuarter
     }
 
     /**
+     * El trimestre en que cae un día.
+     *
+     * @param \DateTimeInterface $date El día.
+     */
+    public static function containing(\DateTimeInterface $date): self
+    {
+        return new self((int) $date->format('Y'), intdiv((int) $date->format('n') - 1, 3) + 1);
+    }
+
+    /**
      * El último trimestre ya cerrado: el que toca entregar. En octubre, el tercero; en
      * enero, el cuarto del año anterior.
      *

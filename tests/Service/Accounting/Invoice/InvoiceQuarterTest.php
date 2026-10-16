@@ -32,6 +32,15 @@ class InvoiceQuarterTest extends TestCase
         $this->assertSame('1T2026', InvoiceQuarter::lastClosed(new \DateTimeImmutable('2026-04-01'))->label());
     }
 
+    /** El trimestre de un día: sus bordes caen dentro. */
+    public function testElTrimestreDeUnDia(): void
+    {
+        $this->assertSame('3T2026', InvoiceQuarter::containing(new \DateTimeImmutable('2026-07-01'))->label());
+        $this->assertSame('3T2026', InvoiceQuarter::containing(new \DateTimeImmutable('2026-09-30'))->label());
+        $this->assertSame('4T2026', InvoiceQuarter::containing(new \DateTimeImmutable('2026-10-01'))->label());
+        $this->assertSame('1T2027', InvoiceQuarter::containing(new \DateTimeImmutable('2027-01-01'))->label());
+    }
+
     /** Un trimestre que no existe no se puede construir. */
     public function testUnTrimestreImposibleNoExiste(): void
     {
