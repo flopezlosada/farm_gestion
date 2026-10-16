@@ -35,6 +35,16 @@ final class InvoiceQuarter
     }
 
     /**
+     * El trimestre en que cae un día.
+     *
+     * @param \DateTimeInterface $date El día.
+     */
+    public static function containing(\DateTimeInterface $date): self
+    {
+        return new self((int) $date->format('Y'), intdiv((int) $date->format('n') - 1, 3) + 1);
+    }
+
+    /**
      * El último trimestre ya cerrado: el que toca entregar. En octubre, el tercero; en
      * enero, el cuarto del año anterior.
      *
@@ -58,6 +68,18 @@ final class InvoiceQuarter
     public function to(): \DateTimeImmutable
     {
         return $this->from()->modify('+3 months -1 day');
+    }
+
+    /**
+     * Último día para entregar el trimestre a la gestoría: los modelos trimestrales se
+     * presentan del 1 al 20 del mes siguiente, y los del cuarto trimestre hasta el 30
+     * de enero.
+     */
+    public function deliveryDeadline(): \DateTimeImmutable
+    {
+        $nextMonth = $this->to()->modify('first day of next month');
+
+        return $nextMonth->setDate((int) $nextMonth->format('Y'), (int) $nextMonth->format('n'), $this->quarter === 4 ? 30 : 20);
     }
 
     /** Como lo escribe la asociación en sus carpetas: «3T2026». */

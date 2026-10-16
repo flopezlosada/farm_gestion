@@ -9,6 +9,8 @@ use App\Form\BudgetType;
 use App\Repository\AccountEntryRepository;
 use App\Repository\BudgetCategoryRepository;
 use App\Repository\BudgetRepository;
+use App\Repository\PartnerBasketShareRepository;
+use App\Service\Accounting\BudgetTracker;
 use App\Service\Accounting\MonthNames;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -34,10 +36,12 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class BudgetController extends AbstractController
 {
     /**
-     * Todos los presupuestos, del más reciente al más viejo, con lo que suman.
+     * Todos los presupuestos, del más reciente al más viejo, con lo que suman, y
+     * cuánto tendría que costar la cesta para que cuadre el presupuesto aprobado del
+     * año: es una cuenta de hacer el presupuesto, por eso vive aquí.
      */
     #[Route('/', name: 'accounting_budgets', methods: ['GET'])]
-    public function index(BudgetRepository $budgets): Response
+    public function index(BudgetRepository $budgets, BudgetTracker $tracker, PartnerBasketShareRepository $shares): Response
     {
         $totals = $budgets->totals();
 
@@ -53,7 +57,16 @@ class BudgetController extends AbstractController
             ];
         }
 
-        return $this->render('accounting/budgets.html.twig', ['rows' => $rows]);
+        $year = (int) date('Y');
+        $baskets = $shares->countActiveBasketEquivalents();
+
+        return $this->render('accounting/budgets.html.twig', [
+            'rows' => $rows,
+            'year' => $year,
+            'basketCost' => $tracker->basketCost($year, $budgets->findApprovedForYear($year), $baskets, 100.0),
+            'baskets' => $baskets,
+            'committedMonthlyFees' => $shares->sumActiveMonthlyFees(),
+        ]);
     }
 
     /**

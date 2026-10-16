@@ -80,6 +80,28 @@ class IssuedInvoiceRepository extends ServiceEntityRepository
     }
 
     /**
+     * Las emitidas que no están ligadas a ningún apunte del libro, con la factura que
+     * rectifican (si lo son) y su cliente: lo que queda por cobrar o por devolver. Las
+     * más antiguas primero. Un borrador no cuenta: todavía no se debe nada.
+     *
+     * @return list<IssuedInvoice>
+     */
+    public function findUnpaid(): array
+    {
+        return $this->createQueryBuilder('i')
+            ->addSelect('r', 'c')
+            ->leftJoin('i.rectifies', 'r')
+            ->leftJoin('i.customer', 'c')
+            ->andWhere('i.status = :issued')
+            ->andWhere('i.accountEntry IS NULL')
+            ->setParameter('issued', IssuedInvoice::STATUS_ISSUED)
+            ->orderBy('i.issueDate', 'ASC')
+            ->addOrderBy('i.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Las emitidas con fecha entre dos días, ambos incluidos, con sus líneas: lo
      * que va al libro de facturas emitidas. Por fecha y, el mismo día, por serie y
      * número.

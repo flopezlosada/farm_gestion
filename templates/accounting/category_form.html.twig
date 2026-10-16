@@ -55,6 +55,9 @@
                         <label style="display:inline-flex; align-items:center; gap: var(--csa-sp-2);">
                             {{ form_widget(form.active) }} <span>En uso: se ofrece al anotar</span>
                         </label>
+                        <label style="display:inline-flex; align-items:center; gap: var(--csa-sp-2);">
+                            {{ form_widget(form.requiresInvoice) }} <span>Sus gastos llevan factura <span class="csa-muted">(no la traen nóminas, Seguridad Social, IRPF, impuestos ni comisiones del banco; en ingresos no cuenta)</span></span>
+                        </label>
                     </div>
                 {% endblock %}
             {% endembed %}

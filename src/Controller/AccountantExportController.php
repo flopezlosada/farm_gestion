@@ -2,7 +2,10 @@
 
 namespace App\Controller;
 
+use App\Entity\User;
+use App\Repository\AccountEntryRepository;
 use App\Repository\ReceivedInvoiceRepository;
+use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\AccountantPackage;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\Invoice\InvoiceQuarter;
@@ -37,6 +40,8 @@ class AccountantExportController extends AbstractController
         InvoiceFileStore $files,
         ReceivedInvoiceRepository $invoices,
         IssuedInvoiceBook $issuedBook,
+        AccountEntryRepository $entries,
+        ClosedPeriods $closed,
     ): Response {
         $quarter = $this->quarterFrom($request);
         $rows = array_map(static fn ($invoice) => [
@@ -59,7 +64,9 @@ class AccountantExportController extends AbstractController
             'total' => array_sum(array_map(static fn (array $r): float => (float) $r['invoice']->getTotal(), $rows)),
             'withWarnings' => \count(array_filter($rows, static fn (array $r): bool => $r['warnings'] !== [])),
             'open' => \count($invoices->findOpen()),
+            'withoutInvoice' => $entries->findExpensesWithoutInvoice($quarter->from(), $quarter->to()),
             'years' => range((int) date('Y'), (int) date('Y') - 3),
+            'delivery' => $closed->latestOf($quarter),
         ]);
     }
 
@@ -85,6 +92,68 @@ class AccountantExportController extends AbstractController
         ));
 
         return $response;
+    }
+
+    /**
+     * Da el trimestre por entregado a la gestoría: desde aquí, lo fechado en él no se
+     * cambia. Descargar el ZIP no lo marca, porque también se descarga para mirarlo.
+     */
+    #[Route('/deliver', name: 'accounting_accountant_deliver', methods: ['POST'])]
+    #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
+    public function deliver(Request $request, ClosedPeriods $closed): Response
+    {
+        return $this->changeDelivery($request, 'deliver-quarter', function (InvoiceQuarter $quarter) use ($closed): string {
+            $closed->deliver($quarter, $this->currentUser());
+
+            return sprintf('El %s queda entregado: ya no se puede cambiar nada fechado en él.', $quarter->label());
+        });
+    }
+
+    /**
+     * Reabre un trimestre entregado para corregirlo. Queda escrito quién y cuándo, y
+     * el trimestre hay que volver a mandarlo.
+     */
+    #[Route('/reopen', name: 'accounting_accountant_reopen', methods: ['POST'])]
+    #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
+    public function reopen(Request $request, ClosedPeriods $closed): Response
+    {
+        return $this->changeDelivery($request, 'reopen-quarter', function (InvoiceQuarter $quarter) use ($closed): string {
+            $closed->reopen($quarter, $this->currentUser());
+
+            return sprintf('El %s está reabierto. Cuando esté corregido, hay que volver a mandarlo a la gestoría y marcarlo como entregado.', $quarter->label());
+        });
+    }
+
+    /**
+     * Lo común a entregar y reabrir: el token, el trimestre de la URL y volver a la
+     * pantalla de ese trimestre con lo que ha pasado.
+     *
+     * @param callable(InvoiceQuarter): string $change Hace el cambio y devuelve el mensaje.
+     */
+    private function changeDelivery(Request $request, string $tokenId, callable $change): Response
+    {
+        $quarter = $this->quarterFrom($request);
+        $back = $this->redirectToRoute('accounting_accountant_export', ['year' => $quarter->year, 'quarter' => $quarter->quarter]);
+        if (!$this->isCsrfTokenValid($tokenId, (string) $request->request->get('_token'))) {
+            $this->addFlash('danger', 'La página había caducado. Vuelve a intentarlo.');
+
+            return $back;
+        }
+
+        try {
+            $this->addFlash('success', $change($quarter));
+        } catch (\LogicException $e) {
+            $this->addFlash('warning', $e->getMessage());
+        }
+
+        return $back;
+    }
+
+    private function currentUser(): ?User
+    {
+        $user = $this->getUser();
+
+        return $user instanceof User ? $user : null;
     }
 
     /**

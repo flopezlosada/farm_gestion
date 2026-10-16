@@ -1,0 +1,49 @@
+{# ============================================================
+ # Página índice de una sección del menú de contabilidad («Informes», «Ajustes»):
+ # una tarjeta por pantalla. No carga datos, sólo ordena.
+ #
+ # El controller pasa: title, intro, links (route, params, icon, title, text).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Contabilidad · {{ title }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ title }}</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+    <style>
+        .acc-hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 18px 0; }
+        .acc-hub a { text-decoration: none; color: inherit; display: block; }
+        .acc-hub a:hover .csa-card { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08); }
+        .acc-hub p { margin: 0; font-size: 13px; }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header('Contabilidad', title, intro) }}
+
+    <div class="acc-hub">
+        {% for link in links %}
+            <a href="{{ path(link.route, link.params) }}">
+                {% embed '_components/csa_card.html.twig' with { title: link.title, icon: link.icon } %}
+                    {% block body %}<p class="acc-muted">{{ link.text }}</p>{% endblock %}
+                {% endembed %}
+            </a>
+        {% endfor %}
+    </div>
+
+</div>
+{% endblock %}

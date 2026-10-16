@@ -2,6 +2,7 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\AccountantDelivery;
 use App\Entity\Customer;
 use App\Entity\IssuedInvoice;
 use App\Entity\IssuedInvoiceLine;
@@ -38,6 +39,10 @@ class AccountantExportControllerTest extends AbstractAuthenticatedTest
             $em->remove($customer);
         }
         $em->flush();
+        foreach ($em->getRepository(AccountantDelivery::class)->findBy(['year' => 2099]) as $delivery) {
+            $em->remove($delivery);
+        }
+        $em->flush();
         foreach ($em->getRepository(Setting::class)->findAll() as $setting) {
             $em->remove($setting);
         }
@@ -56,6 +61,25 @@ class AccountantExportControllerTest extends AbstractAuthenticatedTest
         $this->assertResponseIsSuccessful();
         $this->assertSelectorTextContains('body', '2T2099');
         $this->assertSelectorTextContains('body', 'No hay facturas anotadas con fecha de este trimestre');
+    }
+
+    /** Entregar cierra el trimestre y lo dice; reabrir lo abre y pide volver a mandarlo. */
+    public function testEntregarYReabrir(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $url = '/gestion/accounting/invoices/accountant?year=2099&quarter=2';
+
+        $crawler = $client->request('GET', $url);
+        $client->submit($crawler->selectButton('Marcar como entregado')->form());
+        $client->followRedirect();
+        $this->assertSelectorTextContains('body', 'El 2T2099 queda entregado');
+        $this->assertSelectorTextContains('body', 'Entregado a la gestoría el');
+
+        $crawler = $client->request('GET', $url);
+        $client->submit($crawler->selectButton('Reabrir para corregir')->form());
+        $client->followRedirect();
+        $this->assertSelectorTextContains('body', 'hay que volver a mandarlo a la gestoría');
     }
 
     /** Aun vacío, el ZIP sale y lleva el libro: la gestoría ve que ese trimestre no hubo nada. */

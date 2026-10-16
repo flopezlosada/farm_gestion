@@ -11,8 +11,8 @@ use App\Repository\AccountEntryRepository;
 use App\Repository\BudgetCategoryRepository;
 use App\Repository\BudgetRepository;
 use App\Repository\FinancialAccountRepository;
-use App\Repository\PartnerBasketShareRepository;
 use App\Repository\ReceivedInvoiceRepository;
+use App\Service\Accounting\Agenda\AccountingAgenda;
 use App\Service\Accounting\BudgetTracker;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\MonthNames;
@@ -28,9 +28,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 /**
  * Las cuentas de la asociación: el libro de caja y el seguimiento del presupuesto.
  *
- * La portada es «Cómo vamos» y no el listado de apuntes a propósito: la pregunta que
- * trae a alguien aquí es si el año cuadra, no qué se pagó el martes. El libro está a
- * un clic para quien viene a anotar.
+ * La portada es «Pendiente»: lo que hay que hacer para que el libro esté al día y el
+ * paquete de la gestoría salga completo. «Cómo vamos» es un informe más.
  *
  * Acceso con ROLE_GESTION_CONTABILIDAD, que no da acceso a los datos de socixs
  * (mínimo privilegio): aquí se manejan importes y partidas, no personas.
@@ -40,18 +39,71 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_GESTION_CONTABILIDAD')]
 class AccountingController extends AbstractController
 {
+    /** Días sin apuntes a partir de los que el libro de una cuenta de banco se da por atrasado. */
+    private const STALE_BOOK_DAYS = 30;
+
     /**
-     * Cómo va el año: lo previsto contra lo real por grupo, la caja mes a mes con su
-     * proyección a cierre, y cuánto tendría que costar la cesta para que cuadre.
+     * La portada: lo que hay que hacer. Arriba, el dinero que hay, hasta dónde está el
+     * libro al día y cómo va el año frente al presupuesto; debajo, las tareas
+     * pendientes de {@see AccountingAgenda}, cada una con su enlace.
      */
     #[Route('/', name: 'accounting_index', methods: ['GET'])]
     public function index(
+        AccountingAgenda $agenda,
+        BudgetTracker $tracker,
+        BudgetRepository $budgets,
+        FinancialAccountRepository $accounts,
+        AccountEntryRepository $entries,
+    ): Response {
+        $today = new \DateTimeImmutable('today');
+        $year = (int) $today->format('Y');
+        $lastDates = $entries->lastDateByAccount();
+
+        $balances = [];
+        foreach ($accounts->findActive() as $account) {
+            $last = $lastDates[(int) $account->getId()] ?? null;
+            $balances[] = [
+                'account' => $account,
+                'balance' => $entries->balanceFor($account),
+                'lastDate' => $last,
+                'stale' => $account->isBank() && $last !== null && $last->diff($today)->days > self::STALE_BOOK_DAYS,
+            ];
+        }
+        // Una cuenta sin ningún apunte no está atrasada: no se usa. No cuenta.
+        $bankDates = array_filter(array_map(
+            static fn (array $row): ?\DateTimeImmutable => $row['account']->isBank() ? $row['lastDate'] : null,
+            $balances,
+        ));
+
+        $budget = $budgets->findApprovedForYear($year);
+        $totals = $tracker->track($year, $budget)['totals'];
+
+        return $this->render('accounting/index.html.twig', [
+            'year' => $year,
+            'items' => $agenda->items($today),
+            'balances' => $balances,
+            'totalCash' => array_sum(array_map(static fn (array $row): float => (float) $row['balance'], $balances)),
+            'bookUpTo' => $bankDates !== [] ? min($bankDates) : null,
+            'staleBook' => array_filter($balances, static fn (array $row): bool => $row['stale']) !== [],
+            'resultToDate' => array_sum(array_column($totals, 'actualToDate')),
+            'budgetToDate' => array_sum(array_column($totals, 'budgetToDate')),
+            'hasBudget' => $budget !== null,
+            'unpairedTransfers' => $entries->findUnpairedTransfers(),
+        ]);
+    }
+
+    /**
+     * Cómo va el año: lo previsto contra lo real por grupo y la caja mes a mes con su
+     * proyección a cierre. Es un informe: la pregunta que responde (¿cuadra el año?)
+     * se hace de vez en cuando, no cada vez que se entra a anotar.
+     */
+    #[Route('/report', name: 'accounting_report', methods: ['GET'])]
+    public function report(
         Request $request,
         BudgetTracker $tracker,
         BudgetRepository $budgets,
         FinancialAccountRepository $accounts,
         AccountEntryRepository $entries,
-        PartnerBasketShareRepository $shares,
     ): Response {
         $year = $request->query->getInt('year') ?: (int) date('Y');
         $budget = $this->resolveBudget($request, $budgets, $year);
@@ -64,23 +116,53 @@ class AccountingController extends AbstractController
             $totalCash += (float) $balance;
         }
 
-        $baskets = $shares->countActiveBasketEquivalents();
-
-        return $this->render('accounting/index.html.twig', [
+        return $this->render('accounting/report.html.twig', [
             'year' => $year,
             'years' => $this->yearsWithData($budgets, $entries),
             'budget' => $budget,
             'budgets' => $budgets->findForYear($year),
             'tracked' => $tracker->track($year, $budget),
             'cash' => $tracker->cashFlow($year, $budget),
-            'basketCost' => $tracker->basketCost($year, $budget, $baskets, 100.0),
-            'baskets' => $baskets,
-            'committedMonthlyFees' => $shares->sumActiveMonthlyFees(),
             'balances' => $balances,
             'totalCash' => $totalCash,
-            'unpairedTransfers' => $entries->findUnpairedTransfers(),
             'months' => MonthNames::LONG,
             'kinds' => BudgetCategoryGroup::KIND_LABELS,
+        ]);
+    }
+
+    /**
+     * Índice de los informes: lo que se mira de vez en cuando, no a diario.
+     */
+    #[Route('/reports', name: 'accounting_reports', methods: ['GET'])]
+    public function reports(): Response
+    {
+        return $this->render('accounting/hub.html.twig', [
+            'title' => 'Informes',
+            'intro' => 'Lo que se mira de vez en cuando: cómo va el año, el resumen por meses, los presupuestos y la entrega a la gestoría.',
+            'links' => [
+                ['route' => 'accounting_report', 'params' => [], 'icon' => 'fa-line-chart', 'title' => 'Cómo vamos', 'text' => 'Lo presupuestado frente a lo real, y la caja mes a mes hasta fin de año.'],
+                ['route' => 'accounting_year', 'params' => ['year' => (int) date('Y')], 'icon' => 'fa-table', 'title' => 'Resumen del año', 'text' => 'Cada partida mes a mes.'],
+                ['route' => 'accounting_budgets', 'params' => [], 'icon' => 'fa-calculator', 'title' => 'Presupuestos', 'text' => 'Los de cada año y cuánto tiene que costar la cesta.'],
+                ['route' => 'accounting_accountant_export', 'params' => [], 'icon' => 'fa-briefcase', 'title' => 'Para la gestoría', 'text' => 'El paquete del trimestre: facturas, libros y documentos en un ZIP.'],
+            ],
+        ]);
+    }
+
+    /**
+     * Índice de los ajustes: los catálogos que se tocan al empezar y rara vez después.
+     */
+    #[Route('/settings', name: 'accounting_settings', methods: ['GET'])]
+    public function settings(): Response
+    {
+        return $this->render('accounting/hub.html.twig', [
+            'title' => 'Ajustes',
+            'intro' => 'Los catálogos del módulo: se preparan al empezar y se tocan poco.',
+            'links' => [
+                ['route' => 'accounting_accounts', 'params' => [], 'icon' => 'fa-university', 'title' => 'Cuentas', 'text' => 'Bancos y cajas de efectivo, con su saldo de apertura.'],
+                ['route' => 'accounting_categories', 'params' => [], 'icon' => 'fa-tags', 'title' => 'Partidas', 'text' => 'En qué se ingresa y en qué se gasta.'],
+                ['route' => 'accounting_providers', 'params' => [], 'icon' => 'fa-truck', 'title' => 'Proveedores', 'text' => 'A quién se le compra.'],
+                ['route' => 'accounting_customers', 'params' => [], 'icon' => 'fa-users', 'title' => 'Clientes', 'text' => 'A quién se le factura.'],
+            ],
         ]);
     }
 
