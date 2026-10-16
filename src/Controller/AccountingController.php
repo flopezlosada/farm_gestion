@@ -291,6 +291,56 @@ class AccountingController extends AbstractController
     }
 
     /**
+     * El cierre del año para la asamblea, para imprimir desde el navegador: lo
+     * previsto frente a lo real por grupo, el resultado, y el saldo de cada cuenta al
+     * empezar y al acabar el año. La variación de los saldos tiene que ser el
+     * resultado; si no lo es, se dice cuánto falta, porque un descuadre en el papel de
+     * la asamblea es lo primero que alguien pregunta.
+     */
+    #[Route('/year/{year}/assembly', name: 'accounting_year_assembly', requirements: ['year' => '\d{4}'], methods: ['GET'])]
+    public function yearAssembly(
+        int $year,
+        BudgetTracker $tracker,
+        BudgetRepository $budgets,
+        FinancialAccountRepository $accounts,
+        AccountEntryRepository $entries,
+    ): Response {
+        $budget = $budgets->findApprovedForYear($year);
+        $start = new \DateTimeImmutable(sprintf('%d-12-31', $year - 1));
+        $end = new \DateTimeImmutable(sprintf('%d-12-31', $year));
+
+        $balances = [];
+        foreach ($accounts->findBy([], ['sortOrder' => 'ASC', 'name' => 'ASC']) as $account) {
+            $opened = $account->getOpeningDate();
+            if ($opened !== null && $opened > $end) {
+                continue; // Abierta después: no existía ese año.
+            }
+            $balances[] = [
+                'account' => $account,
+                'openedDuringYear' => $opened !== null && $opened->format('Y-m-d') > sprintf('%d-01-01', $year),
+                'start' => (float) $entries->balanceFor($account, $start),
+                'end' => (float) $entries->balanceFor($account, $end),
+            ];
+        }
+
+        $tracked = $tracker->track($year, $budget, 12);
+        $result = array_sum(array_column($tracked['totals'], 'actualTotal'));
+        $variation = array_sum(array_column($balances, 'end')) - array_sum(array_column($balances, 'start'));
+
+        return $this->render('accounting/year_assembly.html.twig', [
+            'year' => $year,
+            'budget' => $budget,
+            'tracked' => $tracked,
+            'balances' => $balances,
+            'result' => $result,
+            'budgetResult' => array_sum(array_column($tracked['totals'], 'budgetTotal')),
+            'variation' => $variation,
+            'unexplained' => round($variation - $result, 2),
+            'yearClosed' => $year < (int) date('Y'),
+        ]);
+    }
+
+    /**
      * Anotar un movimiento. Preselecciona cuenta y fecha si vienen en la URL, que es
      * como llega quien acaba de guardar otro apunte del mismo extracto.
      */

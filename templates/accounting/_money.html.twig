@@ -13,6 +13,6 @@
 {% macro money(value, withSign) %}
     {%- set v = value|default(0) -%}
     <span class="acc-num {{ v < 0 ? 'acc-neg' : (v > 0 and withSign ? 'acc-pos' : '') }}">
-        {{- (withSign and v > 0 ? '+' : '') ~ (v|number_format(2, ',', '.')) }} €
+        {{- (withSign and v > 0 ? '+' : '') ~ (v|number_format(2, ',', '.')) ~ ' €' -}}
     </span>
-{% endmacro %}
+{%- endmacro %}
