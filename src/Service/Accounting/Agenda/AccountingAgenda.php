@@ -2,6 +2,7 @@
 
 namespace App\Service\Accounting\Agenda;
 
+use App\Entity\AccountantDelivery;
 use App\Entity\FinancialAccount;
 use App\Entity\IssuedInvoice;
 use App\Entity\Remittance;
@@ -10,6 +11,7 @@ use App\Repository\FinancialAccountRepository;
 use App\Repository\IssuedInvoiceRepository;
 use App\Repository\ReceivedInvoiceRepository;
 use App\Repository\RemittanceRepository;
+use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\AccountantPackage;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\Invoice\InvoiceQuarter;
@@ -18,8 +20,9 @@ use App\Service\Accounting\MonthNames;
 
 /**
  * Lo que queda por hacer en la contabilidad, para la portada: la entrega del trimestre
- * a la gestoría, la bandeja de facturas, lo emitido sin cobrar, la remesa del mes y
- * los traspasos a medias. Si no devuelve nada, todo está al día.
+ * a la gestoría (o volver a mandarlo, si se reabrió), la bandeja de facturas, lo
+ * emitido sin cobrar, la remesa del mes y los traspasos a medias. Si no devuelve
+ * nada, todo está al día.
  *
  * El módulo existe para que el libro esté al día y el paquete de la gestoría llegue
  * completo; esta lista es exactamente eso, ordenado por lo que aprieta. Cada tarea
@@ -39,6 +42,7 @@ class AccountingAgenda
         private readonly AccountantPackage $package,
         private readonly InvoiceFileStore $files,
         private readonly IssuedInvoiceBook $issuedBook,
+        private readonly ClosedPeriods $closed,
     ) {
     }
 
@@ -53,7 +57,7 @@ class AccountingAgenda
     public function items(\DateTimeImmutable $today): array
     {
         $items = array_values(array_filter([
-            $this->accountantDelivery($today),
+            ...$this->accountantDeliveries($today),
             $this->openReceivedInvoices(),
             ...$this->uncollectedIssuedInvoices($today),
             $this->monthlyRemittance($today),
@@ -67,19 +71,48 @@ class AccountingAgenda
     }
 
     /**
-     * La entrega del último trimestre cerrado, desde el día siguiente a su cierre
-     * hasta el plazo de presentación. Pasado el plazo no se avisa: sin un registro de
-     * qué trimestres se entregaron, seguir avisando sería ruido.
+     * Lo que hay que mandar a la gestoría: los trimestres reabiertos para corregirlos,
+     * que hay que volver a mandar, y el último trimestre cerrado mientras no conste
+     * entregado. Antes del plazo es una tarea más; en su última semana, pasado el plazo
+     * o reabierto, aprieta. Entregado, ya no sale: es una tarea hecha.
+     *
+     * @return list<AgendaItem>
      */
-    private function accountantDelivery(\DateTimeImmutable $today): ?AgendaItem
+    private function accountantDeliveries(\DateTimeImmutable $today): array
     {
+        $items = array_map(fn (AccountantDelivery $d): AgendaItem => $this->deliveryItem(
+            $d->getQuarter(),
+            AgendaUrgency::Soon,
+            sprintf('Volver a mandar el %s a la gestoría: se reabrió el %s', $d->getQuarter()->label(), $d->getReopenedAt()?->format('d/m/Y')),
+        ), $this->closed->reopened());
+
         $quarter = InvoiceQuarter::lastClosed($today);
-        $deadline = $quarter->deliveryDeadline();
-        $day = $today->setTime(0, 0);
-        if ($day > $deadline) {
-            return null;
+        if ($this->closed->latestOf($quarter) !== null) {
+            return $items;
         }
 
+        $deadline = $quarter->deliveryDeadline();
+        $day = $today->setTime(0, 0);
+        $deadlineText = sprintf('%d de %s', (int) $deadline->format('j'), mb_strtolower(MonthNames::LONG[(int) $deadline->format('n')]));
+
+        $items[] = $day > $deadline
+            ? $this->deliveryItem($quarter, AgendaUrgency::Soon, sprintf('Mandar el %s a la gestoría: el plazo acabó el %s', $quarter->label(), $deadlineText))
+            : $this->deliveryItem(
+                $quarter,
+                (int) $day->diff($deadline)->days <= self::ACCOUNTANT_SOON_DAYS ? AgendaUrgency::Soon : AgendaUrgency::Normal,
+                sprintf('Mandar el %s a la gestoría: plazo hasta el %s', $quarter->label(), $deadlineText),
+            );
+
+        return $items;
+    }
+
+    /**
+     * La tarea de mandar un trimestre: cuántas facturas lleva el paquete, cuántas con
+     * avisos, qué gastos no tienen factura y qué banco tiene el libro sin llegar al
+     * cierre. Es lo que conviene arreglar antes de mandarlo.
+     */
+    private function deliveryItem(InvoiceQuarter $quarter, AgendaUrgency $urgency, string $title): AgendaItem
+    {
         $received = $this->package->invoicesOf($quarter);
         $issued = $this->issuedBook->invoicesOf($quarter);
         $withWarnings = \count(array_filter(
@@ -89,6 +122,7 @@ class AccountingAgenda
             $issued,
             fn ($i): bool => IssuedInvoiceBook::warnings($i, $this->issuedBook->pdfPath($i)) !== [],
         ));
+        $withoutInvoice = \count($this->entries->findExpensesWithoutInvoice($quarter->from(), $quarter->to()));
 
         $details = [sprintf(
             '%d %s y %d %s.',
@@ -100,20 +134,18 @@ class AccountingAgenda
         if ($withWarnings > 0) {
             $details[] = sprintf('%d con avisos que mirar antes de mandarlas.', $withWarnings);
         }
+        if ($withoutInvoice > 0) {
+            $details[] = $withoutInvoice === 1
+                ? '1 gasto del trimestre sin factura.'
+                : sprintf('%d gastos del trimestre sin factura.', $withoutInvoice);
+        }
         foreach ($this->bankAccountsBehind($quarter->to()) as $line) {
             $details[] = $line;
         }
 
-        $daysLeft = (int) $day->diff($deadline)->days;
-
         return new AgendaItem(
-            $daysLeft <= self::ACCOUNTANT_SOON_DAYS ? AgendaUrgency::Soon : AgendaUrgency::Normal,
-            sprintf(
-                'Mandar el %s a la gestoría: plazo hasta el %d de %s',
-                $quarter->label(),
-                (int) $deadline->format('j'),
-                mb_strtolower(MonthNames::LONG[(int) $deadline->format('n')]),
-            ),
+            $urgency,
+            $title,
             $details,
             'accounting_accountant_export',
             ['year' => $quarter->year, 'quarter' => $quarter->quarter],

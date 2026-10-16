@@ -62,6 +62,19 @@ class ClosedPeriods implements ResetInterface
     }
 
     /**
+     * Las entregas reabiertas y no vueltas a mandar, de cualquier trimestre: lo que hay
+     * que volver a entregar.
+     *
+     * @return list<AccountantDelivery>
+     */
+    public function reopened(): array
+    {
+        $this->latest ??= $this->deliveries->latestByQuarter();
+
+        return array_values(array_filter($this->latest, static fn (AccountantDelivery $d): bool => !$d->isStanding()));
+    }
+
+    /**
      * Da el trimestre por entregado.
      *
      * @throws \LogicException Si ya lo estaba.
