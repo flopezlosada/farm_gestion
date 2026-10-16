@@ -7,8 +7,9 @@
  # recibidas y los documentos renombrados.
  #
  # El controller pasa: quarter, rows (invoice + warnings), names (nombre de cada
- # fichero en el ZIP, por id), total, withWarnings, open, years, y withoutInvoice
- # (gastos del trimestre de partidas que piden factura y no tienen ninguna ligada).
+ # fichero en el ZIP, por id), total, withWarnings, open, years, withoutInvoice
+ # (gastos del trimestre de partidas que piden factura y no tienen ninguna ligada)
+ # y delivery (la entrega más reciente del trimestre, o null si nunca se entregó).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -62,6 +63,42 @@
             </a>
         {% endif %}
     </div>
+
+    {# ============ ENTREGA ============ #}
+    {% set q = { year: quarter.year, quarter: quarter.quarter } %}
+    {% if delivery and delivery.standing %}
+        <div class="csa-alert csa-alert--success" role="status" style="margin-bottom: var(--csa-sp-5);">
+            <i class="csa-alert__icon fa fa-check" aria-hidden="true"></i>
+            <div class="csa-alert__body">
+                <b>Entregado a la gestoría el {{ delivery.deliveredAt|date('d/m/Y') }}</b>{% if delivery.deliveredBy %} por {{ delivery.deliveredBy.username }}{% endif %}.
+                Lo fechado en el {{ quarter.label }} ya no se puede cambiar.
+                {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+                    <form method="post" action="{{ path('accounting_accountant_reopen', q) }}" style="display: inline; margin-left: 8px;">
+                        <input type="hidden" name="_token" value="{{ csrf_token('reopen-quarter') }}">
+                        <button type="submit" class="prl-btn"><i class="fa fa-unlock"></i> Reabrir para corregir</button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    {% else %}
+        <div class="csa-alert csa-alert--{{ delivery ? 'warning' : 'info' }}" role="status" style="margin-bottom: var(--csa-sp-5);">
+            <i class="csa-alert__icon fa fa-{{ delivery ? 'exclamation-triangle' : 'paper-plane-o' }}" aria-hidden="true"></i>
+            <div class="csa-alert__body">
+                {% if delivery %}
+                    <b>Reabierto el {{ delivery.reopenedAt|date('d/m/Y') }}</b>{% if delivery.reopenedBy %} por {{ delivery.reopenedBy.username }}{% endif %}:
+                    hay que volver a mandarlo a la gestoría.
+                {% else %}
+                    Cuando lo hayas subido a la carpeta de la gestoría, márcalo como entregado: desde entonces nada fechado en el {{ quarter.label }} se podrá cambiar sin reabrirlo.
+                {% endif %}
+                {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+                    <form method="post" action="{{ path('accounting_accountant_deliver', q) }}" style="display: inline; margin-left: 8px;">
+                        <input type="hidden" name="_token" value="{{ csrf_token('deliver-quarter') }}">
+                        <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-check"></i> Marcar como entregado</button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
 
     {% if open > 0 %}
         {{ csa.callout(open ~ (open == 1 ? ' factura sigue' : ' facturas siguen') ~ ' en la bandeja sin anotar. Si alguna es de este trimestre, no irá en el ZIP hasta que se confirme.', 'warning', 'inbox') }}
