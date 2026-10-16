@@ -44,6 +44,12 @@ class BudgetCategoryGroup
      */
     public const KIND_TRANSFER = 5;
 
+    /**
+     * Los tipos cuyos gastos se justifican con una factura recibida. El resto (ingresos,
+     * financiación, traspasos) no la traen nunca, sea cual sea la partida.
+     */
+    public const INVOICED_KINDS = [self::KIND_EXPENSE, self::KIND_INVESTMENT];
+
     /** Etiquetas de los tipos, para formularios y cabeceras de informe. */
     public const KIND_LABELS = [
         self::KIND_INCOME => 'Ingresos',

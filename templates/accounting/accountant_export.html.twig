@@ -7,7 +7,8 @@
  # recibidas y los documentos renombrados.
  #
  # El controller pasa: quarter, rows (invoice + warnings), names (nombre de cada
- # fichero en el ZIP, por id), total, withWarnings, open, years.
+ # fichero en el ZIP, por id), total, withWarnings, open, years, y withoutInvoice
+ # (gastos del trimestre de partidas que piden factura y no tienen ninguna ligada).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -64,6 +65,9 @@
 
     {% if open > 0 %}
         {{ csa.callout(open ~ (open == 1 ? ' factura sigue' : ' facturas siguen') ~ ' en la bandeja sin anotar. Si alguna es de este trimestre, no irá en el ZIP hasta que se confirme.', 'warning', 'inbox') }}
+    {% endif %}
+    {% if withoutInvoice is not empty %}
+        {{ csa.callout(withoutInvoice|length ~ (withoutInvoice|length == 1 ? ' gasto' : ' gastos') ~ ' del trimestre no ' ~ (withoutInvoice|length == 1 ? 'tiene' : 'tienen') ~ ' factura (abajo). Súbela a la bandeja y, al confirmarla, se liga al apunte.', 'warning', 'file-o') }}
     {% endif %}
     {% if withWarnings > 0 %}
         {{ csa.callout(withWarnings ~ (withWarnings == 1 ? ' factura lleva' : ' facturas llevan') ~ ' una observación (abajo). Va igual en el ZIP, con la observación en el libro, para que la gestoría lo sepa.', 'info', 'info-circle') }}
@@ -162,6 +166,38 @@
             </table>
         {% endif %}
     </div>
+
+    {% if withoutInvoice is not empty %}
+        <h2 class="acc-subhead" style="margin-top: var(--csa-sp-6, 24px);">Gastos sin factura</h2>
+        <p class="acc-muted acc-small" style="margin: 0 2px 8px;">
+            Apuntes de partidas que piden factura (se cambia en cada partida) sin ninguna factura recibida ligada.
+        </p>
+        <div class="prl-table-wrap">
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th class="tight">Fecha</th>
+                        <th>Concepto</th>
+                        <th>Partida</th>
+                        <th class="tight acc-num">Importe</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in withoutInvoice %}
+                        <tr>
+                            <td class="tight">{{ entry.date|date('d/m/Y') }}</td>
+                            <td>
+                                <a href="{{ path('accounting_entry_show', { id: entry.id }) }}">{{ entry.concept }}</a>
+                                {% if entry.providerName %}<br><span class="acc-muted acc-small">{{ entry.providerName }}</span>{% endif %}
+                            </td>
+                            <td class="acc-small">{{ entry.category.name }} · {{ entry.account.name }}</td>
+                            <td class="acc-num">{{ entry.amount|number_format(2, ',', '.') }} €</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
 
 </div>
 {% endblock %}

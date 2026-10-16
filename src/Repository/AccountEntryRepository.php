@@ -379,6 +379,34 @@ class AccountEntryRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /**
+     * Gastos de un periodo que tendrían que llevar factura y no tienen ninguna recibida
+     * ligada: lo que la gestoría echará en falta. Sólo partidas de gasto o inversión
+     * que la piden ({@see \App\Entity\BudgetCategory::expectsInvoice()}, que dice lo
+     * mismo para un apunte suelto). Por fecha.
+     *
+     * @return list<AccountEntry>
+     */
+    public function findExpensesWithoutInvoice(\DateTimeInterface $from, \DateTimeInterface $to): array
+    {
+        return $this->createQueryBuilder('e')
+            ->innerJoin('e.account', 'a')->addSelect('a')
+            ->innerJoin('e.category', 'c')->addSelect('c')
+            ->innerJoin('c.group', 'g')
+            ->leftJoin(ReceivedInvoice::class, 'ri', 'WITH', 'ri.accountEntry = e')
+            ->andWhere('ri.id IS NULL')
+            ->andWhere('g.kind IN (:kinds)')->setParameter('kinds', BudgetCategoryGroup::INVOICED_KINDS)
+            ->andWhere('c.requiresInvoice = true')
+            ->andWhere('e.amount < 0')
+            ->andWhere('e.date BETWEEN :from AND :to')
+            ->setParameter('from', $from)
+            ->setParameter('to', $to)
+            ->orderBy('e.date', 'ASC')
+            ->addOrderBy('e.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
     /** Redondea a dos decimales con punto, como los espera una columna DECIMAL. */
     private function money(float $value): string
     {

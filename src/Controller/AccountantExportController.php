@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Repository\AccountEntryRepository;
 use App\Repository\ReceivedInvoiceRepository;
 use App\Service\Accounting\Invoice\AccountantPackage;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
@@ -37,6 +38,7 @@ class AccountantExportController extends AbstractController
         InvoiceFileStore $files,
         ReceivedInvoiceRepository $invoices,
         IssuedInvoiceBook $issuedBook,
+        AccountEntryRepository $entries,
     ): Response {
         $quarter = $this->quarterFrom($request);
         $rows = array_map(static fn ($invoice) => [
@@ -59,6 +61,7 @@ class AccountantExportController extends AbstractController
             'total' => array_sum(array_map(static fn (array $r): float => (float) $r['invoice']->getTotal(), $rows)),
             'withWarnings' => \count(array_filter($rows, static fn (array $r): bool => $r['warnings'] !== [])),
             'open' => \count($invoices->findOpen()),
+            'withoutInvoice' => $entries->findExpensesWithoutInvoice($quarter->from(), $quarter->to()),
             'years' => range((int) date('Y'), (int) date('Y') - 3),
         ]);
     }

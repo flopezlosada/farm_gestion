@@ -69,6 +69,17 @@ class BudgetCategory
      */
     private int $sortOrder = 0;
 
+    /**
+     * Si un gasto de esta partida tiene que llevar factura. Casi todos la llevan; no
+     * la traen las nóminas, la Seguridad Social, el IRPF, los impuestos ni las
+     * comisiones del banco. Sólo cuenta en gastos e inversión: un ingreso, un traspaso
+     * o una cuota de préstamo no se justifican con factura recibida, y eso lo decide
+     * el tipo del grupo, no esta casilla ({@see expectsInvoice()}).
+     *
+     * @ORM\Column(name="requires_invoice", type="boolean", options={"default": true})
+     */
+    private bool $requiresInvoice = true;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -132,6 +143,28 @@ class BudgetCategory
         $this->sortOrder = $sortOrder;
 
         return $this;
+    }
+
+    public function requiresInvoice(): bool
+    {
+        return $this->requiresInvoice;
+    }
+
+    public function setRequiresInvoice(bool $requiresInvoice): self
+    {
+        $this->requiresInvoice = $requiresInvoice;
+
+        return $this;
+    }
+
+    /**
+     * Si a un apunte de esta partida le falta algo cuando no tiene factura: sólo en
+     * gastos e inversión, y sólo si la partida la pide.
+     */
+    public function expectsInvoice(): bool
+    {
+        return $this->requiresInvoice
+            && \in_array($this->getKind(), BudgetCategoryGroup::INVOICED_KINDS, true);
     }
 
     /** Tipo heredado del grupo: ingreso, gasto, inversión, financiación o traspaso. */
