@@ -5,7 +5,11 @@
  # dentro de la página). Sin factura, la ficha ocupa todo el ancho.
  #
  # El controller pasa: entry, invoice (la factura de la que salió, o null),
- # hasDocument (si el fichero de esa factura está en el servidor).
+ # issuedInvoice (la emitida de la que este apunte es el cobro, o null),
+ # hasDocument (si el fichero de esa factura está en el servidor), y para un
+ # traspaso sin pareja nearbyLoose (mitades sueltas de otras cuentas cerca de su
+ # fecha), pairable (los id de ésas que casan) y peerAccounts (cuentas donde anotar
+ # la que falta).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -31,6 +35,7 @@
 {% endblock %}
 
 {% block csa_main %}
+    {% import _self as here %}
     {% set editable = is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
 
     {{ csa.page_header(
@@ -55,9 +60,13 @@
                 <dd>{{ entry.category ? entry.category.group.name ~ ' / ' ~ entry.category.name : '—' }}</dd>
                 <dt>Cuenta</dt>
                 <dd>{{ entry.account.name }}</dd>
-                {% if entry.transfer and entry.transferPeer %}
+                {% if entry.pairedTransfer %}
                     <dt>Traspaso</dt>
-                    <dd>{{ entry.incoming ? 'desde' : 'hacia' }} {{ entry.transferPeer.account.name }}</dd>
+                    <dd>{{ entry.incoming ? 'desde' : 'hacia' }} <a href="{{ path('accounting_entry_show', { id: entry.transferPeer.id }) }}">{{ entry.transferPeer.account.name }}</a></dd>
+                {% endif %}
+                {% if issuedInvoice %}
+                    <dt>{{ issuedInvoice.rectifying ? 'Devolución de' : 'Cobro de' }}</dt>
+                    <dd><a href="{{ path('accounting_issued_invoice_show', { id: issuedInvoice.id }) }}">la factura {{ issuedInvoice.numberLabel }}</a>{% if issuedInvoice.customer %} · {{ issuedInvoice.customer.name }}{% endif %}</dd>
                 {% endif %}
                 {% if entry.providerName %}
                     <dt>Proveedor</dt>
@@ -81,6 +90,10 @@
                 <dd>{{ entry.createdAt ? entry.createdAt|date('d/m/Y H:i') : '—' }}{% if entry.createdBy %} por {{ entry.createdBy.username }}{% endif %}</dd>
             </dl>
 
+            {% if entry.looseTransfer %}
+                {{ here.loose_transfer(entry, nearbyLoose, pairable, peerAccounts, editable) }}
+            {% endif %}
+
             {% if invoice %}
                 <h2 class="ent-h"><a href="{{ path('accounting_invoice_review', { id: invoice.id }) }}">La factura</a></h2>
                 {{ invm.facts(invoice) }}
@@ -88,11 +101,11 @@
 
             {% if editable %}
                 <div class="csa-row" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
-                    {% if not entry.transfer %}
+                    {% if not entry.pairedTransfer %}
                         {{ csa.btn('Corregir', { variant: 'primary', href: path('accounting_entry_edit', { id: entry.id }), icon: 'fa-pencil' }) }}
                     {% endif %}
                     <form method="post" action="{{ path('accounting_entry_delete', { id: entry.id }) }}" style="display:inline;"
-                          onsubmit="return confirm('{{ entry.transfer ? '¿Borrar el traspaso? Se van los dos apuntes.' : (invoice ? '¿Borrar el apunte? La factura vuelve a la bandeja para anotarla de nuevo.' : '¿Borrar el apunte?') }}');">
+                          onsubmit="return confirm('{{ entry.pairedTransfer ? '¿Borrar el traspaso? Se van los dos apuntes.' : (invoice ? '¿Borrar el apunte? La factura vuelve a la bandeja para anotarla de nuevo.' : (issuedInvoice ? '¿Borrar el apunte? La factura ' ~ issuedInvoice.numberLabel ~ ' volverá a estar sin cobrar.' : '¿Borrar el apunte?')) }}');">
                         <input type="hidden" name="_token" value="{{ csrf_token('accounting_entry_delete_' ~ entry.id) }}">
                         <button type="submit" class="csa-btn csa-btn--ghost"><i class="fa fa-trash"></i> <span>Borrar</span></button>
                     </form>
@@ -101,3 +114,58 @@
         </div>
     </div>
 {% endblock %}
+
+{# Un traspaso al que le falta la otra mitad: la portada manda aquí. Se arregla
+ # emparejándolo con la mitad ya anotada en la otra cuenta o anotando la que falta. #}
+{% macro loose_transfer(entry, nearby, pairable, accounts, editable) %}
+    {% import 'accounting/_money.html.twig' as fmt %}
+    <h2 class="ent-h">Le falta la otra mitad</h2>
+    <p class="acc-muted">
+        Un traspaso son dos apuntes que se anulan: lo que sale de una cuenta entra en otra.
+        A éste le falta el de la otra cuenta, y hasta que lo tenga el saldo de una de
+        las dos no cuadra.
+    </p>
+    {% if nearby is not empty %}
+        <p>Mitades sueltas en sentido contrario, de otras cuentas y cerca de esta fecha. Si
+           la pareja está pero con otro importe, corrige la que esté mal y vuelve aquí.</p>
+        <table class="prl-table">
+            <tbody>
+                {% for c in nearby %}
+                    <tr>
+                        <td class="tight">{{ c.date|date('d/m/Y') }}</td>
+                        <td>{{ c.account.name }}</td>
+                        <td><a href="{{ path('accounting_entry_show', { id: c.id }) }}">{{ c.concept }}</a></td>
+                        <td class="acc-num">{{ fmt.money(c.amount, false) }}</td>
+                        {% if c.id not in pairable %}
+                            <td class="tight acc-muted acc-small">otro importe</td>
+                        {% elseif editable %}
+                            <td class="tight">
+                                <form method="post" action="{{ path('accounting_entry_pair', { id: entry.id }) }}">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('accounting_entry_pair_' ~ entry.id) }}">
+                                    <input type="hidden" name="peer" value="{{ c.id }}">
+                                    <button type="submit" class="csa-btn csa-btn--secondary"><i class="fa fa-link"></i> <span>Es ésta</span></button>
+                                </form>
+                            </td>
+                        {% endif %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% elseif editable %}
+        <p>No hay ninguna mitad suelta en otra cuenta cerca de esta fecha: anota la que falta.</p>
+    {% endif %}
+    {% if editable and accounts is not empty %}
+        <form method="post" action="{{ path('accounting_entry_complete', { id: entry.id }) }}" class="csa-row" style="margin-top: var(--csa-sp-3);">
+            <input type="hidden" name="_token" value="{{ csrf_token('accounting_entry_complete_' ~ entry.id) }}">
+            <label>{{ entry.incoming ? 'Salió de' : 'Entró en' }}
+                <select name="account" class="csa-input" required>
+                    <option value="">Elige la cuenta</option>
+                    {% for a in accounts %}
+                        <option value="{{ a.id }}">{{ a.name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <button type="submit" class="csa-btn csa-btn--ghost"><i class="fa fa-plus"></i> <span>Anotar la otra mitad</span></button>
+        </form>
+    {% endif %}
+{% endmacro %}

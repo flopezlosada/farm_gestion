@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\AccountEntry;
 use App\Entity\BudgetCategoryGroup;
+use App\Entity\FinancialAccount;
 use App\Entity\User;
 use App\Form\AccountEntryType;
 use App\Form\AccountTransferType;
@@ -11,6 +12,7 @@ use App\Repository\AccountEntryRepository;
 use App\Repository\BudgetCategoryRepository;
 use App\Repository\BudgetRepository;
 use App\Repository\FinancialAccountRepository;
+use App\Repository\IssuedInvoiceRepository;
 use App\Repository\ReceivedInvoiceRepository;
 use App\Service\Accounting\Agenda\AccountingAgenda;
 use App\Service\Accounting\BudgetTracker;
@@ -24,6 +26,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 /**
  * Las cuentas de la asociación: el libro de caja y el seguimiento del presupuesto.
@@ -41,6 +44,12 @@ class AccountingController extends AbstractController
 {
     /** Días sin apuntes a partir de los que el libro de una cuenta de banco se da por atrasado. */
     private const STALE_BOOK_DAYS = 30;
+
+    /**
+     * Días alrededor de un traspaso suelto en que se busca la otra mitad. Más que los
+     * del emparejado automático: aquí decide una persona viendo los candidatos.
+     */
+    private const PEER_SEARCH_DAYS = 15;
 
     /**
      * La portada: lo que hay que hacer. Arriba, el dinero que hay, hasta dónde está el
@@ -367,7 +376,7 @@ class AccountingController extends AbstractController
             $em->flush();
             $this->addFlash('success', sprintf('Anotado: %s.', $entry->getConcept()));
 
-            if ($form->get('submitAndNew')->isClicked()) {
+            if ($request->request->has('and_new')) {
                 return $this->redirectToRoute('accounting_entry_new', [
                     'account' => $entry->getAccount()?->getId(),
                     'date' => $entry->getDate()?->format('Y-m-d'),
@@ -391,15 +400,109 @@ class AccountingController extends AbstractController
      * al lado: para comprobar un gasto no hace falta ir a buscar el papel.
      */
     #[Route('/entry/{id}', name: 'accounting_entry_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function entryShow(AccountEntry $entry, ReceivedInvoiceRepository $invoices, InvoiceFileStore $files): Response
-    {
+    public function entryShow(
+        AccountEntry $entry,
+        ReceivedInvoiceRepository $invoices,
+        IssuedInvoiceRepository $issuedInvoices,
+        AccountEntryRepository $entries,
+        FinancialAccountRepository $accounts,
+        InvoiceFileStore $files,
+    ): Response {
         $invoice = $invoices->findOneBy(['accountEntry' => $entry]);
+        $loose = $entry->isLooseTransfer();
+        // La pareja va en sentido contrario: si éste entra, la otra sale.
+        $nearby = $loose ? array_values(array_filter(
+            $entries->findLooseTransfersNear($entry, self::PEER_SEARCH_DAYS),
+            static fn (AccountEntry $c): bool => $c->isIncoming() !== $entry->isIncoming(),
+        )) : [];
 
         return $this->render('accounting/entry_show.html.twig', [
             'entry' => $entry,
             'invoice' => $invoice,
+            'issuedInvoice' => $issuedInvoices->findOneBy(['accountEntry' => $entry]),
             'hasDocument' => $invoice !== null && $files->pathTo($invoice->getFileName()) !== null,
+            // Todas las mitades sueltas cercanas, y cuáles casan: las de otro importe
+            // se enseñan igual, porque suelen ser la pareja con una errata.
+            'nearbyLoose' => $nearby,
+            'pairable' => array_map(
+                static fn (AccountEntry $c): int => (int) $c->getId(),
+                array_filter($nearby, static fn (AccountEntry $c): bool => TransferRecorder::canPair($entry, $c)),
+            ),
+            'peerAccounts' => $loose ? array_values(array_filter(
+                $accounts->findActive(),
+                static fn (FinancialAccount $a): bool => $a !== $entry->getAccount(),
+            )) : [],
         ]);
+    }
+
+    /**
+     * Emparejar una mitad suelta de traspaso con la otra, ya anotada en la otra
+     * cuenta. Es lo que pide la portada con los traspasos sin pareja.
+     */
+    #[Route('/entry/{id}/pair', name: 'accounting_entry_pair', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function entryPair(Request $request, AccountEntry $entry, AccountEntryRepository $entries, TransferRecorder $transfers, EntityManagerInterface $em): Response
+    {
+        if (!$this->isCsrfTokenValid('accounting_entry_pair_'.$entry->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('accounting_entry_show', ['id' => $entry->getId()]);
+        }
+
+        $peer = $entries->find($request->request->getInt('peer'));
+        if ($peer === null || !TransferRecorder::canPair($entry, $peer)) {
+            $this->addFlash('warning', 'Esos dos apuntes no son las dos mitades de un mismo traspaso.');
+
+            return $this->redirectToRoute('accounting_entry_show', ['id' => $entry->getId()]);
+        }
+
+        $transfers->pair($entry, $peer);
+        $em->flush();
+        $this->addFlash('success', sprintf('Traspaso emparejado con el apunte de %s.', $peer->getAccount()?->getName()));
+
+        return $this->redirectToRoute('accounting_entry_show', ['id' => $entry->getId()]);
+    }
+
+    /**
+     * Anotar la mitad que le falta a un traspaso suelto, en la cuenta que se elija:
+     * misma fecha y concepto, importe contrario.
+     */
+    #[Route('/entry/{id}/complete', name: 'accounting_entry_complete', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function entryComplete(
+        Request $request,
+        AccountEntry $entry,
+        FinancialAccountRepository $accounts,
+        TransferRecorder $transfers,
+        ValidatorInterface $validator,
+        EntityManagerInterface $em,
+    ): Response {
+        $back = $this->redirectToRoute('accounting_entry_show', ['id' => $entry->getId()]);
+        if (!$this->isCsrfTokenValid('accounting_entry_complete_'.$entry->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $back;
+        }
+
+        $account = $accounts->find($request->request->getInt('account'));
+        if ($account === null || !$entry->isLooseTransfer() || $account === $entry->getAccount()) {
+            $this->addFlash('warning', 'Elige la otra cuenta del traspaso.');
+
+            return $back;
+        }
+
+        $peer = $transfers->complete($entry, $account, $this->currentUser());
+        $violations = $validator->validate($peer);
+        if (\count($violations) > 0) {
+            $entry->pairWith(null);
+            $this->addFlash('warning', (string) $violations[0]->getMessage());
+
+            return $back;
+        }
+
+        $em->persist($peer);
+        $em->flush();
+        $this->addFlash('success', sprintf('Anotada la otra mitad en %s. El traspaso ya está completo.', $account->getName()));
+
+        return $back;
     }
 
     /**
@@ -416,7 +519,7 @@ class AccountingController extends AbstractController
         EntityManagerInterface $em,
         BudgetCategoryRepository $categories,
     ): Response {
-        if ($entry->isTransfer()) {
+        if ($entry->isPairedTransfer()) {
             $this->addFlash('warning', 'Un traspaso no se edita por mitades: bórralo y vuelve a anotarlo.');
 
             return $this->redirectToRoute('accounting_ledger');
@@ -453,6 +556,7 @@ class AccountingController extends AbstractController
         EntityManagerInterface $em,
         TransferRecorder $transfers,
         ReceivedInvoiceRepository $invoices,
+        IssuedInvoiceRepository $issuedInvoices,
     ): Response {
         $accountId = $entry->getAccount()?->getId();
 
@@ -462,14 +566,22 @@ class AccountingController extends AbstractController
             return $this->redirectToRoute('accounting_ledger', ['account' => $accountId]);
         }
 
-        if ($entry->isTransfer()) {
+        if ($entry->isPairedTransfer()) {
             $transfers->remove($entry);
             $this->addFlash('success', 'Traspaso borrado, con sus dos mitades.');
         } else {
             $invoice = $invoices->findOneBy(['accountEntry' => $entry]);
             $invoice?->reopen();
+            // El cobro de una emitida se desliga solo (SET NULL), pero sin avisar la
+            // factura pasaría a «sin cobrar» sin que nadie lo supiera.
+            $issued = $issuedInvoices->findOneBy(['accountEntry' => $entry]);
+            $issued?->unmarkPaid();
             $em->remove($entry);
-            $this->addFlash('success', $invoice !== null ? 'Apunte borrado. Su factura vuelve a la bandeja.' : 'Apunte borrado.');
+            $this->addFlash('success', match (true) {
+                $invoice !== null => 'Apunte borrado. Su factura vuelve a la bandeja.',
+                $issued !== null => sprintf('Apunte borrado. La factura %s vuelve a estar sin cobrar.', $issued->getNumberLabel()),
+                default => 'Apunte borrado.',
+            });
         }
         $em->flush();
 

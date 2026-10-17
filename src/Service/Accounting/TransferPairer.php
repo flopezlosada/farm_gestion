@@ -31,7 +31,7 @@ class TransferPairer
     {
         $loose = array_values(array_filter(
             $entries,
-            static fn (AccountEntry $e): bool => $e->isTransfer() && $e->getTransferPeer() === null,
+            static fn (AccountEntry $e): bool => $e->isLooseTransfer(),
         ));
 
         $outgoing = array_filter($loose, static fn (AccountEntry $e): bool => self::cents($e) < 0);
@@ -62,7 +62,7 @@ class TransferPairer
     {
         $distances = [];
         foreach ($incoming as $key => $in) {
-            if ($in->getAccount() === $out->getAccount() || self::cents($in) !== -self::cents($out)) {
+            if (!TransferRecorder::canPair($out, $in)) {
                 continue;
             }
             $days = self::daysApart($out, $in);

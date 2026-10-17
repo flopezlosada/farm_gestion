@@ -259,6 +259,24 @@ class AccountEntry
     }
 
     /**
+     * Una mitad de traspaso CON su pareja. Ésta no se corrige suelta: cambiarle el
+     * importe descuadraría la otra cuenta; se borran las dos y se vuelve a anotar.
+     */
+    public function isPairedTransfer(): bool
+    {
+        return $this->isTransfer() && $this->transferPeer !== null;
+    }
+
+    /**
+     * Una mitad de traspaso a la que le falta la otra (la portada las señala). Se
+     * corrige como cualquier apunte, y se empareja o se completa desde su ficha.
+     */
+    public function isLooseTransfer(): bool
+    {
+        return $this->isTransfer() && $this->transferPeer === null;
+    }
+
+    /**
      * Completa este apunte con lo que sabe otro de él, sin pisar nada: cuando una
      * factura se engancha a un pago que ya trajo el banco, el apunte del banco gana el
      * proveedor, el nº de factura y las notas que no tenía. Concepto, partida e

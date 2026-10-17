@@ -249,6 +249,61 @@ class IssuedInvoiceControllerTest extends AbstractAuthenticatedTest
         }
     }
 
+    /**
+     * El apunte de un cobro dice de qué factura es, y borrarlo no la deja «cobrada»
+     * por un movimiento que ya no existe: vuelve a sin cobrar, y se avisa.
+     */
+    public function testElApunteDelCobroLlevaASuFacturaYBorrarloLaDejaSinCobrar(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->configureIssuer();
+        $invoice = $this->draft();
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/issued-invoices/%d', $invoice->getId()));
+        $client->submit($crawler->filter('form[action$="/issue"]')->form());
+
+        $em = $this->em();
+        $suffix = bin2hex(random_bytes(3));
+        $account = (new FinancialAccount())->setName('Banco de prueba ' . $suffix)->setKind(FinancialAccount::KIND_BANK)
+            ->setOpeningBalance('0.00')->setOpeningDate(new \DateTimeImmutable('2091-01-01'))->setActive(true)->setSortOrder(99);
+        $group = (new BudgetCategoryGroup())->setName('INGRESOS PRUEBA ' . $suffix)->setKind(BudgetCategoryGroup::KIND_INCOME)->setSortOrder(99);
+        $category = (new BudgetCategory())->setGroup($group)->setName('Formación')->setSortOrder(1);
+        $payment = (new AccountEntry())->setAccount($account)->setCategory($category)
+            ->setDate(new \DateTimeImmutable('2091-03-26'))->setConcept('trf. cooperativa')->setAmount('121.00');
+        array_map([$em, 'persist'], [$account, $group, $category, $payment]);
+        $em->flush();
+        $paymentId = $payment->getId();
+
+        try {
+            $crawler = $client->request('GET', sprintf('/gestion/accounting/issued-invoices/%d', $invoice->getId()));
+            $client->submit($crawler->filter('form[action$="/payment"]')->form());
+            $this->em()->clear();
+            $label = $this->em()->find(IssuedInvoice::class, $invoice->getId())->getNumberLabel();
+
+            $crawler = $client->request('GET', sprintf('/gestion/accounting/entry/%d', $paymentId));
+            $this->assertResponseIsSuccessful();
+            $this->assertSelectorTextContains('.ent-facts', 'Cobro de');
+            $this->assertCount(1, $crawler->filter(sprintf('.ent-facts a[href="/gestion/accounting/issued-invoices/%d"]', $invoice->getId())));
+
+            $client->submit($crawler->filter('form[action$="/delete"]')->form());
+            $client->followRedirect();
+            $this->assertSelectorTextContains('body', sprintf('La factura %s vuelve a estar sin cobrar', $label));
+            $this->em()->clear();
+            $this->assertFalse($this->em()->find(IssuedInvoice::class, $invoice->getId())->isPaid());
+            $this->assertNull($this->em()->find(AccountEntry::class, $paymentId));
+        } finally {
+            $em = $this->em();
+            $em->clear();
+            foreach ([[AccountEntry::class, $paymentId], [BudgetCategory::class, $category->getId()],
+                      [BudgetCategoryGroup::class, $group->getId()], [FinancialAccount::class, $account->getId()]] as [$class, $id]) {
+                if (($row = $em->find($class, $id)) !== null) {
+                    $em->remove($row);
+                    $em->flush();
+                }
+            }
+        }
+    }
+
     /** Un borrador se puede tirar: no tiene número, no deja hueco. */
     public function testUnBorradorSeTira(): void
     {

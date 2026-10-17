@@ -62,9 +62,11 @@
                 <div class="csa-row">
                     {{ csa.btn('Cancelar', { variant: 'ghost', href: path('accounting_ledger') }) }}
                     {% if not entry %}
-                        {{ form_widget(form.submitAndNew, { attr: { class: 'csa-btn csa-btn--secondary' } }) }}
+                        {# Quien anota viene con un extracto delante y mete veinte seguidos:
+                         # vuelve al formulario en blanco conservando fecha y cuenta. #}
+                        <button type="submit" name="and_new" value="1" class="csa-btn csa-btn--secondary">Guardar y anotar otro</button>
                     {% endif %}
-                    {{ form_widget(form.submit, { attr: { class: 'csa-btn csa-btn--primary' } }) }}
+                    <button type="submit" class="csa-btn csa-btn--primary">Guardar</button>
                 </div>
             </div>
 
