@@ -13,7 +13,6 @@ use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\NumberType;
-use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
@@ -100,12 +99,9 @@ class AccountEntryType extends AbstractType
             ])
             ->add('providerName', TextType::class, ['required' => false])
             ->add('invoiceNumber', TextType::class, ['required' => false])
-            ->add('notes', TextareaType::class, ['required' => false])
-            ->add('submit', SubmitType::class, ['label' => 'Guardar'])
-            // Quien anota viene con un extracto delante y mete veinte seguidos: este
-            // botón vuelve al formulario en blanco conservando fecha y cuenta, en vez
-            // de obligar a navegar al libro y volver por cada apunte.
-            ->add('submitAndNew', SubmitType::class, ['label' => 'Guardar y anotar otro']);
+            // Sin botones: los pone cada plantilla. Este tipo va también incrustado al
+            // confirmar una factura, donde sus botones sobraban y había que taparlos.
+            ->add('notes', TextareaType::class, ['required' => false]);
 
         // Al abrir un apunte que ya trae importe —uno guardado, o uno propuesto a
         // partir de una factura—, deshace el signo para llenar las dos casillas.

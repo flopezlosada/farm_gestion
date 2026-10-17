@@ -380,6 +380,32 @@ class AccountEntryRepository extends ServiceEntityRepository
     }
 
     /**
+     * Traspasos sin pareja de otras cuentas a como mucho `$days` días de un apunte:
+     * de donde sale la mitad que le falta. Quién casa de verdad lo dice
+     * {@see \App\Service\Accounting\TransferRecorder::canPair}.
+     *
+     * @return list<AccountEntry>
+     */
+    public function findLooseTransfersNear(AccountEntry $entry, int $days): array
+    {
+        $date = \DateTimeImmutable::createFromInterface($entry->getDate());
+
+        return $this->createQueryBuilder('e')
+            ->innerJoin('e.account', 'a')->addSelect('a')
+            ->innerJoin('e.category', 'c')->addSelect('c')
+            ->innerJoin('c.group', 'g')->addSelect('g')
+            ->andWhere('g.kind = :transfer')->setParameter('transfer', BudgetCategoryGroup::KIND_TRANSFER)
+            ->andWhere('e.transferPeer IS NULL')
+            ->andWhere('e.account != :account')->setParameter('account', $entry->getAccount())
+            ->andWhere('e.date BETWEEN :from AND :to')
+            ->setParameter('from', $date->modify(sprintf('-%d days', $days)))
+            ->setParameter('to', $date->modify(sprintf('+%d days', $days)))
+            ->orderBy('e.date', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Gastos de un periodo que tendrían que llevar factura y no tienen ninguna recibida
      * ligada: lo que la gestoría echará en falta. Sólo partidas de gasto o inversión
      * que la piden ({@see \App\Entity\BudgetCategory::expectsInvoice()}, que dice lo

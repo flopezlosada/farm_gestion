@@ -6,6 +6,7 @@ use App\Entity\AccountEntry;
 use App\Entity\BudgetCategory;
 use App\Entity\BudgetCategoryGroup;
 use App\Entity\FinancialAccount;
+use App\Entity\IssuedInvoice;
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -75,6 +76,68 @@ class TransferRecorder
             $this->em->remove($peer);
         }
         $this->em->remove($entry);
+    }
+
+    /**
+     * Si dos mitades sueltas son el mismo traspaso visto desde cada cuenta: las dos
+     * sin pareja, de cuentas distintas y con el mismo importe de signo contrario. La
+     * fecha no entra: el banco puede abonar días después, y lo decide quien empareja.
+     */
+    public static function canPair(AccountEntry $a, AccountEntry $b): bool
+    {
+        return $a !== $b
+            && $a->isLooseTransfer()
+            && $b->isLooseTransfer()
+            && $a->getAccount() !== $b->getAccount()
+            && self::cents($a) === -self::cents($b);
+    }
+
+    /**
+     * Enlaza dos mitades sueltas ({@see canPair}).
+     *
+     * @throws \InvalidArgumentException si no casan
+     */
+    public function pair(AccountEntry $a, AccountEntry $b): void
+    {
+        if (!self::canPair($a, $b)) {
+            throw new \InvalidArgumentException('Esos dos apuntes no son las dos mitades de un mismo traspaso.');
+        }
+        $a->pairWith($b);
+    }
+
+    /**
+     * Anota la mitad que le falta a un traspaso suelto, en la otra cuenta: misma
+     * fecha y concepto, importe con el signo contrario. Devuelve la mitad nueva, sin
+     * guardar, para que se valide antes.
+     *
+     * @throws \InvalidArgumentException si el apunte ya tiene pareja o la cuenta es la suya
+     */
+    public function complete(AccountEntry $loose, FinancialAccount $other, ?User $author = null): AccountEntry
+    {
+        if (!$loose->isLooseTransfer()) {
+            throw new \InvalidArgumentException('Ese apunte no es un traspaso al que le falte la otra mitad.');
+        }
+        if ($loose->getAccount() === $other) {
+            throw new \InvalidArgumentException('La otra mitad tiene que ir a una cuenta distinta.');
+        }
+
+        $peer = $this->newEntry(
+            $other,
+            $loose->getCategory(),
+            $loose->getDate(),
+            $loose->getConcept(),
+            IssuedInvoice::fromCents(-self::cents($loose)),
+            $author,
+        );
+        $loose->pairWith($peer);
+
+        return $peer;
+    }
+
+    /** Importe en céntimos, para comparar sin los errores del float. */
+    private static function cents(AccountEntry $entry): int
+    {
+        return IssuedInvoice::toCents($entry->getAmount());
     }
 
     /**
