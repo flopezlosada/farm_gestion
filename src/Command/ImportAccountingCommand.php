@@ -147,6 +147,13 @@ class ImportAccountingCommand extends Command
                 $problems[] = sprintf('Línea %d: no existe la cuenta "%s". Créala antes de importar.', $line, $accountName);
                 continue;
             }
+            if (!$account->isOpenOn($date)) {
+                $problems[] = sprintf(
+                    'Línea %d: %s es anterior a la apertura de "%s" (%s) y no entraría en su saldo. ¿Errata en el año?',
+                    $line, $date->format('d/m/Y'), $account->getName(), $account->getOpeningDate()->format('d/m/Y'),
+                );
+                continue;
+            }
 
             $target = $this->categoryMap->resolve($label, $amount);
             if ($target === null) {

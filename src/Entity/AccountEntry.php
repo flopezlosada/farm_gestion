@@ -5,6 +5,7 @@ namespace App\Entity;
 use Doctrine\ORM\Mapping as ORM;
 use Gedmo\Mapping\Annotation as Gedmo;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 /**
  * Un movimiento de dinero en una cuenta de la asociación. Es la unidad del libro y la
@@ -26,6 +27,9 @@ use Symfony\Component\Validator\Constraints as Assert;
  */
 class AccountEntry
 {
+    /** Aviso cuando la fecha cae antes de la apertura de la cuenta ({@see FinancialAccount::isOpenOn}). */
+    public const BEFORE_OPENING_MESSAGE = 'La cuenta {{ account }} empieza el {{ opening }}: un movimiento anterior no entraría en su saldo. ¿Está bien el año?';
+
     /**
      * @ORM\Id
      * @ORM\GeneratedValue
@@ -130,6 +134,26 @@ class AccountEntry
      * @ORM\Column(name="updated_at", type="datetime")
      */
     private ?\DateTimeInterface $updatedAt = null;
+
+    /**
+     * La fecha no puede ser anterior a la apertura de la cuenta: el saldo empieza a
+     * sumar ahí, y un apunte anterior se quedaría fuera sin avisar. Se valida en la
+     * entidad porque los apuntes se anotan a mano y al confirmar una factura.
+     *
+     * @param ExecutionContextInterface $context Contexto de validación.
+     */
+    #[Assert\Callback]
+    public function validateDateWithinAccount(ExecutionContextInterface $context): void
+    {
+        if ($this->date === null || $this->account === null || $this->account->isOpenOn($this->date)) {
+            return;
+        }
+        $context->buildViolation(self::BEFORE_OPENING_MESSAGE)
+            ->setParameter('{{ account }}', $this->account->getName())
+            ->setParameter('{{ opening }}', $this->account->getOpeningDate()->format('d/m/Y'))
+            ->atPath('date')
+            ->addViolation();
+    }
 
     public function getId(): ?int
     {

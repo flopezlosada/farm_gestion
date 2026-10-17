@@ -84,7 +84,7 @@
                 </select>
             {% endif %}
         </form>
-        <a href="{{ path('accounting_ledger') }}" class="prl-btn"><i class="fa fa-list"></i> Libro</a>
+        <a href="{{ path('accounting_ledger') }}" class="prl-btn"><i class="fa fa-list"></i> Movimientos</a>
         <a href="{{ path('accounting_year', { year: year }) }}" class="prl-btn"><i class="fa fa-table"></i> Resumen del año</a>
         <a href="{{ path('accounting_budgets') }}" class="prl-btn"><i class="fa fa-calculator"></i> Presupuestos</a>
         {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}

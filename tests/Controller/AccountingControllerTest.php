@@ -2,6 +2,7 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\FinancialAccount;
 use App\Entity\Setting;
 use App\Service\AppSettings;
 use Doctrine\ORM\EntityManagerInterface;
@@ -14,11 +15,17 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 class AccountingControllerTest extends AbstractAuthenticatedTest
 {
+    /** Cuenta creada por el test, para quitarla al acabar. */
+    private ?FinancialAccount $account = null;
+
     protected function tearDown(): void
     {
         $em = static::getContainer()->get(EntityManagerInterface::class);
         foreach ($em->getRepository(Setting::class)->findBy(['name' => AppSettings::FEATURE_CONTABILIDAD]) as $setting) {
             $em->remove($setting);
+        }
+        if ($this->account !== null) {
+            $em->remove($em->find(FinancialAccount::class, $this->account->getId()));
         }
         $em->flush();
 
@@ -76,6 +83,28 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
         $this->assertResponseIsSuccessful();
         $this->assertCount(1, $crawler->filter('.acc-hub a[href="/gestion/accounting/setup/accounts"]'));
         $this->assertCount(1, $crawler->filter('.acc-hub a[href="/gestion/accounting/customers"]'));
+    }
+
+    /**
+     * Movimientos filtrados por una cuenta responde con su saldo. El de cada fila lo
+     * cubre AccountEntryRunningBalanceTest.
+     */
+    public function testMovimientosDeUnaCuentaEnsenanSuSaldo(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $this->account = (new FinancialAccount())
+            ->setName('Banco prueba '.bin2hex(random_bytes(3)))
+            ->setOpeningBalance('0')
+            ->setOpeningDate(new \DateTimeImmutable('2099-01-01'));
+        $em->persist($this->account);
+        $em->flush();
+
+        $client->request('GET', '/gestion/accounting/ledger?account='.$this->account->getId());
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorTextContains('h1', 'Movimientos');
+        $this->assertSelectorTextContains('body', 'saldo de '.$this->account->getName());
     }
 
     private function enableModule(): void

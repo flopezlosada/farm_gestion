@@ -46,6 +46,58 @@ class AccountEntryRepository extends ServiceEntityRepository
     }
 
     /**
+     * Saldo de la cuenta tras cada apunte de la lista, como la columna «saldo» del
+     * extracto del banco: `[id del apunte => saldo]`. Los apuntes tienen que ser todos
+     * de esa cuenta y venir en el orden del libro ({@see listingQueryBuilder}), y sin
+     * huecos: con un filtro de partida o de texto el saldo de una fila no se deduce
+     * de la anterior.
+     *
+     * Una sola consulta, para el primer apunte; el resto se arrastra fila a fila. Un
+     * apunte anterior a la apertura no entra en el saldo y se queda sin cifra.
+     *
+     * @param AccountEntry[] $entries
+     * @param bool $ascending El sentido en que vienen.
+     *
+     * @return array<int, string>
+     */
+    public function runningBalances(FinancialAccount $account, array $entries, bool $ascending): array
+    {
+        $counted = array_values(array_filter($entries, static fn (AccountEntry $e): bool => $account->isOpenOn($e->getDate())));
+        if ($counted === []) {
+            return [];
+        }
+
+        $balances = [];
+        $cents = IssuedInvoice::toCents($this->balanceAfter($account, $counted[0]));
+        foreach ($counted as $i => $entry) {
+            if ($i > 0) {
+                $cents += $ascending
+                    ? IssuedInvoice::toCents($entry->getAmount())
+                    : -IssuedInvoice::toCents($counted[$i - 1]->getAmount());
+            }
+            $balances[(int) $entry->getId()] = IssuedInvoice::fromCents($cents);
+        }
+
+        return $balances;
+    }
+
+    /** Saldo de la cuenta justo después de un apunte: lo de días anteriores y lo anotado antes ese mismo día. */
+    private function balanceAfter(FinancialAccount $account, AccountEntry $entry): string
+    {
+        $moved = (string) $this->createQueryBuilder('e')
+            ->select('COALESCE(SUM(e.amount), 0)')
+            ->andWhere('e.account = :account')->setParameter('account', $account)
+            ->andWhere('e.date >= :opening')->setParameter('opening', $account->getOpeningDate())
+            ->andWhere('e.date < :date OR (e.date = :date AND e.id <= :id)')
+            ->setParameter('date', $entry->getDate())
+            ->setParameter('id', $entry->getId())
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return IssuedInvoice::fromCents(IssuedInvoice::toCents($account->getOpeningBalance()) + IssuedInvoice::toCents($moved));
+    }
+
+    /**
      * Cuántos apuntes tiene cada cuenta: `[accountId => nº]`. Sirve para saber si una
      * cuenta ya está en uso, y por tanto si su saldo de apertura todavía se puede
      * corregir o hay que dejarlo quieto.
@@ -261,16 +313,22 @@ class AccountEntryRepository extends ServiceEntityRepository
      * el constructor y no el resultado porque el paginador necesita la consulta sin
      * ejecutar para contar y trocear.
      *
+     * Dentro de un mismo día manda el orden en que se anotaron (el id), en el mismo
+     * sentido que la fecha: si no, al ordenar de antiguo a nuevo los movimientos de
+     * cada día saldrían al revés y el saldo de cada fila no se podría seguir.
+     *
      * @param array{account?: ?FinancialAccount, category?: ?int, group?: ?int, from?: ?\DateTimeInterface, to?: ?\DateTimeInterface, text?: ?string} $filters
+     * @param bool $ascending De antiguo a nuevo; por defecto, lo último primero.
      */
-    public function listingQueryBuilder(array $filters = []): QueryBuilder
+    public function listingQueryBuilder(array $filters = [], bool $ascending = false): QueryBuilder
     {
+        $direction = $ascending ? 'ASC' : 'DESC';
         $qb = $this->createQueryBuilder('e')
             ->innerJoin('e.account', 'a')->addSelect('a')
             ->innerJoin('e.category', 'c')->addSelect('c')
             ->innerJoin('c.group', 'g')->addSelect('g')
-            ->orderBy('e.date', 'DESC')
-            ->addOrderBy('e.id', 'DESC');
+            ->orderBy('e.date', $direction)
+            ->addOrderBy('e.id', $direction);
 
         if (!empty($filters['account'])) {
             $qb->andWhere('e.account = :account')->setParameter('account', $filters['account']);
