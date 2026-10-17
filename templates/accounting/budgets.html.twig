@@ -116,7 +116,7 @@
                 <p style="margin: 0; font-size: 13px;" class="acc-muted">No hay presupuesto aprobado de {{ year }} con el que hacer la cuenta.</p>
             {% else %}
                 <p style="margin: 0 0 10px; font-size: 13px;">
-                    Los gastos previstos del año suman
+                    Los gastos previstos del año, con inversiones y cuotas de préstamo, suman
                     <b>{{ basketCost.expenses|number_format(2, ',', '.') }} €</b>. Descontando los huevos,
                     que se cobran aparte ({{ basketCost.eggExpenses|number_format(2, ',', '.') }} €),
                     quedan <b>{{ basketCost.toCover|number_format(2, ',', '.') }} €</b> que tienen que salir

@@ -45,11 +45,25 @@
         .acc-spread { padding: 2px 6px; font-size: 11px; }
         .acc-grid tfoot td { font-weight: 600; background: rgba(0, 0, 0, 0.04); }
         .acc-cat-name { min-width: 190px; }
+        /* La partida se queda a la vista al desplazar a los últimos meses: sin ella,
+           de septiembre en adelante es una rejilla de números sin nombre. Fondo opaco
+           para que los meses no se transparenten por debajo. */
+        .acc-grid--inputs tr > :first-child {
+            position: sticky; left: 0; z-index: 1;
+            background: var(--prl-surface, #fff);
+            box-shadow: inset -1px 0 0 var(--prl-line, #ddd);
+        }
+        .acc-grid--inputs thead tr > :first-child { background: var(--prl-bg, #f7f6f2); }
+        .acc-grid--inputs .acc-group-row > :first-child { background: linear-gradient(rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.05)), var(--prl-surface, #fff); }
+        .acc-grid--inputs tfoot tr > :first-child { background: linear-gradient(rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.04)), var(--prl-surface, #fff); }
     </style>
 {% endblock %}
 
 {% block csa_main %}
 <div class="prl">
+    {# La columna del año anterior sólo si ese año tiene algo anotado: vacía son
+       cuarenta filas de «—» que no ayudan a presupuestar nada. #}
+    {% set showLastYear = lastYearTotals|filter(v => v != 0)|length > 0 %}
 
     {{ csa.page_header(
         'Presupuesto ' ~ budget.year,
@@ -86,7 +100,7 @@
                             <th class="acc-month">{{ label }}</th>
                         {% endfor %}
                         <th class="acc-month acc-total-col">Año</th>
-                        <th class="acc-month">Real {{ budget.year - 1 }}</th>
+                        {% if showLastYear %}<th class="acc-month">Real {{ budget.year - 1 }}</th>{% endif %}
                         <th class="tight"></th>
                     </tr>
                 </thead>
@@ -99,7 +113,7 @@
                                 <td class="acc-num acc-group-month" data-month="{{ m }}"></td>
                             {% endfor %}
                             <td class="acc-num acc-total-col" data-group-total></td>
-                            <td></td>
+                            {% if showLastYear %}<td></td>{% endif %}
                             <td></td>
                         </tr>
                         {% for category in group.categories %}
@@ -122,10 +136,12 @@
                                     </td>
                                 {% endfor %}
                                 <td class="acc-num acc-total-col" data-row-total></td>
-                                <td class="acc-num acc-muted">
-                                    {% set real = lastYearTotals[category.id]|default(0) %}
-                                    {{ real != 0 ? (real < 0 ? -real : real)|number_format(2, ',', '.') : '—' }}
-                                </td>
+                                {% if showLastYear %}
+                                    <td class="acc-num acc-muted">
+                                        {% set real = lastYearTotals[category.id]|default(0) %}
+                                        {{ real != 0 ? (real < 0 ? -real : real)|number_format(2, ',', '.') : '—' }}
+                                    </td>
+                                {% endif %}
                                 <td class="tight">
                                     <button type="button" class="prl-btn acc-spread" title="Repetir enero en todos los meses">=</button>
                                 </td>
@@ -140,7 +156,7 @@
                             <td class="acc-num acc-month-total" data-month="{{ m }}"></td>
                         {% endfor %}
                         <td class="acc-num acc-total-col" data-grand></td>
-                        <td></td>
+                        {% if showLastYear %}<td></td>{% endif %}
                         <td></td>
                     </tr>
                 </tfoot>
@@ -169,14 +185,22 @@
             var form = document.getElementById('budget-grid');
             if (!form) { return; }
 
+            // La misma regla que Amount::parse en el servidor: la coma es decimal y el
+            // punto sólo es de miles si agrupa de tres en tres. Si no, «12.50» sumaría
+            // aquí 1250 y se guardaría igual de mal.
             function parse(text) {
-                var clean = (text || '').trim().replace(/[.\s€]/g, '').replace(',', '.');
+                var clean = (text || '').trim().replace(/[\s€]/g, '');
+                if (clean.indexOf(',') !== -1 || /^-?\d{1,3}(\.\d{3})+$/.test(clean)) {
+                    clean = clean.replace(/\./g, '').replace(',', '.');
+                }
                 var value = parseFloat(clean);
                 return isNaN(value) ? 0 : value;
             }
 
+            // useGrouping 'always': el español de Intl no agrupa los números de cuatro
+            // cifras y la pantalla mezclaba «9150,00» con «12.225,00».
             function format(value) {
-                return value.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+                return value.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' }) + ' €';
             }
 
             function paint(cell, value) {
