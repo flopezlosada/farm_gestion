@@ -67,6 +67,7 @@ class AccountantExportController extends AbstractController
             'withoutInvoice' => $entries->findExpensesWithoutInvoice($quarter->from(), $quarter->to()),
             'years' => range((int) date('Y'), (int) date('Y') - 3),
             'delivery' => $closed->latestOf($quarter),
+            'canDeliver' => $closed->canDeliver($quarter),
         ]);
     }
 

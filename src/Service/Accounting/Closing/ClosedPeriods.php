@@ -7,6 +7,7 @@ use App\Entity\User;
 use App\Repository\AccountantDeliveryRepository;
 use App\Service\Accounting\Invoice\InvoiceQuarter;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Contracts\Service\ResetInterface;
 
 /**
@@ -25,7 +26,17 @@ class ClosedPeriods implements ResetInterface
     public function __construct(
         private readonly AccountantDeliveryRepository $deliveries,
         private readonly EntityManagerInterface $em,
+        private readonly ClockInterface $clock,
     ) {
+    }
+
+    /**
+     * Si el trimestre se puede dar ya por entregado: sólo cuando ha terminado. Uno en
+     * curso cerraría también los días que quedan, y nada de ellos se podría anotar.
+     */
+    public function canDeliver(InvoiceQuarter $quarter): bool
+    {
+        return $quarter->hasEnded($this->clock->now());
     }
 
     /**
@@ -77,14 +88,17 @@ class ClosedPeriods implements ResetInterface
     /**
      * Da el trimestre por entregado.
      *
-     * @throws \LogicException Si ya lo estaba.
+     * @throws \LogicException Si ya lo estaba o aún no ha terminado.
      */
     public function deliver(InvoiceQuarter $quarter, ?User $by): AccountantDelivery
     {
+        if (!$this->canDeliver($quarter)) {
+            throw new \LogicException(sprintf('El %s aún no ha terminado: se entrega a partir del %s.', $quarter->label(), $quarter->dayAfter()->format('d/m/Y')));
+        }
         if ($this->latestOf($quarter)?->isStanding()) {
             throw new \LogicException(sprintf('El %s ya está entregado.', $quarter->label()));
         }
-        $delivery = new AccountantDelivery($quarter, $by, new \DateTimeImmutable());
+        $delivery = new AccountantDelivery($quarter, $by, $this->clock->now());
         $this->em->persist($delivery);
         $this->em->flush();
         $this->reset();
@@ -103,7 +117,7 @@ class ClosedPeriods implements ResetInterface
         if ($delivery === null || !$delivery->isStanding()) {
             throw new \LogicException(sprintf('El %s no está entregado.', $quarter->label()));
         }
-        $delivery->reopen($by, new \DateTimeImmutable());
+        $delivery->reopen($by, $this->clock->now());
         $this->em->flush();
         $this->reset();
     }

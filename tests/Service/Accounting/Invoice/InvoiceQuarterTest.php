@@ -40,6 +40,17 @@ class InvoiceQuarterTest extends TestCase
         $this->assertSame('2027-01-30', InvoiceQuarter::of(2026, 4)->deliveryDeadline()->format('Y-m-d'));
     }
 
+    /** Termina al empezar el siguiente: el último día, aunque sea tarde, aún no. */
+    public function testCuandoHaTerminado(): void
+    {
+        $q = InvoiceQuarter::of(2026, 3);
+        $this->assertFalse($q->hasEnded(new \DateTimeImmutable('2026-08-15')));
+        $this->assertFalse($q->hasEnded(new \DateTimeImmutable('2026-09-30 23:59:59')));
+        $this->assertTrue($q->hasEnded(new \DateTimeImmutable('2026-10-01 00:00')));
+        $this->assertFalse(InvoiceQuarter::of(2026, 4)->hasEnded(new \DateTimeImmutable('2026-12-31 18:00')));
+        $this->assertTrue(InvoiceQuarter::of(2026, 4)->hasEnded(new \DateTimeImmutable('2027-01-01')));
+    }
+
     /** El trimestre de un día: sus bordes caen dentro. */
     public function testElTrimestreDeUnDia(): void
     {

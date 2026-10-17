@@ -70,6 +70,21 @@ final class InvoiceQuarter
         return $this->from()->modify('+3 months -1 day');
     }
 
+    /** Primer día después del trimestre: desde ese momento se puede entregar. */
+    public function dayAfter(): \DateTimeImmutable
+    {
+        return $this->from()->modify('+3 months');
+    }
+
+    /**
+     * Si el trimestre ya ha terminado en ese instante. Se compara con {@see dayAfter()},
+     * no con {@see to()}: el último día a mediodía aún es del trimestre.
+     */
+    public function hasEnded(\DateTimeInterface $now): bool
+    {
+        return $now >= $this->dayAfter();
+    }
+
     /**
      * Último día para entregar el trimestre a la gestoría: los modelos trimestrales se
      * presentan del 1 al 20 del mes siguiente, y los del cuarto trimestre hasta el 30

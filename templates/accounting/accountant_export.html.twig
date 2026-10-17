@@ -9,7 +9,8 @@
  # El controller pasa: quarter, rows (invoice + warnings), names (nombre de cada
  # fichero en el ZIP, por id), total, withWarnings, open, years, withoutInvoice
  # (gastos del trimestre de partidas que piden factura y no tienen ninguna ligada)
- # y delivery (la entrega más reciente del trimestre, o null si nunca se entregó).
+ # delivery (la entrega más reciente del trimestre, o null si nunca se entregó) y
+ # canDeliver (si el trimestre ha terminado y por tanto se puede dar por entregado).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -80,6 +81,8 @@
                 {% endif %}
             </div>
         </div>
+    {% elseif not canDeliver %}
+        {{ csa.callout('El ' ~ quarter.label ~ ' aún no ha terminado. Se entrega a la gestoría a partir del ' ~ quarter.dayAfter|date('d/m/Y') ~ '; mientras, el ZIP sirve para ir mirando.', 'info', 'hourglass-half') }}
     {% else %}
         <div class="csa-alert csa-alert--{{ delivery ? 'warning' : 'info' }}" role="status" style="margin-bottom: var(--csa-sp-5);">
             <i class="csa-alert__icon fa fa-{{ delivery ? 'exclamation-triangle' : 'paper-plane-o' }}" aria-hidden="true"></i>
