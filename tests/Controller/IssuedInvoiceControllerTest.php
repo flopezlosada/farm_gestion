@@ -362,11 +362,12 @@ class IssuedInvoiceControllerTest extends AbstractAuthenticatedTest
         $settings->setString(AppSettings::ISSUED_INVOICE_PAYMENT, 'Por transferencia a la cuenta ES00 0000 0000 0000 0000 0000');
     }
 
-    /** Un borrador listo para emitir: 100 € al 21 %. */
+    /** Un borrador listo para emitir: 100 € al 21 %, siempre al mismo cliente (el CIF es único). */
     private function draft(string $date = '2091-03-05'): IssuedInvoice
     {
         $em = $this->em();
-        $customer = (new Customer())->setName('Cooperativa de pruebas')->setTaxId(self::TAX_ID);
+        $customer = $em->getRepository(Customer::class)->findOneBy(['taxId' => self::TAX_ID])
+            ?? (new Customer())->setName('Cooperativa de pruebas')->setTaxId(self::TAX_ID);
         $invoice = (new IssuedInvoice())
             ->setCustomer($customer)
             ->setIssueDate(new \DateTimeImmutable($date))
