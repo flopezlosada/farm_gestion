@@ -15,16 +15,20 @@ use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\InvoiceQuarter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Clock\Test\ClockSensitiveTrait;
 
 /**
  * Con un trimestre entregado a la gestoría, nada fechado en él se crea, se cambia
  * ni se borra; lo de otros trimestres sigue igual, y reabrir lo desbloquea. Cobrar
- * después una emitida del trimestre sí se puede: no cambia lo entregado.
+ * después una emitida del trimestre sí se puede: no cambia lo entregado. Uno que
+ * aún no ha terminado no se entrega.
  *
- * Autocontenido: el 3T2094.
+ * Autocontenido: el 3T2094, con el reloj ya en el 4T2094.
  */
 class ClosedPeriodGuardTest extends KernelTestCase
 {
+    use ClockSensitiveTrait;
+
     private EntityManagerInterface $em;
     private ClosedPeriods $closed;
     private InvoiceQuarter $quarter;
@@ -37,6 +41,7 @@ class ClosedPeriodGuardTest extends KernelTestCase
     protected function setUp(): void
     {
         self::bootKernel();
+        static::mockTime('2094-10-10 10:00');
         $this->em = static::getContainer()->get('doctrine')->getManager();
         $this->closed = static::getContainer()->get(ClosedPeriods::class);
         $this->quarter = InvoiceQuarter::of(2094, 3);
@@ -145,6 +150,26 @@ class ClosedPeriodGuardTest extends KernelTestCase
         $this->em->flush();
 
         $this->assertTrue($invoice->isPaid());
+    }
+
+    /**
+     * El último día del trimestre aún no se entrega: cerraría también lo que quede por
+     * anotar ese día. Al día siguiente, sí.
+     */
+    public function testUnTrimestreSinTerminarNoSeEntrega(): void
+    {
+        static::mockTime('2094-09-30 20:00');
+        $this->assertFalse($this->closed->canDeliver($this->quarter));
+        try {
+            $this->closed->deliver($this->quarter, null);
+            $this->fail('Un trimestre en curso no debería poder entregarse.');
+        } catch (\LogicException $e) {
+            $this->assertStringContainsString('01/10/2094', $e->getMessage());
+        }
+        $this->assertNull($this->closed->latestOf($this->quarter));
+
+        static::mockTime('2094-10-01 00:00');
+        $this->assertTrue($this->closed->deliver($this->quarter, null)->isStanding());
     }
 
     private function entry(string $date, string $amount = '-50.00'): AccountEntry

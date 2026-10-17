@@ -11,6 +11,7 @@ use App\Service\Accounting\IssuedInvoice\InvoiceIssuer;
 use App\Service\Accounting\IssuedInvoice\IssuedInvoiceArchive;
 use App\Service\AppSettings;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Clock\Test\ClockSensitiveTrait;
 
 /**
  * La entrega trimestral a la gestoría: la pantalla que enseña qué va a ir y la
@@ -21,6 +22,8 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 class AccountantExportControllerTest extends AbstractAuthenticatedTest
 {
+    use ClockSensitiveTrait;
+
     private const TAX_ID = 'Q2899002H';
 
     protected function tearDown(): void
@@ -66,6 +69,7 @@ class AccountantExportControllerTest extends AbstractAuthenticatedTest
     /** Entregar cierra el trimestre y lo dice; reabrir lo abre y pide volver a mandarlo. */
     public function testEntregarYReabrir(): void
     {
+        static::mockTime('2099-07-10 10:00');
         $client = $this->createAuthenticatedClient();
         $this->enableModule();
         $url = '/gestion/accounting/invoices/accountant?year=2099&quarter=2';
@@ -80,6 +84,20 @@ class AccountantExportControllerTest extends AbstractAuthenticatedTest
         $client->submit($crawler->selectButton('Reabrir para corregir')->form());
         $client->followRedirect();
         $this->assertSelectorTextContains('body', 'hay que volver a mandarlo a la gestoría');
+    }
+
+    /** Un trimestre en curso no se ofrece entregar: se dice desde cuándo se podrá. */
+    public function testUnTrimestreEnCursoNoSeOfreceEntregar(): void
+    {
+        static::mockTime('2099-06-30 18:00');
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+
+        $crawler = $client->request('GET', '/gestion/accounting/invoices/accountant?year=2099&quarter=2');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertCount(0, $crawler->selectButton('Marcar como entregado'));
+        $this->assertSelectorTextContains('body', 'Se entrega a la gestoría a partir del 01/07/2099');
     }
 
     /** Aun vacío, el ZIP sale y lleva el libro: la gestoría ve que ese trimestre no hubo nada. */
