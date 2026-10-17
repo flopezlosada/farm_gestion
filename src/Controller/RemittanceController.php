@@ -314,9 +314,10 @@ class RemittanceController extends AbstractController
         $em->flush();
 
         $this->addFlash('success', sprintf(
-            'Fichas actualizadas: %d %s y %d %s. Lo que no coincide sigue abajo, sin cambiar.',
+            'Fichas actualizadas: %d %s, %d %s y %d %s. Lo que no coincide sigue abajo, sin cambiar.',
             \count($plan['mandates']), \count($plan['mandates']) === 1 ? 'mandato' : 'mandatos',
             \count($plan['ibans']), \count($plan['ibans']) === 1 ? 'cuenta' : 'cuentas',
+            \count($plan['repairs']), \count($plan['repairs']) === 1 ? 'cuenta corregida' : 'cuentas corregidas',
         ));
 
         return $back;

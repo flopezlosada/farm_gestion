@@ -7,17 +7,28 @@ use App\Entity\Remittance;
 use App\Entity\RemittanceLine;
 use App\Service\Accounting\Remittance\MandatesToPartners;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Validator\Validation;
 
 /**
  * Pasar los mandatos y las cuentas de una remesa enviada a las fichas: sólo se
  * rellena lo que falta, lo que no coincide se cuenta y no se toca. Los casos salen
  * de la remesa real de agosto: una persona con dos recibos, cuentas que han cambiado
- * y una cuenta con un punto al final.
+ * y una cuenta con un punto al final. El validador es el de verdad: el dígito de
+ * control de cada IBAN es lo que se está probando.
  */
 class MandatesToPartnersTest extends TestCase
 {
     private const IBAN_A = 'ES9121000418450200051332';
     private const IBAN_B = 'ES7921000813610123456789';
+    /** La A con una cifra cambiada: lo que deja una errata al copiarla a mano. */
+    private const IBAN_A_TYPO = 'ES9121000418450200051333';
+    /** Otra cuenta válida que, enmascarada, sale igual que la A: «ES91 … 1332». */
+    private const IBAN_A_LOOKALIKE = 'ES9121000418450209751332';
+
+    private function service(): MandatesToPartners
+    {
+        return new MandatesToPartners(Validation::createValidator());
+    }
 
     private function partner(string $name): Partner
     {
@@ -43,7 +54,7 @@ class MandatesToPartnersTest extends TestCase
         $empty = $this->partner('Ana');
         $done = $this->partner('Bea')->setIban(self::IBAN_B)->setMandateReference('CUOTA MENSUAL 201')->setMandateSignedOn(new \DateTimeImmutable('2021-01-01'));
         $remittance = $this->sent([$this->line($empty, 'CUOTA MENSUAL 200'), $this->line($done, 'cuota mensual 201', self::IBAN_B)]);
-        $service = new MandatesToPartners();
+        $service = $this->service();
 
         $plan = $service->plan($remittance, [$done]);
         $this->assertCount(1, $plan['mandates']);
@@ -71,7 +82,7 @@ class MandatesToPartnersTest extends TestCase
             $this->line($wantsTaken, 'CUOTA MENSUAL 302'),
             $this->line(null, 'CUOTA MENSUAL 304'),
         ]);
-        $service = new MandatesToPartners();
+        $service = $this->service();
 
         $plan = $service->plan($remittance, [$otherMandate, $holder]);
         $service->apply($remittance, $plan);
@@ -87,12 +98,50 @@ class MandatesToPartnersTest extends TestCase
         $this->assertSame(self::IBAN_A, $wantsTaken->getIban(), 'La cuenta sí se le pone: eso no lo impide.');
     }
 
+    /**
+     * Una cuenta de ficha que ni es un IBAN válido es una errata: se corrige con la
+     * del recibo, con la que el banco cobró. Si la del recibo tampoco vale, no.
+     */
+    public function testLaCuentaMalEscritaDeLaFichaSeCorrige(): void
+    {
+        $typo = $this->partner('Ana')->setIban(self::IBAN_A_TYPO);
+        $bothWrong = $this->partner('Bea')->setIban(self::IBAN_A_TYPO);
+        $remittance = $this->sent([
+            $this->line($typo, 'CUOTA MENSUAL 200'),
+            $this->line($bothWrong, 'CUOTA MENSUAL 201', 'ES7921000813610123456780'),
+        ]);
+        $service = $this->service();
+
+        $plan = $service->plan($remittance, []);
+        $this->assertCount(1, $plan['repairs']);
+        $this->assertSame($typo, $plan['repairs'][0]['partner']);
+        $this->assertSame([], $plan['ibans'], 'Corregir no es rellenar un hueco.');
+        $this->assertCount(1, $plan['differences']);
+        $this->assertStringContainsString('Bea', $plan['differences'][0]);
+        $this->assertSame(self::IBAN_A_TYPO, $typo->getIban(), 'Planear no cambia ninguna ficha.');
+
+        $service->apply($remittance, $plan);
+        $this->assertSame(self::IBAN_A, $typo->getIban());
+        $this->assertSame(self::IBAN_A_TYPO, $bothWrong->getIban());
+    }
+
+    /** Dos cuentas válidas que enmascaradas salen iguales: el aviso dice dónde cambian. */
+    public function testCuentasQueEnmascaradasSalenIguales(): void
+    {
+        $partner = $this->partner('Ana')->setIban(self::IBAN_A_LOOKALIKE);
+        $plan = $this->service()->plan($this->sent([$this->line($partner, 'CUOTA MENSUAL 200')]), []);
+
+        $this->assertSame([], $plan['repairs'], 'Dos cuentas válidas: decide una persona.');
+        $this->assertStringContainsString('(ES91 … 1332) no es la del recibo (ES91 … 1332): cambian cifras del medio', $plan['differences'][0]);
+        $this->assertSame(self::IBAN_A_LOOKALIKE, $partner->getIban());
+    }
+
     /** Quien tiene dos recibos se queda con el primer mandato; el segundo se avisa, no gana el último. */
     public function testDosRecibosDeLaMismaPersona(): void
     {
         $partner = $this->partner('Ana');
         $remittance = $this->sent([$this->line($partner, 'CUOTA MENSUAL 200'), $this->line($partner, 'CUOTA MENSUAL 201', self::IBAN_B)]);
-        $service = new MandatesToPartners();
+        $service = $this->service();
 
         $plan = $service->plan($remittance, []);
         $service->apply($remittance, $plan);
@@ -107,7 +156,7 @@ class MandatesToPartnersTest extends TestCase
     public function testSinFechaDeFirmaNoSePasa(): void
     {
         $partner = $this->partner('Ana');
-        $plan = (new MandatesToPartners())->plan($this->sent([$this->line($partner, 'CUOTA MENSUAL 200', signedOn: null)]), []);
+        $plan = $this->service()->plan($this->sent([$this->line($partner, 'CUOTA MENSUAL 200', signedOn: null)]), []);
 
         $this->assertSame([], $plan['mandates']);
         $this->assertStringContainsString('no dice cuándo se firmó', $plan['differences'][0]);
@@ -118,7 +167,7 @@ class MandatesToPartnersTest extends TestCase
         $draft = new Remittance(Remittance::KIND_BASKET, new \DateTimeImmutable('2026-09-01'), 'Recibos SEPTIEMBRE 2026', Remittance::SOURCE_APP, null);
 
         $this->expectException(\LogicException::class);
-        (new MandatesToPartners())->apply($draft, ['mandates' => [], 'ibans' => []]);
+        $this->service()->apply($draft, ['mandates' => [], 'ibans' => [], 'repairs' => []]);
     }
 
     /** Un IBAN no lleva signos: el punto final que traía un Excel real no es parte de la cuenta. */

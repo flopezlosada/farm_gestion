@@ -5,6 +5,8 @@ namespace App\Service\Accounting\Remittance;
 use App\Entity\Partner;
 use App\Entity\Remittance;
 use App\Entity\RemittanceLine;
+use Symfony\Component\Validator\Constraints\Iban;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 /**
  * Pasa a las fichas de socixs la cuenta y el mandato con los que se les cobró en una
@@ -13,13 +15,19 @@ use App\Entity\RemittanceLine;
  *
  * Sólo RELLENA lo que falta. Si la ficha ya tiene otro mandato u otra cuenta no la
  * pisa: lo cuenta como diferencia para que lo mire una persona. La remesa puede ser
- * vieja, y la ficha, lo que se corrigió después.
+ * vieja, y la ficha, lo que se corrigió después. La excepción es una cuenta de ficha
+ * que ni siquiera es un IBAN válido cuando la del recibo sí lo es: es una errata al
+ * copiarla, y la buena es con la que el banco cobró.
  *
  * En dos pasos: {@see plan()} dice qué haría sin tocar nada (la ficha de la remesa lo
  * enseña siempre) y {@see apply()} lo hace.
  */
 class MandatesToPartners
 {
+    public function __construct(private readonly ValidatorInterface $validator)
+    {
+    }
+
     /**
      * Lo que se rellenaría y lo que no coincide, sin cambiar ninguna ficha.
      *
@@ -29,6 +37,7 @@ class MandatesToPartners
      * @return array{
      *     mandates: list<array{partner: Partner, line: RemittanceLine}>,
      *     ibans: list<array{partner: Partner, line: RemittanceLine}>,
+     *     repairs: list<array{partner: Partner, line: RemittanceLine}>,
      *     differences: list<string>,
      *     unlinked: int,
      * }
@@ -40,7 +49,7 @@ class MandatesToPartners
             $holderOf[mb_strtoupper((string) $holder->getMandateReference())] = $holder;
         }
 
-        $plan = ['mandates' => [], 'ibans' => [], 'differences' => [], 'unlinked' => 0];
+        $plan = ['mandates' => [], 'ibans' => [], 'repairs' => [], 'differences' => [], 'unlinked' => 0];
         // Lo que ya va a recibir cada ficha en este plan: quien tiene dos recibos no
         // puede llevarse dos mandatos ni dos cuentas.
         $gettingMandate = [];
@@ -67,7 +76,11 @@ class MandatesToPartners
                 $plan['ibans'][] = ['partner' => $partner, 'line' => $line];
                 $gettingIban[spl_object_id($partner)] = $line->getIban();
             } elseif ($current !== $line->getIban()) {
-                $plan['differences'][] = sprintf('%s: la cuenta de la ficha (%s) no es la del recibo (%s).', $partner->getLegalName(), RemittanceLine::maskIban($current), $line->getMaskedIban());
+                if (!$this->isIban($current) && $this->isIban($line->getIban())) {
+                    $plan['repairs'][] = ['partner' => $partner, 'line' => $line];
+                } else {
+                    $plan['differences'][] = $this->ibanDifference($partner, $current, $line);
+                }
             }
         }
 
@@ -78,7 +91,7 @@ class MandatesToPartners
      * Rellena las fichas según el plan. Sólo para una remesa enviada: lo que dice un
      * borrador aún no se ha cobrado a nadie.
      *
-     * @param array{mandates: list<array{partner: Partner, line: RemittanceLine}>, ibans: list<array{partner: Partner, line: RemittanceLine}>} $plan
+     * @param array{mandates: list<array{partner: Partner, line: RemittanceLine}>, ibans: list<array{partner: Partner, line: RemittanceLine}>, repairs: list<array{partner: Partner, line: RemittanceLine}>} $plan
      */
     public function apply(Remittance $remittance, array $plan): void
     {
@@ -88,7 +101,7 @@ class MandatesToPartners
         foreach ($plan['mandates'] as ['partner' => $partner, 'line' => $line]) {
             $partner->setMandateReference($line->getMandateReference())->setMandateSignedOn($line->getMandateSignedOn());
         }
-        foreach ($plan['ibans'] as ['partner' => $partner, 'line' => $line]) {
+        foreach ([...$plan['ibans'], ...$plan['repairs']] as ['partner' => $partner, 'line' => $line]) {
             $partner->setIban($line->getIban());
         }
     }
@@ -116,5 +129,26 @@ class MandatesToPartners
         return $line->getMandateSignedOn() === null
             ? sprintf('%s: el recibo no dice cuándo se firmó el mandato «%s».', $partner->getLegalName(), $reference)
             : null;
+    }
+
+    /**
+     * Las dos cuentas no coinciden. Si enmascaradas salen iguales («ES60 … 8199» las
+     * dos), la diferencia está en las cifras del medio y hay que decirlo.
+     */
+    private function ibanDifference(Partner $partner, string $current, RemittanceLine $line): string
+    {
+        $mine = RemittanceLine::maskIban($current);
+        $theirs = $line->getMaskedIban();
+
+        return sprintf(
+            '%s: la cuenta de la ficha (%s) no es la del recibo (%s)%s.',
+            $partner->getLegalName(), $mine, $theirs, $mine === $theirs ? ': cambian cifras del medio' : '',
+        );
+    }
+
+    /** Si una cuenta es un IBAN válido: el país, el largo y el dígito de control. */
+    private function isIban(string $iban): bool
+    {
+        return $this->validator->validate($iban, new Iban())->count() === 0;
     }
 }

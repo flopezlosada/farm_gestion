@@ -20,7 +20,7 @@
 {% endblock %}
 
 {% block csa_main %}
-    {{ csa.page_header('Contabilidad · Remesas', 'Importar una remesa enviada', 'El Excel de recibos tal como se subió a Fiare. Queda como enviada, y la siguiente se prepara a partir de él.') }}
+    {{ csa.page_header('Contabilidad · Remesas', 'Importar una remesa enviada', 'El Excel de recibos tal como se subió a Fiare. Queda como enviada: es el histórico de lo que se cobró y contra ella se comparan los cambios de la siguiente.') }}
 
     {{ form_start(form, { attr: { class: 'csa-form-narrow', 'data-csa-dropdowns': '1' } }) }}
 

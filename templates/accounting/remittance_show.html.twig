@@ -114,7 +114,7 @@
     {% endif %}
 
     {% if toPartners %}
-        {% set fillable = toPartners.mandates|length + toPartners.ibans|length %}
+        {% set fillable = toPartners.mandates|length + toPartners.ibans|length + toPartners.repairs|length %}
         <h2 class="acc-subhead">Con las fichas</h2>
         <p class="acc-muted">La cuenta y el mandato con que se cobró a cada socix. Para cobrar desde aquí, cada ficha tiene que tenerlos.</p>
         <div class="rem-box">
@@ -122,11 +122,18 @@
                 <div class="csa-alert csa-alert--info" role="status">
                     <i class="csa-alert__icon fa fa-id-card-o" aria-hidden="true"></i>
                     <div class="csa-alert__body">
-                        {{ toPartners.mandates|length }} {{ toPartners.mandates|length == 1 ? 'ficha no tiene' : 'fichas no tienen' }} mandato
-                        y {{ toPartners.ibans|length }} {{ toPartners.ibans|length == 1 ? 'no tiene' : 'no tienen' }} cuenta: se pueden rellenar con los de esta remesa.
+                        {% if toPartners.mandates is not empty or toPartners.ibans is not empty %}
+                            {{ toPartners.mandates|length }} {{ toPartners.mandates|length == 1 ? 'ficha no tiene' : 'fichas no tienen' }} mandato
+                            y {{ toPartners.ibans|length }} {{ toPartners.ibans|length == 1 ? 'no tiene' : 'no tienen' }} cuenta: se pueden rellenar con los de esta remesa.
+                        {% endif %}
+                        {% if toPartners.repairs is not empty %}
+                            {% if toPartners.mandates is not empty or toPartners.ibans is not empty %}<br>{% endif %}{{ toPartners.repairs|length }} {{ toPartners.repairs|length == 1 ? 'ficha tiene la cuenta mal escrita' : 'fichas tienen la cuenta mal escrita' }}
+                            (no es un IBAN válido): se corrige{{ toPartners.repairs|length == 1 ? '' : 'n' }} con la del recibo, que es con la que cobró el banco:
+                            {{ toPartners.repairs|map(r => r.partner.legalName)|join(', ') }}.
+                        {% endif %}
                         {% if can_edit and is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
                             <form method="post" action="{{ path('accounting_remittance_to_partners', { id: remittance.id }) }}" style="margin-top: 10px;"
-                                  onsubmit="return confirm('Se copiarán a las fichas que no los tengan. Lo que ya tienen no se toca.');">
+                                  onsubmit="return confirm('Se copiarán a las fichas que no los tengan y se corregirán las cuentas mal escritas. Lo demás que ya tienen no se toca.');">
                                 <input type="hidden" name="_token" value="{{ csrf_token('remittance-to-partners-' ~ remittance.id) }}">
                                 <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-arrow-right"></i> Pasarlos a las fichas</button>
                             </form>
