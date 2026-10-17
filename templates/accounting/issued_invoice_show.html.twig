@@ -8,7 +8,7 @@
  # Emitida y sin cobrar: los apuntes del libro que pueden ser su cobro, para
  # ligarla con un clic; cobrada: dónde y cuándo, con la opción de desligar.
  #
- # El controller pasa: invoice, problems, hasIssuer, rectifications, paymentCandidates.
+ # El controller pasa: invoice, problems, rectifications, paymentCandidates.
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -72,19 +72,18 @@
         {% if can_edit and invoice.draft %}
             <form method="post" action="{{ path('accounting_issued_invoice_issue', { id: invoice.id }) }}" onsubmit="return confirm('¿Emitirla? Recibe número y ya no se puede cambiar: sólo rectificar.');">
                 <input type="hidden" name="_token" value="{{ csrf_token('issue-invoice-' ~ invoice.id) }}">
-                <button type="submit" class="prl-btn prl-btn--primary"{{ problems is not empty or not hasIssuer ? ' disabled' }}><i class="fa fa-check"></i> Emitir</button>
+                <button type="submit" class="prl-btn prl-btn--primary"{{ problems is not empty ? ' disabled' }}><i class="fa fa-check"></i> Emitir</button>
             </form>
         {% endif %}
     </div>
 
-    {% if invoice.draft and (problems is not empty or not hasIssuer) %}
+    {% if problems is not empty %}
         <div class="csa-alert csa-alert--warning iss-problems" role="status">
             <i class="csa-alert__icon fa fa-exclamation-triangle" aria-hidden="true"></i>
             <div class="csa-alert__body">
                 Para emitirla falta:
                 <ul>
                     {% for problem in problems %}<li>{{ problem }}</li>{% endfor %}
-                    {% if not hasIssuer %}<li>Los datos de la asociación para la cabecera (Configuración, «Facturas emitidas»).</li>{% endif %}
                 </ul>
             </div>
         </div>

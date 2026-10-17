@@ -159,6 +159,37 @@ class IssuedInvoiceControllerTest extends AbstractAuthenticatedTest
         $this->assertTrue($this->onlyInvoiceOf($invoice->getCustomer())->isDraft());
     }
 
+    /**
+     * El número es correlativo: un borrador con fecha anterior a la última emitida
+     * de su serie no se emite, porque su número iría por delante de su fecha. La
+     * ficha lo dice antes de pulsar y, con la misma fecha, sí se emite.
+     */
+    public function testNoSeEmiteConFechaAnteriorALaUltimaDeSuSerie(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->configureIssuer();
+        $september = $this->draft('2091-09-15');
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/issued-invoices/%d', $september->getId()));
+        $client->submit($crawler->filter('form[action$="/issue"]')->form());
+
+        $june = $this->draft('2091-06-30');
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/issued-invoices/%d', $june->getId()));
+        $this->assertSelectorTextContains('.iss-problems', 'es del 15/09/2091');
+        $this->assertSelectorExists('form[action$="/issue"] button[disabled]');
+        $client->request('POST', sprintf('/gestion/accounting/issued-invoices/%d/issue', $june->getId()), [
+            '_token' => $crawler->filter('form[action$="/issue"] input[name="_token"]')->attr('value'),
+        ]);
+        $this->em()->clear();
+        $this->assertTrue($this->em()->find(IssuedInvoice::class, $june->getId())->isDraft(), 'se manda a mano y tampoco');
+
+        $sameDay = $this->draft('2091-09-15');
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/issued-invoices/%d', $sameDay->getId()));
+        $client->submit($crawler->filter('form[action$="/issue"]')->form());
+        $this->em()->clear();
+        $this->assertSame(2, $this->em()->find(IssuedInvoice::class, $sameDay->getId())->getNumber());
+    }
+
     /** Una emitida ni se cambia ni se borra; se rectifica, y la rectificativa nace en borrador en su serie. */
     public function testUnaEmitidaSoloSeRectifica(): void
     {
@@ -332,13 +363,13 @@ class IssuedInvoiceControllerTest extends AbstractAuthenticatedTest
     }
 
     /** Un borrador listo para emitir: 100 € al 21 %. */
-    private function draft(): IssuedInvoice
+    private function draft(string $date = '2091-03-05'): IssuedInvoice
     {
         $em = $this->em();
         $customer = (new Customer())->setName('Cooperativa de pruebas')->setTaxId(self::TAX_ID);
         $invoice = (new IssuedInvoice())
             ->setCustomer($customer)
-            ->setIssueDate(new \DateTimeImmutable('2091-03-05'))
+            ->setIssueDate(new \DateTimeImmutable($date))
             ->addLine(new IssuedInvoiceLine('Colaboración', '100.00', '21'));
         $em->persist($customer);
         $em->persist($invoice);
