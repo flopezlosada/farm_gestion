@@ -38,7 +38,7 @@ class MandatesToPartners
      *     mandates: list<array{partner: Partner, line: RemittanceLine}>,
      *     ibans: list<array{partner: Partner, line: RemittanceLine}>,
      *     repairs: list<array{partner: Partner, line: RemittanceLine}>,
-     *     differences: list<string>,
+     *     differences: list<array{partner: Partner, text: string}>,
      *     unlinked: int,
      * }
      */
@@ -64,7 +64,7 @@ class MandatesToPartners
             $currentMandate = $partner->getMandateReference() ?? $gettingMandate[spl_object_id($partner)] ?? null;
             $difference = $this->mandateDifference($line, $partner, $currentMandate, $holderOf);
             if ($difference !== null) {
-                $plan['differences'][] = $difference;
+                $plan['differences'][] = ['partner' => $partner, 'text' => $difference];
             } elseif ($currentMandate === null) {
                 $plan['mandates'][] = ['partner' => $partner, 'line' => $line];
                 $holderOf[mb_strtoupper($line->getMandateReference())] = $partner;
@@ -79,7 +79,7 @@ class MandatesToPartners
                 if (!$this->isIban($current) && $this->isIban($line->getIban())) {
                     $plan['repairs'][] = ['partner' => $partner, 'line' => $line];
                 } else {
-                    $plan['differences'][] = $this->ibanDifference($partner, $current, $line);
+                    $plan['differences'][] = ['partner' => $partner, 'text' => $this->ibanDifference($current, $line)];
                 }
             }
         }
@@ -119,15 +119,15 @@ class MandatesToPartners
         if ($current !== null) {
             return mb_strtoupper($current) === mb_strtoupper($reference)
                 ? null
-                : sprintf('%s: la ficha tiene el mandato «%s» y en la remesa se le cobró con «%s».', $partner->getLegalName(), $current, $reference);
+                : sprintf('La ficha tiene el mandato «%s» y en la remesa se le cobró con «%s».', $current, $reference);
         }
         $holder = $holderOf[mb_strtoupper($reference)] ?? null;
         if ($holder !== null && $holder !== $partner) {
-            return sprintf('%s: el mandato «%s» ya lo tiene %s.', $partner->getLegalName(), $reference, $holder->getLegalName());
+            return sprintf('El mandato «%s» ya lo tiene %s.', $reference, $holder->getLegalName());
         }
 
         return $line->getMandateSignedOn() === null
-            ? sprintf('%s: el recibo no dice cuándo se firmó el mandato «%s».', $partner->getLegalName(), $reference)
+            ? sprintf('El recibo no dice cuándo se firmó el mandato «%s».', $reference)
             : null;
     }
 
@@ -135,14 +135,14 @@ class MandatesToPartners
      * Las dos cuentas no coinciden. Si enmascaradas salen iguales («ES60 … 8199» las
      * dos), la diferencia está en las cifras del medio y hay que decirlo.
      */
-    private function ibanDifference(Partner $partner, string $current, RemittanceLine $line): string
+    private function ibanDifference(string $current, RemittanceLine $line): string
     {
         $mine = RemittanceLine::maskIban($current);
         $theirs = $line->getMaskedIban();
 
         return sprintf(
-            '%s: la cuenta de la ficha (%s) no es la del recibo (%s)%s.',
-            $partner->getLegalName(), $mine, $theirs, $mine === $theirs ? ': cambian cifras del medio' : '',
+            'La cuenta de la ficha (%s) no es la del recibo (%s)%s.',
+            $mine, $theirs, $mine === $theirs ? ': cambian cifras del medio' : '',
         );
     }
 

@@ -48,9 +48,6 @@
         .rem-box { margin-bottom: var(--csa-sp-5, 20px); }
         .rem-box ul { margin: 4px 0 0; padding-left: 18px; }
         .rem-inline-form { display: inline; }
-        .rem-box details summary { cursor: pointer; font-size: 13px; margin: 8px 0; }
-        .rem-diff { font-size: 12.5px; line-height: 1.5; columns: 2 420px; column-gap: 32px; }
-        .rem-diff li { break-inside: avoid; }
     </style>
 {% endblock %}
 
@@ -150,10 +147,25 @@
                 <p class="acc-muted">{{ toPartners.unlinked }} {{ toPartners.unlinked == 1 ? 'recibo no está enlazado' : 'recibos no están enlazados' }} a ningún socix: sus datos no van a ninguna ficha.</p>
             {% endif %}
             {% if toPartners.differences is not empty %}
-                <details{{ fillable == 0 ? ' open' }}>
-                    <summary><b>{{ toPartners.differences|length }}</b> {{ toPartners.differences|length == 1 ? 'cosa no coincide' : 'cosas no coinciden' }} con lo que ya tienen las fichas (no se cambian solas)</summary>
-                    <ul class="rem-diff">{% for d in toPartners.differences %}<li>{{ d }}</li>{% endfor %}</ul>
-                </details>
+                <p class="acc-muted">{{ toPartners.differences|length == 1 ? 'Esto no coincide' : 'Estas ' ~ toPartners.differences|length ~ ' cosas no coinciden' }} con lo que ya tiene la ficha. No se cambia solo: mira en la ficha cuál es lo bueno.</p>
+                <div class="prl-table-wrap">
+                    <table class="prl-table">
+                        <thead>
+                            <tr>
+                                <th>Quién</th>
+                                <th>Qué no coincide</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for d in toPartners.differences %}
+                                <tr>
+                                    <td class="tight">{% if can_see_partners %}<a href="{{ path('partner_show', { id: d.partner.id }) }}">{{ d.partner.legalName }}</a>{% else %}{{ d.partner.legalName }}{% endif %}</td>
+                                    <td>{{ d.text }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             {% endif %}
         </div>
     {% endif %}
