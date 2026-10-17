@@ -72,12 +72,11 @@ class IssuedInvoiceController extends AbstractController
 
     /** Ver una factura: el borrador para revisarlo y emitirlo, la emitida tal como salió. */
     #[Route('/{id}', name: 'accounting_issued_invoice_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(IssuedInvoice $invoice, IssuedInvoiceRepository $invoices, IssuedInvoicePdf $pdf, AccountEntryRepository $entries): Response
+    public function show(IssuedInvoice $invoice, IssuedInvoiceRepository $invoices, InvoiceIssuer $issuer, AccountEntryRepository $entries): Response
     {
         return $this->render('accounting/issued_invoice_show.html.twig', [
             'invoice' => $invoice,
-            'problems' => $invoice->isDraft() ? $invoice->issueProblems() : [],
-            'hasIssuer' => $pdf->hasIssuer(),
+            'problems' => $invoice->isDraft() ? $issuer->problems($invoice) : [],
             'rectifications' => $invoice->isIssued() ? $invoices->findRectificationsOf($invoice) : [],
             'paymentCandidates' => $this->paymentCandidates($invoice, $entries),
         ]);

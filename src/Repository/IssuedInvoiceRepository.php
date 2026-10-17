@@ -37,6 +37,26 @@ class IssuedInvoiceRepository extends ServiceEntityRepository
     }
 
     /**
+     * La emitida más reciente por fecha de una serie en un año (la de mayor número
+     * si hay varias ese día), o null si aún no hay ninguna.
+     */
+    public function findLastIssued(string $series, int $year): ?IssuedInvoice
+    {
+        return $this->createQueryBuilder('i')
+            ->andWhere('i.status = :issued')
+            ->andWhere('i.series = :series')
+            ->andWhere('i.year = :year')
+            ->setParameter('issued', IssuedInvoice::STATUS_ISSUED)
+            ->setParameter('series', $series)
+            ->setParameter('year', $year)
+            ->orderBy('i.issueDate', 'DESC')
+            ->addOrderBy('i.number', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+    /**
      * Los borradores (de cualquier fecha) y lo emitido en el año, con sus líneas y
      * su cliente: lo que enseña el listado. Borradores primero; luego de la más
      * reciente a la más antigua.
