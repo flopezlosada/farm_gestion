@@ -2,6 +2,7 @@
 
 namespace App\Form;
 
+use App\Entity\AccountEntry;
 use App\Entity\FinancialAccount;
 use App\Repository\FinancialAccountRepository;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
@@ -70,7 +71,10 @@ class AccountTransferType extends AbstractType
     {
         $resolver->setDefaults([
             'data_class' => null,
-            'constraints' => [new Assert\Callback([self::class, 'validateDistinctAccounts'])],
+            'constraints' => [
+                new Assert\Callback([self::class, 'validateDistinctAccounts']),
+                new Assert\Callback([self::class, 'validateDateWithinAccounts']),
+            ],
         ]);
     }
 
@@ -89,6 +93,30 @@ class AccountTransferType extends AbstractType
             $context->buildViolation('El dinero tiene que ir a una cuenta distinta de la de origen.')
                 ->atPath('to')
                 ->addViolation();
+        }
+    }
+
+    /**
+     * Las dos cuentas tienen que estar abiertas en la fecha del traspaso: la mitad
+     * anterior a la apertura de su cuenta se quedaría fuera del saldo
+     * ({@see FinancialAccount::isOpenOn}).
+     *
+     * @param array<string, mixed>|null $data
+     */
+    public static function validateDateWithinAccounts(?array $data, ExecutionContextInterface $context): void
+    {
+        if ($data === null || $data['date'] === null) {
+            return;
+        }
+        foreach (['from', 'to'] as $side) {
+            $account = $data[$side];
+            if ($account instanceof FinancialAccount && !$account->isOpenOn($data['date'])) {
+                $context->buildViolation(AccountEntry::BEFORE_OPENING_MESSAGE)
+                    ->setParameter('{{ account }}', $account->getName())
+                    ->setParameter('{{ opening }}', $account->getOpeningDate()->format('d/m/Y'))
+                    ->atPath('date')
+                    ->addViolation();
+            }
         }
     }
 }

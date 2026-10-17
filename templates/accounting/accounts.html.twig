@@ -50,7 +50,7 @@
     <div class="prl-toolbar">
         <div class="counters">El saldo sale de sumar los apuntes; no se teclea.</div>
         <div class="spacer"></div>
-        <a href="{{ path('accounting_ledger') }}" class="prl-btn"><i class="fa fa-list"></i> Libro</a>
+        <a href="{{ path('accounting_ledger') }}" class="prl-btn"><i class="fa fa-list"></i> Movimientos</a>
         <a href="{{ path('accounting_categories') }}" class="prl-btn"><i class="fa fa-tags"></i> Partidas</a>
         {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
             <a href="{{ path('accounting_account_new') }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Nueva cuenta</a>

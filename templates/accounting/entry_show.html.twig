@@ -24,7 +24,7 @@
     <span class="csa-topbar__crumbs-sep">/</span>
     <a href="{{ path('accounting_index') }}">Contabilidad</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <a href="{{ path('accounting_ledger', { account: entry.account.id }) }}">Libro</a>
+    <a href="{{ path('accounting_ledger', { account: entry.account.id }) }}">Movimientos</a>
     <span class="csa-topbar__crumbs-sep">/</span>
     <span class="csa-topbar__crumb-active">Apunte</span>
 {% endblock %}
@@ -39,7 +39,7 @@
     {% set editable = is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
 
     {{ csa.page_header(
-        'Contabilidad · Libro',
+        'Contabilidad · Movimiento',
         entry.concept,
         entry.date|date('d/m/Y') ~ ' · ' ~ entry.account.name
     ) }}

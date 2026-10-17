@@ -176,8 +176,9 @@ class AccountingController extends AbstractController
     }
 
     /**
-     * El libro: todos los apuntes, filtrables y paginados. Es la pantalla de quien
-     * viene con el extracto delante.
+     * Los movimientos: todos los apuntes, filtrables y paginados. Es la pantalla de
+     * quien viene con el extracto delante; con una cuenta elegida lleva, como el
+     * extracto, el saldo tras cada movimiento.
      */
     #[Route('/ledger', name: 'accounting_ledger', methods: ['GET'])]
     public function ledger(
@@ -200,7 +201,8 @@ class AccountingController extends AbstractController
             'text' => trim((string) $request->query->get('q')) ?: null,
         ];
 
-        $qb = $entries->listingQueryBuilder($filters);
+        $ascending = $request->query->get('direction') === 'asc';
+        $qb = $entries->listingQueryBuilder($filters, $ascending);
 
         $pagination = $paginator->paginate(
             $qb->getQuery(),
@@ -209,11 +211,17 @@ class AccountingController extends AbstractController
             ['defaultSortFieldName' => 'e.date', 'defaultSortDirection' => 'desc']
         );
 
-        $pageIds = array_map(static fn (AccountEntry $e): int => (int) $e->getId(), iterator_to_array($pagination->getItems()));
+        $pageEntries = array_values(iterator_to_array($pagination->getItems()));
+        $pageIds = array_map(static fn (AccountEntry $e): int => (int) $e->getId(), $pageEntries);
+
+        // El saldo fila a fila sólo se puede seguir con todos los movimientos de UNA
+        // cuenta: filtrar por partida o por texto deja huecos. Las fechas no molestan.
+        $showsRunningBalance = $account !== null && $filters['category'] === null && $filters['group'] === null && $filters['text'] === null;
 
         return $this->render('accounting/ledger.html.twig', [
             'pagination' => $pagination,
-            'invoices' => $invoices->invoiceIdsByEntry(array_values($pageIds)),
+            'invoices' => $invoices->invoiceIdsByEntry($pageIds),
+            'running' => $showsRunningBalance ? $entries->runningBalances($account, $pageEntries, $ascending) : null,
             'accounts' => $accounts->findActive(),
             'categories' => $categories->findActive(),
             'filters' => $filters,

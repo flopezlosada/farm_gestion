@@ -69,8 +69,8 @@ class FinancialAccount
     private string $openingBalance = '0';
 
     /**
-     * Fecha a la que corresponde {@see getOpeningBalance}. Los apuntes anteriores a
-     * esta fecha no cuentan para el saldo (son histórico previo a la migración).
+     * Fecha a la que corresponde {@see getOpeningBalance}. Un apunte anterior no
+     * contaría para el saldo, así que no se admite ({@see isOpenOn}).
      * @ORM\Column(name="opening_date", type="date")
      */
     #[Assert\NotNull]
@@ -170,6 +170,16 @@ class FinancialAccount
         $this->openingDate = $openingDate;
 
         return $this;
+    }
+
+    /**
+     * Si la cuenta admite un movimiento en esa fecha: desde su apertura en adelante.
+     * Lo anterior quedaría fuera del saldo sin que nadie lo notase; en el libro de
+     * 2026 dos apuntes de la caja llegaron fechados en 2023 por una errata.
+     */
+    public function isOpenOn(\DateTimeInterface $date): bool
+    {
+        return $this->openingDate === null || $date->format('Y-m-d') >= $this->openingDate->format('Y-m-d');
     }
 
     public function isActive(): bool
