@@ -88,9 +88,10 @@ class MandatesToPartnersTest extends TestCase
         $service->apply($remittance, $plan);
 
         $this->assertCount(3, $plan['differences']);
-        $this->assertStringContainsString('«CUOTA MENSUAL 300»', $plan['differences'][0]);
-        $this->assertStringContainsString('la cuenta de la ficha (ES79 … 6789)', $plan['differences'][1]);
-        $this->assertStringContainsString('ya lo tiene Carla', $plan['differences'][2]);
+        $this->assertStringContainsString('«CUOTA MENSUAL 300»', $plan['differences'][0]['text']);
+        $this->assertStringContainsString('La cuenta de la ficha (ES79 … 6789)', $plan['differences'][1]['text']);
+        $this->assertSame($otherIban, $plan['differences'][1]['partner'], 'Cada diferencia dice de quién es: la pantalla enlaza a su ficha.');
+        $this->assertStringContainsString('ya lo tiene Carla', $plan['differences'][2]['text']);
         $this->assertSame(1, $plan['unlinked']);
         $this->assertSame('CUOTA MENSUAL 300', $otherMandate->getMandateReference());
         $this->assertSame(self::IBAN_B, $otherIban->getIban());
@@ -117,7 +118,7 @@ class MandatesToPartnersTest extends TestCase
         $this->assertSame($typo, $plan['repairs'][0]['partner']);
         $this->assertSame([], $plan['ibans'], 'Corregir no es rellenar un hueco.');
         $this->assertCount(1, $plan['differences']);
-        $this->assertStringContainsString('Bea', $plan['differences'][0]);
+        $this->assertSame($bothWrong, $plan['differences'][0]['partner']);
         $this->assertSame(self::IBAN_A_TYPO, $typo->getIban(), 'Planear no cambia ninguna ficha.');
 
         $service->apply($remittance, $plan);
@@ -132,7 +133,7 @@ class MandatesToPartnersTest extends TestCase
         $plan = $this->service()->plan($this->sent([$this->line($partner, 'CUOTA MENSUAL 200')]), []);
 
         $this->assertSame([], $plan['repairs'], 'Dos cuentas válidas: decide una persona.');
-        $this->assertStringContainsString('(ES91 … 1332) no es la del recibo (ES91 … 1332): cambian cifras del medio', $plan['differences'][0]);
+        $this->assertStringContainsString('(ES91 … 1332) no es la del recibo (ES91 … 1332): cambian cifras del medio', $plan['differences'][0]['text']);
         $this->assertSame(self::IBAN_A_LOOKALIKE, $partner->getIban());
     }
 
@@ -159,7 +160,7 @@ class MandatesToPartnersTest extends TestCase
         $plan = $this->service()->plan($this->sent([$this->line($partner, 'CUOTA MENSUAL 200', signedOn: null)]), []);
 
         $this->assertSame([], $plan['mandates']);
-        $this->assertStringContainsString('no dice cuándo se firmó', $plan['differences'][0]);
+        $this->assertStringContainsString('no dice cuándo se firmó', $plan['differences'][0]['text']);
     }
 
     public function testUnBorradorNoSePasaALasFichas(): void
