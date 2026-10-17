@@ -21,6 +21,13 @@ use App\Repository\BudgetLineRepository;
  */
 class BudgetTracker
 {
+    /** Grupos cuyo dinero, si sale, lo tienen que pagar las cestas. */
+    private const OUTFLOW_KINDS = [
+        BudgetCategoryGroup::KIND_EXPENSE,
+        BudgetCategoryGroup::KIND_INVESTMENT,
+        BudgetCategoryGroup::KIND_FINANCING,
+    ];
+
     public function __construct(
         private readonly AccountEntryRepository $entries,
         private readonly BudgetLineRepository $lines,
@@ -197,6 +204,11 @@ class BudgetTracker
      * las cestas comprometidas. Se descuentan los gastos de huevos porque los huevos
      * se cobran aparte, igual que se hace hoy a mano al final del presupuesto.
      *
+     * Cuenta todo el dinero que SALE: gastos, inversión y las cuotas de préstamo. Las
+     * cuotas no son gasto contable, pero hay que pagarlas igual y la hoja de la
+     * asamblea las reparte entre las cestas. Financiación lleva signo a mano (entra el
+     * préstamo, salen las cuotas), así que de ese grupo sólo cuenta su neto si sale.
+     *
      * @return array{
      *     expenses: float,
      *     eggExpenses: float,
@@ -212,10 +224,10 @@ class BudgetTracker
         $expenses = 0.0;
         $eggExpenses = 0.0;
         foreach ($tracked['groups'] as $group) {
-            if (!\in_array($group['kind'], [BudgetCategoryGroup::KIND_EXPENSE, BudgetCategoryGroup::KIND_INVESTMENT], true)) {
+            if (!\in_array($group['kind'], self::OUTFLOW_KINDS, true)) {
                 continue;
             }
-            $amount = abs($group['budgetTotal']);
+            $amount = max(0.0, -$group['budgetTotal']);
             $expenses += $amount;
             if (mb_strtoupper($group['name']) === 'HUEVOS') {
                 $eggExpenses += $amount;

@@ -10,6 +10,7 @@ use App\Repository\AccountEntryRepository;
 use App\Repository\BudgetCategoryRepository;
 use App\Repository\BudgetRepository;
 use App\Repository\PartnerBasketShareRepository;
+use App\Service\Accounting\Amount;
 use App\Service\Accounting\BudgetTracker;
 use App\Service\Accounting\MonthNames;
 use Doctrine\ORM\EntityManagerInterface;
@@ -210,7 +211,7 @@ class BudgetController extends AbstractController
                         continue;
                     }
 
-                    $amount = $this->parseAmount($raw);
+                    $amount = (float) (Amount::parse($raw) ?? 0.0);
                     if ($sign !== 0) {
                         $amount = $sign * abs($amount);
                     }
@@ -374,21 +375,5 @@ class BudgetController extends AbstractController
         }
 
         return $name;
-    }
-
-    /**
-     * Lee una casilla de la rejilla. Se admite la coma decimal porque es lo que sale
-     * del teclado numérico y lo que la gente escribe; los puntos de millar se ignoran.
-     */
-    private function parseAmount(mixed $raw): float
-    {
-        $value = trim((string) $raw);
-        if ($value === '') {
-            return 0.0;
-        }
-        $value = str_replace(['.', ' ', '€'], '', $value);
-        $value = str_replace(',', '.', $value);
-
-        return is_numeric($value) ? (float) $value : 0.0;
     }
 }
