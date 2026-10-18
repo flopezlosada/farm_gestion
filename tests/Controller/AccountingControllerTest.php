@@ -57,6 +57,27 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
         $this->assertSelectorTextContains('body', 'No hay ningún presupuesto cargado para 2099');
     }
 
+    /**
+     * La caja mes a mes nombra cada mes y da euros, como la ficha de una cuenta: «1, 2,
+     * 3…» y «0,4k» no se leen. Un año futuro es todo previsión, desde enero.
+     */
+    public function testLaCajaMesAMesNombraLosMesesYDaEuros(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+
+        $crawler = $client->request('GET', '/gestion/accounting/report?year=2099');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorTextContains('body', 'Desde enero es previsión');
+        $months = $crawler->filter('.acc-months .m');
+        $this->assertCount(12, $months);
+        $this->assertStringContainsString('Ene', $months->eq(0)->text());
+        $this->assertStringContainsString('Dic', $months->eq(11)->text());
+        $this->assertStringEndsWith(' €', trim($months->eq(11)->filter('.v')->text()));
+        $this->assertSame('Diciembre', explode(':', (string) $months->eq(11)->attr('title'))[0]);
+    }
+
     public function testElCosteDeLaCestaEstaEnPresupuestos(): void
     {
         $client = $this->createAuthenticatedClient();
