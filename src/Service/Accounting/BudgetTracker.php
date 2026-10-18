@@ -249,8 +249,11 @@ class BudgetTracker
      * Última mensualidad con apuntes. Es el corte natural del «hasta la fecha»: no
      * tiene sentido contar como ejecutado un mes del que aún no se ha anotado nada.
      * Sin apuntes, el mes en curso; o ninguno, si el año aún no ha empezado.
+     *
+     * Es del libro entero, no de una partida: un mes anotado en el que una partida no
+     * se movió es un cero de verdad, no un hueco.
      */
-    private function lastMonthWithData(int $year): int
+    public function lastMonthWithData(int $year): int
     {
         $last = 0;
         foreach ($this->entries->totalsByCategoryAndMonth($year) as $months) {
