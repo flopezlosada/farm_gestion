@@ -345,7 +345,10 @@ class AccountingController extends AbstractController
             ];
         }
 
-        $tracked = $tracker->track($year, $budget, 12);
+        // Con el año abierto, lo previsto se mide hasta el último mes con apuntes:
+        // contra los doce meses, medio año de gasto parece dinero que sobra.
+        $yearClosed = $year < (int) date('Y');
+        $tracked = $tracker->track($year, $budget, $yearClosed ? 12 : null);
         $result = $tracked['result']['actualTotal'];
         $variation = array_sum(array_column($balances, 'end')) - array_sum(array_column($balances, 'start'));
 
@@ -355,10 +358,11 @@ class AccountingController extends AbstractController
             'tracked' => $tracked,
             'balances' => $balances,
             'result' => $result,
-            'budgetResult' => $tracked['result']['budgetTotal'],
+            'budgetResult' => $tracked['result']['budgetToDate'],
+            'throughMonthName' => MonthNames::long($tracked['throughMonth']),
             'variation' => $variation,
             'unexplained' => round($variation - $result, 2),
-            'yearClosed' => $year < (int) date('Y'),
+            'yearClosed' => $yearClosed,
         ]);
     }
 

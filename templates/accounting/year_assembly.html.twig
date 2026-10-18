@@ -7,9 +7,10 @@
  #
  # El controller pasa:
  #   year, budget             año y presupuesto aprobado (o null)
- #   tracked                  BudgetTracker::track del año entero
+ #   tracked                  BudgetTracker::track del año, hasta el último mes con apuntes si sigue abierto
+ #   throughMonthName         ese mes de corte, para decirlo en el papel
  #   balances                 por cuenta: account, openedDuringYear, start, end
- #   result, budgetResult     resultado real y previsto del año
+ #   result, budgetResult     resultado real y previsto hasta el mes de corte
  #   variation                lo que cambiaron los saldos de todas las cuentas
  #   unexplained              variación menos resultado (0 si cuadra)
  #   yearClosed               si el año ya acabó
@@ -75,12 +76,14 @@
             : 'Lo que de verdad entró y salió, y el dinero de cada cuenta al empezar y al acabar el año. No hay presupuesto aprobado de ' ~ year ~ ' con el que compararlo.'
     ) }}
 
-    <div class="prl-toolbar acc-no-print">
+    {# Fuera de acc-no-print: un papel con el año a medias tiene que decirlo. #}
+    {% set previstoLabel = yearClosed or throughMonthName == '' ? 'Previsto' : 'Previsto a ' ~ throughMonthName|lower %}
+    <div class="prl-toolbar">
         {% if not yearClosed %}
-            <span class="prl-chip prl-chip--pausado"><span class="dot"></span>{{ year }} todavía no ha acabado: las cifras son hasta hoy</span>
+            <span class="prl-chip prl-chip--pausado"><span class="dot"></span>{{ year }} todavía no ha acabado{% if throughMonthName %}: lo previsto se compara hasta {{ throughMonthName|lower }}, el último mes con apuntes{% endif %}</span>
         {% endif %}
-        <div class="spacer"></div>
-        <button type="button" class="prl-btn prl-btn--primary" onclick="window.print()"><i class="fa fa-print"></i> Imprimir o guardar en PDF</button>
+        <div class="spacer acc-no-print"></div>
+        <button type="button" class="prl-btn prl-btn--primary acc-no-print" onclick="window.print()"><i class="fa fa-print"></i> Imprimir o guardar en PDF</button>
     </div>
 
     {# ============ RESULTADO ============ #}
@@ -90,7 +93,7 @@
             <thead>
                 <tr>
                     <th></th>
-                    {% if budget %}<th class="tight acc-num">Previsto</th>{% endif %}
+                    {% if budget %}<th class="tight acc-num">{{ previstoLabel }}</th>{% endif %}
                     <th class="tight acc-num">Real</th>
                     {% if budget %}<th class="tight acc-num">Diferencia</th>{% endif %}
                 </tr>
@@ -99,9 +102,9 @@
                 {% for total in tracked.totals %}
                     <tr>
                         <td>{{ total.name }}</td>
-                        {% if budget %}<td class="acc-num">{{ fmt.money(total.budgetTotal, false) }}</td>{% endif %}
+                        {% if budget %}<td class="acc-num">{{ fmt.money(total.budgetToDate, false) }}</td>{% endif %}
                         <td class="acc-num">{{ fmt.money(total.actualTotal, false) }}</td>
-                        {% if budget %}<td class="acc-num">{{ fmt.money(total.actualTotal - total.budgetTotal, true) }}</td>{% endif %}
+                        {% if budget %}<td class="acc-num">{{ fmt.money(total.actualTotal - total.budgetToDate, true) }}</td>{% endif %}
                     </tr>
                 {% endfor %}
                 <tr class="acc-total">
@@ -121,7 +124,7 @@
             <thead>
                 <tr>
                     <th>Grupo</th>
-                    {% if budget %}<th class="tight acc-num">Previsto</th>{% endif %}
+                    {% if budget %}<th class="tight acc-num">{{ previstoLabel }}</th>{% endif %}
                     <th class="tight acc-num">Real</th>
                     {% if budget %}<th class="tight acc-num">Diferencia</th>{% endif %}
                 </tr>
@@ -130,7 +133,7 @@
                 {% for group in tracked.groups %}
                     <tr>
                         <td>{{ group.name }} <span class="acc-muted acc-small">· {{ group.kindLabel|lower }}</span></td>
-                        {% if budget %}<td class="acc-num">{{ fmt.money(group.budgetTotal, false) }}</td>{% endif %}
+                        {% if budget %}<td class="acc-num">{{ fmt.money(group.budgetToDate, false) }}</td>{% endif %}
                         <td class="acc-num">{{ fmt.money(group.actualTotal, false) }}</td>
                         {% if budget %}<td class="acc-num">{{ fmt.money(group.deviation, true) }}</td>{% endif %}
                     </tr>
@@ -149,7 +152,7 @@
                 <tr>
                     <th>Cuenta</th>
                     <th class="tight acc-num">1 de enero</th>
-                    <th class="tight acc-num">31 de diciembre</th>
+                    <th class="tight acc-num">{{ yearClosed ? '31 de diciembre' : 'Hoy' }}</th>
                     <th class="tight acc-num">Variación</th>
                 </tr>
             </thead>
