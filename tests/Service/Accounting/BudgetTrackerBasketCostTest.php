@@ -13,7 +13,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Cuánto tiene que costar la cesta: todo lo que sale en el año, menos los huevos,
- * repartido entre las cestas.
+ * repartido entre las cestas. Y el resultado de la rejilla del año, del que sale.
  */
 class BudgetTrackerBasketCostTest extends TestCase
 {
@@ -22,6 +22,8 @@ class BudgetTrackerBasketCostTest extends TestCase
     private array $groups = [];
     /** @var array<int, array<int, string>> */
     private array $lines = [];
+    /** @var array<int, array<int, string>> */
+    private array $actuals = [];
 
     /**
      * El presupuesto 2026 aprobado en asamblea, agregado por grupo. La hoja de la
@@ -80,6 +82,34 @@ class BudgetTrackerBasketCostTest extends TestCase
     }
 
     /**
+     * El resultado de cada mes es lo que entra menos lo que sale, de todos los tipos
+     * (la inversión y las cuotas de préstamo también son dinero que se va). Un
+     * traspaso entre cuentas propias no cuenta: la asociación no gana ni pierde.
+     */
+    public function testResultSumsEveryKindButTransfersMonthByMonth(): void
+    {
+        $fees = $this->category(BudgetCategoryGroup::KIND_INCOME, 'INGRESOS', 'Cuotas de socixs', '9000.00');
+        $seeds = $this->category(BudgetCategoryGroup::KIND_EXPENSE, 'HUERTA', 'Semillas y plantel', '-1500.00');
+        $tractor = $this->category(BudgetCategoryGroup::KIND_INVESTMENT, 'INVERSIÓN', 'Maquinaria', null);
+        $loan = $this->category(BudgetCategoryGroup::KIND_FINANCING, 'FINANCIACIÓN', 'Cuotas de préstamo', null);
+        $toCash = $this->category(BudgetCategoryGroup::KIND_TRANSFER, 'TRASPASOS', 'Del banco a la caja', null);
+        $this->actuals[$fees->getId()] = [1 => '8750.00', 2 => '8900.50'];
+        $this->actuals[$seeds->getId()] = [1 => '-1320.40', 2 => '-610.00'];
+        $this->actuals[$tractor->getId()] = [2 => '-4200.00'];
+        $this->actuals[$loan->getId()] = [1 => '-198.00', 2 => '-198.00'];
+        $this->actuals[$toCash->getId()] = [1 => '-500.00'];
+
+        $result = $this->tracker()->track(2026, new Budget(), 12)['result'];
+
+        $this->assertSame('Resultado', $result['name']);
+        $this->assertSame(7231.6, $result['actual'][1]);
+        $this->assertSame(3892.5, $result['actual'][2]);
+        $this->assertSame(0.0, $result['actual'][3]);
+        $this->assertSame(11124.1, $result['actualTotal']);
+        $this->assertSame(7500.0, $result['budgetTotal']);
+    }
+
+    /**
      * Una partida con su importe anual previsto en enero (el reparto por meses no
      * cambia la cuenta del año). Con `$amount` null la partida existe pero no lleva
      * nada previsto, como las muchas partidas vacías del presupuesto real.
@@ -106,7 +136,7 @@ class BudgetTrackerBasketCostTest extends TestCase
     private function tracker(): BudgetTracker
     {
         $entries = $this->createMock(AccountEntryRepository::class);
-        $entries->method('totalsByCategoryAndMonth')->willReturn([]);
+        $entries->method('totalsByCategoryAndMonth')->willReturn($this->actuals);
         $lines = $this->createMock(BudgetLineRepository::class);
         $lines->method('totalsByCategoryAndMonth')->willReturn($this->lines);
         $groups = $this->createMock(BudgetCategoryGroupRepository::class);
