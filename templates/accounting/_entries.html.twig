@@ -3,8 +3,10 @@
  #
  # invoices: id del apunte => id de su factura, para el clip (vacío si no importa). #}
 
-{# Las celdas de un apunte: fecha, concepto (enlaza a su ficha), partida, cuenta e importe. #}
-{% macro cells(entry, invoices = {}) %}
+{# Las celdas de un apunte: fecha, concepto (enlaza a su ficha), partida, cuenta e importe.
+ # without: 'category' o 'account' para callar la columna que en esa ficha sería la
+ # misma en todas las filas. #}
+{% macro cells(entry, invoices = {}, without = null) %}
     <td class="tight">{{ entry.date ? entry.date|date('d/m/Y') : '—' }}</td>
     <td>
         <a href="{{ path('accounting_entry_show', { id: entry.id }) }}">{{ entry.concept }}</a>
@@ -17,32 +19,36 @@
             </span>
         {% endif %}
     </td>
-    <td>
-        <span class="acc-muted acc-small">{{ entry.category.group.name }}</span><br>
-        <a href="{{ path('accounting_category_show', { id: entry.category.id }) }}">{{ entry.category.name }}</a>
-    </td>
-    <td class="tight"><a href="{{ path('accounting_account_show', { id: entry.account.id }) }}">{{ entry.account.name }}</a></td>
+    {% if without != 'category' %}
+        <td>
+            <span class="acc-muted acc-small">{{ entry.category.group.name }}</span><br>
+            <a href="{{ path('accounting_category_show', { id: entry.category.id }) }}">{{ entry.category.name }}</a>
+        </td>
+    {% endif %}
+    {% if without != 'account' %}
+        <td class="tight"><a href="{{ path('accounting_account_show', { id: entry.account.id }) }}">{{ entry.account.name }}</a></td>
+    {% endif %}
     <td class="acc-num {{ entry.incoming ? '' : 'acc-neg' }}">
         {{ entry.amount|number_format(2, ',', '.') }} €
     </td>
 {% endmacro %}
 
 {# Una tabla de sólo lectura, para las fichas. #}
-{% macro table(entries, invoices = {}) %}
+{% macro table(entries, invoices = {}, without = null) %}
     {% import _self as rows %}
     <table class="prl-table">
         <thead>
             <tr>
                 <th class="tight">Fecha</th>
                 <th>Concepto</th>
-                <th>Partida</th>
-                <th class="tight">Cuenta</th>
+                {% if without != 'category' %}<th>Partida</th>{% endif %}
+                {% if without != 'account' %}<th class="tight">Cuenta</th>{% endif %}
                 <th class="tight acc-num">Importe</th>
             </tr>
         </thead>
         <tbody>
             {% for entry in entries %}
-                <tr>{{ rows.cells(entry, invoices) }}</tr>
+                <tr>{{ rows.cells(entry, invoices, without) }}</tr>
             {% endfor %}
         </tbody>
     </table>

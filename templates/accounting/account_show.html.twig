@@ -3,8 +3,8 @@
  # últimos apuntes. Todos los apuntes, en el libro filtrado por la cuenta.
  #
  # El controller pasa: account, balance (hoy), count (nº de apuntes), year,
- # months (mes => saldo al cerrarlo, null si la cuenta aún no existía), recent,
- # invoices (apunte => factura, para el clip).
+ # balances (mes => saldo al cerrarlo, null si la cuenta aún no existía), months
+ # (rótulos cortos), recent, invoices (apunte => factura, para el clip).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -60,14 +60,14 @@
         <dd>{{ count }}</dd>
     </dl>
 
-    {% if months is not empty %}
+    {% if balances is not empty %}
         {% embed '_components/csa_card.html.twig' with { title: 'Saldo al cerrar cada mes de ' ~ year, accent: 'sky' } %}
             {% block body %}
                 <div class="acc-months">
-                    {% for m, value in months %}
+                    {% for m, value in balances %}
                         <div class="m {{ value is not null and value < 0 ? 'low' : '' }}">
-                            <span class="v">{{ value is null ? '—' : (value / 1000)|number_format(1, ',', '.') ~ 'k' }}</span>
-                            {{ m }}
+                            <span class="v">{{ value is null ? '—' : value|number_format(0, ',', '.') ~ ' €' }}</span>
+                            {{ months[m] }}
                         </div>
                     {% endfor %}
                 </div>
@@ -84,7 +84,7 @@
         {% if recent is empty %}
             <div class="prl-empty">Esta cuenta aún no tiene apuntes.</div>
         {% else %}
-            {{ rows.table(recent, invoices) }}
+            {{ rows.table(recent, invoices, 'account') }}
         {% endif %}
     </div>
 

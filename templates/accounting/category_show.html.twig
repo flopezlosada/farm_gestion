@@ -3,7 +3,8 @@
  # lo real, mes a mes, y sus últimos apuntes.
  #
  # El controller pasa: category, year, budget (aprobado del año, o null),
- # actual y planned (mes => importe con signo), count, recent, invoices, months.
+ # actual y planned (mes => importe con signo), throughMonth (último mes con apuntes
+ # en el libro: los siguientes aún no tienen real), count, recent, invoices, months.
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -32,6 +33,7 @@
 {% block csa_main %}
 {% set plannedTotal = planned|reduce((a, v) => a + v, 0) %}
 {% set actualTotal = actual|reduce((a, v) => a + v, 0) %}
+{% set plannedToDate = planned|filter((v, m) => m <= throughMonth)|reduce((a, v) => a + v, 0) %}
 <div class="prl">
 
     {{ csa.page_header('Contabilidad · Partidas', category.name, category.group.name ~ ' · ' ~ category.group.kindLabel ~ (category.active ? '' : ' · retirada')) }}
@@ -39,7 +41,12 @@
     <div class="prl-toolbar">
         <div class="counters">
             <b>{{ fmt.money(actualTotal) }}</b> en {{ year }}
-            {% if budget %} · previsto <b>{{ fmt.money(plannedTotal) }}</b>{% endif %}
+            {% if budget and throughMonth > 0 and throughMonth < 12 %}
+                · previsto hasta {{ months[throughMonth]|lower }} <b>{{ fmt.money(plannedToDate) }}</b>
+                ({{ fmt.money(plannedTotal) }} en el año)
+            {% elseif budget %}
+                · previsto <b>{{ fmt.money(plannedTotal) }}</b>
+            {% endif %}
             · {{ count }} apuntes en total
         </div>
         <div class="spacer"></div>
@@ -70,8 +77,13 @@
                         <tr>
                             <td><a href="{{ path('accounting_month', { year: year, month: m }) }}">{{ months[m] }}</a></td>
                             {% if budget %}<td class="acc-num">{{ fmt.money(p) }}</td>{% endif %}
-                            <td class="acc-num">{{ fmt.money(a) }}</td>
-                            {% if budget %}<td class="acc-num {{ a - p < 0 ? 'acc-neg' : '' }}">{{ fmt.money(a - p) }}</td>{% endif %}
+                            {% if m <= throughMonth %}
+                                <td class="acc-num">{{ fmt.money(a) }}</td>
+                                {% if budget %}<td class="acc-num {{ a - p < 0 ? 'acc-neg' : '' }}">{{ fmt.money(a - p) }}</td>{% endif %}
+                            {% else %}
+                                <td class="acc-num acc-muted" title="Sin anotar todavía">—</td>
+                                {% if budget %}<td class="acc-num acc-muted">—</td>{% endif %}
+                            {% endif %}
                         </tr>
                     {% endif %}
                 {% endfor %}
@@ -88,7 +100,7 @@
         {% if recent is empty %}
             <div class="prl-empty">Esta partida aún no tiene apuntes.</div>
         {% else %}
-            {{ rows.table(recent, invoices) }}
+            {{ rows.table(recent, invoices, 'category') }}
         {% endif %}
     </div>
 

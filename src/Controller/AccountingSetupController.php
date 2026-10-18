@@ -12,6 +12,7 @@ use App\Repository\BudgetLineRepository;
 use App\Repository\BudgetRepository;
 use App\Repository\FinancialAccountRepository;
 use App\Repository\ReceivedInvoiceRepository;
+use App\Service\Accounting\BudgetTracker;
 use App\Service\Accounting\MonthNames;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -109,11 +110,11 @@ class AccountingSetupController extends AbstractController
 
         // Una consulta por mes de una sola cuenta: doce como mucho, y balanceFor() ya
         // sabe que antes de abrirse la cuenta no tenía saldo.
-        $months = [];
+        $balances = [];
         $lastMonth = $year < (int) date('Y') ? 12 : ($year > (int) date('Y') ? 0 : (int) date('n'));
         for ($m = 1; $m <= $lastMonth; ++$m) {
             $end = (new \DateTimeImmutable(sprintf('%d-%02d-01', $year, $m)))->modify('last day of this month');
-            $months[$m] = $end < $account->getOpeningDate() ? null : (float) $entries->balanceFor($account, $end);
+            $balances[$m] = $end < $account->getOpeningDate() ? null : (float) $entries->balanceFor($account, $end);
         }
 
         $recent = $entries->listingQueryBuilder(['account' => $account->getId()])->setMaxResults(self::RECENT)->getQuery()->getResult();
@@ -123,7 +124,8 @@ class AccountingSetupController extends AbstractController
             'balance' => $entries->balanceFor($account),
             'count' => $entries->countByAccount()[(int) $account->getId()] ?? 0,
             'year' => $year,
-            'months' => $months,
+            'balances' => $balances,
+            'months' => MonthNames::SHORT,
             'recent' => $recent,
             'invoices' => $invoices->invoiceIdsByEntry(array_map(static fn ($e) => (int) $e->getId(), $recent)),
         ]);
@@ -202,7 +204,8 @@ class AccountingSetupController extends AbstractController
 
     /**
      * La ficha de una partida: lo previsto en el presupuesto aprobado del año frente a
-     * lo real, mes a mes, y sus últimos apuntes.
+     * lo real, mes a mes, y sus últimos apuntes. Los meses que el libro aún no tiene
+     * anotados no son una desviación: se comparan sólo los que sí.
      */
     #[Route('/categories/{id}', name: 'accounting_category_show', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function categoryShow(
@@ -212,6 +215,7 @@ class AccountingSetupController extends AbstractController
         BudgetRepository $budgets,
         BudgetLineRepository $lines,
         ReceivedInvoiceRepository $invoices,
+        BudgetTracker $tracker,
     ): Response {
         $year = $request->query->getInt('year') ?: (int) date('Y');
         $budget = $budgets->findApprovedForYear($year);
@@ -228,6 +232,7 @@ class AccountingSetupController extends AbstractController
             'budget' => $budget,
             'actual' => $actual,
             'planned' => $planned,
+            'throughMonth' => $tracker->lastMonthWithData($year),
             'count' => $entries->countByCategory()[$id] ?? 0,
             'recent' => $recent,
             'invoices' => $invoices->invoiceIdsByEntry(array_map(static fn ($e) => (int) $e->getId(), $recent)),

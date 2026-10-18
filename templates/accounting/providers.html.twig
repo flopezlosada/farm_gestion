@@ -35,7 +35,7 @@
     {{ csa.page_header(
         'Contabilidad',
         'Proveedores',
-        'A quién se le compra y cuánto en ' ~ year ~ '. Se dan de alta solos al confirmar una factura con CIF.'
+        'A quién se le compra y cuánto en ' ~ year ~ ', según las facturas subidas: un pago del libro sin su factura no suma aquí. Se dan de alta solos al confirmar una factura con CIF.'
     ) }}
 
     <div class="prl-stats">
@@ -45,7 +45,7 @@
         </div>
         <div class="prl-stat">
             <b>{{ over|length }}</b>
-            <span>pasan de {{ threshold|number_format(2, ',', '.') }} € (modelo 347)</span>
+            <span>pasan de {{ threshold|number_format(2, ',', '.') }} € en facturas (modelo 347)</span>
         </div>
     </div>
 
