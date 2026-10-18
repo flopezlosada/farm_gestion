@@ -375,7 +375,7 @@ class AppSettings
 
     /**
      * Copia de seguridad fuera del hosting: cifrada y bloqueada contra el borrado
-     * en Backblaze B2. De momento sólo sube un fichero de prueba.
+     * en Backblaze B2: un volcado de la base y los documentos de var/documentos.
      */
     public const CRON_OFFSITE_BACKUP = 'cron.offsite_backup';
 
@@ -711,9 +711,10 @@ class AppSettings
             'requires' => [self::FEATURE_CONTABILIDAD],
             'depends_on' => [],
         ],
-        // De madrugada, cuando nadie toca las facturas ni el libro. NACE APAGADA
-        // mientras sólo sea una prueba: el botón de la pantalla la lanza igual,
-        // porque la ejecución manual salta el interruptor propio.
+        // De madrugada, cuando nadie toca las facturas ni el libro. NACE APAGADA:
+        // sin las claves en el .env.local no hace nada, y se enciende cuando la
+        // primera copia esté subida a mano con el botón (la ejecución manual
+        // salta el interruptor propio).
         self::CRON_OFFSITE_BACKUP => [
             'command' => 'app:offsite-backup',
             // Ningún canal: no entrega nada a nadie.
@@ -937,7 +938,7 @@ class AppSettings
         self::CRON_OFFSITE_BACKUP => [
             'group' => 'Tareas programadas',
             'label' => 'Copia de seguridad fuera del hosting',
-            'help' => 'Sube a Backblaze B2 una copia cifrada que el servidor no puede borrar (app:offsite-backup). DE MOMENTO ES UNA PRUEBA: sube un fichero pequeño bloqueado un día, para comprobar que el hosting cifra, sale hacia B2 y que la clave no puede borrar. Déjala apagada y lánzala con el botón.',
+            'help' => 'Sube a Backblaze B2, cifrados y sin que el servidor pueda borrarlos, un volcado de la base (se guarda 90 días) y los documentos de facturas y vencimientos que aún no estén fuera (6 años) (app:offsite-backup). Cada ejecución dedica a los documentos unos dos minutos: si la primera no los sube todos, pulsa el botón otra vez.',
             'default' => false,
         ],
         self::CRON_VOLUNTEER_CALLS => [

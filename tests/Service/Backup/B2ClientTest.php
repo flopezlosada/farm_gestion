@@ -19,6 +19,8 @@ class B2ClientTest extends TestCase
 
     private const APP_KEY = 'K003SECRETO';
 
+    private const AUTHORIZE_URL = 'https://api.backblazeb2.com/b2api/v4/b2_authorize_account';
+
     private const API_URL = 'https://api003.backblazeb2.com';
 
     private const UPLOAD_URL = 'https://pod-000-1000-00.backblaze.com/b2api/v4/b2_upload_file/bucket1/c003';
@@ -46,6 +48,98 @@ class B2ClientTest extends TestCase
         $this->assertSame('X-Bz-File-Retention-Mode: governance', $this->header($upload, 'x-bz-file-retention-mode'));
         $this->assertSame('X-Bz-File-Retention-Retain-Until-Timestamp: ' . $until->getTimestamp() * 1000, $this->header($upload, 'x-bz-file-retention-retain-until-timestamp'));
         $this->assertSame('Authorization: upload-token', $this->header($upload, 'authorization'));
+    }
+
+    /**
+     * La primera copia sube más de mil ficheros: se entra en B2 y se pide URL de
+     * subida una sola vez, no una por fichero.
+     */
+    public function testVariasSubidasEntranUnaVezYReutilizanLaUrl(): void
+    {
+        $requests = [];
+        $client = $this->client($requests, [
+            $this->authorized(['listFiles', 'writeFiles', 'writeFileRetentions']),
+            $this->uploadUrl(),
+            $this->uploaded('a'),
+            $this->uploaded('b'),
+        ]);
+
+        $client->uploadLocked('a', 'x', new \DateTimeImmutable('+1 day'));
+        $client->uploadLocked('b', 'y', new \DateTimeImmutable('+1 day'));
+
+        $this->assertSame([self::AUTHORIZE_URL, self::API_URL . '/b2api/v4/b2_get_upload_url?bucketId=bucket1', self::UPLOAD_URL, self::UPLOAD_URL], array_column($requests, 'url'));
+    }
+
+    /** Si el servidor de subida falla, se pide otra URL y se reintenta una vez. */
+    public function testSiFallaLaSubidaReintentaConOtraUrl(): void
+    {
+        $requests = [];
+        $client = $this->client($requests, [
+            $this->authorized(['writeFiles']),
+            $this->uploadUrl(),
+            new MockResponse('{"status":503,"code":"service_unavailable","message":"c001 is too busy"}', ['http_code' => 503]),
+            $this->uploadUrl(),
+            $this->uploaded('a'),
+        ]);
+
+        $file = $client->uploadLocked('a', 'x', new \DateTimeImmutable('+1 day'));
+
+        $this->assertSame('4_za', $file['fileId']);
+        $this->assertCount(5, $requests);
+    }
+
+    /** Un rechazo que se repetiría (400, 403) no vuelve a subir el fichero entero. */
+    public function testUnRechazoPermanenteNoSeReintenta(): void
+    {
+        $requests = [];
+        $client = $this->client($requests, [
+            $this->authorized(['writeFiles']),
+            $this->uploadUrl(),
+            new MockResponse('{"status":400,"code":"bad_request","message":"File names must not contain DEL"}', ['http_code' => 400]),
+        ]);
+
+        try {
+            $client->uploadLocked('a', 'x', new \DateTimeImmutable('+1 day'));
+            $this->fail('Debía fallar.');
+        } catch (B2Exception $e) {
+            $this->assertSame(400, $e->status);
+        }
+        $this->assertCount(3, $requests);
+    }
+
+    /** Lo que se pide guardar con el fichero viaja en cabeceras X-Bz-Info-. */
+    public function testLosDatosPropiosVanConElFichero(): void
+    {
+        $requests = [];
+        $client = $this->client($requests, [$this->authorized(['writeFiles']), $this->uploadUrl(), $this->uploaded('a')]);
+
+        $client->uploadLocked('a', 'x', new \DateTimeImmutable('+1 day'), ['plain_sha1' => 'abc123']);
+
+        $this->assertSame('X-Bz-Info-plain_sha1: abc123', $this->header($requests[2], 'x-bz-info-plain_sha1'));
+    }
+
+    /** El listado recorre todas las páginas y devuelve los datos propios de cada fichero. */
+    public function testListaTodasLasPaginas(): void
+    {
+        $requests = [];
+        $client = $this->client($requests, [
+            $this->authorized(['listFiles']),
+            new MockResponse(json_encode([
+                'files' => [['fileName' => 'web/documentos/a.pdf.sealed', 'fileInfo' => ['plain_sha1' => '111']]],
+                'nextFileName' => 'web/documentos/b.pdf.sealed',
+            ])),
+            new MockResponse(json_encode([
+                'files' => [['fileName' => 'web/documentos/b.pdf.sealed', 'fileInfo' => []]],
+                'nextFileName' => null,
+            ])),
+        ]);
+
+        $files = $client->listFiles('web/documentos/');
+
+        $this->assertSame(['web/documentos/a.pdf.sealed' => ['plain_sha1' => '111'], 'web/documentos/b.pdf.sealed' => []], $files);
+        $this->assertStringContainsString('prefix=web/documentos/', $requests[1]['url']);
+        $this->assertStringNotContainsString('startFileName', $requests[1]['url']);
+        $this->assertStringContainsString('startFileName=web/documentos/b.pdf.sealed', $requests[2]['url']);
     }
 
     /**
@@ -163,6 +257,18 @@ class B2ClientTest extends TestCase
                 ],
             ]],
         ]));
+    }
+
+    /** Respuesta de b2_get_upload_url. */
+    private function uploadUrl(): MockResponse
+    {
+        return new MockResponse(json_encode(['uploadUrl' => self::UPLOAD_URL, 'authorizationToken' => 'upload-token']));
+    }
+
+    /** Respuesta de b2_upload_file para un fichero. */
+    private function uploaded(string $fileName): MockResponse
+    {
+        return new MockResponse(json_encode(['fileId' => '4_z' . $fileName, 'fileName' => $fileName]));
     }
 
     /**
