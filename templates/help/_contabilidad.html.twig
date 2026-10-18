@@ -97,7 +97,7 @@
             <li>Vuelve a la remesa y pulsa <strong>«Ya está enviada»</strong>. Desde ese momento no se puede cambiar.</li>
         </ol>
         {{ csa.callout(
-            'Si algún recibo tiene un problema, la remesa lo dice y no deja darla por enviada hasta arreglarlo. Las cuotas que no se pueden cobrar todavía no van en la remesa: están en Socios → «Cuotas del mes», con el motivo.',
+            'Si algún recibo tiene un problema, la remesa lo dice y no deja darla por enviada hasta arreglarlo. Las cuotas que no se pueden cobrar todavía no van en la remesa: están en Socios → «Cuotas del mes», con el motivo (esa pantalla pide permiso de socios).',
             'info'
         ) }}
     {% endblock %}
@@ -108,7 +108,7 @@
         {% import '_macros/csa.html.twig' as csa %}
         <ol class="help-steps">
             <li>Antes, deja el trimestre completo: los movimientos del banco metidos hasta el último día y las facturas de la bandeja revisadas.</li>
-            <li>En <strong>Informes → Para la gestoría</strong> sale el trimestre que toca. Arriba avisa de lo que falta: facturas sin revisar, gastos sin factura, bancos con el libro sin llegar al final del trimestre.</li>
+            <li>En <strong>Informes → Para la gestoría</strong> sale el trimestre que toca. Avisa de las facturas que siguen en la bandeja sin anotar, de los gastos sin factura y de las facturas con alguna observación. Si el libro de un banco no llega al final del trimestre, lo dice la tarea de la portada.</li>
             <li>Pulsa <strong>«Descargar el ZIP»</strong>: lleva las facturas renombradas y los libros. Súbelo a la carpeta de la gestoría.</li>
             <li>Pulsa <strong>«Marcar como entregado»</strong>.</li>
         </ol>
@@ -124,7 +124,7 @@
         {% import '_macros/csa.html.twig' as csa %}
         <ol class="help-steps">
             <li>Para la asamblea, en <strong>Informes → Para la asamblea</strong> está la hoja del año: lo previsto frente a lo que de verdad entró y salió, y el dinero de cada cuenta. Se imprime o se guarda en PDF.</li>
-            <li>Para el presupuesto del año siguiente, en <strong>Informes → Presupuestos</strong>, copia el de este año con el botón de copiar: se copia con todas sus cifras. Con el lápiz («Nombre, año y notas») ponle el año nuevo, y con el botón de la tabla («Las cifras») ajusta lo que cambie.</li>
+            <li>Para el presupuesto del año siguiente, en <strong>Informes → Presupuestos</strong>, copia el de este año con el botón de copiar: se copia con todas sus cifras y sin aprobar. Con el lápiz («Nombre, año y notas») ponle el año nuevo, y con el botón de la tabla («Las cifras») ajusta lo que cambie.</li>
             <li>Cuando la asamblea lo apruebe, en su ficha marca <strong>«Aprobado en asamblea»</strong> con la fecha. Contra ése se mide «Cómo vamos».</li>
         </ol>
         {{ csa.callout(
