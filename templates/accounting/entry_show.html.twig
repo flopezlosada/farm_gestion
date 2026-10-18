@@ -6,7 +6,8 @@
  #
  # El controller pasa: entry, invoice (la factura de la que salió, o null),
  # issuedInvoice (la emitida de la que este apunte es el cobro, o null),
- # hasDocument (si el fichero de esa factura está en el servidor), y para un
+ # hasDocument (si el fichero de esa factura está en el servidor), closedBy (la
+# entrega a la gestoría que cierra su trimestre, o null), y para un
  # traspaso sin pareja nearbyLoose (mitades sueltas de otras cuentas cerca de su
  # fecha), pairable (los id de ésas que casan) y peerAccounts (cuentas donde anotar
  # la que falta).
@@ -36,13 +37,24 @@
 
 {% block csa_main %}
     {% import _self as here %}
-    {% set editable = is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+    {% set editable = is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') and closedBy is null %}
 
     {{ csa.page_header(
         'Contabilidad · Movimiento',
         entry.concept,
         entry.date|date('d/m/Y') ~ ' · ' ~ entry.account.name
     ) }}
+
+    {% if closedBy %}
+        <p class="csa-callout csa-callout--info">
+            <i class="csa-callout__icon fa fa-lock"></i>
+            <span>
+                El {{ closedBy.quarter.label }} se entregó a la gestoría el {{ closedBy.deliveredAt|date('d/m/Y') }}: este apunte ya no se cambia.
+                Si hay que corregirlo, se reabre desde
+                <a href="{{ path('accounting_accountant_export', { year: closedBy.quarter.year, quarter: closedBy.quarter.quarter }) }}">Para la gestoría</a>.
+            </span>
+        </p>
+    {% endif %}
 
     <div class="ent-show{{ invoice ? '' : ' ent-show--solo' }}">
 
