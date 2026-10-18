@@ -374,6 +374,12 @@ class AppSettings
     public const CRON_READ_INVOICES = 'cron.read_invoices';
 
     /**
+     * Copia de seguridad fuera del hosting: cifrada y bloqueada contra el borrado
+     * en Backblaze B2. De momento sólo sube un fichero de prueba.
+     */
+    public const CRON_OFFSITE_BACKUP = 'cron.offsite_backup';
+
+    /**
      * Manda las novedades de la web que administración ha pedido contar.
      *
      * A diferencia del resto, no vigila una fecha ni un estado del dominio:
@@ -705,6 +711,21 @@ class AppSettings
             'requires' => [self::FEATURE_CONTABILIDAD],
             'depends_on' => [],
         ],
+        // De madrugada, cuando nadie toca las facturas ni el libro. NACE APAGADA
+        // mientras sólo sea una prueba: el botón de la pantalla la lanza igual,
+        // porque la ejecución manual salta el interruptor propio.
+        self::CRON_OFFSITE_BACKUP => [
+            'command' => 'app:offsite-backup',
+            // Ningún canal: no entrega nada a nadie.
+            'channels' => [],
+            'needs_recipient' => false,
+            'confirm' => false,
+            'dry' => true,
+            'schedule' => ['freq' => 'daily', 'hour' => 3],
+            'max_delay_hours' => 36,
+            'requires' => [],
+            'depends_on' => [],
+        ],
         self::CRON_VOLUNTEER_CALLS => [
             'command' => 'app:send-volunteer-calls',
             // Multicanal desde que el aviso también sale por correo. Por eso NO
@@ -912,6 +933,12 @@ class AppSettings
             'label' => 'Leer las facturas en cola',
             'help' => 'Cada hora vuelve a intentar leer las facturas recibidas que no se pudieron leer al subirlas, porque el servicio de lectura estaba saturado o sin cupo (app:read-received-invoices). No manda nada a nadie. Apagada, esas facturas se quedan en cola hasta que alguien suba otra. Requiere la contabilidad encendida.',
             'default' => true,
+        ],
+        self::CRON_OFFSITE_BACKUP => [
+            'group' => 'Tareas programadas',
+            'label' => 'Copia de seguridad fuera del hosting',
+            'help' => 'Sube a Backblaze B2 una copia cifrada que el servidor no puede borrar (app:offsite-backup). DE MOMENTO ES UNA PRUEBA: sube un fichero pequeño bloqueado un día, para comprobar que el hosting cifra, sale hacia B2 y que la clave no puede borrar. Déjala apagada y lánzala con el botón.',
+            'default' => false,
         ],
         self::CRON_VOLUNTEER_CALLS => [
             'group' => 'Tareas programadas',
