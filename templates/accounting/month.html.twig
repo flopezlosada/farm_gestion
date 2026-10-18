@@ -3,8 +3,8 @@
  # cierre. Es la hoja mensual del Excel (ENERO, FEBRERO…), pero calculada: los
  # mismos apuntes del libro, agrupados, sin volver a teclearlos.
  #
- # El controller pasa: year, month, monthName, months, grouped, totals, kinds,
- # balances.
+ # El controller pasa: year, month, monthName, months (abreviados), grouped,
+ # totals, kinds, result, balances.
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -17,7 +17,11 @@
     <span class="csa-topbar__crumbs-sep">/</span>
     <a href="{{ path('accounting_index') }}">Contabilidad</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <span class="csa-topbar__crumb-active">{{ monthName }} {{ year }}</span>
+    <a href="{{ path('accounting_reports') }}">Informes</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_year', { year: year }) }}">Resumen {{ year }}</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ monthName }}</span>
 {% endblock %}
 
 {% block more_css %}
@@ -27,6 +31,7 @@
     <style>
         .acc-cat-row > td { font-weight: 600; background: rgba(0, 0, 0, 0.02); }
         .acc-entry-row > td:first-child { padding-left: 28px; }
+        .acc-result-row > td { border-top: 2px solid rgba(0, 0, 0, 0.25); }
     </style>
 {% endblock %}
 
@@ -43,23 +48,25 @@
     <div class="prl-tabs">
         {% for n, name in months %}
             <a class="{{ n == month ? 'is-active' : '' }}" href="{{ path('accounting_month', { year: year, month: n }) }}">
-                {{ name|slice(0, 3) }}
+                {{ name }}
             </a>
         {% endfor %}
     </div>
 
     {# ============ SALDOS AL CIERRE ============ #}
-    <div class="prl-stats">
-        {% for row in balances %}
-            <div class="prl-stat {{ row.balance < 0 ? 'prl-stat--leave' : '' }}">
-                <div class="v">{{ row.balance|number_format(0, ',', '.') }} €</div>
-                <div class="l">{{ row.account.name }}</div>
-            </div>
-        {% endfor %}
-    </div>
-    <p class="acc-muted" style="margin: 0 2px 18px; font-size: 12px;">
-        Saldos a final de {{ monthName|lower }}, no de hoy.
-    </p>
+    {% if balances is not empty %}
+        <div class="prl-stats">
+            {% for row in balances %}
+                <div class="prl-stat {{ row.balance < 0 ? 'prl-stat--leave' : '' }}">
+                    <div class="v">{{ row.balance|number_format(0, ',', '.') }} €</div>
+                    <div class="l">{{ row.account.name }}</div>
+                </div>
+            {% endfor %}
+        </div>
+        <p class="acc-muted" style="margin: 0 2px 18px; font-size: 12px;">
+            Saldos a final de {{ monthName|lower }}, no de hoy.
+        </p>
+    {% endif %}
 
     {# ============ APUNTES AGRUPADOS ============ #}
     <div class="prl-table-wrap">
@@ -115,6 +122,10 @@
                             <td class="acc-num {{ total < 0 ? 'acc-neg' : '' }}"><b>{{ total|number_format(2, ',', '.') }} €</b></td>
                         </tr>
                     {% endfor %}
+                    <tr class="acc-result-row">
+                        <td colspan="3"><b>Resultado del mes</b></td>
+                        <td class="acc-num {{ result < 0 ? 'acc-neg' : '' }}"><b>{{ result|number_format(2, ',', '.') }} €</b></td>
+                    </tr>
                 </tfoot>
             </table>
         {% endif %}

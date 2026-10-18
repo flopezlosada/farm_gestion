@@ -269,18 +269,23 @@ class AccountingController extends AbstractController
             $totals[$kind] = ($totals[$kind] ?? 0) + (float) $entry->getAmount();
         }
 
-        $balances = [];
-        foreach ($accounts->findActive() as $account) {
-            $balances[] = ['account' => $account, 'balance' => $entries->balanceFor($account, $lastDay)];
-        }
+        // Una cuenta abierta después del mes no tenía saldo entonces: sin el filtro
+        // saldría con su saldo de apertura en meses en que aún no existía.
+        $balances = array_map(
+            static fn (FinancialAccount $account): array => ['account' => $account, 'balance' => $entries->balanceFor($account, $lastDay)],
+            array_values(array_filter($accounts->findActive(), static fn (FinancialAccount $account): bool => $account->isOpenOn($lastDay))),
+        );
 
         return $this->render('accounting/month.html.twig', [
             'year' => $year,
             'month' => $month,
             'monthName' => MonthNames::long($month),
-            'months' => MonthNames::LONG,
+            'months' => MonthNames::SHORT,
             'grouped' => $grouped,
             'totals' => $totals,
+            // El mismo «Resultado» que cierra el resumen del año: la suma de todo, que
+            // es lo que subieron o bajaron los saldos (los traspasos se anulan).
+            'result' => array_sum($totals),
             'kinds' => BudgetCategoryGroup::KIND_LABELS,
             'balances' => $balances,
         ]);
