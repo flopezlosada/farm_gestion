@@ -16,6 +16,7 @@ use App\Repository\IssuedInvoiceRepository;
 use App\Repository\ReceivedInvoiceRepository;
 use App\Service\Accounting\Agenda\AccountingAgenda;
 use App\Service\Accounting\BudgetTracker;
+use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\MonthNames;
 use App\Service\Accounting\TransferRecorder;
@@ -425,6 +426,7 @@ class AccountingController extends AbstractController
         AccountEntryRepository $entries,
         FinancialAccountRepository $accounts,
         InvoiceFileStore $files,
+        ClosedPeriods $closed,
     ): Response {
         $invoice = $invoices->findOneBy(['accountEntry' => $entry]);
         $loose = $entry->isLooseTransfer();
@@ -439,6 +441,8 @@ class AccountingController extends AbstractController
             'invoice' => $invoice,
             'issuedInvoice' => $issuedInvoices->findOneBy(['accountEntry' => $entry]),
             'hasDocument' => $invoice !== null && $files->pathTo($invoice->getFileName()) !== null,
+            // En un trimestre entregado no se ofrece cambiarlo: lo pararía el guardado.
+            'closedBy' => $closed->closingDeliveryFor($entry->getDate()),
             // Todas las mitades sueltas cercanas, y cuáles casan: las de otro importe
             // se enseñan igual, porque suelen ser la pareja con una errata.
             'nearbyLoose' => $nearby,
@@ -536,7 +540,10 @@ class AccountingController extends AbstractController
         AccountEntry $entry,
         EntityManagerInterface $em,
         BudgetCategoryRepository $categories,
+        ClosedPeriods $closed,
     ): Response {
+        // Ni se abre el formulario: lo tecleado se perdería al guardar.
+        $closed->assertOpen($entry->getDate());
         if ($entry->isPairedTransfer()) {
             $this->addFlash('warning', 'Un traspaso no se edita por mitades: bórralo y vuelve a anotarlo.');
 
@@ -586,7 +593,7 @@ class AccountingController extends AbstractController
 
         if ($entry->isPairedTransfer()) {
             $transfers->remove($entry);
-            $this->addFlash('success', 'Traspaso borrado, con sus dos mitades.');
+            $done = 'Traspaso borrado, con sus dos mitades.';
         } else {
             $invoice = $invoices->findOneBy(['accountEntry' => $entry]);
             $invoice?->reopen();
@@ -595,13 +602,16 @@ class AccountingController extends AbstractController
             $issued = $issuedInvoices->findOneBy(['accountEntry' => $entry]);
             $issued?->unmarkPaid();
             $em->remove($entry);
-            $this->addFlash('success', match (true) {
+            $done = match (true) {
                 $invoice !== null => 'Apunte borrado. Su factura vuelve a la bandeja.',
                 $issued !== null => sprintf('Apunte borrado. La factura %s vuelve a estar sin cobrar.', $issued->getNumberLabel()),
                 default => 'Apunte borrado.',
-            });
+            };
         }
         $em->flush();
+        // Después del flush: en un trimestre entregado el borrado no llega a hacerse, y
+        // el aviso de éxito ya en la sesión saldría junto al que lo prohíbe.
+        $this->addFlash('success', $done);
 
         return $this->redirectToRoute('accounting_ledger', ['account' => $accountId]);
     }
