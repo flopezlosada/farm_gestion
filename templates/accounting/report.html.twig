@@ -11,6 +11,7 @@
  #   tracked                  rejilla de BudgetTracker::track
  #   cash                     flujo de caja de BudgetTracker::cashFlow
  #   balances, totalCash      saldo de cada cuenta y el total
+ #   months, shortMonths      nombre del mes, completo y en tres letras
  #
  # SIGNO: todo va con el signo de su efecto sobre la caja (negativo = sale). Eso
  # hace que la desviación se lea igual en ingresos y en gastos: positiva es buena
@@ -106,13 +107,13 @@
         </div>
         {% if incomeTotal %}
             <div class="prl-stat {{ incomeTotal.deviation < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}">
-                <div class="v">{{ incomeTotal.deviation|number_format(0, ',', '.') }} €</div>
+                <div class="v">{{ incomeTotal.deviation > 0 ? '+' : '' }}{{ incomeTotal.deviation|number_format(0, ',', '.') }} €</div>
                 <div class="l">de ingresos frente a lo previsto</div>
             </div>
         {% endif %}
         {% if expenseTotal %}
             <div class="prl-stat {{ expenseTotal.deviation < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}">
-                <div class="v">{{ expenseTotal.deviation|number_format(0, ',', '.') }} €</div>
+                <div class="v">{{ expenseTotal.deviation > 0 ? '+' : '' }}{{ expenseTotal.deviation|number_format(0, ',', '.') }} €</div>
                 <div class="l">de gastos frente a lo previsto</div>
             </div>
         {% endif %}
@@ -173,8 +174,8 @@
 
     <p class="acc-muted" style="margin: 10px 2px 24px; font-size: 12px;">
         «Previsto a la fecha» es la parte del presupuesto que correspondía a los meses ya
-        anotados (hasta {{ months[tracked.throughMonth]|default('ninguno todavía') }}), no el año entero: comparar medio año de gasto
-        contra doce meses de presupuesto siempre daría la falsa impresión de que sobra dinero.
+        anotados (hasta {{ months[tracked.throughMonth]|default('ninguno todavía')|lower }}), no el año entero: comparar unos meses de gasto
+        contra los doce del presupuesto siempre daría la falsa impresión de que sobra dinero.
         Una diferencia positiva es buena para la caja, tanto si es por ingresar de más como
         por gastar de menos.
     </p>
@@ -184,15 +185,15 @@
         {# ============ CAJA MES A MES ============ #}
         {% set cashSubtitle = tracked.throughMonth >= 12
             ? 'Todo el año es real'
-            : 'Desde ' ~ months[tracked.throughMonth + 1] ~ ' es previsión' %}
+            : 'Desde ' ~ months[tracked.throughMonth + 1]|lower ~ ' es previsión' %}
         {% embed '_components/csa_card.html.twig' with { title: 'La caja mes a mes', subtitle: cashSubtitle, accent: 'sky' } %}
             {% block body %}
                 <div class="acc-months">
                     {% for m in cash.months %}
                         <div class="m {{ m.projected ? 'proj' : '' }} {{ m.cumulative < 0 ? 'low' : '' }}"
-                             title="{{ m.month }}: neto {{ m.net|number_format(2, ',', '.') }} €">
-                            <span class="v">{{ (m.cumulative / 1000)|number_format(1, ',', '.') }}k</span>
-                            {{ m.month }}
+                             title="{{ months[m.month] }}: neto {{ m.net|number_format(2, ',', '.') }} €">
+                            <span class="v">{{ m.cumulative|number_format(0, ',', '.') }} €</span>
+                            {{ shortMonths[m.month] }}
                         </div>
                     {% endfor %}
                 </div>
@@ -206,7 +207,7 @@
                     {% endif %}
                     El año cerraría con <b>{{ cash.endOfYear|number_format(2, ',', '.') }} €</b>.
                     {% if cash.lowest.cumulative < 0 %}
-                        El punto más bajo es el mes {{ cash.lowest.month }}, con
+                        El punto más bajo es {{ months[cash.lowest.month]|lower }}, con
                         <b class="acc-neg">{{ cash.lowest.cumulative|number_format(2, ',', '.') }} €</b>.
                     {% endif %}
                 </p>

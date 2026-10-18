@@ -135,6 +135,7 @@ class AccountingController extends AbstractController
             'balances' => $balances,
             'totalCash' => $totalCash,
             'months' => MonthNames::LONG,
+            'shortMonths' => MonthNames::SHORT,
             'kinds' => BudgetCategoryGroup::KIND_LABELS,
         ]);
     }
