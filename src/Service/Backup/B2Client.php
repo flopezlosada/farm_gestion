@@ -9,7 +9,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 /**
  * Lo que la aplicación necesita de Backblaze B2: subir un fichero bloqueado
- * contra el borrado hasta una fecha.
+ * contra el borrado hasta una fecha, y saber qué hay ya subido.
  *
  * POR QUÉ LA API NATIVA Y NO LA S3: son tres llamadas con el cliente HTTP de
  * Symfony, y el SDK de AWS pesa decenas de megas que habría que subir por FTP.
@@ -26,6 +26,25 @@ class B2Client
 
     /** Permisos que la clave del servidor NO debe tener. */
     private const FORBIDDEN_CAPABILITIES = ['deleteFiles', 'bypassGovernance', 'writeKeys', 'deleteKeys'];
+
+    /** Lo máximo que B2 devuelve por página al listar. */
+    private const LIST_PAGE_SIZE = 1000;
+
+    /**
+     * Sesión abierta, para no entrar en B2 una vez por fichero: entrar es una
+     * operación de pago a partir de 2.500 al día, y la primera copia sube más de
+     * mil ficheros.
+     *
+     * @var array{apiUrl: string, token: string, bucketId: string, bucketName: string}|null
+     */
+    private ?array $session = null;
+
+    /**
+     * URL de subida en uso. B2 pide reutilizarla y pedir otra sólo cuando falla.
+     *
+     * @var array{uploadUrl: string, authorizationToken: string}|null
+     */
+    private ?array $uploadTarget = null;
 
     /**
      * @param HttpClientInterface $http           Cliente HTTP.
@@ -54,35 +73,43 @@ class B2Client
      * hasta que venza. Governance sólo lo deja borrar a una clave con
      * `bypassGovernance`, que no es la del servidor.
      *
-     * @param string             $fileName    Nombre dentro del bucket (puede llevar "/").
-     * @param string             $content     Contenido.
-     * @param \DateTimeImmutable $retainUntil Hasta cuándo no se puede borrar.
+     * Si la subida falla por algo pasajero se reintenta una vez con otra URL: es
+     * lo que B2 manda hacer cuando el servidor de subida que tocó está lleno o
+     * caído ({@see B2Exception::isRetryable()}).
+     *
+     * @param string                $fileName    Nombre dentro del bucket (puede llevar "/").
+     * @param string                $content     Contenido.
+     * @param \DateTimeImmutable    $retainUntil Hasta cuándo no se puede borrar.
+     * @param array<string, string> $info        Datos propios que B2 guarda con el fichero
+     *                                           y devuelve al listar ({@see self::listFiles()}).
      *
      * @return array{fileId: string, fileName: string, bucket: string} Lo que B2 dice haber guardado.
      *
      * @throws B2Exception Si no se ha subido; dice por qué.
      */
-    public function uploadLocked(string $fileName, string $content, \DateTimeImmutable $retainUntil): array
+    public function uploadLocked(string $fileName, string $content, \DateTimeImmutable $retainUntil, array $info = []): array
     {
         $session = $this->authorize();
+        $headers = [
+            'X-Bz-File-Name' => str_replace('%2F', '/', rawurlencode($fileName)),
+            'Content-Type' => 'application/octet-stream',
+            'X-Bz-Content-Sha1' => sha1($content),
+            'X-Bz-File-Retention-Mode' => 'governance',
+            'X-Bz-File-Retention-Retain-Until-Timestamp' => (string) ($retainUntil->getTimestamp() * 1000),
+        ];
+        foreach ($info as $key => $value) {
+            $headers['X-Bz-Info-' . $key] = rawurlencode($value);
+        }
 
-        $target = $this->call('GET', $session['apiUrl'] . '/b2api/v4/b2_get_upload_url', [
-            'headers' => ['Authorization' => $session['token']],
-            'query' => ['bucketId' => $session['bucketId']],
-        ]);
-
-        $uploaded = $this->call('POST', (string) ($target['uploadUrl'] ?? ''), [
-            'headers' => [
-                'Authorization' => (string) ($target['authorizationToken'] ?? ''),
-                'X-Bz-File-Name' => str_replace('%2F', '/', rawurlencode($fileName)),
-                'Content-Type' => 'application/octet-stream',
-                'X-Bz-Content-Sha1' => sha1($content),
-                'X-Bz-File-Retention-Mode' => 'governance',
-                'X-Bz-File-Retention-Retain-Until-Timestamp' => (string) ($retainUntil->getTimestamp() * 1000),
-            ],
-            'body' => $content,
-            'timeout' => 120,
-        ]);
+        try {
+            $uploaded = $this->upload($session, $headers, $content);
+        } catch (B2Exception $e) {
+            if (!$e->isRetryable()) {
+                throw $e;
+            }
+            $this->uploadTarget = null;
+            $uploaded = $this->upload($session, $headers, $content);
+        }
 
         return [
             'fileId' => (string) ($uploaded['fileId'] ?? ''),
@@ -92,7 +119,87 @@ class B2Client
     }
 
     /**
-     * Entra en B2 y comprueba que la clave es la que debe ser.
+     * Lo que hay subido bajo un prefijo, con los datos propios de cada fichero.
+     *
+     * Sólo la última versión de cada nombre: las anteriores siguen guardadas (y
+     * bloqueadas), pero para saber qué falta por subir no cuentan.
+     *
+     * @param string $prefix Prefijo de los nombres (p. ej. "csavegadejarama.org/documentos/").
+     *
+     * @return array<string, array<string, string>> Datos propios por nombre de fichero.
+     *
+     * @throws B2Exception Si no se puede listar.
+     */
+    public function listFiles(string $prefix): array
+    {
+        $session = $this->authorize();
+        $files = [];
+        $start = null;
+
+        do {
+            $page = $this->call('GET', $session['apiUrl'] . '/b2api/v4/b2_list_file_names', [
+                'headers' => ['Authorization' => $session['token']],
+                'query' => array_filter([
+                    'bucketId' => $session['bucketId'],
+                    'prefix' => $prefix,
+                    'maxFileCount' => self::LIST_PAGE_SIZE,
+                    'startFileName' => $start,
+                ], static fn ($value): bool => $value !== null),
+            ]);
+            foreach ($page['files'] ?? [] as $file) {
+                $files[(string) $file['fileName']] = array_map('rawurldecode', $file['fileInfo'] ?? []);
+            }
+            $start = $page['nextFileName'] ?? null;
+        } while ($start !== null);
+
+        return $files;
+    }
+
+    /**
+     * Una subida con la URL en uso, pidiendo una si no la hay.
+     *
+     * @param array{apiUrl: string, token: string, bucketId: string, bucketName: string} $session
+     * @param array<string, string>                                                       $headers
+     *
+     * @return array<string, mixed> Respuesta de b2_upload_file.
+     *
+     * @throws B2Exception Si no se ha subido.
+     */
+    private function upload(array $session, array $headers, string $content): array
+    {
+        $this->uploadTarget ??= $this->uploadTargetFor($session);
+
+        return $this->call('POST', $this->uploadTarget['uploadUrl'], [
+            'headers' => ['Authorization' => $this->uploadTarget['authorizationToken']] + $headers,
+            'body' => $content,
+            'timeout' => 120,
+        ]);
+    }
+
+    /**
+     * Pide a B2 una URL de subida.
+     *
+     * @param array{apiUrl: string, token: string, bucketId: string, bucketName: string} $session
+     *
+     * @return array{uploadUrl: string, authorizationToken: string}
+     *
+     * @throws B2Exception Si no la da.
+     */
+    private function uploadTargetFor(array $session): array
+    {
+        $target = $this->call('GET', $session['apiUrl'] . '/b2api/v4/b2_get_upload_url', [
+            'headers' => ['Authorization' => $session['token']],
+            'query' => ['bucketId' => $session['bucketId']],
+        ]);
+
+        return [
+            'uploadUrl' => (string) ($target['uploadUrl'] ?? ''),
+            'authorizationToken' => (string) ($target['authorizationToken'] ?? ''),
+        ];
+    }
+
+    /**
+     * Entra en B2 (una vez por proceso) y comprueba que la clave es la que debe ser.
      *
      * @return array{apiUrl: string, token: string, bucketId: string, bucketName: string}
      *
@@ -100,6 +207,9 @@ class B2Client
      */
     private function authorize(): array
     {
+        if ($this->session !== null) {
+            return $this->session;
+        }
         if (!$this->isConfigured()) {
             throw new B2Exception('La copia fuera del hosting no está configurada (faltan B2_KEY_ID y B2_APPLICATION_KEY).');
         }
@@ -119,7 +229,7 @@ class B2Client
             throw new B2Exception(sprintf('La clave de B2 puede más de lo que debe (%s): créala sin esos permisos.', implode(', ', $excess)));
         }
 
-        return [
+        return $this->session = [
             'apiUrl' => (string) ($storage['apiUrl'] ?? ''),
             'token' => (string) ($account['authorizationToken'] ?? ''),
             'bucketId' => (string) ($buckets[0]['id'] ?? ''),
@@ -167,10 +277,10 @@ class B2Client
                 $endpoint,
                 (string) ($payload['code'] ?? 'error'),
                 isset($payload['message']) ? ' — ' . $payload['message'] : '',
-            ));
+            ), $status);
         }
         if ($payload === []) {
-            throw new B2Exception(sprintf('Backblaze B2 ha devuelto algo que no se entiende en %s.', $endpoint));
+            throw new B2Exception(sprintf('Backblaze B2 ha devuelto algo que no se entiende en %s.', $endpoint), $status);
         }
 
         return $payload;
