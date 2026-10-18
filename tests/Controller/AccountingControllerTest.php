@@ -98,6 +98,7 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
         $crawler = $client->request('GET', '/gestion/accounting/reports');
         $this->assertResponseIsSuccessful();
         $this->assertCount(1, $crawler->filter('.acc-hub a[href="/gestion/accounting/report"]'));
+        $this->assertCount(1, $crawler->filter(sprintf('.acc-hub a[href="/gestion/accounting/year/%d/assembly"]', (int) date('Y'))));
         $this->assertCount(1, $crawler->filter('.acc-hub a[href="/gestion/accounting/invoices/accountant"]'));
 
         $crawler = $client->request('GET', '/gestion/accounting/settings');
