@@ -19,8 +19,9 @@ use App\Service\Accounting\IssuedInvoice\IssuedInvoiceBook;
 use App\Service\Accounting\MonthNames;
 
 /**
- * Lo que queda por hacer en la contabilidad, para la portada: la entrega del trimestre
- * a la gestoría (o volver a mandarlo, si se reabrió), la bandeja de facturas, lo
+ * Lo que queda por hacer en la contabilidad, para la portada: el libro de los bancos
+ * sin meter, la entrega del trimestre a la gestoría (o volver a mandarlo, si se
+ * reabrió), la bandeja de facturas, lo
  * emitido sin cobrar, la remesa del mes y los traspasos a medias. Si no devuelve
  * nada, todo está al día.
  *
@@ -32,6 +33,9 @@ class AccountingAgenda
 {
     /** Días antes del plazo de la gestoría en que la entrega pasa a apremiar. */
     public const ACCOUNTANT_SOON_DAYS = 7;
+
+    /** Días sin apuntes a partir de los que el libro de una cuenta de banco se da por atrasado. */
+    public const STALE_BOOK_DAYS = 30;
 
     public function __construct(
         private readonly ReceivedInvoiceRepository $receivedInvoices,
@@ -48,7 +52,8 @@ class AccountingAgenda
 
     /**
      * Las tareas pendientes a una fecha, las que aprietan primero y, a igual urgencia,
-     * en el orden del ritmo de trabajo: gestoría, facturas, cobros, remesa, traspasos.
+     * en el orden del ritmo de trabajo: libro, gestoría, facturas, cobros, remesa,
+     * traspasos.
      *
      * @param \DateTimeImmutable $today Hoy.
      *
@@ -57,6 +62,7 @@ class AccountingAgenda
     public function items(\DateTimeImmutable $today): array
     {
         $items = array_values(array_filter([
+            $this->staleBankBooks($today),
             ...$this->accountantDeliveries($today),
             $this->openReceivedInvoices(),
             ...$this->uncollectedIssuedInvoices($today),
@@ -153,28 +159,92 @@ class AccountingAgenda
     }
 
     /**
+     * Si el libro de una cuenta de banco, con su último apunte en esa fecha, está
+     * atrasado a día de hoy. Lo usa también la portada para pintar en rojo la cuenta.
+     * Compara fechas y no `diff()->days`, que es absoluto: un apunte con fecha futura
+     * (una errata) no es un libro atrasado.
+     *
+     * @param \DateTimeImmutable $last  Fecha del último apunte de la cuenta.
+     * @param \DateTimeImmutable $today Hoy.
+     */
+    public static function isStaleBook(\DateTimeImmutable $last, \DateTimeImmutable $today): bool
+    {
+        return $last < $today->modify(sprintf('-%d days', self::STALE_BOOK_DAYS));
+    }
+
+    /**
      * Las cuentas de banco cuyo libro no llega al cierre del trimestre: su libro de
-     * caja saldría incompleto. Las cajas de efectivo no se miran, porque pueden pasar
-     * meses sin moverse; tampoco una cuenta sin ningún apunte, que es que no se usa.
+     * caja saldría incompleto.
      *
      * @return list<string>
      */
     private function bankAccountsBehind(\DateTimeImmutable $quarterEnd): array
     {
+        return array_values(array_map(
+            static fn (array $row): string => sprintf('El libro de %s sólo llega al %s.', $row['account']->getName(), $row['last']->format('d/m/Y')),
+            array_filter($this->bankBooks(), static fn (array $row): bool => $row['last'] < $quarterEnd),
+        ));
+    }
+
+    /**
+     * El libro de los bancos sin meter: las cuentas de banco que llevan más de
+     * {@see STALE_BOOK_DAYS} días sin apuntes. Todo lo demás (el paquete de la gestoría,
+     * los cobros, el cuadre con el banco) sale de ese libro, así que va la primera de las
+     * tareas sin plazo. Con una sola cuenta lleva a sus movimientos; con varias, a todos.
+     */
+    private function staleBankBooks(\DateTimeImmutable $today): ?AgendaItem
+    {
+        $stale = array_values(array_filter(
+            $this->bankBooks(),
+            static fn (array $row): bool => self::isStaleBook($row['last'], $today),
+        ));
+        if ($stale === []) {
+            return null;
+        }
+
+        if (\count($stale) === 1) {
+            ['account' => $account, 'last' => $last] = $stale[0];
+
+            return new AgendaItem(
+                AgendaUrgency::Normal,
+                sprintf('Meter los movimientos de %s: el libro lleva %d días sin apuntes', $account->getName(), $last->diff($today)->days),
+                [sprintf('El último es del %s. Se anotan desde el extracto que se descarga de la banca online.', $last->format('d/m/Y'))],
+                'accounting_ledger',
+                ['account' => $account->getId()],
+            );
+        }
+
+        return new AgendaItem(
+            AgendaUrgency::Normal,
+            sprintf('Meter los movimientos de %d bancos: llevan más de %d días sin apuntes', \count($stale), self::STALE_BOOK_DAYS),
+            array_map(
+                static fn (array $row): string => sprintf('%s: el último apunte es del %s, hace %d días.', $row['account']->getName(), $row['last']->format('d/m/Y'), $row['last']->diff($today)->days),
+                $stale,
+            ),
+            'accounting_ledger',
+        );
+    }
+
+    /**
+     * Las cuentas de banco activas con la fecha de su último apunte. Las cajas de
+     * efectivo no se miran, porque pueden pasar meses sin moverse; tampoco una cuenta
+     * sin ningún apunte, que es que no se usa.
+     *
+     * @return list<array{account: FinancialAccount, last: \DateTimeImmutable}>
+     */
+    private function bankBooks(): array
+    {
         $lastDates = $this->entries->lastDateByAccount();
-        $lines = [];
+        $rows = [];
         foreach ($this->accounts->findActive() as $account) {
             /** @var FinancialAccount $account */
-            if (!$account->isBank()) {
-                continue;
-            }
             $last = $lastDates[(int) $account->getId()] ?? null;
-            if ($last !== null && $last < $quarterEnd) {
-                $lines[] = sprintf('El libro de %s sólo llega al %s.', $account->getName(), $last->format('d/m/Y'));
+            if ($account->isBank() && $last !== null) {
+                $rows[] = ['account' => $account, 'last' => $last];
             }
         }
 
-        return $lines;
+        return $rows;
     }
 
     /** Lo que espera en la bandeja de facturas recibidas. */

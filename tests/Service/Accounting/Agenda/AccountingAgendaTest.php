@@ -133,7 +133,7 @@ class AccountingAgendaTest extends TestCase
         $paypal = $this->account('PayPal', FinancialAccount::KIND_BANK);
         $caja = $this->account('Caja de la huerta', FinancialAccount::KIND_CASH);
 
-        $item = $this->only($this->agenda(
+        $items = $this->agenda(
             deliveries: [],
             received: [$this->received(), $this->received()],
             accounts: [$fiare, $caixa, $paypal, $caja],
@@ -142,13 +142,79 @@ class AccountingAgendaTest extends TestCase
                 $caixa->getId() => new \DateTimeImmutable('2026-08-13'),
                 $caja->getId() => new \DateTimeImmutable('2026-06-25'),
             ],
-        )->items(new \DateTimeImmutable('2026-10-05')));
+        )->items(new \DateTimeImmutable('2026-10-05'));
+        // La Caixa lleva además más de un mes sin meter: esa es otra tarea.
+        $item = $this->only(array_values(array_filter($items, static fn (AgendaItem $i): bool => $i->route === 'accounting_accountant_export')));
 
         $this->assertSame([
             '2 facturas recibidas y 0 emitidas.',
             '2 con avisos que mirar antes de mandarlas.',
             'El libro de La Caixa sólo llega al 13/08/2026.',
         ], $item->details);
+    }
+
+    /**
+     * Un banco con más de un mes sin apuntes: cuántos días lleva y adónde ir a meterlos.
+     * A los 30 días justos todavía no es atraso.
+     */
+    public function testElLibroDeUnBancoSinMeter(): void
+    {
+        $fiare = $this->account('Fiare', FinancialAccount::KIND_BANK);
+        $agenda = fn (string $last): AccountingAgenda => $this->agenda(
+            accounts: [$fiare],
+            lastDates: [$fiare->getId() => new \DateTimeImmutable($last)],
+        );
+        $today = new \DateTimeImmutable('2026-10-18');
+
+        $item = $this->only($agenda('2026-08-31')->items($today));
+        $this->assertSame('Meter los movimientos de Fiare: el libro lleva 48 días sin apuntes', $item->title);
+        $this->assertSame(['El último es del 31/08/2026. Se anotan desde el extracto que se descarga de la banca online.'], $item->details);
+        $this->assertSame('accounting_ledger', $item->route);
+        $this->assertSame(['account' => $fiare->getId()], $item->routeParams);
+
+        $this->assertSame([], $agenda('2026-09-18')->items($today), '30 días justos aún no es atraso');
+        $this->assertCount(1, $agenda('2026-09-17')->items($today), '31 días sí');
+    }
+
+    /**
+     * Ni una caja quieta, ni una cuenta sin ningún apunte, ni un apunte con fecha futura
+     * (una errata) son un libro atrasado.
+     */
+    public function testElLibroSinMeterSoloMiraBancosConApuntesPasados(): void
+    {
+        $caja = $this->account('Caja de la huerta', FinancialAccount::KIND_CASH);
+        $paypal = $this->account('PayPal', FinancialAccount::KIND_BANK);
+        $caixa = $this->account('La Caixa', FinancialAccount::KIND_BANK);
+
+        $this->assertSame([], $this->agenda(
+            accounts: [$caja, $paypal, $caixa],
+            lastDates: [
+                $caja->getId() => new \DateTimeImmutable('2026-03-01'),
+                $caixa->getId() => new \DateTimeImmutable('2027-03-01'),
+            ],
+        )->items(new \DateTimeImmutable('2026-10-18')));
+    }
+
+    /** Varios bancos atrasados: una sola tarea, con lo de cada uno, que lleva a todos los movimientos. */
+    public function testElLibroDeVariosBancosSinMeter(): void
+    {
+        $fiare = $this->account('Fiare', FinancialAccount::KIND_BANK);
+        $caixa = $this->account('La Caixa', FinancialAccount::KIND_BANK);
+
+        $item = $this->only($this->agenda(
+            accounts: [$fiare, $caixa],
+            lastDates: [
+                $fiare->getId() => new \DateTimeImmutable('2026-08-31'),
+                $caixa->getId() => new \DateTimeImmutable('2026-08-13'),
+            ],
+        )->items(new \DateTimeImmutable('2026-10-18')));
+
+        $this->assertSame('Meter los movimientos de 2 bancos: llevan más de 30 días sin apuntes', $item->title);
+        $this->assertSame([
+            'Fiare: el último apunte es del 31/08/2026, hace 48 días.',
+            'La Caixa: el último apunte es del 13/08/2026, hace 66 días.',
+        ], $item->details);
+        $this->assertSame([], $item->routeParams);
     }
 
     /** Las facturas de la bandeja, en singular y en plural. */
@@ -221,18 +287,22 @@ class AccountingAgendaTest extends TestCase
     /** Lo que aprieta va primero; a igual urgencia, en el orden del trabajo. */
     public function testLoQueAprietaVaPrimero(): void
     {
+        $fiare = $this->account('Fiare', FinancialAccount::KIND_BANK);
         $items = $this->agenda(
             deliveries: [],
             open: [$this->received()],
             unpaid: [$this->issued('50.00', '2026-10-01')],
             unpaired: [new AccountEntry()],
+            accounts: [$fiare],
+            lastDates: [$fiare->getId() => new \DateTimeImmutable('2026-08-31')],
         )->items(new \DateTimeImmutable('2026-10-16'));
 
+        // La gestoría aprieta (última semana del plazo); el libro, primero de lo demás.
         $this->assertSame(
-            ['Mandar el 3T2026', 'Revisar 1 factura', 'Cobrar 60,50 €', 'Revisar 1 traspaso'],
+            ['Mandar el 3T2026', 'Meter los movimientos', 'Revisar 1 factura', 'Cobrar 60,50 €', 'Revisar 1 traspaso'],
             array_map(static fn (AgendaItem $i): string => implode(' ', \array_slice(explode(' ', $i->title), 0, 3)), $items),
         );
-        $this->assertSame('traspasos', $items[3]->fragment);
+        $this->assertSame('traspasos', $items[4]->fragment);
     }
 
     /**

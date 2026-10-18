@@ -43,9 +43,6 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 #[IsGranted('ROLE_GESTION_CONTABILIDAD')]
 class AccountingController extends AbstractController
 {
-    /** Días sin apuntes a partir de los que el libro de una cuenta de banco se da por atrasado. */
-    private const STALE_BOOK_DAYS = 30;
-
     /**
      * Días alrededor de un traspaso suelto en que se busca la otra mitad. Más que los
      * del emparejado automático: aquí decide una persona viendo los candidatos.
@@ -76,7 +73,7 @@ class AccountingController extends AbstractController
                 'account' => $account,
                 'balance' => $entries->balanceFor($account),
                 'lastDate' => $last,
-                'stale' => $account->isBank() && $last !== null && $last->diff($today)->days > self::STALE_BOOK_DAYS,
+                'stale' => $account->isBank() && $last !== null && AccountingAgenda::isStaleBook($last, $today),
             ];
         }
         // Una cuenta sin ningún apunte no está atrasada: no se usa. No cuenta.
