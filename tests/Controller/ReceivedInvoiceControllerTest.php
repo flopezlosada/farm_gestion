@@ -225,6 +225,32 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * Las últimas resueltas nombran al proveedor por su ficha, como la propia factura:
+     * si la ficha se corrige después, la bandeja no se queda con el nombre de entonces.
+     */
+    public function testLasResueltasNombranAlProveedorPorSuFicha(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->createCatalogue();
+        $known = $this->createProvider('Ferretería de siempre', self::TAX_ID, null);
+
+        $invoice = $this->uploadOne($client);
+        $this->confirm($client, $invoice, ['provider' => (string) $known->getId()], '26.75');
+        $this->assertResponseRedirects();
+
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $em->find(Provider::class, $known->getId())->setName('Ferretería Hermanos Gil, S.L.');
+        $em->flush();
+
+        $crawler = $client->request('GET', '/gestion/accounting/invoices');
+        $this->assertResponseIsSuccessful();
+        $link = $crawler->filter(sprintf('a[href="/gestion/accounting/invoices/%d"]', $invoice->getId()));
+        $this->assertCount(1, $link);
+        $this->assertSame('Ferretería Hermanos Gil, S.L.', trim($link->text()));
+    }
+
+    /**
      * Si el CIF leído es de un proveedor conocido, la revisión llega con él ya
      * elegido: lo normal es que baste con guardar.
      */

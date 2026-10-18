@@ -157,7 +157,8 @@
                         {% set entry = invoice.accountEntry %}
                         <tr>
                             <td>
-                                <a href="{{ path('accounting_invoice_review', { id: invoice.id }) }}">{{ invoice.providerName ?? invoice.originalName }}</a>
+                                {# Como en la ficha: el proveedor dado de alta manda sobre el nombre leído. #}
+                                <a href="{{ path('accounting_invoice_review', { id: invoice.id }) }}">{{ invoice.provider ? invoice.provider.name : (invoice.providerName ?? invoice.originalName) }}</a>
                                 {% if invoice.status == 'discarded' %}{{ csa.badge('Descartada', 'neutral') }}{% endif %}
                             </td>
                             <td class="tight">{{ entry ? entry.date|date('d/m/Y') : '—' }}</td>

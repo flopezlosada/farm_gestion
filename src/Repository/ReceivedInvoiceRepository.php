@@ -125,6 +125,7 @@ class ReceivedInvoiceRepository extends ServiceEntityRepository
     {
         return $this->createQueryBuilder('i')
             ->leftJoin('i.accountEntry', 'e')->addSelect('e')
+            ->leftJoin('i.provider', 'p')->addSelect('p')
             ->andWhere('i.status IN (:resolved)')
             ->setParameter('resolved', [ReceivedInvoice::STATUS_CONFIRMED, ReceivedInvoice::STATUS_DISCARDED])
             ->orderBy('i.updatedAt', 'DESC')
