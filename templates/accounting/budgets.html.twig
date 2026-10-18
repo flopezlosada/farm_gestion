@@ -46,6 +46,7 @@
         {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
             <a href="{{ path('accounting_budget_new') }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Nuevo presupuesto</a>
         {% endif %}
+        {{ csa.help('contabilidad', 'anual', 'Ayuda: el presupuesto del año') }}
     </div>
 
     <div class="prl-table-wrap">

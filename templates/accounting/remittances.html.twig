@@ -71,6 +71,7 @@
         {% if can_edit %}
             <a href="{{ path('accounting_remittance_import') }}" class="prl-btn"><i class="fa fa-upload"></i> Importar una enviada</a>
         {% endif %}
+        {{ csa.help('contabilidad', 'remesa', 'Ayuda: la remesa de cuotas') }}
     </div>
 
     <div class="prl-table-wrap">

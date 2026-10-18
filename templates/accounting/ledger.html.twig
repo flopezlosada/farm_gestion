@@ -78,6 +78,7 @@
             <a href="{{ path('accounting_transfer_new') }}" class="prl-btn"><i class="fa fa-exchange"></i> Traspaso</a>
             <a href="{{ path('accounting_entry_new', account ? { account: account.id } : {}) }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Anotar apunte</a>
         {% endif %}
+        {{ csa.help('contabilidad', 'movimientos', 'Ayuda: meter los movimientos del banco') }}
     </div>
 
     {# ============ TABLA ============ #}
