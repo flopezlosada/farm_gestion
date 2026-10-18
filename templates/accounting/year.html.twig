@@ -6,7 +6,8 @@
  # resumen y el libro no coinciden en dos de los ocho meses cerrados). Aquí es la
  # misma suma de siempre, sólo que presentada de otra forma.
  #
- # El controller pasa: year, years, tracked (con throughMonth = 12), months, kinds.
+ # El controller pasa: year, years, tracked (con throughMonth = 12, sin presupuesto)
+ # y months (en tres letras).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -18,6 +19,8 @@
     <a href="{{ path('dashboard') }}">Inicio</a>
     <span class="csa-topbar__crumbs-sep">/</span>
     <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_reports') }}">Informes</a>
     <span class="csa-topbar__crumbs-sep">/</span>
     <span class="csa-topbar__crumb-active">Resumen {{ year }}</span>
 {% endblock %}
@@ -58,7 +61,7 @@
                     <tr>
                         <th>Partida</th>
                         {% for n, name in months %}
-                            <th class="acc-num"><a href="{{ path('accounting_month', { year: year, month: n }) }}">{{ name|slice(0, 3) }}</a></th>
+                            <th class="acc-num"><a href="{{ path('accounting_month', { year: year, month: n }) }}">{{ name }}</a></th>
                         {% endfor %}
                         <th class="acc-num acc-total-col">Año</th>
                     </tr>
@@ -108,6 +111,19 @@
                             </td>
                         </tr>
                     {% endfor %}
+                    {% set result = tracked.result %}
+                    <tr class="acc-result-row">
+                        <td><b>{{ result.name }}</b></td>
+                        {% for n in 1..12 %}
+                            {% set v = result.actual[n] %}
+                            <td class="acc-num {{ v < 0 ? 'acc-neg' : '' }} {{ v == 0 ? 'zero' : '' }}">
+                                <b>{{ v == 0 ? '·' : v|number_format(0, ',', '.') }}</b>
+                            </td>
+                        {% endfor %}
+                        <td class="acc-num acc-total-col {{ result.actualTotal < 0 ? 'acc-neg' : '' }}">
+                            <b>{{ result.actualTotal|number_format(0, ',', '.') }}</b>
+                        </td>
+                    </tr>
                 </tfoot>
             </table>
         {% endif %}

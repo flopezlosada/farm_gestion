@@ -47,11 +47,15 @@ class BudgetTracker
      *    presupuesto de doce siempre da la falsa impresión de que sobra dinero)
      *  - `deviation`: real menos previsto hasta la fecha
      *
+     * `totals` es lo mismo por tipo (ingresos, gastos…) y `result` la suma de todos los
+     * tipos: lo que la asociación ganó o perdió cada mes, sin contar traspasos.
+     *
      * @return array{
      *     year: int,
      *     throughMonth: int,
      *     groups: array<int, array<string, mixed>>,
-     *     totals: array<int, array<string, mixed>>
+     *     totals: array<int, array<string, mixed>>,
+     *     result: array<string, mixed>
      * }
      */
     public function track(int $year, ?Budget $budget, ?int $throughMonth = null): array
@@ -62,6 +66,8 @@ class BudgetTracker
 
         $groups = [];
         $totals = [];
+        $resultBudget = $this->emptyMonths();
+        $resultActual = $this->emptyMonths();
 
         foreach ($this->groups->findAllWithCategories() as $group) {
             if ($group->isTransfer()) {
@@ -106,6 +112,8 @@ class BudgetTracker
             for ($m = 1; $m <= 12; ++$m) {
                 $totals[$kind]['budget'][$m] += $groupBudget[$m];
                 $totals[$kind]['actual'][$m] += $groupActual[$m];
+                $resultBudget[$m] += $groupBudget[$m];
+                $resultActual[$m] += $groupActual[$m];
             }
         }
 
@@ -120,6 +128,7 @@ class BudgetTracker
             'throughMonth' => $throughMonth,
             'groups' => $groups,
             'totals' => $totals,
+            'result' => $this->row('Resultado', $resultBudget, $resultActual, $throughMonth),
         ];
     }
 

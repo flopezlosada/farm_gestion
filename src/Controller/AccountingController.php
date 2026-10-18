@@ -297,14 +297,13 @@ class AccountingController extends AbstractController
         BudgetRepository $budgets,
         AccountEntryRepository $entries,
     ): Response {
-        $budget = $budgets->findApprovedForYear($year);
-
+        // Sin presupuesto: la rejilla sólo enseña lo real, y una partida que sólo está
+        // presupuestada saldría como una fila entera de «·» con total 0.
         return $this->render('accounting/year.html.twig', [
             'year' => $year,
             'years' => $this->yearsWithData($budgets, $entries),
-            'tracked' => $tracker->track($year, $budget, 12),
-            'months' => MonthNames::LONG,
-            'kinds' => BudgetCategoryGroup::KIND_LABELS,
+            'tracked' => $tracker->track($year, null, 12),
+            'months' => MonthNames::SHORT,
         ]);
     }
 
@@ -342,7 +341,7 @@ class AccountingController extends AbstractController
         }
 
         $tracked = $tracker->track($year, $budget, 12);
-        $result = array_sum(array_column($tracked['totals'], 'actualTotal'));
+        $result = $tracked['result']['actualTotal'];
         $variation = array_sum(array_column($balances, 'end')) - array_sum(array_column($balances, 'start'));
 
         return $this->render('accounting/year_assembly.html.twig', [
@@ -351,7 +350,7 @@ class AccountingController extends AbstractController
             'tracked' => $tracked,
             'balances' => $balances,
             'result' => $result,
-            'budgetResult' => array_sum(array_column($tracked['totals'], 'budgetTotal')),
+            'budgetResult' => $tracked['result']['budgetTotal'],
             'variation' => $variation,
             'unexplained' => round($variation - $result, 2),
             'yearClosed' => $year < (int) date('Y'),
