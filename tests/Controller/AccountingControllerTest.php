@@ -41,7 +41,7 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
 
         $this->assertResponseIsSuccessful();
         $this->assertSelectorTextContains('h1', 'Pendiente');
-        $this->assertSelectorTextContains('body', 'hay hoy en las cuentas');
+        $this->assertSelectorTextContains('body', 'en las cuentas, según el libro');
         $this->assertSelectorTextContains('body', 'Dónde está el dinero');
     }
 
