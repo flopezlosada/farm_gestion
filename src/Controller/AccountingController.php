@@ -148,10 +148,11 @@ class AccountingController extends AbstractController
     {
         return $this->render('accounting/hub.html.twig', [
             'title' => 'Informes',
-            'intro' => 'Lo que se mira de vez en cuando: cómo va el año, el resumen por meses, los presupuestos y la entrega a la gestoría.',
+            'intro' => 'Lo que se mira de vez en cuando: cómo va el año, el resumen por meses, la hoja de la asamblea, los presupuestos y la entrega a la gestoría.',
             'links' => [
                 ['route' => 'accounting_report', 'params' => [], 'icon' => 'fa-line-chart', 'title' => 'Cómo vamos', 'text' => 'Lo presupuestado frente a lo real, y la caja mes a mes hasta fin de año.'],
                 ['route' => 'accounting_year', 'params' => ['year' => (int) date('Y')], 'icon' => 'fa-table', 'title' => 'Resumen del año', 'text' => 'Cada partida mes a mes.'],
+                ['route' => 'accounting_year_assembly', 'params' => ['year' => (int) date('Y')], 'icon' => 'fa-print', 'title' => 'Para la asamblea', 'text' => 'La hoja del año para imprimir y repartir.'],
                 ['route' => 'accounting_budgets', 'params' => [], 'icon' => 'fa-calculator', 'title' => 'Presupuestos', 'text' => 'Los de cada año y cuánto tiene que costar la cesta.'],
                 ['route' => 'accounting_accountant_export', 'params' => [], 'icon' => 'fa-briefcase', 'title' => 'Para la gestoría', 'text' => 'El paquete del trimestre: facturas, libros y documentos en un ZIP.'],
             ],
