@@ -1,0 +1,135 @@
+{# Contenido de ayuda · Contabilidad. Pensada para quien lleva las cuentas sin saber
+ # contabilidad: primero el ritmo (qué toca y cuándo), luego cada tarea en su tarjeta.
+ # El id de cada tarjeta es el ancla a la que apuntan los «?» de las pantallas. #}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'ritmo', title: 'El ritmo: qué se hace y cuándo' } %}
+    {% block body %}
+        {% import '_macros/csa.html.twig' as csa %}
+        <ol class="help-steps">
+            <li><strong>Cada semana</strong>: meter los movimientos del banco y revisar las facturas que hayan llegado.</li>
+            <li><strong>Cada mes</strong>: preparar y enviar la remesa de cuotas, y comprobar que el saldo de cada cuenta coincide con el del banco.</li>
+            <li><strong>Cada trimestre</strong>: mandar a la gestoría el paquete del trimestre. Hay hasta el <strong>día 20</strong> del mes siguiente (el último trimestre del año, hasta el <strong>30 de enero</strong>).</li>
+            <li><strong>Cada año</strong>: la hoja de cuentas para la asamblea y el presupuesto del año siguiente.</li>
+        </ol>
+        {{ csa.callout(
+            'No hace falta recordarlo: la portada de contabilidad («Pendiente») dice lo que toca en cada momento, con un botón «Ir» que lleva a donde se hace. Si pone «Todo al día», no hay nada que hacer.',
+            'info'
+        ) }}
+        {{ csa.callout(
+            'Aquí se lleva un libro de caja: lo que entra y sale de cada cuenta. La contabilidad oficial y los impuestos los hace la gestoría con el paquete del trimestre. Las dudas sobre impuestos, a la gestoría.',
+            'info', 'briefcase'
+        ) }}
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'movimientos', title: 'Meter los movimientos del banco' } %}
+    {% block body %}
+        {% import '_macros/csa.html.twig' as csa %}
+        <ol class="help-steps">
+            <li>Descarga de la banca online los movimientos desde el último que hay en el libro. La portada dice hasta qué día está al día cada cuenta.</li>
+            <li>En <strong>Movimientos</strong>, pulsa <strong>«Anotar apunte»</strong>.</li>
+            <li>Elige la <strong>cuenta</strong>, pon la <strong>fecha</strong> que dice el banco y si el dinero <strong>entra</strong> o <strong>sale</strong>. El <strong>importe</strong> va siempre en positivo: el signo lo pone «entra» o «sale».</li>
+            <li>Elige la <strong>partida</strong> (en qué se ha ingresado o gastado) y escribe un <strong>concepto</strong> que se entienda dentro de un año.</li>
+            <li>Si es un gasto con factura, pon el <strong>proveedor</strong> y el <strong>número de factura</strong>. Lo mejor es subir la factura (tarjeta siguiente): al confirmarla se engancha a este apunte.</li>
+        </ol>
+        {{ csa.callout(
+            'Para comprobar que está bien: en Movimientos elige la cuenta y mira el saldo tras el último movimiento. Tiene que coincidir con el del extracto del banco ese mismo día. Si no coincide, falta un movimiento o hay un importe mal.',
+            'info', 'check'
+        ) }}
+        {{ csa.callout(
+            'Si la portada avisa de que un banco lleva más de 30 días sin apuntes, es esto lo que falta. Todo lo demás (el paquete de la gestoría, los cobros, la hoja de la asamblea) sale de este libro.',
+            'warning'
+        ) }}
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'facturas', title: 'Las facturas y tickets que nos llegan' } %}
+    {% block body %}
+        {% import '_macros/csa.html.twig' as csa %}
+        <ol class="help-steps">
+            <li>Hay dos formas de meterlas: en <strong>Facturas → Recibidas</strong>, botón <strong>«Subir»</strong> (PDF o foto, varias a la vez), o mandándolas al <strong>bot de Telegram</strong>. Por el bot puede mandarlas cualquiera, por ejemplo quien ha pagado la gasolina: mandar no es anotar.</li>
+            <li>La factura <strong>se lee sola</strong> en unos segundos y se queda en la bandeja. Entra en ella.</li>
+            <li>Compara lo leído con el documento, que sale al lado. Corrige lo que esté mal y elige la <strong>partida</strong>.</li>
+            <li>Si el pago ya lo has metido desde el banco, sale <strong>«Este pago ya está en el libro»</strong>: deja marcado ese apunte y la factura se engancha a él, sin contar el gasto dos veces.</li>
+            <li>Pulsa <strong>«Guardar el apunte»</strong>.</li>
+        </ol>
+        {{ csa.callout(
+            'Si avisa de que ya hay una factura de ese proveedor con el mismo número, es que está repetida: pulsa «Descartar». Anotarla otra vez contaría el gasto doble.',
+            'warning'
+        ) }}
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'traspasos', title: 'Mover dinero entre cuentas propias' } %}
+    {% block body %}
+        {% import '_macros/csa.html.twig' as csa %}
+        <ol class="help-steps">
+            <li>Sacar efectivo del banco para la caja, o pasar dinero de un banco a otro, <strong>no es un gasto ni un ingreso</strong>: el dinero sigue siendo de la asociación.</li>
+            <li>Se anota en <strong>Movimientos → «Traspaso»</strong>, nunca como un apunte normal. Se crean a la vez los dos lados: lo que sale de una cuenta y lo que entra en la otra.</li>
+            <li>Si un traspaso se quedó con un solo lado, la portada lo avisa. Entra en él: o eliges la otra mitad ya anotada (<strong>«Es ésta»</strong>) o la anotas (<strong>«Anotar la otra mitad»</strong>).</li>
+        </ol>
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'emitidas', title: 'Hacer una factura a alguien' } %}
+    {% block body %}
+        {% import '_macros/csa.html.twig' as csa %}
+        <ol class="help-steps">
+            <li>En <strong>Facturas → Emitidas</strong>, pulsa <strong>«Nueva factura»</strong>. También se puede pedir al bot de Telegram por voz o por escrito: a quién, por qué y cuánto.</li>
+            <li>Queda en <strong>borrador</strong>: revísala y, si está bien, pulsa <strong>«Emitir»</strong>. Entonces recibe su número y su PDF.</li>
+            <li>Cuando el dinero llegue al banco y lo hayas metido en el libro, entra en la factura: abajo salen los apuntes con su importe exacto. Pulsa <strong>«Es este»</strong> y queda cobrada.</li>
+        </ol>
+        {{ csa.callout(
+            'Una factura emitida no se borra ni se cambia. Si tiene un error, se pulsa «Rectificar» y se hace la factura que la corrige.',
+            'warning'
+        ) }}
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'remesa', title: 'La remesa de cuotas de cada mes' } %}
+    {% block body %}
+        {% import '_macros/csa.html.twig' as csa %}
+        <ol class="help-steps">
+            <li>En <strong>Remesas</strong>, pulsa <strong>«Preparar desde las cuotas»</strong> y elige el mes. Sale un borrador con un recibo por cada cuota que se puede cobrar.</li>
+            <li>Revisa los recibos. Mientras sea borrador se pueden corregir, añadir o quitar.</li>
+            <li>Pulsa <strong>«Descargar el Excel»</strong> y súbelo a la banca online de Fiare.</li>
+            <li>Vuelve a la remesa y pulsa <strong>«Ya está enviada»</strong>. Desde ese momento no se puede cambiar.</li>
+        </ol>
+        {{ csa.callout(
+            'Si algún recibo tiene un problema, la remesa lo dice y no deja darla por enviada hasta arreglarlo. Las cuotas que no se pueden cobrar todavía no van en la remesa: están en Socios → «Cuotas del mes», con el motivo.',
+            'info'
+        ) }}
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'gestoria', title: 'Mandar el trimestre a la gestoría' } %}
+    {% block body %}
+        {% import '_macros/csa.html.twig' as csa %}
+        <ol class="help-steps">
+            <li>Antes, deja el trimestre completo: los movimientos del banco metidos hasta el último día y las facturas de la bandeja revisadas.</li>
+            <li>En <strong>Informes → Para la gestoría</strong> sale el trimestre que toca. Arriba avisa de lo que falta: facturas sin revisar, gastos sin factura, bancos con el libro sin llegar al final del trimestre.</li>
+            <li>Pulsa <strong>«Descargar el ZIP»</strong>: lleva las facturas renombradas y los libros. Súbelo a la carpeta de la gestoría.</li>
+            <li>Pulsa <strong>«Marcar como entregado»</strong>.</li>
+        </ol>
+        {{ csa.callout(
+            'Entregado, el trimestre queda cerrado: sus apuntes ya no se pueden cambiar, para que lo que tiene la gestoría y lo que hay aquí sea lo mismo. Si hay que corregir algo, «Reabrir para corregir», corregir y volver a mandarlo.',
+            'warning', 'lock'
+        ) }}
+    {% endblock %}
+{% endembed %}
+
+{% embed '_components/csa_card.html.twig' with { id: 'anual', title: 'Cada año: la asamblea y el presupuesto' } %}
+    {% block body %}
+        {% import '_macros/csa.html.twig' as csa %}
+        <ol class="help-steps">
+            <li>Para la asamblea, en <strong>Informes → Para la asamblea</strong> está la hoja del año: lo previsto frente a lo que de verdad entró y salió, y el dinero de cada cuenta. Se imprime o se guarda en PDF.</li>
+            <li>Para el presupuesto del año siguiente, en <strong>Informes → Presupuestos</strong>, copia el de este año con el botón de copiar: se copia con todas sus cifras. Con el lápiz («Nombre, año y notas») ponle el año nuevo, y con el botón de la tabla («Las cifras») ajusta lo que cambie.</li>
+            <li>Cuando la asamblea lo apruebe, en su ficha marca <strong>«Aprobado en asamblea»</strong> con la fecha. Contra ése se mide «Cómo vamos».</li>
+        </ol>
+        {{ csa.callout(
+            'Un presupuesto aprobado no se borra: si a mitad de año hace falta revisarlo, se copia y se trabaja sobre la copia.',
+            'info'
+        ) }}
+    {% endblock %}
+{% endembed %}

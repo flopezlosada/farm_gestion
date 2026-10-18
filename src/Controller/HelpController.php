@@ -27,7 +27,10 @@ class HelpController extends AbstractController
      * alimenta tanto las tarjetas de la portada como las pestañas y la
      * cabecera de cada página de área. La clave es el slug de la URL.
      *
-     * @var array<string, array{label: string, icon: string, accent: string, lead: string, feature?: string}>
+     * `requires` son los permisos que hay que tener TODOS para ver el área: el módulo
+     * encendido y, si lo tiene, el rol de la sección.
+     *
+     * @var array<string, array{label: string, icon: string, accent: string, lead: string, requires?: list<string>}>
      */
     private const SECTIONS = [
         'socios' => [
@@ -55,7 +58,15 @@ class HelpController extends AbstractController
             'lead' => 'Preparar una encuesta, abrirla y avisar, y leer los resultados.',
             // Sólo con el módulo encendido: una guía de algo que no aparece
             // en el menú confunde más que ayuda.
-            'feature' => 'FEATURE_SURVEYS',
+            'requires' => ['FEATURE_SURVEYS'],
+        ],
+        'contabilidad' => [
+            'label' => 'Contabilidad',
+            'icon' => 'fa-book',
+            'accent' => 'ochre',
+            'lead' => 'El ritmo de cada semana, mes, trimestre y año, y cómo se hace cada cosa.',
+            // Como su menú: módulo encendido y permiso de contabilidad.
+            'requires' => ['FEATURE_CONTABILIDAD', 'ROLE_GESTION_CONTABILIDAD'],
         ],
     ];
 
@@ -63,7 +74,7 @@ class HelpController extends AbstractController
      * Los slugs válidos, para el `requirements` de las rutas. Tiene que casar
      * con las claves de {@see SECTIONS}: un atributo PHP no puede leerlas.
      */
-    private const SLUGS = 'socios|reparto|cosechas|encuestas';
+    private const SLUGS = 'socios|reparto|cosechas|encuestas|contabilidad';
 
     #[Route('/gestion/help', name: 'help_index', methods: ['GET'])]
     public function index(): Response
@@ -103,21 +114,25 @@ class HelpController extends AbstractController
     }
 
     /**
-     * Las áreas que se enseñan a quien mira: todas menos las de un módulo
-     * apagado.
+     * Las áreas que se enseñan a quien mira: las que no piden nada y las que
+     * piden permisos que tiene todos.
      *
-     * @return array<string, array<string, string>>
+     * @return array<string, array<string, mixed>>
      */
     private function visibleSections(): array
     {
         return array_filter(
             self::SECTIONS,
-            fn (array $meta): bool => !isset($meta['feature']) || $this->isGranted($meta['feature'])
+            fn (array $meta): bool => array_reduce(
+                $meta['requires'] ?? [],
+                fn (bool $granted, string $attribute): bool => $granted && $this->isGranted($attribute),
+                true,
+            )
         );
     }
 
     /**
-     * 404 para el área de un módulo apagado, igual que un slug que no existe.
+     * 404 para el área que quien mira no puede ver, igual que un slug que no existe.
      */
     private function denyUnlessVisible(string $section): void
     {

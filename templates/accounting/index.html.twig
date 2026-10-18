@@ -60,6 +60,7 @@
         {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
             <a href="{{ path('accounting_entry_new') }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Anotar apunte</a>
         {% endif %}
+        {{ csa.help('contabilidad', 'ritmo', 'Ayuda: cómo se lleva la contabilidad') }}
     </div>
 
     {# ============ TRES CIFRAS ============ #}
