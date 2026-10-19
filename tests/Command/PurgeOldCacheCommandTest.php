@@ -20,6 +20,11 @@ class PurgeOldCacheCommandTest extends KernelTestCase
 
     protected function tearDown(): void
     {
+        foreach ($this->created as $dir) {
+            if (is_dir($dir)) {
+                (new Filesystem())->chmod($dir, 0o755, 0o000, true);
+            }
+        }
         (new Filesystem())->remove($this->created);
 
         parent::tearDown();
@@ -41,6 +46,34 @@ class PurgeOldCacheCommandTest extends KernelTestCase
         $this->assertDirectoryDoesNotExist($second);
         $this->assertDirectoryExists($neighbour, 'Sólo se borra lo que lleva el sufijo «_old_».');
         $this->assertDirectoryExists($cacheDir, 'La caché en uso no se toca nunca.');
+    }
+
+    /**
+     * Lo que no se deja borrar —ficheros de otro dueño en el hosting— deja la
+     * caché apartada con su nombre y la ejecución en rojo. Filesystem::remove()
+     * renombraba el directorio a un «.!xxxx» oculto y no lo deshacía al fallar:
+     * la siguiente pasada ya no lo veía y salía en verde con la basura dentro.
+     */
+    public function testLoQueNoSeDejaBorrarSigueVisibleYFalla(): void
+    {
+        if (\function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            $this->markTestSkipped('Como root no hay fichero que se resista a borrarse.');
+        }
+
+        self::bootKernel();
+        $cacheDir = self::getContainer()->getParameter('kernel.cache_dir');
+        $stale = $this->staleCache('_old_444');
+        chmod($stale . '/pools/system/AB/C', 0o555);
+
+        $tester = $this->commandTester();
+
+        $this->assertSame(Command::FAILURE, $tester->execute(['--force' => true]));
+        $this->assertStringContainsString('Permission denied', $tester->getDisplay());
+        $this->assertDirectoryExists($stale, 'La caché apartada conserva su nombre.');
+        $this->assertSame([], glob(\dirname($cacheDir) . '/.!*'), 'Nada se esconde junto a la caché en uso.');
+
+        $tester->execute(['--force' => true]);
+        $this->assertSame(Command::FAILURE, $tester->getStatusCode(), 'La pasada siguiente lo sigue viendo.');
     }
 
     /** El dry-run lista y no borra. */
