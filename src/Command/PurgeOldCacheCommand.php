@@ -88,7 +88,14 @@ class PurgeOldCacheCommand extends AbstractCronCommand
     }
 
     /**
-     * Borra una caché apartada.
+     * Borra una caché apartada: primero su contenido y luego el directorio vacío.
+     *
+     * No se le pasa el directorio entero a Filesystem::remove() porque éste lo
+     * renombra a un «.!xxxx» oculto antes de vaciarlo y, si un fichero de dentro
+     * no se deja borrar, no deshace el renombrado: la caché quedaba fuera del
+     * patrón «_old_*» y la tarea siguiente salía en verde con la basura escondida.
+     * Vaciándolo por dentro, lo que no se borre sigue en el «_old_*» y la tarea lo
+     * vuelve a ver y a dar por fallido.
      *
      * @param string $directory Ruta absoluta del directorio.
      *
@@ -97,6 +104,7 @@ class PurgeOldCacheCommand extends AbstractCronCommand
     private function remove(string $directory): ?string
     {
         try {
+            $this->filesystem->remove(new \FilesystemIterator($directory, \FilesystemIterator::CURRENT_AS_PATHNAME | \FilesystemIterator::SKIP_DOTS));
             $this->filesystem->remove($directory);
 
             return null;
