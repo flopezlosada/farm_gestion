@@ -380,6 +380,13 @@ class AppSettings
     public const CRON_OFFSITE_BACKUP = 'cron.offsite_backup';
 
     /**
+     * Borra las cachés que el despliegue dejó apartadas al renombrarlas
+     * (app:purge-old-cache). La borra PHP y no el despliegue porque PHP es el
+     * dueño de esos ficheros y el FTP no puede con ellos.
+     */
+    public const CRON_PURGE_OLD_CACHE = 'cron.purge_old_cache';
+
+    /**
      * Manda las novedades de la web que administración ha pedido contar.
      *
      * A diferencia del resto, no vigila una fecha ni un estado del dominio:
@@ -727,6 +734,20 @@ class AppSettings
             'requires' => [],
             'depends_on' => [],
         ],
+        // De madrugada para no competir con nadie. Diaria aunque se despliega
+        // pocas veces: casi siempre sale en verde sin hacer nada.
+        self::CRON_PURGE_OLD_CACHE => [
+            'command' => 'app:purge-old-cache',
+            // Ningún canal: no entrega nada a nadie.
+            'channels' => [],
+            'needs_recipient' => false,
+            'confirm' => false,
+            'dry' => true,
+            'schedule' => ['freq' => 'daily', 'hour' => 4],
+            'max_delay_hours' => 48,
+            'requires' => [],
+            'depends_on' => [],
+        ],
         self::CRON_VOLUNTEER_CALLS => [
             'command' => 'app:send-volunteer-calls',
             // Multicanal desde que el aviso también sale por correo. Por eso NO
@@ -940,6 +961,12 @@ class AppSettings
             'label' => 'Copia de seguridad fuera del hosting',
             'help' => 'Sube a Backblaze B2, cifrados y sin que el servidor pueda borrarlos, un volcado de la base (se guarda 90 días) y los documentos de facturas y vencimientos que aún no estén fuera (6 años) (app:offsite-backup). Cada ejecución dedica a los documentos unos dos minutos: si la primera no los sube todos, pulsa el botón otra vez.',
             'default' => false,
+        ],
+        self::CRON_PURGE_OLD_CACHE => [
+            'group' => 'Tareas programadas',
+            'label' => 'Borrar las cachés de despliegues anteriores',
+            'help' => 'Cada madrugada borra las cachés que cada despliegue deja apartadas en el servidor (app:purge-old-cache). No manda nada a nadie. Apagada, se acumulan y ocupan disco. Si sale en rojo, hay ficheros que ni la web puede borrar: hay que pedírselo al soporte del hosting.',
+            'default' => true,
         ],
         self::CRON_VOLUNTEER_CALLS => [
             'group' => 'Tareas programadas',

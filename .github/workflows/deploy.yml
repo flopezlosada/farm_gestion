@@ -137,9 +137,14 @@ jobs:
 
       # Invalida el cache compilado de prod en el servidor. En prod Symfony NO recompila
       # plantillas/config al cambiar el fuente: sirve lo que tenga en var/cache/prod (que
-      # se excluye de la subida). La action no ejecuta comandos remotos, así que el borrado
-      # va con un lftp mínimo (una sola operación, segundos). Symfony lo regenera on-demand
-      # en el primer request. -f: no falla si el dir no existe.
+      # se excluye de la subida). La action no ejecuta comandos remotos, así que va con un
+      # lftp mínimo. Se RENOMBRA, no se borra: un rm -rf por FTP tarda decenas de minutos
+      # mientras la web sigue escribiendo en el árbol a medio borrar, y no puede con los
+      # ficheros que creó PHP con otro dueño; lo que sobrevive se sirve como válido, porque
+      # el espacio de nombres de los pools no cambia entre deploys. El renombrado es
+      # instantáneo y sólo pide permiso sobre var/cache, así que Symfony regenera de cero
+      # en el primer request. Si falla, el deploy falla: un cache viejo no se tolera.
+      # Los prod_old_* quedan en el servidor; borrarlos no corre prisa.
       - name: Invalidar cache compilado de prod
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
@@ -150,8 +155,9 @@ jobs:
           lftp -c "
             set ssl:verify-certificate no;
             set ftp:ssl-allow no;
+            set cmd:fail-exit yes;
             open -u $FTP_USERNAME,$FTP_PASSWORD $FTP_SERVER;
-            rm -rf gestion_csa_4/var/cache/prod;
+            mv gestion_csa_4/var/cache/prod gestion_csa_4/var/cache/prod_old_${{ github.run_id }};
           "
 
       # Verifica que la home responde sana tras el deploy. Caza la corrupcion
