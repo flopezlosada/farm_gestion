@@ -43,7 +43,7 @@
             <div class="csa-row" style="gap:.6rem;">
                 <form method="post" action="{{ path('staff_access_resend', { id: worker.id }) }}">
                     <input type="hidden" name="_token" value="{{ csrf_token('staff_access' ~ worker.id) }}">
-                    <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm"><i class="fa fa-paper-plane"></i><span>Reenviar enlace</span></button>
+                    <button type="submit" class="csa-btn csa-btn--secondary csa-btn--sm"><i class="fa fa-paper-plane"></i><span>Reenviar invitación</span></button>
                 </form>
                 <form method="post" action="{{ path('staff_access_revoke', { id: worker.id }) }}"
                       onsubmit="return confirm('¿Retirar el acceso de {{ worker.name|e('js') }}? No podrá fichar hasta que se lo vuelvas a dar.');">
@@ -53,12 +53,12 @@
             </div>
         {% else %}
             <p style="margin:0 0 .8rem; color:#6b7280;">
-                Aún no puede fichar. Dale acceso con su email: si ya tiene cuenta (p. ej. es socix) se la reutiliza; si no, se crea una nueva y se le envía un enlace para entrar.
+                Aún no puede fichar. Dale acceso con su email —mejor su cuenta de Google, para que entre con un toque desde el móvil—: si ya tiene cuenta (p. ej. es socix) se la reutiliza; si no, se crea una nueva. Le llegará un correo para entrar con Google.
             </p>
             <form method="post" action="{{ path('staff_access_grant', { id: worker.id }) }}" class="csa-row" style="gap:.6rem; flex-wrap:wrap;">
                 <input type="hidden" name="_token" value="{{ csrf_token('staff_access' ~ worker.id) }}">
                 <input type="email" name="email" required placeholder="email@ejemplo.org" class="csa-input" style="max-width:280px;">
-                <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm"><i class="fa fa-key"></i><span>Dar acceso y enviar enlace</span></button>
+                <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm"><i class="fa fa-key"></i><span>Dar acceso y enviar invitación</span></button>
             </form>
         {% endif %}
     </div>

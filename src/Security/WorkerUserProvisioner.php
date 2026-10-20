@@ -16,12 +16,13 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  *   - El trabajador YA tiene cuenta (p. ej. es también socix y entra con su
  *     email): se le AÑADE la faceta laboral a esa misma cuenta, no se crea otra.
  *   - El trabajador no tiene cuenta (p. ej. no es socix): se CREA una nueva con
- *     ese email, con contraseña placeholder y passwordSet = false (al primer
- *     acceso, por magic-link, configurará la suya).
+ *     ese email, con contraseña placeholder y passwordSet = false. Lo normal es
+ *     que entre con Google ({@see self::resolveByVerifiedEmail()}); si entra
+ *     por magic-link, al primer acceso configurará una contraseña.
  *
  * No toca la columna `roles`: ROLE_WORKER se deriva de tener un Worker vinculado
- * ({@see User::getRoles()}). El envío del enlace de acceso lo hace el controller
- * con {@see MagicLinkMailer}.
+ * ({@see User::getRoles()}). La invitación para entrar la envía el controller
+ * con {@see WorkerAccessMailer}.
  */
 class WorkerUserProvisioner
 {
@@ -41,6 +42,34 @@ class WorkerUserProvisioner
     public function userFor(Worker $worker): ?User
     {
         return $this->userRepository->findOneBy(['worker' => $worker]);
+    }
+
+    /**
+     * Cuenta de trabajador para el SSO con Google: la que ya tiene ese email y un
+     * Worker vinculado, o null. NUNCA crea una cuenta: sólo la administración da
+     * acceso a fichar ({@see self::grantAccess()}), así que un gmail que no se
+     * haya dado de alta antes no entra.
+     *
+     * Entrar con Google cuenta como haber elegido credencial: se marca
+     * passwordSet para que no le obliguen a ponerse una contraseña que no va a
+     * usar (mismo criterio que el SSO de socixs).
+     *
+     * @param string $verifiedEmail Email que Google devuelve ya verificado.
+     * @return User|null
+     */
+    public function resolveByVerifiedEmail(string $verifiedEmail): ?User
+    {
+        $user = $this->userRepository->loadUserByIdentifier($verifiedEmail);
+        if (!$user instanceof User || $user->getWorker() === null) {
+            return null;
+        }
+
+        if (!$user->isPasswordSet()) {
+            $user->setPasswordSet(true);
+            $this->em->flush();
+        }
+
+        return $user;
     }
 
     /**
