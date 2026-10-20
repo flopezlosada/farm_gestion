@@ -43,20 +43,25 @@ class SecurityController extends AbstractController
 
     /**
      * Dispatcher tras el login: manda a cada cual a la zona que puede abrir.
-     * Gestión ({@see ManagementVoter}) va al dashboard; quien
-     * trabaja para la asociación, a fichar, que es lo que viene a hacer a diario
-     * (si además es socix, el conmutador de áreas le lleva a su panel); el resto,
-     * al panel del socix. Sin la rama del trabajador, uno que no es socix
-     * acababa en /panel, que exige ROLE_PARTNER: un 403 nada más entrar.
+     * Quien trabaja para la asociación va SIEMPRE a fichar, aunque además sea
+     * de gestión o socix: es lo que viene a hacer a diario, y el conmutador de
+     * áreas le lleva al resto. Después, gestión ({@see ManagementVoter}) va al
+     * dashboard y el resto al panel del socix.
+     *
+     * El trabajador se mira por la ficha vinculada, no por ROLE_WORKER: ROLE_ADMIN
+     * lo alcanza por jerarquía y mandaría a fichar a todo admin.
      *
      * @return Response Redirección a la zona de destino.
      */
     #[Route('/post-login', name: 'app_post_login')]
     public function postLogin(): Response
     {
+        $user = $this->getUser();
+        $isWorker = $user instanceof User && $user->getWorker() !== null;
+
         return $this->redirectToRoute(match (true) {
+            $isWorker && $this->isGranted('FEATURE_LABORAL') => 'work',
             $this->isGranted(ManagementVoter::MANAGEMENT) => 'dashboard',
-            $this->isGranted('ROLE_WORKER') && $this->isGranted('FEATURE_LABORAL') => 'work',
             default => 'panel',
         });
     }

@@ -13,8 +13,9 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 /**
  * El dispatcher de después del login (/post-login) manda a cada cuenta a la zona
  * que puede abrir. Se prueban las cuentas que antes caían en /panel —que exige
- * ser socix— y se comían un 403 nada más entrar: el trabajador que no es socix
- * y quien sólo tiene un rol de gestión de una sección reciente.
+ * ser socix— y se comían un 403 nada más entrar (el trabajador que no es socix
+ * y quien sólo tiene un rol de gestión de una sección reciente), y que quien
+ * trabaja va a fichar aunque además sea de gestión.
  */
 class PostLoginDispatchTest extends WebTestCase
 {
@@ -107,6 +108,24 @@ class PostLoginDispatchTest extends WebTestCase
 
         $this->client->followRedirect();
         $this->assertResponseIsSuccessful();
+    }
+
+    public function testTrabajadorQueTambienEsDeGestionVaAFichar(): void
+    {
+        // Fichar es lo diario; gestión queda a un toque en el conmutador.
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_LABORAL, true);
+        $this->loginAs('worker-manager', ['ROLE_GESTION_CONTABILIDAD'], withWorker: true);
+
+        $this->assertDispatchesTo('/work');
+    }
+
+    public function testAdminSinFichaDeTrabajadorNoVaAFichar(): void
+    {
+        // ROLE_ADMIN alcanza ROLE_WORKER por jerarquía: no debe bastar.
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_LABORAL, true);
+        $this->loginAs('admin-sin-ficha', ['ROLE_ADMIN']);
+
+        $this->assertDispatchesTo('/gestion/dashboard');
     }
 
     public function testTrabajadorConElModuloLaboralApagadoNoVaAFichar(): void
