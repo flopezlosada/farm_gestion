@@ -53,7 +53,7 @@ class WorkerAccessMailer
             ->htmlTemplate('email/worker_access.html.twig')
             ->textTemplate('email/worker_access.txt.twig')
             ->context([
-                'email' => $user->getEmail(),
+                'address' => $user->getEmail(),
                 'google_url' => $this->urlGenerator->generate('connect_google_start', [], UrlGeneratorInterface::ABSOLUTE_URL),
                 'link_url' => $this->urlGenerator->generate('app_login_link_forgot', [], UrlGeneratorInterface::ABSOLUTE_URL),
             ]);
