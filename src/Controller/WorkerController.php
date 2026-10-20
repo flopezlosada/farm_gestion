@@ -879,8 +879,8 @@ class WorkerController extends AbstractController
      * Por defecto se BLOQUEA si tiene fichajes: el registro de jornada se conserva
      * 4 años por ley aunque la persona se vaya, así que la vía correcta para un
      * trabajador con histórico es marcarlo inactivo, no borrarlo. Solo con
-     * `force=1` (acción reservada a ROLE_GESTION_LABORAL_EDIT por access_control,
-     * pensada para limpiar trabajadores de PRUEBA) se borra aun teniendo fichajes,
+     * `force=1` (acción reservada a ROLE_ADMIN, pensada para limpiar trabajadores
+     * de PRUEBA) se borra aun teniendo fichajes,
      * destruyendo el registro de jornada.
      *
      * En cualquier caso el borrado arrastra en cascada lo que solo tiene sentido

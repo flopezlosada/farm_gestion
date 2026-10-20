@@ -26,6 +26,15 @@
 
             <span class="pun__view" data-pun-view>
                 <span class="stf-pun__time">{{ t }}</span>
+                {% if entry.manual %}
+                    {# Apuntado a mano (olvido, corrección, relleno con el horario o
+                     # el supervisor): se ve SIEMPRE, no es un detalle opcional.
+                     # El desglose de cuándo y quién va en el title. #}
+                    {% set trail = 'Apuntado el ' ~ entry.recordedAt|date('d/m/Y H:i', madrid)
+                        ~ (entry.author ? ' por ' ~ entry.author.displayName : '')
+                        ~ (entry.note ? ' · ' ~ entry.note : '') %}
+                    <span class="stf-late" title="{{ trail }}">a mano</span>
+                {% endif %}
                 <button type="button" class="pun__btn pun__pen" data-pun-edit aria-label="Editar hora"><i class="fa fa-pencil"></i></button>
             </span>
 

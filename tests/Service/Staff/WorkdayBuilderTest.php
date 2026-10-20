@@ -93,4 +93,19 @@ class WorkdayBuilderTest extends TestCase
         $this->assertSame(420, $days[0]['totalMinutes']);
         $this->assertSame(480, $days[1]['totalMinutes']);
     }
+
+    public function testMarcaElDiaComoManualSiAlgunFichajeLoEs(): void
+    {
+        // El 20 tiene la salida añadida por el supervisor; el 18 es todo en tiempo real
+        // (sin sello, como una fila aún sin persistir: no cuenta como manual).
+        $days = (new WorkdayBuilder())->buildDays([
+            $this->entry(TimeEntry::TYPE_IN, '2026-06-18 09:00'),
+            $this->entry(TimeEntry::TYPE_OUT, '2026-06-18 17:00'),
+            $this->entry(TimeEntry::TYPE_IN, '2026-06-20 08:00'),
+            $this->entry(TimeEntry::TYPE_OUT, '2026-06-20 15:00')->setSource(TimeEntry::SOURCE_SUPERVISOR),
+        ], $this->utc);
+
+        $this->assertTrue($days[0]['manual']);
+        $this->assertFalse($days[1]['manual']);
+    }
 }

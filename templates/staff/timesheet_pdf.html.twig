@@ -3,7 +3,7 @@
  # Recibe (de WorkerController::monthlyPdf / WorkController::monthlyPdf):
  #   - worker        Worker.
  #   - sheet         estructura de MonthlyTimesheetBuilder::build()
- #                   ({ rows, totalMinutes, workedDays, missingDays }).
+ #                   ({ rows, totalMinutes, workedDays, missingDays, manualDays }).
  #   - year, month   del periodo.
  #   - month_label   \DateTimeImmutable del primer día del mes.
  #   - generated_at  \DateTimeImmutable de la generación.
@@ -101,6 +101,7 @@
                     <td class="total{{ row.status == 'worked' ? ' tot-b' : '' }}">{{ m.hm(row.totalMinutes) }}</td>
                     <td class="obs">
                         {%- if row.status == 'worked' and row.absenceType %}{{ abs_labels[row.absenceType]|default('') }}{% endif -%}
+                        {%- if row.manual %}{{ row.status == 'worked' and row.absenceType ? ' · ' : '' }}Apuntado a mano{% endif -%}
                     </td>
                 </tr>
             {% endfor %}
@@ -117,6 +118,7 @@
     <div class="totals">
         <span>Días trabajados: <strong>{{ sheet.workedDays }}</strong></span>
         {% if sheet.missingDays > 0 %}<span style="color:#9b1c1c;">Días laborables sin fichar: <strong>{{ sheet.missingDays }}</strong></span>{% endif %}
+        {% if sheet.manualDays > 0 %}<span>Días con registros apuntados a mano: <strong>{{ sheet.manualDays }}</strong></span>{% endif %}
     </div>
 
     <table class="sign">
@@ -128,7 +130,9 @@
 
     <p class="foot">
         Documento generado automáticamente a partir del registro de fichajes. Las horas se calculan emparejando
-        entradas y salidas; los apuntes son inmutables (las correcciones quedan trazadas). Conservar durante 4 años.
+        entradas y salidas; los apuntes son inmutables (las correcciones quedan trazadas). «Apuntado a mano»: algún
+        registro del día no se fichó en el momento (olvido añadido después, hora corregida o anotado por el supervisor).
+        Conservar durante 4 años.
     </p>
 </body>
 </html>

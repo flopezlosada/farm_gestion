@@ -62,6 +62,13 @@ class TimeEntry
     ];
 
     /**
+     * Desfase entre la hora del fichaje y su registro a partir del cual se da por
+     * apuntado a mano ({@see self::isManual()}). Holgado a propósito: un fichaje
+     * en tiempo real tarda milisegundos, y cinco minutos no tapan ningún olvido.
+     */
+    public const MANUAL_MARGIN_SECONDS = 300;
+
+    /**
      * @var int|null
      *
      * @ORM\Column(name="id", type="integer")
@@ -323,19 +330,29 @@ class TimeEntry
     }
 
     /**
-     * ¿Se declaró tarde? Cierto cuando el fichaje se registró en un día natural
-     * (Madrid) posterior al que dice haber ocurrido. Es la señal que destaca los
-     * apuntes del pasado en el panel de huecos, sin necesitar un campo extra.
+     * ¿Se apuntó a mano? Cierto si lo metió el supervisor, o si entre la hora que
+     * dice el fichaje y el momento en que entró en la BBDD hay más de
+     * {@see self::MANUAL_MARGIN_SECONDS}: un olvido añadido después, una hora
+     * corregida, el relleno con el horario habitual. El botón de fichar estampa
+     * las dos horas a la vez, así que nunca lo cumple.
+     *
+     * Es la señal que el supervisor necesita para aprobar el mes con criterio: un
+     * registro tecleado a posteriori vale, pero no vale lo mismo que uno fichado
+     * en el momento, y no puede verse igual. Sale de los sellos que ya hay, sin
+     * campo extra.
      *
      * @return bool
      */
-    public function isLate(): bool
+    public function isManual(): bool
     {
+        if ($this->source === self::SOURCE_SUPERVISOR) {
+            return true;
+        }
         if ($this->occurredAt === null || $this->recordedAt === null) {
             return false;
         }
 
-        return $this->recordedAt->format('Y-m-d') > $this->occurredAt->format('Y-m-d');
+        return abs($this->recordedAt->getTimestamp() - $this->occurredAt->getTimestamp()) > self::MANUAL_MARGIN_SECONDS;
     }
 
     /**
