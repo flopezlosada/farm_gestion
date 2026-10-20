@@ -260,6 +260,10 @@ class StaffControllerTest extends WebTestCase
         $this->em->persist($editor);
         $this->em->flush();
         $this->client->loginUser($editor);
+        // El fichaje se creó por el EM compartido: la colección inversa del
+        // trabajador en memoria no lo ve. Sin limpiar, la ficha creería que no
+        // tiene fichajes y pintaría el borrado normal, no el forzado.
+        $this->em->clear();
 
         // Ni siquiera se le pinta el botón…
         $crawler = $this->client->request('GET', '/gestion/staff/' . $id);
