@@ -8,6 +8,7 @@ use App\Security\UserChecker;
 use App\Service\AppSettings;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Security\Core\Exception\CustomUserMessageAccountStatusException;
+use Symfony\Component\Security\Core\Role\RoleHierarchy;
 
 /**
  * El UserChecker es el punto único donde se aplica el feature-flag de acceso de
@@ -31,6 +32,18 @@ class UserCheckerTest extends TestCase
         return $settings;
     }
 
+    /**
+     * Checker con la jerarquía real de las secciones partidas en lectura y
+     * escritura que se prueban aquí: el `_EDIT` alcanza la lectura.
+     */
+    private function checker(bool $partnerLoginOpen): UserChecker
+    {
+        return new UserChecker($this->settings($partnerLoginOpen), new RoleHierarchy([
+            'ROLE_GESTION_LABORAL_EDIT' => ['ROLE_GESTION_LABORAL'],
+            'ROLE_GESTION_CONTABILIDAD_EDIT' => ['ROLE_GESTION_CONTABILIDAD'],
+        ]));
+    }
+
     private function socix(): User
     {
         return (new User())->setRoles(['ROLE_PARTNER'])->setEnabled(true);
@@ -45,19 +58,19 @@ class UserCheckerTest extends TestCase
     {
         $this->expectException(CustomUserMessageAccountStatusException::class);
 
-        (new UserChecker($this->settings(false)))->checkPreAuth($this->socix());
+        $this->checker(false)->checkPreAuth($this->socix());
     }
 
     public function testSocixAdmitidoConElAccesoAbierto(): void
     {
-        (new UserChecker($this->settings(true)))->checkPreAuth($this->socix());
+        $this->checker(true)->checkPreAuth($this->socix());
 
         $this->addToAssertionCount(1); // no lanzó: pasa
     }
 
     public function testElEquipoEntraAunqueElAccesoDeSocixsEsteCerrado(): void
     {
-        (new UserChecker($this->settings(false)))->checkPreAuth($this->teamMember());
+        $this->checker(false)->checkPreAuth($this->teamMember());
 
         $this->addToAssertionCount(1); // no lanzó: pasa
     }
@@ -66,12 +79,12 @@ class UserCheckerTest extends TestCase
     {
         $this->expectException(CustomUserMessageAccountStatusException::class);
 
-        (new UserChecker($this->settings(true)))->checkPreAuth($this->socix()->setEnabled(false));
+        $this->checker(true)->checkPreAuth($this->socix()->setEnabled(false));
     }
 
     public function testSocixConAccesoAnticipadoEntraAunqueElGrifoEsteCerrado(): void
     {
-        (new UserChecker($this->settings(false)))->checkPreAuth($this->socix()->setEarlyAccess(true));
+        $this->checker(false)->checkPreAuth($this->socix()->setEarlyAccess(true));
 
         $this->addToAssertionCount(1); // no lanzó: pasa
     }
@@ -80,7 +93,7 @@ class UserCheckerTest extends TestCase
     {
         $this->expectException(CustomUserMessageAccountStatusException::class);
 
-        (new UserChecker($this->settings(false)))
+        $this->checker(false)
             ->checkPreAuth($this->socix()->setEarlyAccess(true)->setEnabled(false));
     }
 
@@ -90,7 +103,7 @@ class UserCheckerTest extends TestCase
         // anticipado) no depende del rollout de socixs: debe poder entrar a fichar.
         $worker = (new User())->setEnabled(true)->setWorker(new Worker());
 
-        (new UserChecker($this->settings(false)))->checkPreAuth($worker);
+        $this->checker(false)->checkPreAuth($worker);
 
         $this->addToAssertionCount(1); // no lanzó: pasa
     }
@@ -102,6 +115,29 @@ class UserCheckerTest extends TestCase
 
         $worker = (new User())->setEnabled(false)->setWorker(new Worker());
 
-        (new UserChecker($this->settings(false)))->checkPreAuth($worker);
+        $this->checker(false)->checkPreAuth($worker);
+    }
+
+    public function testQuienSoloEscribeEnUnaSeccionEntraComoEquipo(): void
+    {
+        // Al que escribe se le guarda sólo el _EDIT; la lectura (que es la que
+        // abre /gestion) le llega por jerarquía. Sin expandirla, contabilidad se
+        // quedaba fuera con el acceso de socixs cerrado.
+        $this->checker(false)->checkPreAuth(
+            (new User())->setRoles(['ROLE_GESTION_CONTABILIDAD_EDIT'])->setEnabled(true)
+        );
+
+        $this->addToAssertionCount(1); // no lanzó: pasa
+    }
+
+    public function testRolDeGestionDeUnaSeccionNuevaEntraComoEquipo(): void
+    {
+        // Vencimientos no estaba en la lista copiada del checker: quien sólo
+        // tenía ese rol era tratado como socix y rebotaba.
+        $this->checker(false)->checkPreAuth(
+            (new User())->setRoles(['ROLE_GESTION_VENCIMIENTOS'])->setEnabled(true)
+        );
+
+        $this->addToAssertionCount(1); // no lanzó: pasa
     }
 }
