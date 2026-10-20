@@ -242,4 +242,58 @@ class StaffControllerTest extends WebTestCase
         $this->assertSame([], $this->em->getRepository(Absence::class)->findAll(), 'Las ausencias deben borrarse en cascada.');
         $this->assertNull($this->em->getRepository(User::class)->find($userId), 'La cuenta solo-laboral huérfana debe borrarse.');
     }
+
+    public function testForceDeleteIsAdminOnly(): void
+    {
+        $worker = $this->makeWorker();
+        $id = $worker->getId();
+        $this->addEntry($worker, TimeEntry::TYPE_IN, '2026-01-15 09:00');
+
+        // Gestiona personal con permiso de escritura, pero no es admin.
+        $editor = (new User())
+            ->setUsername('worker-test-editor')
+            ->setEmail('worker-test-editor@example.test')
+            ->setPassword('x')
+            ->setEnabled(true)
+            ->setPasswordSet(true)
+            ->setRoles(['ROLE_GESTION_LABORAL_EDIT']);
+        $this->em->persist($editor);
+        $this->em->flush();
+        $this->client->loginUser($editor);
+
+        // Ni siquiera se le pinta el botón…
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $id);
+        $this->assertResponseIsSuccessful();
+        $this->assertCount(0, $crawler->filter('#confirm-worker-delete'));
+
+        // …y el POST fabricado se rechaza sin tocar nada.
+        $this->client->request('POST', '/gestion/staff/' . $id, ['_token' => 'x', 'force' => '1']);
+        $this->assertResponseStatusCodeSame(403);
+
+        $this->em->clear();
+        $this->assertNotNull($this->em->getRepository(Worker::class)->find($id));
+        $this->assertCount(1, $this->em->getRepository(TimeEntry::class)->findAll());
+    }
+
+    public function testDayShowsHowEachEntryCameInAndWhatWasVoided(): void
+    {
+        $worker = $this->makeWorker();
+        // addEntry() los crea con origen supervisor: cuentan como apuntados a mano.
+        $this->addEntry($worker, TimeEntry::TYPE_IN, '2026-03-02 09:00');
+        $wrong = $this->addEntry($worker, TimeEntry::TYPE_OUT, '2026-03-02 13:00');
+        $admin = $this->em->getRepository(User::class)->loadUserByIdentifier('admin');
+        $wrong->void($admin, 'Se fichó la salida dos veces', new \DateTimeImmutable('2026-03-03 08:00', new \DateTimeZone('Europe/Madrid')));
+        $this->em->flush();
+
+        $crawler = $this->client->request('GET', sprintf('/gestion/staff/%d/day/2026-03-02', $worker->getId()));
+        $this->assertResponseIsSuccessful();
+
+        $trail = $crawler->filter('.stf-trail')->each(static fn ($n) => trim(preg_replace('/\s+/', ' ', $n->text())));
+        $this->assertCount(2, $trail, 'Una línea por el vigente y otra por el anulado.');
+        $this->assertStringContainsString('Entrada 09:00', $trail[0]);
+        $this->assertStringContainsString('a mano', $trail[0]);
+        $this->assertStringContainsString('Salida 13:00', $trail[1]);
+        $this->assertStringContainsString('anulado', $trail[1]);
+        $this->assertStringContainsString('Se fichó la salida dos veces', $trail[1]);
+    }
 }

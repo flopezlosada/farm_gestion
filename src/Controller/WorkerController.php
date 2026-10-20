@@ -807,6 +807,8 @@ class WorkerController extends AbstractController
             'total' => $days[0]['totalMinutes'] ?? 0,
             'open' => $days[0]['open'] ?? false,
             'anomaly' => $days[0]['anomaly'] ?? false,
+            'entries' => $entries,
+            'voided' => $timeEntries->findVoidedForWorkerBetween($worker, $dayStart, $dayEnd),
         ]);
     }
 
@@ -902,14 +904,22 @@ class WorkerController extends AbstractController
         EntityManagerInterface $em,
         WorkerUserProvisioner $provisioner,
     ): Response {
+        $entryCount = $worker->getTimeEntries()->count();
+        $force = $request->request->getBoolean('force');
+
+        // Destruir un registro de jornada que la ley obliga a conservar no es una
+        // acción de gestión laboral corriente: sólo admin, aunque el botón no se
+        // pinte a nadie más (el POST se puede fabricar igual). Va antes que el
+        // CSRF porque no depende de él: sin el permiso, la respuesta es la misma.
+        if ($force && $entryCount > 0 && !$this->isGranted('ROLE_ADMIN')) {
+            throw $this->createAccessDeniedException('Sólo administración puede destruir un registro de jornada.');
+        }
+
         if (!$this->isCsrfTokenValid('delete' . $worker->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
 
             return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
         }
-
-        $entryCount = $worker->getTimeEntries()->count();
-        $force = $request->request->getBoolean('force');
 
         if ($entryCount > 0 && !$force) {
             $this->addFlash('error', sprintf(
