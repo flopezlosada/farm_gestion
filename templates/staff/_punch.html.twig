@@ -34,7 +34,8 @@
                     {% set trail = 'Apuntado el ' ~ entry.recordedAt|date('d/m/Y H:i', madrid)
                         ~ (entry.author ? ' por ' ~ entry.author.displayName : '')
                         ~ (entry.note ? ' · ' ~ entry.note : '') %}
-                    <span class="stf-late" title="{{ trail }}">a mano</span>
+                    {% import 'staff/_manual.html.twig' as m %}
+                    <span class="stf-late" title="{{ trail }}">{{ m.label(entry, madrid) }}</span>
                 {% endif %}
                 {% if not opts.readonly|default(false) %}
                 <button type="button" class="pun__btn pun__pen" data-pun-edit aria-label="Editar hora"><i class="fa fa-pencil"></i></button>

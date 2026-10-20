@@ -4,6 +4,7 @@
  #
  # Espera: weeks, day_route, base_params, madrid.
  # ============================================================ #}
+{% import 'staff/_manual.html.twig' as m %}
 {% set absence_labels = { vacation: 'Vacaciones', sick_leave: 'Baja', permit: 'Permiso', other: 'Ausencia' } %}
 <table class="cal-grid">
     <thead>
@@ -26,7 +27,7 @@
                                     <div class="cal-total">{{ (cell.total.totalMinutes // 60) }}h {{ '%02d'|format(cell.total.totalMinutes % 60) }}m</div>
                                     {% if cell.total.open %}<span class="cal-badge cal-badge--abs">En curso</span>{% endif %}
                                     {% if cell.total.anomaly %}<span class="cal-badge cal-badge--warn">Revisar</span>{% endif %}
-                                    {% if cell.total.manual %}<span class="cal-badge cal-badge--manual" title="Algún registro de este día se apuntó a mano">A mano</span>{% endif %}
+                                    {% if cell.total.lastManual %}<span class="cal-badge cal-badge--manual" title="Algún fichaje de este día no se fichó en el momento">{{ m.label(cell.total.lastManual, madrid) }}</span>{% endif %}
                                 {% elseif cell.absence %}
                                     <span class="cal-badge cal-badge--abs">{{ absence_labels[cell.absence]|default('Ausencia') }}</span>
                                 {% elseif cell.holiday %}
