@@ -33,7 +33,8 @@
     <style>
         .mc-actions { display: flex; align-items: center; gap: 6px; justify-content: flex-end; flex-wrap: nowrap; }
         .mc-actions > form { margin: 0; display: inline-flex; }
-        .prl-table .actions .mc-actions a { display: inline-flex; }
+        /* Pisa la caja de 28px de los iconos de acción del listado canónico. */
+        .prl-table .actions .mc-actions a.prl-btn { width: auto; height: auto; color: var(--prl-ink); }
         .prl-table .actions .mc-actions .prl-btn { white-space: nowrap; }
         .mc-warn { color: var(--prl-terra-d); font-weight: 600; }
     </style>
@@ -140,8 +141,10 @@
                             </td>
                             <td class="actions">
                                 <div class="mc-actions">
-                                    <a href="{{ path('staff_calendar', { id: w.id, year: month.year, month: month.month }) }}" title="Ver el mes" aria-label="Ver el mes"><i class="fa fa-calendar"></i></a>
-                                    <a href="{{ path('staff_timesheet_pdf', { id: w.id, year: month.year, month: month.month }) }}" title="Resumen en PDF" aria-label="Resumen en PDF"><i class="fa fa-file-pdf-o"></i></a>
+                                    {# Botones con texto, no iconos sueltos: junto a «Aprobar» un icono
+                                     # de 12px ni se ve ni dice qué hace. #}
+                                    <a class="prl-btn prl-btn--sm" href="{{ path('staff_calendar', { id: w.id, year: month.year, month: month.month }) }}"><i class="fa fa-calendar"></i> Ver mes</a>
+                                    <a class="prl-btn prl-btn--sm" href="{{ path('staff_timesheet_pdf', { id: w.id, year: month.year, month: month.month }) }}" title="Resumen del mes en PDF"><i class="fa fa-file-pdf-o"></i> PDF</a>
 
                                     {% if is_granted('ROLE_GESTION_LABORAL_EDIT') %}
                                         {% if close %}
