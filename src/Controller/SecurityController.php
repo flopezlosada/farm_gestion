@@ -6,7 +6,7 @@ use App\Entity\User;
 use App\Repository\PartnerRepository;
 use App\Repository\UserRepository;
 use App\Security\MagicLinkMailer;
-use App\Security\ManagementRoles;
+use App\Security\ManagementVoter;
 use App\Security\PartnerUserProvisioner;
 use App\Security\UserChecker;
 use App\Service\AppSettings;
@@ -43,7 +43,7 @@ class SecurityController extends AbstractController
 
     /**
      * Dispatcher tras el login: manda a cada cual a la zona que puede abrir.
-     * Gestión (cualquier rol de {@see ManagementRoles}) va al dashboard; quien
+     * Gestión ({@see ManagementVoter}) va al dashboard; quien
      * trabaja para la asociación, a fichar, que es lo que viene a hacer a diario
      * (si además es socix, el conmutador de áreas le lleva a su panel); el resto,
      * al panel del socix. Sin la rama del trabajador, uno que no es socix
@@ -54,10 +54,8 @@ class SecurityController extends AbstractController
     #[Route('/post-login', name: 'app_post_login')]
     public function postLogin(): Response
     {
-        $isManager = array_filter(ManagementRoles::ALL, fn (string $role): bool => $this->isGranted($role)) !== [];
-
         return $this->redirectToRoute(match (true) {
-            $isManager => 'dashboard',
+            $this->isGranted(ManagementVoter::MANAGEMENT) => 'dashboard',
             $this->isGranted('ROLE_WORKER') && $this->isGranted('FEATURE_LABORAL') => 'work',
             default => 'panel',
         });

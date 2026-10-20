@@ -5,7 +5,8 @@ namespace App\Security;
 /**
  * Roles que abren la zona de gestión (`/gestion`). Fuente única: la usan el
  * access_control de `^/gestion` en security.yaml (vía `!php/const`), el
- * dispatcher de después del login y el {@see UserChecker}.
+ * {@see ManagementVoter} (`is_granted('MANAGEMENT')` en controllers y
+ * plantillas) y el {@see UserChecker}.
  *
  * Se listan sólo los roles de LECTURA de cada sección: el `_EDIT` llega a ellos
  * por la jerarquía de security.yaml, así que quien compruebe contra esta lista
@@ -13,8 +14,9 @@ namespace App\Security;
  * `RoleHierarchyInterface`), nunca contra los roles almacenados en el User.
  *
  * Al añadir una sección de gestión nueva, su rol de lectura va aquí: antes
- * vivía copiada en cuatro sitios y tres se quedaron atrás, con lo que quien
- * sólo tenía, p. ej., ROLE_GESTION_LABORAL acababa en un 403 tras el login.
+ * vivía copiada en seis sitios (controllers y plantillas) y casi todos se
+ * quedaron atrás, con lo que quien sólo tenía, p. ej., ROLE_GESTION_LABORAL
+ * acababa en un 403 tras el login.
  */
 final class ManagementRoles
 {
@@ -33,6 +35,17 @@ final class ManagementRoles
         'ROLE_GESTION_CONTABILIDAD',
         'ROLE_GESTION_VENCIMIENTOS',
     ];
+
+    /**
+     * ¿Alguno de estos roles abre la zona de gestión?
+     *
+     * @param string[] $reachableRoles Roles con la jerarquía YA resuelta.
+     * @return bool
+     */
+    public static function anyIn(array $reachableRoles): bool
+    {
+        return array_intersect(self::ALL, $reachableRoles) !== [];
+    }
 
     private function __construct()
     {
