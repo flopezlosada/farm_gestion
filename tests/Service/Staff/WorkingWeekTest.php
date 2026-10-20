@@ -75,6 +75,31 @@ class WorkingWeekTest extends TestCase
         $this->assertSame([1, 2, 3, 4, 6], $this->days(WorkingWeek::fromSchedules([...$own, ...$globals])));
     }
 
+    /**
+     * Sin plantilla global, una única excepción (el viernes libre) no deja el
+     * resto de la semana sin huecos: los días sin fila caen a lunes-viernes.
+     */
+    public function testUnDiaSinNingunaFilaCaeALunesAViernes(): void
+    {
+        $week = WorkingWeek::fromSchedules([$this->row(new Worker(), 5, null)]);
+
+        $this->assertSame([1, 2, 3, 4], $this->days($week));
+    }
+
+    /**
+     * Dos filas globales para el mismo día (la BD no lo impide): gana la
+     * primera, que el repositorio entrega por id.
+     */
+    public function testConFilasDuplicadasGanaLaPrimera(): void
+    {
+        $week = WorkingWeek::fromSchedules([
+            $this->row(null, 6, [['09:00', '14:00']]),
+            $this->row(null, 6, null),
+        ]);
+
+        $this->assertSame([1, 2, 3, 4, 5, 6], $this->days($week));
+    }
+
     public function testUnDiaInexistenteNoSeAdmite(): void
     {
         $this->expectException(\InvalidArgumentException::class);

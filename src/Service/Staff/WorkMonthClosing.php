@@ -57,7 +57,7 @@ class WorkMonthClosing
                 'worker' => $worker,
                 'sheet' => $sheet,
                 'close' => $sheet['close'],
-                'issues' => $sheet['issueDays'] + $sheet['missingDays'],
+                'issues' => $sheet['issueDays'] + ($worker->isActive() ? $sheet['missingDays'] : 0),
             ];
         }
 
@@ -121,7 +121,10 @@ class WorkMonthClosing
             ));
         }
 
-        $missing = $sheet['missingDays'];
+        // Quien ya no trabaja aquí no tiene fecha de baja en su ficha: los días
+        // después de irse saldrían como huecos y no habría forma honesta de
+        // justificarlos. Para esa persona sólo bloquean las jornadas a medias.
+        $missing = $worker->isActive() ? $sheet['missingDays'] : 0;
         if ($missing > 0) {
             throw new \DomainException(sprintf(
                 '%s tiene %d día%s sin fichar y sin ausencia. Corrige los fichajes o registra la ausencia (permiso, huelga…) antes de aprobar el mes.',

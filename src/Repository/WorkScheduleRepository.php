@@ -40,6 +40,10 @@ class WorkScheduleRepository extends ServiceEntityRepository
      * (ver {@see WorkingWeek::fromSchedules()}). Una sola consulta para los 7
      * días, no una por día.
      *
+     * Es el horario de HOY, no el que tenía en el mes que se mira: no se guarda
+     * historial. Cambiar el horario recalcula los huecos de meses pasados,
+     * también en el PDF de un mes ya aprobado.
+     *
      * @param Worker $worker Trabajador.
      * @return WorkingWeek
      */
@@ -48,6 +52,7 @@ class WorkScheduleRepository extends ServiceEntityRepository
         return WorkingWeek::fromSchedules($this->createQueryBuilder('s')
             ->andWhere('s.worker = :worker OR s.worker IS NULL')
             ->setParameter('worker', $worker)
+            ->orderBy('s.id', 'ASC')
             ->getQuery()
             ->getResult());
     }

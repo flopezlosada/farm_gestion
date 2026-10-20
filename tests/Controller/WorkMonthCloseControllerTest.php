@@ -293,6 +293,23 @@ class WorkMonthCloseControllerTest extends WebTestCase
         $this->assertNotNull($this->standingClose($worker));
     }
 
+    /**
+     * Quien ya no trabaja aquí no tiene fecha de baja: los días tras irse no se
+     * pueden justificar con verdad, así que no bloquean. Su mes se aprueba con
+     * lo que fichó.
+     */
+    public function testElMesDeQuienSeFueSeApruebaSinJustificarLosDiasSinFichar(): void
+    {
+        $worker = $this->makeWorker('Trabajadora que se fue');
+        $this->punch($worker, TimeEntry::TYPE_IN, '09:00');
+        $this->punch($worker, TimeEntry::TYPE_OUT, '14:00');
+        $worker->setActive(false);
+        $this->em->flush();
+
+        $this->approve($worker);
+        $this->assertNotNull($this->standingClose($worker));
+    }
+
     public function testElMesEnCursoNoSeAprueba(): void
     {
         $worker = $this->makeWorker();

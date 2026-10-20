@@ -255,7 +255,13 @@ class WorkerController extends AbstractController
     #[Route('/{id}/absence/new', name: 'staff_absence_new', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     public function newAbsence(Request $request, Worker $worker, EntityManagerInterface $em, AbsenceRepository $absences, ClosedWorkMonths $closedMonths): Response
     {
-        $day = \DateTimeImmutable::createFromFormat('!Y-m-d', (string) $request->query->get('date', '')) ?: null;
+        // Ida y vuelta por el formato: createFromFormat acepta un 31 de febrero
+        // y lo convierte en marzo sin avisar.
+        $date = (string) $request->query->get('date', '');
+        $day = \DateTimeImmutable::createFromFormat('!Y-m-d', $date) ?: null;
+        if ($day?->format('Y-m-d') !== $date) {
+            $day = null;
+        }
         $back = (string) $request->query->get('back', '');
 
         $absence = (new Absence())->setWorker($worker);
@@ -266,7 +272,8 @@ class WorkerController extends AbstractController
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            $day ??= $absence->getStartDate();
+            // Se vuelve al mes/día de lo que se guardó, aunque se cambiaran las fechas.
+            $day = $absence->getStartDate();
             if ($absences->findOverlappingForWorker($worker, $absence->getStartDate(), $absence->getEndDate()) !== []) {
                 $this->addFlash('error', 'Ese trabajador ya tiene una ausencia en esas fechas.');
 

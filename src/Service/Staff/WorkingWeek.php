@@ -54,28 +54,38 @@ final class WorkingWeek
      * La semana de un trabajador a partir de sus filas de horario y las de la
      * plantilla global: cada día manda su excepción si la tiene (aunque esté
      * vacía: ese día no trabaja), si no la global; la misma regla que
-     * {@see \App\Repository\WorkScheduleRepository::forWorkerAndDay()}. Sin
-     * ninguna fila, de lunes a viernes: mejor ver huecos de más que tragarse
-     * olvidos por no haber rellenado la plantilla.
+     * {@see \App\Repository\WorkScheduleRepository::forWorkerAndDay()}. Un día
+     * sin ninguna fila cae a lunes-viernes: mejor ver huecos de más que tragarse
+     * olvidos por no haber rellenado la plantilla (una sola excepción de viernes
+     * no puede dejar sin huecos el resto de la semana).
      *
-     * @param WorkSchedule[] $schedules Filas del trabajador y globales (worker null), en cualquier orden.
+     * Si un mismo día tiene dos filas del mismo nivel (la BD no lo impide, ver
+     * {@see WorkSchedule}), gana la primera de la lista: quien llama la pasa
+     * ordenada por id para que el resultado no dependa del orden de MySQL.
+     *
+     * @param WorkSchedule[] $schedules Filas del trabajador y globales (worker null).
      * @return self
      */
     public static function fromSchedules(array $schedules): self
     {
-        if ($schedules === []) {
-            return self::mondayToFriday();
-        }
-
-        $timesByDay = [];
+        $own = [];
+        $global = [];
         foreach ($schedules as $schedule) {
-            if ($schedule->getWorker() === null && isset($timesByDay[$schedule->getDayOfWeek()])) {
-                continue; // ya hay excepción del trabajador para ese día
+            if ($schedule->getWorker() === null) {
+                $global[$schedule->getDayOfWeek()] ??= $schedule->getTimes();
+            } else {
+                $own[$schedule->getDayOfWeek()] ??= $schedule->getTimes();
             }
-            $timesByDay[$schedule->getDayOfWeek()] = $schedule->getTimes();
         }
 
-        return self::of(...array_keys(array_filter($timesByDay, static fn (array $times) => $times !== [])));
+        $default = self::mondayToFriday();
+
+        return self::of(...array_values(array_filter(
+            range(1, 7),
+            static fn (int $day) => isset($own[$day]) || isset($global[$day])
+                ? ($own[$day] ?? $global[$day]) !== []
+                : isset($default->days[$day]),
+        )));
     }
 
     /**
