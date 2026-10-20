@@ -26,7 +26,7 @@
 
     <div class="cal-nav">
         {{ csa.btn('', { variant: 'ghost', icon: 'fa-chevron-left', href: path('staff_calendar', { id: worker.id, year: prev|date('Y'), month: prev|date('n') }) }) }}
-        <div class="cal-nav__title">{{ month_label|date('F Y', madrid) }}</div>
+        <div class="cal-nav__title">{{ month_label|format_date(pattern="MMMM 'de' y", locale='es', timezone=madrid)|capitalize }}</div>
         {{ csa.btn('', { variant: 'ghost', icon: 'fa-chevron-right', href: path('staff_calendar', { id: worker.id, year: next|date('Y'), month: next|date('n') }) }) }}
     </div>
 

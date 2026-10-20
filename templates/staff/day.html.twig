@@ -6,7 +6,7 @@
 {% set madrid = 'Europe/Madrid' %}
 {% set ymd = date|date('Y-m-d', madrid) %}
 
-{% block title %}{{ worker.name }} · {{ date|date('j M Y', madrid) }}{% endblock %}
+{% block title %}{{ worker.name }} · {{ date|format_date(pattern='d MMM y', locale='es', timezone=madrid) }}{% endblock %}
 
 {% block csa_crumbs %}
     <a href="{{ path('dashboard') }}">Inicio</a>
@@ -17,7 +17,7 @@
     <span class="csa-topbar__crumbs-sep">/</span>
     <a href="{{ path('staff_calendar', { id: worker.id, year: date|date('Y', madrid), month: date|date('n', madrid) }) }}">Calendario</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <span class="csa-topbar__crumb-active">{{ date|date('j M', madrid) }}</span>
+    <span class="csa-topbar__crumb-active">{{ date|format_date(pattern='d MMM', locale='es', timezone=madrid) }}</span>
 {% endblock %}
 
 {% block more_css %}
@@ -26,7 +26,7 @@
 {% endblock %}
 
 {% block csa_main %}
-    {{ csa.page_header('Personal · ' ~ worker.name, date|date('l, j F Y', madrid)|capitalize,
+    {{ csa.page_header('Personal · ' ~ worker.name, date|format_date('full', locale='es', timezone=madrid)|capitalize,
         'Fichajes de la jornada. Total: ' ~ (total // 60) ~ 'h ' ~ '%02d'|format(total % 60) ~ 'm.') }}
 
     {{ include('staff/_day_warning.html.twig', { open: open, anomaly: anomaly, date: date, madrid: madrid }) }}

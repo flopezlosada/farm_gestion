@@ -130,7 +130,7 @@
         {% for day in days %}
             <div class="stf-day">
                 <div class="stf-day__head" style="display:flex; align-items:center; gap:.6rem;">
-                    <span>{{ day.date|date('l, j M', madrid) }}</span>
+                    <span>{{ day.date|format_date(pattern='EEEE, d MMM', locale='es', timezone=madrid) }}</span>
                     {% if day.anomaly %}<span class="stf-late" style="background:#fde2e2; color:#9b1c1c;">Revisar</span>{% endif %}
                     {% if day.open %}<span class="stf-late" style="background:#e0f2fe; color:#075985;">En curso</span>{% endif %}
                     <span style="margin-left:auto; font-variant-numeric:tabular-nums; font-weight:600;">
