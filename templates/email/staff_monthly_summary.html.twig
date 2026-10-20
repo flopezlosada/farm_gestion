@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Tu resumen de jornada · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 720px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Tu resumen de jornada de {{ month_label }}</h2>
+
+    <p>Hola, {{ worker_name }}:</p>
+
+    <p>
+        Te mandamos el resumen de tu jornada de {{ month_label }}, ya revisado y aprobado por la asociación.
+        En total: <strong>{{ total_minutes // 60 }} h {{ '%02d'|format(total_minutes % 60) }} min</strong>
+        en <strong>{{ worked_days }}</strong> día(s) trabajados. El detalle día a día va en el PDF adjunto.
+    </p>
+
+    <p>
+        Guárdalo: es tu copia del registro de ese mes. Si ves algún error, dínoslo y lo corregimos.
+    </p>
+
+    <p style="margin-top: 32px; color: #777; font-size: 13px;">
+        Te lo mandamos cada mes porque trabajas a tiempo parcial (art. 12.4.c del Estatuto de los Trabajadores).<br>
+        CSA Vega de Jarama · <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Registro de jornada sin aprobar · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 720px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Falta aprobar el registro de jornada de {{ month_label }}</h2>
+
+    <p>
+        Estos trabajadores tienen el mes sin aprobar. Al aprobarlo, el registro de ese mes queda cerrado
+        y, a quien trabaja a tiempo parcial, se le manda el resumen de sus horas.
+    </p>
+
+    <ul style="padding-left: 18px; color: #555;">
+        {% for row in pending %}
+            <li style="margin-bottom: 6px;">
+                <strong>{{ row.worker.name }}</strong>
+                {% if row.issues > 0 %}
+                    <span style="color: #9b1c1c;">— {{ row.issues }} día(s) con la jornada sin cerrar o descuadrada: hay que corregirlos antes de aprobar</span>
+                {% endif %}
+                {% if row.worker.workdayType is null %}
+                    <span style="color: #9b1c1c;">— falta el tipo de jornada en su ficha</span>
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+
+    <p style="margin: 24px 0;">
+        <a href="{{ close_url }}" style="background: #5a8f3d; color: #fff; padding: 10px 18px; border-radius: 6px; text-decoration: none;">Revisar y aprobar</a>
+    </p>
+
+    <p style="margin-top: 32px; color: #777; font-size: 13px;">
+        Aviso automático del control horario: llega el día 1 y, si sigue pendiente, el 5 y el 10.<br>
+        CSA Vega de Jarama · <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+</body>
+</html>
