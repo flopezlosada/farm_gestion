@@ -96,6 +96,6 @@ class UserChecker implements UserCheckerInterface
      */
     private function belongsToTeam(User $user): bool
     {
-        return array_intersect(ManagementRoles::ALL, $this->roleHierarchy->getReachableRoleNames($user->getRoles())) !== [];
+        return ManagementRoles::anyIn($this->roleHierarchy->getReachableRoleNames($user->getRoles()));
     }
 }

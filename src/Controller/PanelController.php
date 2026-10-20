@@ -25,7 +25,7 @@ use App\Repository\VolunteerShiftRepository;
 use App\Repository\VolunteerSignupRepository;
 use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketRepository;
-use App\Security\ManagementRoles;
+use App\Security\ManagementVoter;
 use App\Service\ConsumerGroup\PartnerConsumerGroupDeliveries;
 use App\Service\Delivery\AccumulatingMove;
 use App\Service\Delivery\DeliveryCalendarProjector;
@@ -1537,9 +1537,7 @@ class PanelController extends AbstractController
 
         $this->addFlash('error', 'Tu usuaria no está vinculada a un socix; pide a admin que te vincule para usar el panel.');
 
-        $isManager = array_filter(ManagementRoles::ALL, fn (string $role): bool => $this->isGranted($role)) !== [];
-
-        return $this->redirectToRoute($isManager ? 'dashboard' : 'homepage');
+        return $this->redirectToRoute($this->isGranted(ManagementVoter::MANAGEMENT) ? 'dashboard' : 'homepage');
     }
 
     /**
