@@ -71,7 +71,6 @@
                     <div class="stf-trail">
                         <strong>{{ type_label[e.type]|default(e.type) }} {{ e.occurredAt|date('H:i', madrid) }}</strong>
                         {% if e.manual %}
-                            <span class="stf-late">a mano</span>
                             <span class="stf-trail__meta">
                                 apuntado el {{ e.recordedAt|date('d/m/Y H:i', madrid) }}{{ e.author ? ' por ' ~ e.author.displayName : '' }}{{ e.note ? ' · «' ~ e.note ~ '»' : '' }}
                             </span>

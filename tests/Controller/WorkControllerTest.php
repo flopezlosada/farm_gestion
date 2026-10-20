@@ -140,6 +140,30 @@ class WorkControllerTest extends WebTestCase
         $this->assertResponseIsSuccessful();
         $this->assertCount(2, $crawler->filter('.wk-row'));
         $this->assertCount(1, $crawler->filter('.wk-chip-manual'), 'Lo que metió el supervisor sí es «a mano».');
+        $this->assertSame('Apuntado por el supervisor', trim($crawler->filter('.wk-chip-manual')->text()), 'El chip dice quién lo apuntó.');
+    }
+
+    /**
+     * Un día rellenado días después dice en el calendario CUÁNDO se apuntó, no
+     * una etiqueta genérica: es lo que el trabajador y el supervisor entienden
+     * sin leyenda.
+     */
+    public function testCalendarSaysWhenADayWasWrittenDownLater(): void
+    {
+        $madrid = new \DateTimeZone('Europe/Madrid');
+        $day = new \DateTimeImmutable('2026-03-10 09:00', $madrid);
+        $this->em->persist((new TimeEntry())
+            ->setWorker($this->em->find(Worker::class, $this->worker->getId()))
+            ->setType(TimeEntry::TYPE_IN)
+            ->setOccurredAt($day));
+        $this->em->flush();
+
+        $crawler = $this->client->request('GET', '/work/calendar', ['year' => 2026, 'month' => 3]);
+        $this->assertResponseIsSuccessful();
+        $this->assertSame(
+            'Apuntado el ' . (new \DateTimeImmutable('now', $madrid))->format('d/m'),
+            trim($crawler->filter('.cal-badge--manual')->text()),
+        );
     }
 
     public function testPermitIsRegisteredApprovedWithoutApproval(): void

@@ -30,10 +30,12 @@ class WorkdayBuilder
      *   - open          bool: hay un tramo sin cerrar (jornada en curso)
      *   - anomaly       bool: hay algún fichaje descuadrado (IN sin OUT intermedio, etc.)
      *   - manual        bool: algún fichaje del día se apuntó a mano ({@see TimeEntry::isManual()})
+     *   - lastManual    ?TimeEntry: el último de ésos en registrarse (el que da el
+     *                   texto del chip del día), o null
      *
      * @param TimeEntry[]       $entries Fichajes vigentes, en cualquier orden.
      * @param \DateTimeZone     $tz      Zona con la que se decide el día y se pinta la hora.
-     * @return array<int, array{date: \DateTimeImmutable, segments: array, totalMinutes: int, open: bool, anomaly: bool, manual: bool}>
+     * @return array<int, array{date: \DateTimeImmutable, segments: array, totalMinutes: int, open: bool, anomaly: bool, manual: bool, lastManual: ?TimeEntry}>
      */
     public function buildDays(array $entries, \DateTimeZone $tz): array
     {
@@ -49,13 +51,18 @@ class WorkdayBuilder
         $days = [];
         foreach ($byDay as $key => $dayEntries) {
             $segments = $this->pairDay($dayEntries);
+            $manual = array_values(array_filter($dayEntries, static fn (TimeEntry $e) => $e->isManual()));
             $days[] = [
                 'date' => new \DateTimeImmutable($key . ' 00:00:00', $tz),
                 'segments' => $segments,
                 'totalMinutes' => array_sum(array_map(static fn (array $s) => $s['minutes'] ?? 0, $segments)),
                 'open' => array_filter($segments, static fn (array $s) => $s['out'] === null && $s['in'] !== null) !== [],
                 'anomaly' => array_filter($segments, static fn (array $s) => $s['in'] === null) !== [],
-                'manual' => array_filter($dayEntries, static fn (TimeEntry $e) => $e->isManual()) !== [],
+                'manual' => $manual !== [],
+                'lastManual' => array_reduce(
+                    $manual,
+                    static fn (?TimeEntry $last, TimeEntry $e) => $last === null || $e->getRecordedAt() > $last->getRecordedAt() ? $e : $last,
+                ),
             ];
         }
 

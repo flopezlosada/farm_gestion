@@ -295,7 +295,8 @@ class StaffControllerTest extends WebTestCase
         $trail = $crawler->filter('.stf-trail')->each(static fn ($n) => trim(preg_replace('/\s+/', ' ', $n->text())));
         $this->assertCount(2, $trail, 'Una línea por el vigente y otra por el anulado.');
         $this->assertStringContainsString('Entrada 09:00', $trail[0]);
-        $this->assertStringContainsString('a mano', $trail[0]);
+        $this->assertStringContainsString('apuntado el', $trail[0], 'La traza dice cuándo se apuntó lo que no se fichó en el momento.');
+        $this->assertStringNotContainsString('fichado en el momento', $trail[0]);
         $this->assertStringContainsString('Salida 13:00', $trail[1]);
         $this->assertStringContainsString('anulado', $trail[1]);
         $this->assertStringContainsString('Se fichó la salida dos veces', $trail[1]);

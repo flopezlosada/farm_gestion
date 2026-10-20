@@ -1,4 +1,5 @@
 {% extends '_layouts/csa_work.html.twig' %}
+{% import 'staff/_manual.html.twig' as m %}
 
 {% block title %}Fichar{% endblock %}
 
@@ -52,7 +53,7 @@
                         <i class="fa {{ entry.in ? 'fa-sign-in' : 'fa-sign-out' }}"></i>
                     </span>
                     <span class="wk-row__type">{{ entry.in ? 'Entrada' : 'Salida' }}</span>
-                    {% if entry.manual %}<span class="wk-chip-manual" title="Apuntado a posteriori o por tu supervisor, no fichado en el momento">A mano</span>{% endif %}
+                    {% if entry.manual %}<span class="wk-chip-manual" title="No se fichó en el momento">{{ m.label(entry, madrid) }}</span>{% endif %}
                     <span class="wk-row__time">{{ entry.occurredAt|date('H:i', madrid) }}</span>
                 </div>
             {% else %}

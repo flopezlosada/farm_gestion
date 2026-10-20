@@ -107,5 +107,7 @@ class WorkdayBuilderTest extends TestCase
 
         $this->assertTrue($days[0]['manual']);
         $this->assertFalse($days[1]['manual']);
+        $this->assertSame(TimeEntry::TYPE_OUT, $days[0]['lastManual']?->getType(), 'El chip del día sale del fichaje manual.');
+        $this->assertNull($days[1]['lastManual']);
     }
 }
