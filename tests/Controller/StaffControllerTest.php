@@ -301,4 +301,20 @@ class StaffControllerTest extends WebTestCase
         $this->assertStringContainsString('anulado', $trail[1]);
         $this->assertStringContainsString('Se fichó la salida dos veces', $trail[1]);
     }
+
+    /**
+     * El calendario y el día de un trabajador cuelgan de «Trabajadores»: si
+     * ningún enlace del grupo queda activo, el menú del admin (que arranca
+     * plegado) esconde «Personal» justo al entrar.
+     */
+    public function testWorkerCalendarAndDayKeepPersonalMenuActive(): void
+    {
+        $worker = $this->makeWorker();
+
+        foreach (['/gestion/staff/%d/calendar', '/gestion/staff/%d/day/2026-03-02'] as $url) {
+            $crawler = $this->client->request('GET', sprintf($url, $worker->getId()));
+            $this->assertResponseIsSuccessful();
+            $this->assertSame('Trabajadores', trim($crawler->filter('.csa-sidebar__link--active')->text()), $url);
+        }
+    }
 }
