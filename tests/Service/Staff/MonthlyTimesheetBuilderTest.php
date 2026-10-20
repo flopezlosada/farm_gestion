@@ -21,9 +21,10 @@ class MonthlyTimesheetBuilderTest extends TestCase
      *
      * @param string $key     Día 'Y-m-d'.
      * @param int    $minutes Total del día.
+     * @param bool   $manual  Si algún fichaje del día se apuntó a mano.
      * @return array
      */
-    private function workedDay(string $key, int $minutes): array
+    private function workedDay(string $key, int $minutes, bool $manual = false): array
     {
         return [
             'date' => new \DateTimeImmutable($key . ' 00:00:00', $this->madrid),
@@ -31,6 +32,7 @@ class MonthlyTimesheetBuilderTest extends TestCase
             'totalMinutes' => $minutes,
             'open' => false,
             'anomaly' => false,
+            'manual' => $manual,
         ];
     }
 
@@ -124,5 +126,29 @@ class MonthlyTimesheetBuilderTest extends TestCase
 
         // El 27 (viernes) es futuro respecto al 10: no cuenta como hueco.
         $this->assertSame(MonthlyTimesheetBuilder::STATUS_FUTURE, $rows['2026-02-27']['status']);
+    }
+
+    public function testCuentaYMarcaLosDiasApuntadosAMano(): void
+    {
+        $sheet = $this->build(
+            [
+                '2026-02-04' => $this->workedDay('2026-02-04', 480, manual: true),
+                '2026-02-05' => $this->workedDay('2026-02-05', 480),
+            ],
+            [],
+            [],
+            null,
+        );
+
+        $rows = [];
+        foreach ($sheet['rows'] as $row) {
+            $rows[$row['date']->format('Y-m-d')] = $row;
+        }
+
+        $this->assertSame(1, $sheet['manualDays']);
+        $this->assertTrue($rows['2026-02-04']['manual']);
+        $this->assertFalse($rows['2026-02-05']['manual']);
+        // Un día sin fichajes no es manual, aunque sea hueco.
+        $this->assertFalse($rows['2026-02-06']['manual']);
     }
 }

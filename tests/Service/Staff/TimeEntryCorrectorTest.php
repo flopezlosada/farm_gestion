@@ -35,7 +35,8 @@ class TimeEntryCorrectorTest extends TestCase
 
         return new TimeEntryCorrector(
             $em,
-            new MockClock(new \DateTimeImmutable('2026-06-20 10:00:00', new \DateTimeZone('UTC'))),
+            // "Ahora" es el día siguiente a los fichajes de los casos: todos son pasado.
+            new MockClock(new \DateTimeImmutable('2026-06-21 10:00:00', new \DateTimeZone('UTC'))),
             $repo,
             new PunchSequenceGuard(),
             $closed,
@@ -126,6 +127,42 @@ class TimeEntryCorrectorTest extends TestCase
             TimeEntry::SOURCE_SUPERVISOR,
             'salida suelta',
         );
+    }
+
+    public function testAnadirFichajeFuturoSeRechaza(): void
+    {
+        $this->expectException(PunchSequenceException::class);
+
+        // Un minuto después de "ahora" (2026-06-21 10:00 UTC): no se ficha por adelantado.
+        $this->corrector()->addEntry(
+            new Worker(),
+            TimeEntry::TYPE_IN,
+            new \DateTimeImmutable('2026-06-21 10:01:00', new \DateTimeZone('UTC')),
+            new User(),
+            TimeEntry::SOURCE_SELF,
+        );
+    }
+
+    public function testCorregirAUnaHoraFuturaSeRechazaYNoAnulaElOriginal(): void
+    {
+        $original = (new TimeEntry())
+            ->setWorker(new Worker())
+            ->setType(TimeEntry::TYPE_IN)
+            ->setOccurredAt(new \DateTimeImmutable('2026-06-20 09:00:00', new \DateTimeZone('UTC')));
+
+        try {
+            $this->corrector()->correctTime(
+                $original,
+                new \DateTimeImmutable('2026-06-22 09:00:00', new \DateTimeZone('UTC')),
+                new User(),
+                TimeEntry::SOURCE_SUPERVISOR,
+                'Se movió de día',
+            );
+            $this->fail('Se esperaba PunchSequenceException.');
+        } catch (PunchSequenceException) {
+            // Se valida ANTES de anular: el original sigue vigente.
+            $this->assertFalse($original->isVoided());
+        }
     }
 
     public function testEnUnMesAprobadoNoSeAnadeNiSeAnulaNiSeCorrige(): void

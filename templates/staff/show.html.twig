@@ -183,8 +183,9 @@
                 <p style="margin: 0 0 .8rem; color: #6b7280; font-size: .9rem;">
                     Este trabajador tiene <strong>{{ entry_count }}</strong> fichaje{{ entry_count == 1 ? '' : 's' }}.
                     Para una baja real márcalo como <strong>inactivo</strong> (conserva el registro). Borrarlo
-                    destruye el registro de jornada y solo debe usarse para limpiar trabajadores de prueba.
+                    destruye el registro de jornada y solo debe usarse para limpiar trabajadores de prueba{{ is_granted('ROLE_ADMIN') ? '' : ': sólo puede hacerlo administración' }}.
                 </p>
+                {% if is_granted('ROLE_ADMIN') %}
                 <button type="button" class="csa-btn csa-btn--danger"
                         onclick="document.getElementById('confirm-worker-delete').showModal()">
                     <i class="fa fa-trash"></i> Forzar borrado
@@ -200,6 +201,7 @@
                     csrf_name: '_token',
                     extra_fields: [{ name: 'force', value: '1' }],
                 }) }}
+                {% endif %}
             {% else %}
                 <p style="margin: 0 0 .8rem; color: #6b7280; font-size: .9rem;">
                     No tiene fichajes. Se borrará junto con sus ausencias y su cuenta de acceso.

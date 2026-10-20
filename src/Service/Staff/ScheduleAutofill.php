@@ -9,6 +9,7 @@ use App\Repository\AbsenceRepository;
 use App\Repository\HolidayRepository;
 use App\Repository\TimeEntryRepository;
 use App\Repository\WorkScheduleRepository;
+use Symfony\Component\Clock\ClockInterface;
 
 /**
  * Rellena con el horario habitual los fichajes que le falten a un trabajador un
@@ -31,15 +32,18 @@ class ScheduleAutofill
         private readonly AbsenceRepository $absences,
         private readonly TimeEntryRepository $timeEntries,
         private readonly TimeEntryCorrector $corrector,
+        private readonly ClockInterface $clock,
         private readonly ClosedWorkMonths $closedMonths,
     ) {
     }
 
     /**
-     * ¿Tiene sentido ofrecer el botón de rellenar ese día? No, si no hay horario
-     * aplicable con tramos ese día de la semana, si es festivo, si el
-     * trabajador tiene una ausencia aprobada que lo cubre, o si el mes ya está
-     * aprobado (no admite fichajes nuevos).
+     * ¿Tiene sentido ofrecer el botón de rellenar ese día? No, si es un día
+     * futuro (no se ficha por adelantado), si el mes ya está aprobado (no admite
+     * fichajes nuevos), si no hay horario aplicable con tramos ese día de la
+     * semana, si es festivo, o si el trabajador tiene una ausencia aprobada que
+     * lo cubre. Hoy sí se ofrece: el corrector sólo deja pasar los bordes cuya
+     * hora ya ha llegado.
      *
      * @param Worker             $worker Trabajador.
      * @param \DateTimeImmutable $day    Día a comprobar (medianoche, hora de Madrid).
@@ -47,6 +51,10 @@ class ScheduleAutofill
      */
     public function isAvailableFor(Worker $worker, \DateTimeImmutable $day): bool
     {
+        if ($day > $this->clock->now()) {
+            return false;
+        }
+
         if ($this->closedMonths->isClosed($worker, $day)) {
             return false;
         }

@@ -837,6 +837,8 @@ class WorkerController extends AbstractController
             'total' => $days[0]['totalMinutes'] ?? 0,
             'open' => $days[0]['open'] ?? false,
             'anomaly' => $days[0]['anomaly'] ?? false,
+            'entries' => $entries,
+            'voided' => $timeEntries->findVoidedForWorkerBetween($worker, $dayStart, $dayEnd),
             'closed' => $closedMonths->isClosed($worker, $dayStart),
         ]);
     }
@@ -910,8 +912,8 @@ class WorkerController extends AbstractController
      * Por defecto se BLOQUEA si tiene fichajes: el registro de jornada se conserva
      * 4 años por ley aunque la persona se vaya, así que la vía correcta para un
      * trabajador con histórico es marcarlo inactivo, no borrarlo. Solo con
-     * `force=1` (acción reservada a ROLE_GESTION_LABORAL_EDIT por access_control,
-     * pensada para limpiar trabajadores de PRUEBA) se borra aun teniendo fichajes,
+     * `force=1` (acción reservada a ROLE_ADMIN, pensada para limpiar trabajadores
+     * de PRUEBA) se borra aun teniendo fichajes,
      * destruyendo el registro de jornada.
      *
      * En cualquier caso el borrado arrastra en cascada lo que solo tiene sentido
@@ -933,14 +935,22 @@ class WorkerController extends AbstractController
         EntityManagerInterface $em,
         WorkerUserProvisioner $provisioner,
     ): Response {
+        $entryCount = $worker->getTimeEntries()->count();
+        $force = $request->request->getBoolean('force');
+
+        // Destruir un registro de jornada que la ley obliga a conservar no es una
+        // acción de gestión laboral corriente: sólo admin, aunque el botón no se
+        // pinte a nadie más (el POST se puede fabricar igual). Va antes que el
+        // CSRF porque no depende de él: sin el permiso, la respuesta es la misma.
+        if ($force && $entryCount > 0 && !$this->isGranted('ROLE_ADMIN')) {
+            throw $this->createAccessDeniedException('Sólo administración puede destruir un registro de jornada.');
+        }
+
         if (!$this->isCsrfTokenValid('delete' . $worker->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
 
             return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
         }
-
-        $entryCount = $worker->getTimeEntries()->count();
-        $force = $request->request->getBoolean('force');
 
         if ($entryCount > 0 && !$force) {
             $this->addFlash('error', sprintf(

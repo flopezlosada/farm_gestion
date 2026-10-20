@@ -59,6 +59,40 @@
         </div>
     </div>
 
+    {# Traza del día: cómo entró cada fichaje y lo que se anuló. Es lo que el
+     # supervisor mira para aprobar el mes; sin esto, un día tecleado entero a
+     # posteriori se ve igual que uno fichado en el momento. #}
+    {% set type_label = { in: 'Entrada', out: 'Salida' } %}
+    {% if entries is not empty or voided is not empty %}
+        <div class="stf-reg" style="max-width:560px;">
+            <div class="stf-day">
+                <div class="stf-day__head">Traza del día</div>
+                {% for e in entries %}
+                    <div class="stf-trail">
+                        <strong>{{ type_label[e.type]|default(e.type) }} {{ e.occurredAt|date('H:i', madrid) }}</strong>
+                        {% if e.manual %}
+                            <span class="stf-late">a mano</span>
+                            <span class="stf-trail__meta">
+                                apuntado el {{ e.recordedAt|date('d/m/Y H:i', madrid) }}{{ e.author ? ' por ' ~ e.author.displayName : '' }}{{ e.note ? ' · «' ~ e.note ~ '»' : '' }}
+                            </span>
+                        {% else %}
+                            <span class="stf-trail__meta">fichado en el momento</span>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                {% for e in voided %}
+                    <div class="stf-trail stf-trail--voided">
+                        <s>{{ type_label[e.type]|default(e.type) }} {{ e.occurredAt|date('H:i', madrid) }}</s>
+                        <span class="stf-late stf-late--voided">anulado</span>
+                        <span class="stf-trail__meta">
+                            el {{ e.voidedAt|date('d/m/Y H:i', madrid) }}{{ e.voidedBy ? ' por ' ~ e.voidedBy.displayName : '' }}{{ e.voidReason ? ' · «' ~ e.voidReason ~ '»' : '' }}
+                        </span>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
     {% if not closed %}
     <details class="stf-add" open>
         <summary><i class="fa fa-plus-circle"></i> Añadir un registro a este día</summary>

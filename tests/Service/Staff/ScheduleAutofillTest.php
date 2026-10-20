@@ -16,6 +16,7 @@ use App\Service\Staff\PunchSequenceException;
 use App\Service\Staff\ScheduleAutofill;
 use App\Service\Staff\TimeEntryCorrector;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MockClock;
 
 class ScheduleAutofillTest extends TestCase
 {
@@ -46,6 +47,7 @@ class ScheduleAutofillTest extends TestCase
         array $holidayDates = [],
         array $approvedAbsences = [],
         array $rejectedTimes = [],
+        string $now = '2026-06-23 12:00:00',
         bool $monthClosed = false,
     ): ScheduleAutofill {
         $schedules = $this->createMock(WorkScheduleRepository::class);
@@ -74,7 +76,7 @@ class ScheduleAutofillTest extends TestCase
         $closed = $this->createMock(ClosedWorkMonths::class);
         $closed->method('isClosed')->willReturn($monthClosed);
 
-        return new ScheduleAutofill($schedules, $holidays, $absences, $timeEntries, $corrector, $closed);
+        return new ScheduleAutofill($schedules, $holidays, $absences, $timeEntries, $corrector, new MockClock($now, 'Europe/Madrid'), $closed);
     }
 
     private function monday(): \DateTimeImmutable
@@ -143,6 +145,16 @@ class ScheduleAutofillTest extends TestCase
         $this->assertFalse($this->autofill($this->schedule([]))->isAvailableFor($this->worker(), $this->monday()));
         $this->assertFalse($this->autofill($schedule, holidayDates: ['2026-06-22' => 'Festivo'])->isAvailableFor($this->worker(), $this->monday()));
         $this->assertFalse($this->autofill($schedule, approvedAbsences: [new Absence()])->isAvailableFor($this->worker(), $this->monday()));
+    }
+
+    public function testDiaFuturoNoOfreceRellenarYHoySi(): void
+    {
+        $schedule = $this->schedule([['09:00', '14:00']]);
+
+        // El domingo anterior, el lunes aún no ha llegado: no se rellena por adelantado.
+        $this->assertFalse($this->autofill($schedule, now: '2026-06-21 20:00:00')->isAvailableFor($this->worker(), $this->monday()));
+        // El propio lunes a media mañana sí: el corrector sólo admitirá los bordes ya pasados.
+        $this->assertTrue($this->autofill($schedule, now: '2026-06-22 10:30:00')->isAvailableFor($this->worker(), $this->monday()));
     }
 
     public function testMesAprobadoNiSeOfreceNiRellena(): void
