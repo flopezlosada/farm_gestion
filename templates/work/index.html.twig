@@ -52,7 +52,7 @@
                         <i class="fa {{ entry.in ? 'fa-sign-in' : 'fa-sign-out' }}"></i>
                     </span>
                     <span class="wk-row__type">{{ entry.in ? 'Entrada' : 'Salida' }}</span>
-                    {% if entry.late %}<span class="wk-chip-late">Fichado tarde</span>{% endif %}
+                    {% if entry.manual %}<span class="wk-chip-manual" title="Apuntado a posteriori o por tu supervisor, no fichado en el momento">A mano</span>{% endif %}
                     <span class="wk-row__time">{{ entry.occurredAt|date('H:i', madrid) }}</span>
                 </div>
             {% else %}

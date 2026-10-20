@@ -28,9 +28,9 @@ use Symfony\Component\Validator\Constraints as Assert;
  * simple y correcto operar todo en Madrid; el caso del cambio de hora (nadie
  * ficha a las 2:30 del cambio DST) es despreciable.
  *
- * FICHAJE TARDÍO: el desfase entre `occurredAt` (cuándo dice que ocurrió) y
+ * FICHAJE A MANO: el desfase entre `occurredAt` (cuándo dice que ocurrió) y
  * `recordedAt` (cuándo lo puso el servidor) marca por sí solo los apuntes
- * declarados tarde, sin campo extra ({@see TimeEntry::isLate()}). Es lo que hace
+ * apuntados a mano, sin campo extra ({@see TimeEntry::isManual()}). Es lo que hace
  * imposible disfrazar de fichaje en tiempo real un relleno del pasado.
  *
  * @ORM\Table(name="time_entry")

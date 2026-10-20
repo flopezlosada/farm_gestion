@@ -115,6 +115,33 @@ class WorkControllerTest extends WebTestCase
         $this->assertSame(TimeEntry::TYPE_IN, $entries[0]->getType(), 'El primer fichaje del día es una entrada.');
     }
 
+    /**
+     * El panel pinta los fichajes de hoy y sólo marca «A mano» los que no se
+     * ficharon en el momento: el del botón sale limpio, el que metió el
+     * supervisor lleva el chip.
+     */
+    public function testTodayListMarksOnlyManualEntries(): void
+    {
+        $token = $this->csrf('/work');
+        $this->client->request('POST', '/work/clock', ['_csrf_token' => $token]);
+        $crawler = $this->client->followRedirect();
+        $this->assertResponseIsSuccessful();
+        $this->assertCount(1, $crawler->filter('.wk-row'));
+        $this->assertCount(0, $crawler->filter('.wk-chip-manual'), 'Lo fichado con el botón no es «a mano».');
+
+        $this->em->persist((new TimeEntry())
+            ->setWorker($this->em->find(Worker::class, $this->worker->getId()))
+            ->setType(TimeEntry::TYPE_OUT)
+            ->setOccurredAt(new \DateTimeImmutable('now', new \DateTimeZone('Europe/Madrid')))
+            ->setSource(TimeEntry::SOURCE_SUPERVISOR));
+        $this->em->flush();
+
+        $crawler = $this->client->request('GET', '/work');
+        $this->assertResponseIsSuccessful();
+        $this->assertCount(2, $crawler->filter('.wk-row'));
+        $this->assertCount(1, $crawler->filter('.wk-chip-manual'), 'Lo que metió el supervisor sí es «a mano».');
+    }
+
     public function testPermitIsRegisteredApprovedWithoutApproval(): void
     {
         $token = $this->csrf('/work/vacations');
