@@ -25,6 +25,9 @@ use Symfony\Component\Clock\ClockInterface;
  * La anulación deja siempre la traza (quién, cuándo, por qué). No hay flujo de
  * aprobación: la corrección se aplica directa (modelo Factorial), y la traza es
  * lo que da garantías.
+ *
+ * Ninguna de las tres toca un mes ya aprobado ({@see ClosedWorkMonths}): la
+ * aprobación vale porque lo aprobado no cambia por debajo.
  */
 class TimeEntryCorrector
 {
@@ -33,6 +36,7 @@ class TimeEntryCorrector
         private readonly ClockInterface $clock,
         private readonly TimeEntryRepository $timeEntries,
         private readonly PunchSequenceGuard $guard,
+        private readonly ClosedWorkMonths $closedMonths,
     ) {
     }
 
@@ -47,7 +51,8 @@ class TimeEntryCorrector
      * @param string             $reason         Motivo (queda en la traza).
      * @return TimeEntry El fichaje nuevo.
      *
-     * @throws PunchSequenceException Si la nueva hora rompería el orden del día.
+     * @throws PunchSequenceException   Si la nueva hora rompería el orden del día.
+     * @throws ClosedWorkMonthException Si el mes del fichaje ya está aprobado.
      */
     public function correctTime(
         TimeEntry $original,
@@ -56,6 +61,9 @@ class TimeEntryCorrector
         string $source,
         string $reason,
     ): TimeEntry {
+        $this->closedMonths->assertOpen($original->getWorker(), $original->getOccurredAt());
+        $this->closedMonths->assertOpen($original->getWorker(), $newOccurredAt);
+
         // El original va a anularse, así que se excluye al validar el reemplazo.
         $this->assertConsistent($original->getWorker(), $original->getType(), $newOccurredAt, $original->getId());
 
@@ -82,9 +90,13 @@ class TimeEntryCorrector
      * @param User      $author   Quién anula.
      * @param string    $reason   Motivo.
      * @return void
+     *
+     * @throws ClosedWorkMonthException Si el mes del fichaje ya está aprobado.
      */
     public function voidEntry(TimeEntry $original, User $author, string $reason): void
     {
+        $this->closedMonths->assertOpen($original->getWorker(), $original->getOccurredAt());
+
         $original->void($author, $reason, $this->nowMadrid());
         $this->em->flush();
     }
@@ -101,7 +113,8 @@ class TimeEntryCorrector
      * @param string|null        $note       Justificación opcional.
      * @return TimeEntry El fichaje creado.
      *
-     * @throws PunchSequenceException Si el fichaje rompería el orden del día.
+     * @throws PunchSequenceException   Si el fichaje rompería el orden del día.
+     * @throws ClosedWorkMonthException Si el mes del fichaje ya está aprobado.
      */
     public function addEntry(
         Worker $worker,
@@ -111,6 +124,7 @@ class TimeEntryCorrector
         string $source,
         ?string $note = null,
     ): TimeEntry {
+        $this->closedMonths->assertOpen($worker, $occurredAt);
         $this->assertConsistent($worker, $type, $occurredAt, null);
 
         $entry = (new TimeEntry())

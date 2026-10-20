@@ -16,6 +16,8 @@ use App\Security\WorkerUserProvisioner;
 use App\Service\Staff\GapReport;
 use App\Service\Staff\MonthGridBuilder;
 use App\Service\Staff\MonthlyTimesheetReport;
+use App\Service\Staff\ClosedWorkMonthException;
+use App\Service\Staff\ClosedWorkMonths;
 use App\Service\Staff\PunchSequenceException;
 use App\Service\Staff\TimesheetPdfRenderer;
 use App\Service\Staff\WorkingDayCounter;
@@ -241,10 +243,12 @@ class WorkerController extends AbstractController
      * @param Request                $request
      * @param Worker                 $worker
      * @param EntityManagerInterface $em
+     * @param AbsenceRepository      $absences
+     * @param ClosedWorkMonths       $closedMonths
      * @return Response
      */
     #[Route('/{id}/absence/new', name: 'staff_absence_new', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function newAbsence(Request $request, Worker $worker, EntityManagerInterface $em, AbsenceRepository $absences): Response
+    public function newAbsence(Request $request, Worker $worker, EntityManagerInterface $em, AbsenceRepository $absences, ClosedWorkMonths $closedMonths): Response
     {
         $absence = (new Absence())->setWorker($worker);
         $form = $this->createForm(AbsenceType::class, $absence);
@@ -253,6 +257,14 @@ class WorkerController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             if ($absences->findOverlappingForWorker($worker, $absence->getStartDate(), $absence->getEndDate()) !== []) {
                 $this->addFlash('error', 'Ese trabajador ya tiene una ausencia en esas fechas.');
+
+                return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
+            }
+            // Se registra ya aprobada, así que cambia el registro de esos meses.
+            try {
+                $closedMonths->assertRangeOpen($worker, $absence->getStartDate(), $absence->getEndDate());
+            } catch (ClosedWorkMonthException $e) {
+                $this->addFlash('error', $e->getMessage());
 
                 return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
             }
@@ -278,6 +290,7 @@ class WorkerController extends AbstractController
      * @param Worker                 $worker
      * @param Absence                $absence
      * @param EntityManagerInterface $em
+     * @param ClosedWorkMonths       $closedMonths
      * @return Response
      */
     #[Route('/{id}/absence/{absenceId}/approve', name: 'staff_absence_approve', methods: ['POST'], requirements: ['id' => '\d+', 'absenceId' => '\d+'])]
@@ -286,7 +299,18 @@ class WorkerController extends AbstractController
         Worker $worker,
         #[MapEntity(id: 'absenceId')] Absence $absence,
         EntityManagerInterface $em,
+        ClosedWorkMonths $closedMonths,
     ): Response {
+        // Aprobarla la mete en el registro de esos meses: si alguno ya está
+        // aprobado, antes hay que reabrirlo.
+        try {
+            $closedMonths->assertRangeOpen($worker, $absence->getStartDate(), $absence->getEndDate());
+        } catch (ClosedWorkMonthException $e) {
+            $this->addFlash('error', $e->getMessage());
+
+            return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
+        }
+
         return $this->changeAbsenceStatus($request, $worker, $absence, Absence::STATUS_APPROVED, 'Ausencia aprobada.', $em);
     }
 
@@ -598,7 +622,7 @@ class WorkerController extends AbstractController
         try {
             $corrector->addEntry($worker, $type, $occurredAt, $this->getUser(), TimeEntry::SOURCE_SUPERVISOR, $this->reasonOrDefault($request));
             $this->addFlash('success', 'Fichaje añadido.');
-        } catch (PunchSequenceException $e) {
+        } catch (PunchSequenceException|ClosedWorkMonthException $e) {
             $this->addFlash('error', $e->getMessage());
         }
 
@@ -636,7 +660,7 @@ class WorkerController extends AbstractController
         try {
             $corrector->correctTime($entry, $occurredAt, $this->getUser(), TimeEntry::SOURCE_SUPERVISOR, $this->reasonOrDefault($request));
             $this->addFlash('success', 'Hora corregida.');
-        } catch (PunchSequenceException $e) {
+        } catch (PunchSequenceException|ClosedWorkMonthException $e) {
             $this->addFlash('error', $e->getMessage());
         }
 
@@ -663,8 +687,12 @@ class WorkerController extends AbstractController
             return $error;
         }
 
-        $corrector->voidEntry($entry, $this->getUser(), $this->reasonOrDefault($request));
-        $this->addFlash('success', 'Fichaje anulado.');
+        try {
+            $corrector->voidEntry($entry, $this->getUser(), $this->reasonOrDefault($request));
+            $this->addFlash('success', 'Fichaje anulado.');
+        } catch (ClosedWorkMonthException $e) {
+            $this->addFlash('error', $e->getMessage());
+        }
 
         return $this->redirectAfterEntry($request, $worker);
     }
@@ -737,9 +765,9 @@ class WorkerController extends AbstractController
     }
 
     /**
-     * Descarga el PDF del justificante mensual de jornada del trabajador. Es la
-     * copia que se le entrega para que firme (ancla de integridad del registro
-     * fuera de la BBDD). Lectura: basta ROLE_GESTION_LABORAL.
+     * Descarga el PDF del resumen mensual de jornada del trabajador, con el
+     * sello de aprobación del mes si ya está aprobado. Lectura: basta
+     * ROLE_GESTION_LABORAL.
      *
      * @param Request                $request
      * @param Worker                 $worker
@@ -780,6 +808,7 @@ class WorkerController extends AbstractController
      * @param string              $date   Día en formato Y-m-d.
      * @param TimeEntryRepository $timeEntries
      * @param WorkdayBuilder      $workdays
+     * @param ClosedWorkMonths    $closedMonths
      * @return Response
      */
     #[Route('/{id}/day/{date}', name: 'staff_day', methods: ['GET'], requirements: ['id' => '\d+', 'date' => '\d{4}-\d{2}-\d{2}'])]
@@ -788,6 +817,7 @@ class WorkerController extends AbstractController
         string $date,
         TimeEntryRepository $timeEntries,
         WorkdayBuilder $workdays,
+        ClosedWorkMonths $closedMonths,
     ): Response {
         $madrid = new \DateTimeZone('Europe/Madrid');
 
@@ -807,6 +837,7 @@ class WorkerController extends AbstractController
             'total' => $days[0]['totalMinutes'] ?? 0,
             'open' => $days[0]['open'] ?? false,
             'anomaly' => $days[0]['anomaly'] ?? false,
+            'closed' => $closedMonths->isClosed($worker, $dayStart),
         ]);
     }
 

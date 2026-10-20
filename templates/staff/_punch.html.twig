@@ -16,6 +16,7 @@
  #   void_route     ruta de anular
  #   base_params    params fijos de la ruta (p. ej. { id: worker_id }) ó {}
  #   return_to      ymd al que volver tras la acción, o null
+ #   readonly       true para pintar sólo la hora (mes ya aprobado)
  # ============================================================ #}
 {% macro punch(entry, side, madrid, opts) %}
     {% if entry %}
@@ -26,8 +27,11 @@
 
             <span class="pun__view" data-pun-view>
                 <span class="stf-pun__time">{{ t }}</span>
+                {% if not opts.readonly|default(false) %}
                 <button type="button" class="pun__btn pun__pen" data-pun-edit aria-label="Editar hora"><i class="fa fa-pencil"></i></button>
+                {% endif %}
             </span>
+            {% if not opts.readonly|default(false) %}
 
             <form method="post" action="{{ path(opts.correct_route, base|merge({ entryId: entry.id })) }}" class="pun__edit" data-pun-edit-form hidden>
                 <input type="hidden" name="_token" value="{{ csrf_token(opts.csrf_id) }}">
@@ -43,6 +47,7 @@
                 {% if opts.return_to|default(null) %}<input type="hidden" name="return_to" value="{{ opts.return_to }}">{% endif %}
                 <button type="submit" class="pun__btn pun__del" aria-label="Anular fichaje"><i class="fa fa-trash"></i></button>
             </form>
+            {% endif %}
         </span>
     {% else %}
         <span class="stf-pun__time">—</span>

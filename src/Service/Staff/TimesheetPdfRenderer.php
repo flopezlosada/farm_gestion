@@ -10,10 +10,10 @@ use Symfony\Component\String\Slugger\SluggerInterface;
 use Twig\Environment;
 
 /**
- * Renderiza el PDF del justificante mensual de jornada a partir de la hoja ya
+ * Renderiza el PDF del resumen mensual de jornada a partir de la hoja ya
  * construida ({@see MonthlyTimesheetReport}). Aísla el uso de dompdf para que lo
- * compartan el panel del supervisor y el del trabajador sin duplicar la
- * configuración de la fuente ni las cabeceras de descarga.
+ * compartan el panel del supervisor, el del trabajador y el envío por correo sin
+ * duplicar la configuración de la fuente ni las cabeceras de descarga.
  */
 class TimesheetPdfRenderer
 {
@@ -26,14 +26,32 @@ class TimesheetPdfRenderer
     /**
      * Genera la respuesta de descarga del PDF.
      *
-     * @param Worker             $worker      Trabajador del justificante.
+     * @param Worker             $worker      Trabajador del resumen.
      * @param int                $year        Año del periodo.
      * @param int                $month       Mes del periodo (1-12).
-     * @param array              $sheet       Hoja de {@see MonthlyTimesheetBuilder::build()}.
+     * @param array              $sheet       Hoja de {@see MonthlyTimesheetReport::forMonth()}.
      * @param \DateTimeImmutable $generatedAt Instante de generación (para el sello del documento).
      * @return Response Respuesta PDF con cabecera de descarga.
      */
     public function download(Worker $worker, int $year, int $month, array $sheet, \DateTimeImmutable $generatedAt): Response
+    {
+        return new Response($this->render($worker, $year, $month, $sheet, $generatedAt), Response::HTTP_OK, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => sprintf('attachment; filename="%s"', $this->filename($worker, $year, $month)),
+        ]);
+    }
+
+    /**
+     * El PDF en bruto, para adjuntarlo a un correo sin pasar por una respuesta HTTP.
+     *
+     * @param Worker             $worker      Trabajador del resumen.
+     * @param int                $year        Año del periodo.
+     * @param int                $month       Mes del periodo (1-12).
+     * @param array              $sheet       Hoja de {@see MonthlyTimesheetReport::forMonth()}.
+     * @param \DateTimeImmutable $generatedAt Instante de generación.
+     * @return string Bytes del PDF.
+     */
+    public function render(Worker $worker, int $year, int $month, array $sheet, \DateTimeImmutable $generatedAt): string
     {
         $html = $this->twig->render('staff/timesheet_pdf.html.twig', [
             'worker' => $worker,
@@ -52,12 +70,21 @@ class TimesheetPdfRenderer
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
 
-        $slug = $this->slugger->slug((string) $worker->getName())->lower();
-        $filename = sprintf('jornada-%s-%04d-%02d.pdf', $slug, $year, $month);
+        return (string) $dompdf->output();
+    }
 
-        return new Response($dompdf->output(), Response::HTTP_OK, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => sprintf('attachment; filename="%s"', $filename),
-        ]);
+    /**
+     * Nombre de fichero del resumen ("jornada-nombre-2026-03.pdf").
+     *
+     * @param Worker $worker Trabajador.
+     * @param int    $year   Año.
+     * @param int    $month  Mes (1-12).
+     * @return string
+     */
+    public function filename(Worker $worker, int $year, int $month): string
+    {
+        $slug = $this->slugger->slug((string) $worker->getName())->lower();
+
+        return sprintf('jornada-%s-%04d-%02d.pdf', $slug, $year, $month);
     }
 }

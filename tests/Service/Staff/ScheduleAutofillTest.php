@@ -11,6 +11,7 @@ use App\Repository\AbsenceRepository;
 use App\Repository\HolidayRepository;
 use App\Repository\TimeEntryRepository;
 use App\Repository\WorkScheduleRepository;
+use App\Service\Staff\ClosedWorkMonths;
 use App\Service\Staff\PunchSequenceException;
 use App\Service\Staff\ScheduleAutofill;
 use App\Service\Staff\TimeEntryCorrector;
@@ -45,6 +46,7 @@ class ScheduleAutofillTest extends TestCase
         array $holidayDates = [],
         array $approvedAbsences = [],
         array $rejectedTimes = [],
+        bool $monthClosed = false,
     ): ScheduleAutofill {
         $schedules = $this->createMock(WorkScheduleRepository::class);
         $schedules->method('forWorkerAndDay')->willReturn($schedule);
@@ -69,7 +71,10 @@ class ScheduleAutofillTest extends TestCase
             }
         );
 
-        return new ScheduleAutofill($schedules, $holidays, $absences, $timeEntries, $corrector);
+        $closed = $this->createMock(ClosedWorkMonths::class);
+        $closed->method('isClosed')->willReturn($monthClosed);
+
+        return new ScheduleAutofill($schedules, $holidays, $absences, $timeEntries, $corrector, $closed);
     }
 
     private function monday(): \DateTimeImmutable
@@ -138,5 +143,14 @@ class ScheduleAutofillTest extends TestCase
         $this->assertFalse($this->autofill($this->schedule([]))->isAvailableFor($this->worker(), $this->monday()));
         $this->assertFalse($this->autofill($schedule, holidayDates: ['2026-06-22' => 'Festivo'])->isAvailableFor($this->worker(), $this->monday()));
         $this->assertFalse($this->autofill($schedule, approvedAbsences: [new Absence()])->isAvailableFor($this->worker(), $this->monday()));
+    }
+
+    public function testMesAprobadoNiSeOfreceNiRellena(): void
+    {
+        $schedule = $this->schedule([['09:00', '14:00']]);
+        $autofill = $this->autofill($schedule, monthClosed: true);
+
+        $this->assertFalse($autofill->isAvailableFor($this->worker(), $this->monday()));
+        $this->assertSame([], $autofill->fill($this->worker(), $this->monday(), new User()));
     }
 }

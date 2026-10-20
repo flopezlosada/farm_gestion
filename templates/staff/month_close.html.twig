@@ -1,0 +1,180 @@
+{# ============================================================
+ # Cierre mensual del registro de jornada — listado prl-*.
+ #
+ # El controller pasa:
+ #   - month   WorkMonth que se revisa
+ #   - rows    list<{ worker, sheet, close, issues }> (WorkMonthClosing::rowsFor)
+ #   - ended   ¿ha terminado ya el mes? (sólo entonces se aprueba)
+ #   - prev    WorkMonth anterior; next: el siguiente o null
+ #   - stats   { approved, pending, issues }
+ #
+ # Aprobar bloquea el mes: ni fichajes, ni correcciones, ni ausencias. Para
+ # corregir algo se reabre, y queda escrito quién y cuándo.
+ # ============================================================ #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% macro hm(minutes) %}{{ (minutes // 60) }}h {{ '%02d'|format(minutes % 60) }}m{% endmacro %}
+{% import _self as m %}
+
+{% block title %}Cierre de mes · {{ month.label }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('staff_index') }}">Personal</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Cierre de mes</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    <style>
+        .mc-actions { display: flex; align-items: center; gap: 6px; justify-content: flex-end; flex-wrap: nowrap; }
+        .mc-actions > form { margin: 0; display: inline-flex; }
+        .prl-table .actions .mc-actions a { display: inline-flex; }
+        .prl-table .actions .mc-actions .prl-btn { white-space: nowrap; }
+        .mc-warn { color: var(--prl-terra-d); font-weight: 600; }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Personal · Cierre de mes',
+        month.label|capitalize,
+        'Revisa el mes de cada trabajador y apruébalo. Un mes aprobado ya no se puede cambiar; si hay que corregir algo, se reabre.'
+    ) }}
+
+    <div class="prl-stats">
+        <div class="prl-stat prl-stat--active">
+            <div class="v">{{ stats.approved }}</div>
+            <div class="l">aprobados</div>
+        </div>
+        <div class="prl-stat prl-stat--paused">
+            <div class="v">{{ stats.pending }}</div>
+            <div class="l">pendientes</div>
+        </div>
+        <div class="prl-stat prl-stat--leave">
+            <div class="v">{{ stats.issues }}</div>
+            <div class="l">con días a corregir</div>
+        </div>
+    </div>
+
+    <div class="prl-toolbar">
+        <a href="{{ path('staff_month_close', { year: prev.year, month: prev.month }) }}" class="prl-btn">
+            <i class="fa fa-chevron-left"></i> {{ prev.label|capitalize }}
+        </a>
+        {% if next %}
+            <a href="{{ path('staff_month_close', { year: next.year, month: next.month }) }}" class="prl-btn">
+                {{ next.label|capitalize }} <i class="fa fa-chevron-right"></i>
+            </a>
+        {% endif %}
+        <div class="spacer"></div>
+        <div class="counters"><b>{{ rows|length }}</b> trabajador{{ rows|length == 1 ? '' : 'es' }}</div>
+    </div>
+
+    {% if not ended %}
+        <div class="csa-callout csa-callout--info" style="margin-bottom: 1rem;">
+            {{ month.label|capitalize }} aún no ha terminado. Se puede aprobar a partir del día 1 del mes siguiente.
+        </div>
+    {% endif %}
+
+    <div class="prl-table-wrap">
+        {% if rows is empty %}
+            <div class="prl-empty">Nadie tiene registro de jornada en {{ month.label }}.</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th>Trabajador</th>
+                        <th class="tight">Horas</th>
+                        <th class="tight">Días trabajados</th>
+                        <th class="tight">Sin fichar</th>
+                        <th class="tight">Estado</th>
+                        <th class="actions"><span class="sr-only">Acciones</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                        {% set w = row.worker %}
+                        {% set close = row.close %}
+                        <tr>
+                            <td>
+                                <div class="prl-person">
+                                    <span class="prl-person__avatar prl-person__avatar--{{ close ? 'sage' : 'muted' }}" aria-hidden="true">
+                                        <i class="fa fa-id-badge"></i>
+                                    </span>
+                                    <div class="prl-person__body">
+                                        <a class="prl-person__name" href="{{ path('staff_show', { id: w.id }) }}">{{ w.name }}</a>
+                                        {% if w.workdayType %}
+                                            <span class="prl-person__meta">{{ w.workdayTypeLabel }}{{ w.partTime ? ' · se le manda el resumen del mes' : '' }}</span>
+                                        {% else %}
+                                            <span class="prl-person__meta mc-warn">Tipo de jornada sin definir</span>
+                                        {% endif %}
+                                        {% if close %}
+                                            <span class="prl-person__meta">
+                                                Aprobado el {{ close.approvedAt|date('d/m/Y H:i', 'Europe/Madrid') }}{{ close.approvedBy ? ' por ' ~ close.approvedBy.displayName : '' }}
+                                            </span>
+                                        {% elseif row.issues > 0 %}
+                                            <span class="prl-person__meta mc-warn">
+                                                {{ row.issues }} día{{ row.issues == 1 ? '' : 's' }} con la jornada sin cerrar o descuadrada
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="tight">{{ m.hm(row.sheet.totalMinutes) }}</td>
+                            <td class="tight">{{ row.sheet.workedDays }}</td>
+                            <td class="tight">{{ row.sheet.missingDays }}</td>
+                            <td class="tight">
+                                {% if close %}
+                                    <span class="prl-chip prl-chip--activo"><span class="dot"></span>Aprobado</span>
+                                {% elseif row.issues > 0 %}
+                                    <span class="prl-chip prl-chip--mod-3"><span class="dot"></span>A corregir</span>
+                                {% else %}
+                                    <span class="prl-chip prl-chip--pausado"><span class="dot"></span>Pendiente</span>
+                                {% endif %}
+                            </td>
+                            <td class="actions">
+                                <div class="mc-actions">
+                                    <a href="{{ path('staff_calendar', { id: w.id, year: month.year, month: month.month }) }}" title="Ver el mes" aria-label="Ver el mes"><i class="fa fa-calendar"></i></a>
+                                    <a href="{{ path('staff_timesheet_pdf', { id: w.id, year: month.year, month: month.month }) }}" title="Resumen en PDF" aria-label="Resumen en PDF"><i class="fa fa-file-pdf-o"></i></a>
+
+                                    {% if is_granted('ROLE_GESTION_LABORAL_EDIT') %}
+                                        {% if close %}
+                                            <button type="button" class="prl-btn prl-btn--sm" onclick="document.getElementById('dlg-reopen-{{ close.id }}').showModal()">
+                                                <i class="fa fa-unlock"></i> Reabrir
+                                            </button>
+                                            {{ csa.confirm_dialog('dlg-reopen-' ~ close.id, {
+                                                variant: 'danger',
+                                                eyebrow: 'Reabrir el mes',
+                                                title: 'Reabrir ' ~ month.label ~ ' de ' ~ w.name,
+                                                body: 'Se podrá volver a corregir el registro de ese mes. Queda escrito quién lo reabre y cuándo, y habrá que aprobarlo de nuevo' ~ (w.partTime ? ', con lo que se le mandará otra vez el resumen.' : '.'),
+                                                confirm_label: 'Reabrir',
+                                                action: path('staff_month_close_reopen', { closeId: close.id }),
+                                                csrf_name: '_token',
+                                                csrf_token: csrf_token('staff_month_close')
+                                            }) }}
+                                        {% elseif ended and row.issues == 0 %}
+                                            <form method="post" action="{{ path('staff_month_close_approve', { workerId: w.id }) }}">
+                                                <input type="hidden" name="_token" value="{{ csrf_token('staff_month_close') }}">
+                                                <input type="hidden" name="year" value="{{ month.year }}">
+                                                <input type="hidden" name="month" value="{{ month.month }}">
+                                                <button type="submit" class="prl-btn prl-btn--primary prl-btn--sm"><i class="fa fa-check"></i> Aprobar</button>
+                                            </form>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

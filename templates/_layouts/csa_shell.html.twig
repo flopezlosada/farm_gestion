@@ -425,6 +425,8 @@
                                    route == 'staff_team_calendar') }}
                                 {{ _self.nav_link('Huecos del registro', path('staff_gaps'), 'fa-exclamation-triangle',
                                    route == 'staff_gaps') }}
+                                {{ _self.nav_link('Cierre de mes', path('staff_month_close'), 'fa-check-square-o',
+                                   route starts with 'staff_month_close') }}
                                 {{ _self.nav_link('Festivos', path('staff_holidays'), 'fa-calendar-times-o',
                                    route starts with 'staff_holiday') }}
                                 {{ _self.nav_link('Horario habitual', path('staff_schedule'), 'fa-clock-o',

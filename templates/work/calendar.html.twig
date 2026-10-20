@@ -25,7 +25,7 @@
     </div>
 
     <div class="csa-row" style="justify-content: flex-end; margin-bottom: var(--csa-sp-4);">
-        {{ csa.btn('Descargar mi justificante', { variant: 'secondary', icon: 'fa-file-pdf-o', href: path('work_timesheet_pdf', { year: month_label|date('Y'), month: month_label|date('n') }) }) }}
+        {{ csa.btn('Mi resumen del mes (PDF)', { variant: 'secondary', icon: 'fa-file-pdf-o', href: path('work_timesheet_pdf', { year: month_label|date('Y'), month: month_label|date('n') }) }) }}
     </div>
 
     {{ include('staff/_calendar_grid.html.twig', { weeks: weeks, day_route: 'work_day', base_params: {}, madrid: madrid }) }}
