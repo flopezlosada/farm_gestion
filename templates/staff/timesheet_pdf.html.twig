@@ -1,15 +1,18 @@
 {# ============================================================
- # Justificante mensual de jornada (dompdf). Standalone: NO extiende el shell.
+ # Resumen mensual de jornada (dompdf). Standalone: NO extiende el shell.
  # Recibe (de WorkerController::monthlyPdf / WorkController::monthlyPdf):
  #   - worker        Worker.
- #   - sheet         estructura de MonthlyTimesheetBuilder::build()
- #                   ({ rows, totalMinutes, workedDays, missingDays, manualDays }).
+ #   - sheet         estructura de MonthlyTimesheetReport::forMonth()
+ #                   ({ rows, totalMinutes, workedDays, missingDays, manualDays, close }).
+ #                   `close` es la aprobación vigente del mes, o null.
  #   - year, month   del periodo.
  #   - month_label   \DateTimeImmutable del primer día del mes.
  #   - generated_at  \DateTimeImmutable de la generación.
  #
- # Es el ancla de integridad legal del registro fuera de la BBDD: cada trabajador
- # recibe su jornada periódica y la firma. Una fila por día natural del mes.
+ # Sin casillas de firma: lo que da validez al mes es su aprobación en la app,
+ # que queda con quién y cuándo y bloquea el registro. Es el documento que se
+ # entrega cada mes a quien trabaja a tiempo parcial (art. 12.4.c ET) y el que
+ # cualquiera puede descargar. Una fila por día natural del mes.
  # ============================================================ #}
 {% macro hm(minutes) %}{% if minutes > 0 %}{{ (minutes // 60) }}h {{ '%02d'|format(minutes % 60) }}m{% else %}—{% endif %}{% endmacro %}
 {% import _self as m %}
@@ -43,15 +46,15 @@
         tfoot td { border-top: 2px solid #2f6f43; padding: 6px; font-weight: bold; }
         .totals { margin-top: 10px; font-size: 10px; }
         .totals span { margin-right: 18px; }
-        .sign { margin-top: 34px; width: 100%; }
-        .sign td { width: 50%; padding-top: 28px; border-top: 1px solid #9ca3af; text-align: center; color: #6b7280; font-size: 9px; }
+        .approval { margin-top: 18px; padding: 8px 10px; border: 1px solid #2f6f43; color: #2f6f43; font-size: 10px; }
+        .approval--pending { border-color: #b45309; color: #b45309; }
         .foot { margin-top: 16px; color: #9ca3af; font-size: 8px; }
     </style>
 </head>
 <body>
     <div class="head">
-        <h1>Registro de jornada — {{ month_names[month] }} {{ year }}</h1>
-        <p class="sub">CSA Vega de Jarama · Justificante mensual de control horario (RD-ley 8/2019)</p>
+        <h1>Resumen mensual de jornada — {{ month_names[month] }} {{ year }}</h1>
+        <p class="sub">CSA Vega de Jarama · Registro diario de jornada (art. 34.9 ET) totalizado por mes</p>
     </div>
 
     <table class="meta">
@@ -62,6 +65,10 @@
         <tr>
             <td class="lbl">Fecha de alta</td><td>{{ worker.hireDate ? worker.hireDate|date('d/m/Y') : '—' }}</td>
             <td class="lbl">Generado</td><td>{{ generated_at|date('d/m/Y H:i') }}</td>
+        </tr>
+        <tr>
+            <td class="lbl">Jornada</td><td>{{ worker.workdayTypeLabel ?? 'Sin definir' }}</td>
+            <td></td><td></td>
         </tr>
     </table>
 
@@ -121,12 +128,16 @@
         {% if sheet.manualDays > 0 %}<span>Días con registros apuntados a mano: <strong>{{ sheet.manualDays }}</strong></span>{% endif %}
     </div>
 
-    <table class="sign">
-        <tr>
-            <td>Firma del trabajador/a</td>
-            <td>Firma de la asociación</td>
-        </tr>
-    </table>
+    {% if sheet.close %}
+        <div class="approval">
+            <strong>Mes aprobado por la asociación</strong> el {{ sheet.close.approvedAt|date('d/m/Y H:i', 'Europe/Madrid') }}{{ sheet.close.approvedBy ? ' (' ~ sheet.close.approvedBy.displayName ~ ')' : '' }}.
+            Desde la aprobación, el registro de este mes no se puede modificar.
+        </div>
+    {% else %}
+        <div class="approval approval--pending">
+            <strong>Pendiente de aprobación.</strong> Este resumen puede cambiar mientras el mes no esté aprobado.
+        </div>
+    {% endif %}
 
     <p class="foot">
         Documento generado automáticamente a partir del registro de fichajes. Las horas se calculan emparejando

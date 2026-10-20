@@ -92,6 +92,12 @@ class AppSettings
     /** Envío de los avisos de huecos del registro de jornada al supervisor (digest semanal + salida abierta). */
     public const EMAIL_STAFF_GAPS = 'email.staff_gaps';
 
+    /** Aviso a gestión laboral de que hay meses del registro de jornada sin aprobar (app:send-staff-month-close-reminder). */
+    public const EMAIL_STAFF_MONTH_CLOSE = 'email.staff_month_close';
+
+    /** Envío a cada trabajador a tiempo parcial del resumen de su mes aprobado (app:send-staff-monthly-summaries). */
+    public const EMAIL_STAFF_MONTHLY_SUMMARY = 'email.staff_monthly_summary';
+
     /** Envío del listado de reparto en PDF al cerrarse el plazo de cada nodo (app:send-delivery-sheets). */
     public const EMAIL_DELIVERY_SHEET = 'email.delivery_sheet';
 
@@ -322,6 +328,12 @@ class AppSettings
 
     /** Tarea del aviso de salida abierta del registro de jornada (app:send-staff-open-shift-alert). */
     public const CRON_STAFF_OPEN_SHIFT_ALERT = 'cron.staff_open_shift_alert';
+
+    /** Tarea del aviso de cierre de mes del registro de jornada (app:send-staff-month-close-reminder). */
+    public const CRON_STAFF_MONTH_CLOSE_REMINDER = 'cron.staff_month_close_reminder';
+
+    /** Tarea del envío del resumen mensual a quien trabaja a tiempo parcial (app:send-staff-monthly-summaries). */
+    public const CRON_STAFF_MONTHLY_SUMMARY = 'cron.staff_monthly_summary';
 
     /**
      * Envío del listado de reparto en cuanto se cierra el plazo de cambios de
@@ -674,6 +686,38 @@ class AppSettings
             'requires' => [self::EMAIL_ENABLED, self::EMAIL_STAFF_GAPS],
             'depends_on' => [],
         ],
+        // A diario aunque el aviso sea de principio de mes: la tarea decide sola
+        // qué día toca (el 1, el 5 y el 10 mientras quede algo sin aprobar), y
+        // con una cadencia más larga un reloj caído se comería el aviso entero.
+        // El flag del módulo va en `requires` igual que en vencimientos: avisar de
+        // una pantalla que no se puede abrir es un susto, no un aviso.
+        self::CRON_STAFF_MONTH_CLOSE_REMINDER => [
+            'command' => 'app:send-staff-month-close-reminder',
+            'channels' => ['email'],
+            // Va a quien tenga permiso de escritura de personal, no a una persona.
+            'needs_recipient' => false,
+            'confirm' => true,
+            'dry' => true,
+            'schedule' => ['freq' => 'daily', 'hour' => 9],
+            'max_delay_hours' => 36,
+            'requires' => [self::FEATURE_LABORAL, self::EMAIL_ENABLED, self::EMAIL_STAFF_MONTH_CLOSE],
+            'depends_on' => [],
+        ],
+        // A diario: manda el resumen de cada mes aprobado una sola vez, y que lo
+        // pille la pasada siguiente a la aprobación. Sale a los trabajadores, no
+        // al equipo: por eso `confirm`, y sin `needs_recipient` (cada uno tiene
+        // el suyo; un --to lo desviaría todo a quien pulsa).
+        self::CRON_STAFF_MONTHLY_SUMMARY => [
+            'command' => 'app:send-staff-monthly-summaries',
+            'channels' => ['email'],
+            'needs_recipient' => false,
+            'confirm' => true,
+            'dry' => true,
+            'schedule' => ['freq' => 'daily', 'hour' => 9],
+            'max_delay_hours' => 36,
+            'requires' => [self::FEATURE_LABORAL, self::EMAIL_ENABLED, self::EMAIL_STAFF_MONTHLY_SUMMARY],
+            'depends_on' => [],
+        ],
         // La única por intervalo. Las demás tienen su hora del día porque
         // mandan correo y da igual media hora arriba o abajo; ésta abre avisos
         // push por pasos, y con cadencia diaria el segundo paso de una tarea que
@@ -866,6 +910,18 @@ class AppSettings
             'help' => 'Cubre los dos avisos al supervisor del control horario: el digest semanal con los días laborables sin fichar de cada trabajador, y el aviso de “salida abierta” cuando alguien se deja una entrada sin cerrar de un día anterior. Se envían a la dirección configurada en cada cron.',
             'default' => false,
         ],
+        self::EMAIL_STAFF_MONTH_CLOSE => [
+            'group' => 'Emails internos',
+            'label' => 'Avisar de que hay que aprobar el registro de jornada',
+            'help' => 'A principio de mes avisa a quien tenga permiso de escritura de personal de que hay trabajadores con el mes anterior sin aprobar: el día 1, y otra vez el 5 y el 10 si sigue pendiente. Apagado, la pantalla de cierre sigue funcionando pero nadie recibe el recordatorio.',
+            'default' => true,
+        ],
+        self::EMAIL_STAFF_MONTHLY_SUMMARY => [
+            'group' => 'Emails internos',
+            'label' => 'Mandar el resumen del mes a quien trabaja a tiempo parcial',
+            'help' => 'Cuando se aprueba el mes de un trabajador a tiempo parcial, le manda por correo el PDF con el resumen de sus horas. La ley obliga a entregárselo cada mes (art. 12.4.c del Estatuto); si no se hace, se presume que el contrato es a jornada completa. Apagado, habría que entregárselo a mano.',
+            'default' => true,
+        ],
         self::EMAIL_DELIVERY_SHEET => [
             'group' => 'Emails internos',
             'label' => 'Listado de reparto al cerrarse el plazo',
@@ -1039,6 +1095,18 @@ class AppSettings
             'label' => 'Enviar el resumen de huecos de jornada',
             'help' => 'Manda al supervisor el resumen de días laborables sin fichar de cada trabajador (app:send-staff-gaps-digest). Semanal a propósito, para no saturar. Independiente del email de jornada.',
             'default' => false,
+        ],
+        self::CRON_STAFF_MONTH_CLOSE_REMINDER => [
+            'group' => 'Tareas programadas',
+            'label' => 'Avisar de que hay que aprobar el mes',
+            'help' => 'Cada mañana mira si queda algún trabajador con el mes anterior sin aprobar y, los días 1, 5 y 10, avisa por correo a quien tenga permiso de escritura de personal (app:send-staff-month-close-reminder). Independiente del email: apagada aquí, la tarea ni se ejecuta.',
+            'default' => true,
+        ],
+        self::CRON_STAFF_MONTHLY_SUMMARY => [
+            'group' => 'Tareas programadas',
+            'label' => 'Mandar el resumen del mes a quien trabaja a tiempo parcial',
+            'help' => 'Cada mañana manda, a cada trabajador a tiempo parcial con un mes recién aprobado, el PDF del resumen de sus horas (app:send-staff-monthly-summaries). Cada mes aprobado sale una sola vez; si se reabre y se vuelve a aprobar, sale el nuevo.',
+            'default' => true,
         ],
         self::CRON_STAFF_OPEN_SHIFT_ALERT => [
             'group' => 'Tareas programadas',

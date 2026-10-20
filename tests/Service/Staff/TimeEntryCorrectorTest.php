@@ -6,9 +6,12 @@ use App\Entity\TimeEntry;
 use App\Entity\User;
 use App\Entity\Worker;
 use App\Repository\TimeEntryRepository;
+use App\Service\Staff\ClosedWorkMonthException;
+use App\Service\Staff\ClosedWorkMonths;
 use App\Service\Staff\PunchSequenceException;
 use App\Service\Staff\PunchSequenceGuard;
 use App\Service\Staff\TimeEntryCorrector;
+use App\Service\Staff\WorkMonth;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
@@ -16,10 +19,16 @@ use Symfony\Component\Clock\MockClock;
 class TimeEntryCorrectorTest extends TestCase
 {
     /**
-     * @param TimeEntry[] $dayEntries Fichajes vigentes que el repo devolverá para el día.
+     * @param TimeEntry[] $dayEntries  Fichajes vigentes que el repo devolverá para el día.
+     * @param bool        $monthClosed Si el mes del fichaje está aprobado.
      */
-    private function corrector(array $dayEntries = []): TimeEntryCorrector
+    private function corrector(array $dayEntries = [], bool $monthClosed = false): TimeEntryCorrector
     {
+        $closed = $this->createMock(ClosedWorkMonths::class);
+        if ($monthClosed) {
+            $closed->method('assertOpen')->willThrowException(new ClosedWorkMonthException(WorkMonth::of(2026, 6)));
+        }
+
         $em = $this->createMock(EntityManagerInterface::class);
         $repo = $this->createMock(TimeEntryRepository::class);
         $repo->method('findEffectiveForWorkerBetween')->willReturn($dayEntries);
@@ -30,6 +39,7 @@ class TimeEntryCorrectorTest extends TestCase
             new MockClock(new \DateTimeImmutable('2026-06-21 10:00:00', new \DateTimeZone('UTC'))),
             $repo,
             new PunchSequenceGuard(),
+            $closed,
         );
     }
 
@@ -152,6 +162,29 @@ class TimeEntryCorrectorTest extends TestCase
         } catch (PunchSequenceException) {
             // Se valida ANTES de anular: el original sigue vigente.
             $this->assertFalse($original->isVoided());
+        }
+    }
+
+    public function testEnUnMesAprobadoNoSeAnadeNiSeAnulaNiSeCorrige(): void
+    {
+        $entry = (new TimeEntry())
+            ->setWorker(new Worker())
+            ->setType(TimeEntry::TYPE_IN)
+            ->setOccurredAt(new \DateTimeImmutable('2026-06-19 09:00:00', new \DateTimeZone('UTC')));
+        $corrector = $this->corrector([], monthClosed: true);
+
+        foreach ([
+            fn () => $corrector->addEntry(new Worker(), TimeEntry::TYPE_IN, new \DateTimeImmutable('2026-06-19 08:30:00'), new User(), TimeEntry::SOURCE_SUPERVISOR),
+            fn () => $corrector->correctTime($entry, new \DateTimeImmutable('2026-06-19 09:15:00'), new User(), TimeEntry::SOURCE_SUPERVISOR, 'hora real'),
+            fn () => $corrector->voidEntry($entry, new User(), 'duplicado'),
+        ] as $attempt) {
+            try {
+                $attempt();
+                $this->fail('Se esperaba ClosedWorkMonthException.');
+            } catch (ClosedWorkMonthException) {
+                // Se rechaza ANTES de tocar nada: el original sigue vigente.
+                $this->assertFalse($entry->isVoided());
+            }
         }
     }
 }

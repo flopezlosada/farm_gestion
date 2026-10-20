@@ -31,10 +31,19 @@
 
     {{ include('staff/_day_warning.html.twig', { open: open, anomaly: anomaly, date: date, madrid: madrid }) }}
 
+    {% if closed %}
+        {# Mes aprobado: el registro ya no se toca. Se dice aquí, y no sólo al
+         # intentar guardar, para que nadie rellene un formulario para nada. #}
+        <div class="csa-callout csa-callout--info" style="max-width:560px; margin-bottom: 1rem;">
+            <i class="fa fa-lock"></i> El registro de este mes ya está aprobado y no se puede cambiar.
+            Para corregirlo, reabre el mes en «Cierre de mes».
+        </div>
+    {% endif %}
+
     <div class="stf-reg" style="max-width:560px;">
         <div class="stf-day">
             <div class="stf-day__head">Tramos del día</div>
-            {% set popts = { csrf_id: 'staff_entry' ~ worker.id, correct_route: 'staff_entry_correct', void_route: 'staff_entry_void', base_params: { id: worker.id }, return_to: ymd } %}
+            {% set popts = { csrf_id: 'staff_entry' ~ worker.id, correct_route: 'staff_entry_correct', void_route: 'staff_entry_void', base_params: { id: worker.id }, return_to: ymd, readonly: closed } %}
             {% for seg in segments %}
                 <div class="stf-pun">
                     {{ p.punch(seg.in, 'in', madrid, popts) }}
@@ -84,6 +93,7 @@
         </div>
     {% endif %}
 
+    {% if not closed %}
     <details class="stf-add" open>
         <summary><i class="fa fa-plus-circle"></i> Añadir un registro a este día</summary>
         <form method="post" action="{{ path('staff_entry_add', { id: worker.id }) }}" class="stf-addrow">
@@ -101,4 +111,5 @@
             <button type="submit" class="csa-btn csa-btn--primary">Añadir</button>
         </form>
     </details>
+    {% endif %}
 {% endblock %}

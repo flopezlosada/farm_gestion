@@ -26,7 +26,19 @@
     <div class="csa-kpi-row" style="margin-bottom: 1.4rem;">
         {{ csa.kpi('Alta', worker.hireDate ? worker.hireDate|date('d/m/Y') : '—', null, null, null, 'sky', 'fa-calendar') }}
         {{ csa.kpi('Vacaciones ' ~ year, vacation_used ~ ' / ' ~ vacation_total, 'días', null, null, 'ochre', 'fa-umbrella') }}
+        {{ csa.kpi('Jornada', worker.workdayTypeLabel ?? 'Sin definir', null, null, null, worker.workdayType ? 'green' : 'terracotta', 'fa-briefcase') }}
     </div>
+
+    {% if worker.workdayType is null %}
+        {# Sin tipo de jornada no se sabe si hay que mandarle el resumen del mes:
+         # a un parcial tomado por completo se le dejaría de entregar sin que
+         # nadie se enterase. #}
+        <div class="csa-callout csa-callout--warning" style="margin-bottom: 1.4rem;">
+            Falta el <strong>tipo de jornada</strong> del contrato. Si trabaja a tiempo parcial, la ley obliga a darle
+            cada mes el resumen de sus horas, y sin este dato no se le manda.
+            {{ csa.btn('Completar la ficha', { variant: 'secondary', icon: 'fa-pencil', href: path('staff_edit', { id: worker.id }) }) }}
+        </div>
+    {% endif %}
 
     <p style="margin: 0 0 1.4rem;">
         {{ csa.btn('Horario de ' ~ worker.name, { variant: 'secondary', icon: 'fa-clock-o', href: path('staff_schedule_worker', { workerId: worker.id }) }) }}

@@ -11,6 +11,7 @@ use App\Repository\AbsenceRepository;
 use App\Repository\HolidayRepository;
 use App\Repository\TimeEntryRepository;
 use App\Repository\WorkScheduleRepository;
+use App\Service\Staff\ClosedWorkMonths;
 use App\Service\Staff\PunchSequenceException;
 use App\Service\Staff\ScheduleAutofill;
 use App\Service\Staff\TimeEntryCorrector;
@@ -47,6 +48,7 @@ class ScheduleAutofillTest extends TestCase
         array $approvedAbsences = [],
         array $rejectedTimes = [],
         string $now = '2026-06-23 12:00:00',
+        bool $monthClosed = false,
     ): ScheduleAutofill {
         $schedules = $this->createMock(WorkScheduleRepository::class);
         $schedules->method('forWorkerAndDay')->willReturn($schedule);
@@ -71,7 +73,10 @@ class ScheduleAutofillTest extends TestCase
             }
         );
 
-        return new ScheduleAutofill($schedules, $holidays, $absences, $timeEntries, $corrector, new MockClock($now, 'Europe/Madrid'));
+        $closed = $this->createMock(ClosedWorkMonths::class);
+        $closed->method('isClosed')->willReturn($monthClosed);
+
+        return new ScheduleAutofill($schedules, $holidays, $absences, $timeEntries, $corrector, new MockClock($now, 'Europe/Madrid'), $closed);
     }
 
     private function monday(): \DateTimeImmutable
@@ -150,5 +155,14 @@ class ScheduleAutofillTest extends TestCase
         $this->assertFalse($this->autofill($schedule, now: '2026-06-21 20:00:00')->isAvailableFor($this->worker(), $this->monday()));
         // El propio lunes a media mañana sí: el corrector sólo admitirá los bordes ya pasados.
         $this->assertTrue($this->autofill($schedule, now: '2026-06-22 10:30:00')->isAvailableFor($this->worker(), $this->monday()));
+    }
+
+    public function testMesAprobadoNiSeOfreceNiRellena(): void
+    {
+        $schedule = $this->schedule([['09:00', '14:00']]);
+        $autofill = $this->autofill($schedule, monthClosed: true);
+
+        $this->assertFalse($autofill->isAvailableFor($this->worker(), $this->monday()));
+        $this->assertSame([], $autofill->fill($this->worker(), $this->monday(), new User()));
     }
 }

@@ -33,15 +33,17 @@ class ScheduleAutofill
         private readonly TimeEntryRepository $timeEntries,
         private readonly TimeEntryCorrector $corrector,
         private readonly ClockInterface $clock,
+        private readonly ClosedWorkMonths $closedMonths,
     ) {
     }
 
     /**
      * ¿Tiene sentido ofrecer el botón de rellenar ese día? No, si es un día
-     * futuro (no se ficha por adelantado), si no hay horario aplicable con tramos
-     * ese día de la semana, si es festivo, o si el trabajador tiene una ausencia
-     * aprobada que lo cubre. Hoy sí se ofrece: el corrector sólo deja pasar los
-     * bordes cuya hora ya ha llegado.
+     * futuro (no se ficha por adelantado), si el mes ya está aprobado (no admite
+     * fichajes nuevos), si no hay horario aplicable con tramos ese día de la
+     * semana, si es festivo, o si el trabajador tiene una ausencia aprobada que
+     * lo cubre. Hoy sí se ofrece: el corrector sólo deja pasar los bordes cuya
+     * hora ya ha llegado.
      *
      * @param Worker             $worker Trabajador.
      * @param \DateTimeImmutable $day    Día a comprobar (medianoche, hora de Madrid).
@@ -50,6 +52,10 @@ class ScheduleAutofill
     public function isAvailableFor(Worker $worker, \DateTimeImmutable $day): bool
     {
         if ($day > $this->clock->now()) {
+            return false;
+        }
+
+        if ($this->closedMonths->isClosed($worker, $day)) {
             return false;
         }
 
@@ -75,6 +81,11 @@ class ScheduleAutofill
      */
     public function fill(Worker $worker, \DateTimeImmutable $day, User $author): array
     {
+        // Mes aprobado: nada que rellenar (el corrector lo rechazaría entero).
+        if ($this->closedMonths->isClosed($worker, $day)) {
+            return [];
+        }
+
         $schedule = $this->schedules->forWorkerAndDay($worker, (int) $day->format('N'));
         if ($schedule === null) {
             return [];

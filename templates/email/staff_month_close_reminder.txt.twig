@@ -1,0 +1,16 @@
+Falta aprobar el registro de jornada de {{ month_label }}
+================================================
+
+Estos trabajadores tienen el mes sin aprobar. Al aprobarlo, el registro de ese
+mes queda cerrado y, a quien trabaja a tiempo parcial, se le manda el resumen de
+sus horas.
+
+{% for row in pending %}
+- {{ row.worker.name }}{% if row.issues > 0 %} — {{ row.issues }} día(s) con la jornada sin cerrar o descuadrada: hay que corregirlos antes de aprobar{% endif %}{% if row.worker.workdayType is null %} — falta el tipo de jornada en su ficha{% endif %}
+
+{% endfor %}
+Revisar y aprobar: {{ close_url }}
+
+--
+Aviso automático del control horario: llega el día 1 y, si sigue pendiente, el 5 y el 10.
+CSA Vega de Jarama · csavegadejarama.org
