@@ -129,9 +129,11 @@ class TimeEntryCorrector
 
     /**
      * Valida que un fichaje (tipo + hora) encaje en la secuencia entrada-salida de
-     * su día, o lanza {@see PunchSequenceException}. Se apoya en {@see PunchSequenceGuard}
-     * con los fichajes vigentes del día, opcionalmente excluyendo uno (el que se
-     * corrige, que va a anularse).
+     * su día, o lanza {@see PunchSequenceException}. Una hora que aún no ha llegado
+     * se rechaza siempre: el registro recoge jornada hecha, no se puede fichar por
+     * adelantado. Después se apoya en {@see PunchSequenceGuard} con los fichajes
+     * vigentes del día, opcionalmente excluyendo uno (el que se corrige, que va a
+     * anularse).
      *
      * @param Worker             $worker     Trabajador.
      * @param string             $type       Tipo del fichaje propuesto.
@@ -143,6 +145,10 @@ class TimeEntryCorrector
      */
     private function assertConsistent(Worker $worker, string $type, \DateTimeImmutable $at, ?int $excludeId): void
     {
+        if ($at > $this->clock->now()) {
+            throw new PunchSequenceException('No se puede fichar una hora que aún no ha llegado.');
+        }
+
         $dayStart = $at->setTime(0, 0, 0);
         $dayEnd = $dayStart->modify('+1 day');
 
