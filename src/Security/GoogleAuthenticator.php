@@ -17,19 +17,22 @@ use Symfony\Component\Security\Http\Authenticator\Passport\Passport;
 use Symfony\Component\Security\Http\Authenticator\Passport\SelfValidatingPassport;
 
 /**
- * Authenticator del SSO con Google para socixs.
+ * Authenticator del SSO con Google para socixs y trabajadores.
  *
- * Lazy provisioning condicionado: el email verificado que devuelve Google se
- * resuelve contra los socixs activos. Sólo se crea/enlaza el User si casa con
- * exactamente un Partner activo (ver
- * {@see PartnerUserProvisioner::resolveByVerifiedEmail()}); no se autoprovisiona
- * ninguna cuenta para un gmail que no esté en la BBDD.
+ * El email verificado que devuelve Google se resuelve primero contra los socixs
+ * activos: sólo se crea/enlaza el User si casa con exactamente un Partner
+ * activo (ver {@see PartnerUserProvisioner::resolveByVerifiedEmail()}). Si no es
+ * socix, se busca una cuenta de trabajador ya dada de alta por la
+ * administración ({@see WorkerUserProvisioner::resolveByVerifiedEmail()}), que
+ * nunca crea cuentas. Así no se autoprovisiona nada para un gmail que no esté
+ * en la BBDD.
  */
 class GoogleAuthenticator extends OAuth2Authenticator
 {
     public function __construct(
         private readonly ClientRegistry $clientRegistry,
         private readonly PartnerUserProvisioner $provisioner,
+        private readonly WorkerUserProvisioner $workerProvisioner,
         private readonly UrlGeneratorInterface $urlGenerator,
     ) {
     }
@@ -50,10 +53,12 @@ class GoogleAuthenticator extends OAuth2Authenticator
                 $googleUser = $client->fetchUserFromToken($accessToken);
 
                 // Google entrega el email ya verificado con el scope `email`.
-                $user = $this->provisioner->resolveByVerifiedEmail((string) $googleUser->getEmail());
+                $email = (string) $googleUser->getEmail();
+                $user = $this->provisioner->resolveByVerifiedEmail($email)
+                    ?? $this->workerProvisioner->resolveByVerifiedEmail($email);
                 if (null === $user) {
                     throw new CustomUserMessageAuthenticationException(
-                        'Esa cuenta de Google no está asociada a ningún socix. Usa el enlace por correo o contacta con la asociación.'
+                        'Esa cuenta de Google no está dada de alta en la asociación. Usa el enlace por correo o contacta con la asociación.'
                     );
                 }
 

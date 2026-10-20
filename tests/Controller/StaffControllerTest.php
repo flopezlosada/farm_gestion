@@ -141,6 +141,36 @@ class StaffControllerTest extends WebTestCase
         $this->assertResponseHeaderSame('Content-Type', 'application/pdf');
     }
 
+    public function testGrantAccessSendsGoogleInvitationNotAnExpiringLink(): void
+    {
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::EMAIL_ENABLED, true);
+        $worker = $this->makeWorker();
+        $id = $worker->getId();
+
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $id);
+        $token = $crawler->filter('form[action$="/access/grant"] input[name="_token"]')->attr('value');
+
+        $this->client->request('POST', '/gestion/staff/' . $id . '/access/grant', [
+            '_token' => $token,
+            'email' => 'Worker-Test-Grant@Example.test',
+        ]);
+        $this->assertResponseRedirects('/gestion/staff/' . $id);
+
+        $this->em->clear();
+        $user = $this->em->getRepository(User::class)->loadUserByIdentifier('worker-test-grant@example.test');
+        $this->assertNotNull($user, 'Dar acceso crea la cuenta con el email normalizado.');
+        $this->assertSame($id, $user->getWorker()?->getId());
+
+        // La invitación lleva a entrar con Google y, como plan B, a pedir un
+        // enlace; no un magic-link, que caducaría antes de que lo abra.
+        $this->assertEmailCount(1);
+        $email = $this->getMailerMessage();
+        $this->assertEmailAddressContains($email, 'To', 'worker-test-grant@example.test');
+        $this->assertEmailHtmlBodyContains($email, '/connect/google');
+        $this->assertEmailHtmlBodyContains($email, '/login/forgot');
+        $this->assertEmailHtmlBodyNotContains($email, '/login/magic/check');
+    }
+
     public function testDeleteWorkerWithoutEntries(): void
     {
         $worker = $this->makeWorker();

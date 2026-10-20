@@ -11,7 +11,7 @@ use App\Repository\AbsenceRepository;
 use App\Repository\HolidayRepository;
 use App\Repository\TimeEntryRepository;
 use App\Repository\WorkerRepository;
-use App\Security\MagicLinkMailer;
+use App\Security\WorkerAccessMailer;
 use App\Security\WorkerUserProvisioner;
 use App\Service\Staff\GapReport;
 use App\Service\Staff\MonthGridBuilder;
@@ -404,13 +404,13 @@ class WorkerController extends AbstractController
 
     /**
      * Da acceso de login al trabajador por email (reusa cuenta existente o crea
-     * una) y le envía el enlace de acceso. La escritura la exige
+     * una) y le envía la invitación para entrar con Google. La escritura la exige
      * ROLE_GESTION_LABORAL_EDIT en access_control.
      *
      * @param Request                 $request
      * @param Worker                  $worker
      * @param WorkerUserProvisioner   $provisioner
-     * @param MagicLinkMailer         $magicLinkMailer
+     * @param WorkerAccessMailer      $accessMailer
      * @return Response
      */
     #[Route('/{id}/access/grant', name: 'staff_access_grant', methods: ['POST'], requirements: ['id' => '\d+'])]
@@ -418,7 +418,7 @@ class WorkerController extends AbstractController
         Request $request,
         Worker $worker,
         WorkerUserProvisioner $provisioner,
-        MagicLinkMailer $magicLinkMailer,
+        WorkerAccessMailer $accessMailer,
     ): Response {
         if (!$this->isCsrfTokenValid('staff_access' . $worker->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
@@ -434,22 +434,22 @@ class WorkerController extends AbstractController
             return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
         }
 
-        if ($magicLinkMailer->send($user)) {
-            $this->addFlash('success', sprintf('Acceso concedido a %s. Le hemos enviado un enlace para entrar.', $user->getEmail()));
+        if ($accessMailer->send($user)) {
+            $this->addFlash('success', sprintf('Acceso concedido a %s. Le hemos enviado un correo para entrar con Google.', $user->getEmail()));
         } else {
-            $this->addFlash('warning', sprintf('Acceso concedido a %s, pero no se pudo enviar el enlace. Reenvíalo desde su ficha.', $user->getEmail()));
+            $this->addFlash('warning', sprintf('Acceso concedido a %s, pero no se pudo enviar la invitación. Reenvíala desde su ficha.', $user->getEmail()));
         }
 
         return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
     }
 
     /**
-     * Reenvía el enlace de acceso a la cuenta del trabajador.
+     * Reenvía la invitación para entrar a la cuenta del trabajador.
      *
      * @param Request               $request
      * @param Worker                $worker
      * @param WorkerUserProvisioner $provisioner
-     * @param MagicLinkMailer       $magicLinkMailer
+     * @param WorkerAccessMailer    $accessMailer
      * @return Response
      */
     #[Route('/{id}/access/resend', name: 'staff_access_resend', methods: ['POST'], requirements: ['id' => '\d+'])]
@@ -457,7 +457,7 @@ class WorkerController extends AbstractController
         Request $request,
         Worker $worker,
         WorkerUserProvisioner $provisioner,
-        MagicLinkMailer $magicLinkMailer,
+        WorkerAccessMailer $accessMailer,
     ): Response {
         if (!$this->isCsrfTokenValid('staff_access' . $worker->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
@@ -472,10 +472,10 @@ class WorkerController extends AbstractController
             return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
         }
 
-        if ($magicLinkMailer->send($user)) {
-            $this->addFlash('success', sprintf('Enlace de acceso reenviado a %s.', $user->getEmail()));
+        if ($accessMailer->send($user)) {
+            $this->addFlash('success', sprintf('Invitación reenviada a %s.', $user->getEmail()));
         } else {
-            $this->addFlash('error', 'No se pudo enviar el enlace. Revisa la configuración de correo.');
+            $this->addFlash('error', 'No se pudo enviar la invitación. Revisa la configuración de correo.');
         }
 
         return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);

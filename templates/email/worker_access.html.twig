@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Acceso para registrar tu jornada</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 580px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Ya puedes registrar tu jornada</h2>
+
+    <p>Te hemos dado acceso a la web de la CSA Vega de Jarama para fichar la entrada y la salida, ver tus horas y pedir vacaciones.</p>
+
+    <p>Entra con tu cuenta de Google <strong>{{ address }}</strong>:</p>
+
+    <p style="margin: 28px 0;">
+        <a href="{{ google_url }}"
+           style="display: inline-block; padding: 12px 24px; background: #5a8f3d; color: #fff; text-decoration: none; border-radius: 4px;">
+            Entrar con Google
+        </a>
+    </p>
+
+    <p>Las próximas veces, en la pantalla de entrada pulsa «Continuar con Google». Guárdala en el móvil para fichar en un toque.</p>
+
+    <p style="color: #777; font-size: 13px;">
+        ¿Ese correo no es de Google? <a href="{{ link_url }}">Pide aquí un enlace de acceso</a>
+        y te lo mandamos a {{ address }}.
+    </p>
+
+    <p style="margin-top: 32px; color: #777; font-size: 12px;">
+        CSA Vega de Jarama<br>
+        <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+</body>
+</html>
