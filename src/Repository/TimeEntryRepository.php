@@ -48,6 +48,32 @@ class TimeEntryRepository extends ServiceEntityRepository
     }
 
     /**
+     * Fichajes ANULADOS de un trabajador en [desde, hasta), por hora de
+     * ocurrencia. Es la otra mitad de la traza: lo vigente dice qué cuenta, y
+     * esto dice qué se quitó, quién y por qué. Un supervisor que aprueba el mes
+     * tiene que poder verlo; si no, anular sería invisible.
+     *
+     * @param Worker             $worker Trabajador.
+     * @param \DateTimeImmutable $from   Inicio del rango, incluido.
+     * @param \DateTimeImmutable $to     Fin del rango, excluido.
+     * @return TimeEntry[]
+     */
+    public function findVoidedForWorkerBetween(Worker $worker, \DateTimeImmutable $from, \DateTimeImmutable $to): array
+    {
+        return $this->createQueryBuilder('t')
+            ->andWhere('t.worker = :worker')
+            ->andWhere('t.voidedAt IS NOT NULL')
+            ->andWhere('t.occurredAt >= :from')
+            ->andWhere('t.occurredAt < :to')
+            ->setParameter('worker', $worker)
+            ->setParameter('from', $from)
+            ->setParameter('to', $to)
+            ->orderBy('t.occurredAt', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Último fichaje vigente de un trabajador (por hora de ocurrencia). Sirve
      * para saber si tiene un tramo abierto (último = entrada) y pintar el botón
      * correcto (fichar entrada vs. salida).
