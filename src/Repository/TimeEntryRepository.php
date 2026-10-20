@@ -43,6 +43,7 @@ class TimeEntryRepository extends ServiceEntityRepository
             ->setParameter('from', $from)
             ->setParameter('to', $to)
             ->orderBy('t.occurredAt', 'ASC')
+            ->addOrderBy('t.id', 'ASC')
             ->getQuery()
             ->getResult();
     }
@@ -69,6 +70,7 @@ class TimeEntryRepository extends ServiceEntityRepository
             ->setParameter('from', $from)
             ->setParameter('to', $to)
             ->orderBy('t.occurredAt', 'ASC')
+            ->addOrderBy('t.id', 'ASC')
             ->getQuery()
             ->getResult();
     }
@@ -87,7 +89,10 @@ class TimeEntryRepository extends ServiceEntityRepository
             ->andWhere('t.worker = :worker')
             ->andWhere('t.voidedAt IS NULL')
             ->setParameter('worker', $worker)
+            // Dos fichajes en el mismo segundo (doble clic) empatan en la
+            // hora: manda el orden de alta, o el «último» sería la entrada.
             ->orderBy('t.occurredAt', 'DESC')
+            ->addOrderBy('t.id', 'DESC')
             ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult();
@@ -117,6 +122,7 @@ class TimeEntryRepository extends ServiceEntityRepository
             ->setParameter('from', $from)
             ->setParameter('to', $to)
             ->orderBy('t.occurredAt', 'DESC')
+            ->addOrderBy('t.id', 'DESC')
             ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult();
