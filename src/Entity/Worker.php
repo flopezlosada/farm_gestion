@@ -34,6 +34,17 @@ use Symfony\Component\Validator\Constraints as Assert;
  */
 class Worker
 {
+    /** Jornada completa. */
+    public const WORKDAY_FULL_TIME = 'full_time';
+    /** Jornada a tiempo parcial (art. 12 ET): su resumen mensual se le entrega por obligación legal. */
+    public const WORKDAY_PART_TIME = 'part_time';
+
+    /** Tipos de jornada con su etiqueta para pantalla y PDF. */
+    public const WORKDAY_TYPES = [
+        self::WORKDAY_FULL_TIME => 'Jornada completa',
+        self::WORKDAY_PART_TIME => 'Tiempo parcial',
+    ];
+
     /**
      * @var int|null
      *
@@ -76,6 +87,25 @@ class Worker
      */
     #[Assert\PositiveOrZero]
     private $annualVacationDays = 22;
+
+    /**
+     * Tipo de jornada del contrato. Decide una obligación legal: a quien trabaja a
+     * tiempo parcial hay que entregarle cada mes el resumen de sus horas junto con
+     * la nómina (art. 12.4.c ET), y si no se hace se presume que el contrato es a
+     * jornada completa.
+     *
+     * Admite null sólo por los trabajadores dados de alta antes de existir el
+     * campo: no se sabe qué contrato tienen y adivinarlo sería peor (un parcial
+     * tomado por completo se quedaría sin su resumen sin que nadie se enterase).
+     * El formulario lo exige, y la pantalla de cierre del mes avisa de quien lo
+     * tenga sin definir.
+     *
+     * @var string|null
+     * @ORM\Column(name="workday_type", type="string", length=20, nullable=true)
+     */
+    #[Assert\NotNull(message: 'Indica el tipo de jornada del contrato.')]
+    #[Assert\Choice(choices: [self::WORKDAY_FULL_TIME, self::WORKDAY_PART_TIME])]
+    private $workdayType;
 
     /**
      * ¿Sigue empleado? Un trabajador que se va se marca inactivo, NUNCA se borra:
@@ -191,6 +221,45 @@ class Worker
         $this->annualVacationDays = $annualVacationDays;
 
         return $this;
+    }
+
+    /**
+     * @return string|null Uno de WORKDAY_*, o null si está sin definir.
+     */
+    public function getWorkdayType(): ?string
+    {
+        return $this->workdayType;
+    }
+
+    /**
+     * @param string|null $workdayType Uno de WORKDAY_*.
+     * @return self
+     */
+    public function setWorkdayType(?string $workdayType): self
+    {
+        $this->workdayType = $workdayType;
+
+        return $this;
+    }
+
+    /**
+     * Etiqueta del tipo de jornada, o null si está sin definir.
+     *
+     * @return string|null
+     */
+    public function getWorkdayTypeLabel(): ?string
+    {
+        return self::WORKDAY_TYPES[$this->workdayType] ?? null;
+    }
+
+    /**
+     * ¿Trabaja a tiempo parcial? Es lo que decide si se le manda el resumen del mes.
+     *
+     * @return bool
+     */
+    public function isPartTime(): bool
+    {
+        return $this->workdayType === self::WORKDAY_PART_TIME;
     }
 
     /**
