@@ -20,7 +20,7 @@
 
         <header class="wk-hero">
             <h1 class="wk-hero__title">Hola, {{ worker.name }}</h1>
-            <div class="wk-hero__date">{{ 'now'|date('l, j F Y', madrid) }}</div>
+            <div class="wk-hero__date">{{ 'now'|format_date('full', locale='es', timezone=madrid)|capitalize }}</div>
         </header>
 
         {# ===== Estado + botón de fichar ===== #}
@@ -30,6 +30,11 @@
                 <p class="wk-clock__since">
                     {% if last %}Entrada fichada a las {{ last.occurredAt|date('H:i', madrid) }}{% endif %}
                 </p>
+            {% elseif last %}
+                {# Ya hubo jornada hoy y está cerrada: «empezar tu jornada» confunde.
+                 # Se dice cuándo salió y que una entrada nueva abre otro tramo. #}
+                <p class="wk-clock__state">Has fichado la salida a las {{ last.occurredAt|date('H:i', madrid) }}</p>
+                <p class="wk-clock__since">Si vuelves a trabajar hoy, ficha otra entrada</p>
             {% else %}
                 <p class="wk-clock__state">No estás fichando ahora mismo</p>
                 <p class="wk-clock__since">Pulsa para empezar tu jornada</p>
@@ -39,7 +44,7 @@
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('work_clock') }}">
                 <button type="submit" class="wk-btn wk-btn--{{ is_open ? 'out' : 'in' }}">
                     <i class="fa {{ is_open ? 'fa-sign-out' : 'fa-sign-in' }}" aria-hidden="true"></i>
-                    {{ is_open ? 'Fichar salida' : 'Fichar entrada' }}
+                    {{ is_open ? 'Fichar salida' : (last ? 'Fichar otra entrada' : 'Fichar entrada') }}
                 </button>
             </form>
         </div>
