@@ -3,6 +3,7 @@
 namespace App\Tests\Service\Staff;
 
 use App\Service\Staff\GapFinder;
+use App\Service\Staff\WorkingWeek;
 use PHPUnit\Framework\TestCase;
 
 class GapFinderTest extends TestCase
@@ -24,6 +25,8 @@ class GapFinderTest extends TestCase
             $this->d('2020-01-01'),
             [],
             [],
+            [],
+            WorkingWeek::mondayToFriday(),
         );
 
         $keys = array_map(static fn ($d) => $d->format('Y-m-d'), $gaps);
@@ -38,6 +41,8 @@ class GapFinderTest extends TestCase
             $this->d('2020-01-01'),
             ['2026-06-16' => true, '2026-06-18' => true],
             [],
+            [],
+            WorkingWeek::mondayToFriday(),
         );
 
         $keys = array_map(static fn ($d) => $d->format('Y-m-d'), $gaps);
@@ -52,6 +57,8 @@ class GapFinderTest extends TestCase
             $this->d('2020-01-01'),
             [],
             ['2026-06-15' => true, '2026-06-16' => true],
+            [],
+            WorkingWeek::mondayToFriday(),
         );
 
         $keys = array_map(static fn ($d) => $d->format('Y-m-d'), $gaps);
@@ -68,6 +75,7 @@ class GapFinderTest extends TestCase
             [],
             [],
             ['2026-06-17' => 'San Festivo'],
+            WorkingWeek::mondayToFriday(),
         );
 
         $keys = array_map(static fn ($d) => $d->format('Y-m-d'), $gaps);
@@ -82,6 +90,8 @@ class GapFinderTest extends TestCase
             $this->d('2026-06-18'), // alta el jueves
             [],
             [],
+            [],
+            WorkingWeek::mondayToFriday(),
         );
 
         $keys = array_map(static fn ($d) => $d->format('Y-m-d'), $gaps);
@@ -97,9 +107,49 @@ class GapFinderTest extends TestCase
             $this->d('2020-01-01'),
             [],
             [],
+            [],
+            WorkingWeek::mondayToFriday(),
         );
 
         $keys = array_map(static fn ($d) => $d->format('Y-m-d'), $gaps);
         $this->assertSame(['2026-06-15', '2026-06-16', '2026-06-17', '2026-06-18'], $keys);
+    }
+
+    /**
+     * Media jornada de lunes a jueves: el viernes es su descanso, no un olvido.
+     */
+    public function testElDiaQueNoLeTocaNoEsHueco(): void
+    {
+        $gaps = (new GapFinder())->gapsFor(
+            $this->d('2026-06-15'),
+            $this->d('2026-06-22'),
+            $this->d('2020-01-01'),
+            [],
+            [],
+            [],
+            WorkingWeek::of(1, 2, 3, 4),
+        );
+
+        $keys = array_map(static fn ($d) => $d->format('Y-m-d'), $gaps);
+        $this->assertSame(['2026-06-15', '2026-06-16', '2026-06-17', '2026-06-18'], $keys);
+    }
+
+    /**
+     * Quien trabaja los sábados tiene un hueco si un sábado no ficha.
+     */
+    public function testUnSabadoQueLeTocaSinFicharEsHueco(): void
+    {
+        $gaps = (new GapFinder())->gapsFor(
+            $this->d('2026-06-15'),
+            $this->d('2026-06-22'),
+            $this->d('2020-01-01'),
+            ['2026-06-17' => true],
+            [],
+            [],
+            WorkingWeek::of(3, 6),
+        );
+
+        $keys = array_map(static fn ($d) => $d->format('Y-m-d'), $gaps);
+        $this->assertSame(['2026-06-20'], $keys);
     }
 }

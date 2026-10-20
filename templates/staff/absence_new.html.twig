@@ -1,4 +1,6 @@
-{# Registrar ausencia (vacaciones/baja/permiso) — supervisor. #}
+{# Registrar ausencia (vacaciones/baja/permiso/huelga) — supervisor. También
+ # justifica un día sin fichar: el controller pasa cancel_url para volver a
+ # la pantalla de la que se vino. #}
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
@@ -15,7 +17,7 @@
 {% endblock %}
 
 {% block csa_main %}
-    {{ csa.page_header('Personal · ' ~ worker.name, 'Registrar ausencia', 'Vacaciones, baja o permiso. Queda aprobada directamente.') }}
+    {{ csa.page_header('Personal · ' ~ worker.name, 'Registrar ausencia', 'Vacaciones, baja, permiso o huelga. Queda aprobada directamente y explica los días que no se trabajaron: no hace falta inventar fichajes.') }}
 
     {% form_theme form 'form_div_layout.html.twig' %}
     {{ form_start(form, { attr: { class: 'csa-form-narrow' } }) }}
@@ -35,7 +37,7 @@
             <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
                 <div></div>
                 <div class="csa-row">
-                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('staff_show', { id: worker.id }) }) }}
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: cancel_url }) }}
                     <button type="submit" class="csa-btn csa-btn--primary">Registrar ausencia</button>
                 </div>
             </div>

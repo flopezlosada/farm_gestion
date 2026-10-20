@@ -9,7 +9,7 @@ namespace App\Service\Staff;
  * Inspección.
  *
  * Un hueco es un día que cumple todo esto:
- *   - es laborable (lunes a viernes),
+ *   - le toca trabajar según su horario ({@see WorkingWeek}),
  *   - cae en el rango pedido y a partir del alta del trabajador,
  *   - es anterior a hoy (el día en curso no es un olvido),
  *   - no tiene ningún fichaje,
@@ -31,6 +31,7 @@ class GapFinder
      * @param array<string, bool>    $workedDates  Días con algún fichaje, clave 'Y-m-d'.
      * @param array<string, bool>    $coveredDates Días cubiertos por ausencia, clave 'Y-m-d'.
      * @param array<string, mixed>   $holidayDates Días festivos, clave 'Y-m-d'.
+     * @param WorkingWeek            $workingWeek  Días de la semana que le toca trabajar.
      * @return \DateTimeImmutable[] Fechas-hueco, de más antigua a más reciente.
      */
     public function gapsFor(
@@ -39,7 +40,8 @@ class GapFinder
         \DateTimeImmutable $hireDate,
         array $workedDates,
         array $coveredDates,
-        array $holidayDates = [],
+        array $holidayDates,
+        WorkingWeek $workingWeek,
     ): array {
         // El barrido empieza en el más tardío entre la ventana y el alta.
         $cursor = $from > $hireDate ? $from : $hireDate;
@@ -48,10 +50,9 @@ class GapFinder
 
         $gaps = [];
         while ($cursor < $end) {
-            $weekday = (int) $cursor->format('N'); // 1 (lunes) … 7 (domingo)
             $key = $cursor->format('Y-m-d');
 
-            if ($weekday <= 5
+            if ($workingWeek->includes($cursor)
                 && !isset($workedDates[$key])
                 && !isset($coveredDates[$key])
                 && !isset($holidayDates[$key])

@@ -2,6 +2,7 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\Absence;
 use App\Entity\Setting;
 use App\Entity\TimeEntry;
 use App\Entity\User;
@@ -19,6 +20,9 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
  *
  * Se trabaja siempre con el MES ANTERIOR al de hoy, que es el que se puede
  * aprobar, para que el test valga lo ejecute el día que lo ejecute.
+ *
+ * Un mes sólo se aprueba con cada día que le tocaba explicado, así que los
+ * tests cubren con un permiso los días que no fichan ({@see self::excuse()}).
  */
 class WorkMonthCloseControllerTest extends WebTestCase
 {
@@ -51,6 +55,9 @@ class WorkMonthCloseControllerTest extends WebTestCase
         }
         foreach ($em->getRepository(TimeEntry::class)->findAll() as $e) {
             $em->remove($e);
+        }
+        foreach ($em->getRepository(Absence::class)->findAll() as $a) {
+            $em->remove($a);
         }
         $em->flush();
         foreach ($em->getRepository(Worker::class)->findAll() as $w) {
@@ -95,6 +102,46 @@ class WorkMonthCloseControllerTest extends WebTestCase
         return $entry;
     }
 
+    /**
+     * Cubre con un permiso aprobado todo el mes revisado, salvo los días
+     * indicados (que quedan como huecos si le tocaban). El día 10, el de los
+     * fichajes, puede quedar cubierto: lo trabajado manda sobre la ausencia.
+     *
+     * @param int[] $exceptDays Días del mes (1-31) que se dejan sin cubrir.
+     */
+    private function excuse(Worker $worker, array $exceptDays = []): void
+    {
+        $last = (int) $this->month->end()->modify('-1 day')->format('j');
+        $from = 1;
+        foreach ([...$exceptDays, $last + 1] as $hole) {
+            if ($hole > $from) {
+                $absence = (new Absence())
+                    ->setWorker($worker)
+                    ->setType(Absence::TYPE_PERMIT)
+                    ->setStartDate(new \DateTimeImmutable(sprintf('%s-%02d', $this->month->key(), $from)))
+                    ->setEndDate(new \DateTimeImmutable(sprintf('%s-%02d', $this->month->key(), $hole - 1)))
+                    ->setStatus(Absence::STATUS_APPROVED);
+                $this->em->persist($absence);
+            }
+            $from = $hole + 1;
+        }
+        $this->em->flush();
+    }
+
+    /**
+     * Primer día de lunes a jueves del mes revisado a partir del 12: un día que
+     * le toca a cualquiera con el horario por defecto.
+     */
+    private function weekdayAfterTheTenth(): int
+    {
+        for ($day = 12; ; $day++) {
+            $date = new \DateTimeImmutable(sprintf('%s-%02d', $this->month->key(), $day));
+            if ((int) $date->format('N') <= 4) {
+                return $day;
+            }
+        }
+    }
+
     private function closeUrl(): string
     {
         return sprintf('/gestion/staff/close?year=%d&month=%d', $this->month->year, $this->month->month);
@@ -132,6 +179,7 @@ class WorkMonthCloseControllerTest extends WebTestCase
         $worker = $this->makeWorker();
         $this->punch($worker, TimeEntry::TYPE_IN, '09:00');
         $this->punch($worker, TimeEntry::TYPE_OUT, '14:00');
+        $this->excuse($worker);
 
         $this->approve($worker);
         $close = $this->standingClose($worker);
@@ -172,8 +220,9 @@ class WorkMonthCloseControllerTest extends WebTestCase
         $worker = $this->makeWorker();
         // Entrada sin salida: esas horas no suman, el resumen mentiría.
         $this->punch($worker, TimeEntry::TYPE_IN, '09:00');
+        $this->excuse($worker);
         // Otra trabajadora con el mes limpio, para tener un token válido en la página.
-        $this->makeWorker('Trabajadora sin incidencias');
+        $this->excuse($this->makeWorker('Trabajadora sin incidencias'));
 
         $crawler = $this->client->request('GET', $this->closeUrl());
         $this->assertResponseIsSuccessful();
@@ -188,6 +237,60 @@ class WorkMonthCloseControllerTest extends WebTestCase
             'month' => $this->month->month,
         ]);
         $this->assertNull($this->standingClose($worker));
+    }
+
+    /**
+     * Un día que le tocaba sin fichar ni ausencia no deja aprobar. Desde el
+     * propio cierre se justifica (aquí, una huelga), con el día ya puesto, se
+     * vuelve al cierre y entonces sí se aprueba. Nunca se rellena con el
+     * horario: el registro es de la jornada real.
+     */
+    public function testUnDiaSinFicharSeJustificaDesdeElCierreYEntoncesSeAprueba(): void
+    {
+        $worker = $this->makeWorker();
+        $this->punch($worker, TimeEntry::TYPE_IN, '09:00');
+        $this->punch($worker, TimeEntry::TYPE_OUT, '14:00');
+        $gapDay = $this->weekdayAfterTheTenth();
+        $gap = sprintf('%s-%02d', $this->month->key(), $gapDay);
+        $this->excuse($worker, [$gapDay]);
+        $this->excuse($this->makeWorker('Trabajadora sin incidencias'));
+
+        $crawler = $this->client->request('GET', $this->closeUrl());
+        $this->assertResponseIsSuccessful();
+        $this->assertCount(0, $crawler->filter(sprintf('form[action$="/gestion/staff/close/approve/%d"]', $worker->getId())), 'Con un hueco no debe ofrecerse aprobar.');
+        $this->assertStringContainsString('Sin fichar ni ausencia', $crawler->filter('.prl-table')->text());
+
+        // Y el POST fabricado tampoco aprueba.
+        $token = $crawler->filter('form[action*="/gestion/staff/close/approve/"] input[name="_token"]')->attr('value');
+        $this->client->request('POST', '/gestion/staff/close/approve/' . $worker->getId(), [
+            '_token' => $token,
+            'year' => $this->month->year,
+            'month' => $this->month->month,
+        ]);
+        $this->assertNull($this->standingClose($worker));
+
+        // El hueco enlaza al formulario de ausencia con ese día ya puesto.
+        $crawler = $this->client->request('GET', $this->closeUrl());
+        $link = $crawler->filter('a.mc-gap');
+        $this->assertCount(1, $link, 'Sólo el día sin cubrir es un hueco.');
+        $crawler = $this->client->click($link->link());
+        $this->assertResponseIsSuccessful();
+        $form = $crawler->selectButton('Registrar ausencia')->form();
+        $this->assertSame($gap, $form['absence[startDate]']->getValue());
+        $this->assertSame($gap, $form['absence[endDate]']->getValue());
+
+        $form['absence[type]']->select(Absence::TYPE_STRIKE);
+        $this->client->submit($form);
+        $this->assertResponseRedirects($this->closeUrl());
+
+        $this->em->clear();
+        $strike = $this->em->getRepository(Absence::class)->findOneBy(['worker' => $worker->getId(), 'type' => Absence::TYPE_STRIKE]);
+        $this->assertNotNull($strike, 'La huelga debe quedar registrada.');
+        $this->assertSame(Absence::STATUS_APPROVED, $strike->getStatus());
+
+        // Con el día explicado, ya se aprueba.
+        $this->approve($worker);
+        $this->assertNotNull($this->standingClose($worker));
     }
 
     public function testElMesEnCursoNoSeAprueba(): void

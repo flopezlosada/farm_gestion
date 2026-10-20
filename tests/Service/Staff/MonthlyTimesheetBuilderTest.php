@@ -3,6 +3,7 @@
 namespace App\Tests\Service\Staff;
 
 use App\Service\Staff\MonthlyTimesheetBuilder;
+use App\Service\Staff\WorkingWeek;
 use PHPUnit\Framework\TestCase;
 
 class MonthlyTimesheetBuilderTest extends TestCase
@@ -36,7 +37,7 @@ class MonthlyTimesheetBuilderTest extends TestCase
         ];
     }
 
-    private function build(array $worked, array $covered, array $holidays, ?string $hire): array
+    private function build(array $worked, array $covered, array $holidays, ?string $hire, ?WorkingWeek $week = null): array
     {
         return $this->builder->build(
             2026,
@@ -45,6 +46,7 @@ class MonthlyTimesheetBuilderTest extends TestCase
             $worked,
             $covered,
             $holidays,
+            $week ?? WorkingWeek::mondayToFriday(),
             $hire !== null ? new \DateTimeImmutable($hire, $this->madrid) : null,
             new \DateTimeImmutable('2026-06-15', $this->madrid), // hoy muy posterior: ningún día de feb es futuro
         );
@@ -115,6 +117,7 @@ class MonthlyTimesheetBuilderTest extends TestCase
             [],
             [],
             [],
+            WorkingWeek::mondayToFriday(),
             null,
             new \DateTimeImmutable('2026-02-10', $this->madrid),
         );
@@ -126,6 +129,9 @@ class MonthlyTimesheetBuilderTest extends TestCase
 
         // El 27 (viernes) es futuro respecto al 10: no cuenta como hueco.
         $this->assertSame(MonthlyTimesheetBuilder::STATUS_FUTURE, $rows['2026-02-27']['status']);
+        // Hoy (martes 10) aún puede ficharse: tampoco es un olvido.
+        $this->assertSame(MonthlyTimesheetBuilder::STATUS_FUTURE, $rows['2026-02-10']['status']);
+        $this->assertSame(MonthlyTimesheetBuilder::STATUS_MISSING, $rows['2026-02-09']['status']);
     }
 
     public function testCuentaYMarcaLosDiasApuntadosAMano(): void
@@ -150,5 +156,74 @@ class MonthlyTimesheetBuilderTest extends TestCase
         $this->assertFalse($rows['2026-02-05']['manual']);
         // Un día sin fichajes no es manual, aunque sea hueco.
         $this->assertFalse($rows['2026-02-06']['manual']);
+    }
+
+    /**
+     * Media jornada de lunes a jueves: los viernes son descanso (no hueco) y los
+     * fines de semana siguen siendo fin de semana.
+     */
+    public function testElDiaQueNoLeTocaEsDescansoNoHueco(): void
+    {
+        $sheet = $this->build([], [], [], null, WorkingWeek::of(1, 2, 3, 4));
+
+        $rows = [];
+        foreach ($sheet['rows'] as $row) {
+            $rows[$row['date']->format('Y-m-d')] = $row;
+        }
+
+        $this->assertSame(MonthlyTimesheetBuilder::STATUS_REST, $rows['2026-02-06']['status']);
+        $this->assertSame(MonthlyTimesheetBuilder::STATUS_WEEKEND, $rows['2026-02-07']['status']);
+        $this->assertSame(MonthlyTimesheetBuilder::STATUS_MISSING, $rows['2026-02-05']['status']);
+        // Febrero 2026: 4 lunes, 4 martes, 4 miércoles y 4 jueves.
+        $this->assertSame(16, $sheet['missingDays']);
+    }
+
+    /**
+     * Un sábado que le toca y no fichó es hueco, no fin de semana.
+     */
+    public function testUnSabadoQueLeTocaSinFicharEsHueco(): void
+    {
+        $sheet = $this->build([], [], [], null, WorkingWeek::of(6));
+
+        $rows = [];
+        foreach ($sheet['rows'] as $row) {
+            $rows[$row['date']->format('Y-m-d')] = $row;
+        }
+
+        $this->assertSame(MonthlyTimesheetBuilder::STATUS_MISSING, $rows['2026-02-07']['status']);
+        $this->assertSame(MonthlyTimesheetBuilder::STATUS_WEEKEND, $rows['2026-02-08']['status']);
+        $this->assertSame(MonthlyTimesheetBuilder::STATUS_REST, $rows['2026-02-09']['status']);
+    }
+
+    /**
+     * Una huelga (o un permiso) explica el día: no es hueco.
+     */
+    public function testUnaHuelgaExplicaElDia(): void
+    {
+        $sheet = $this->build([], ['2026-02-09' => 'strike'], [], null);
+
+        $rows = [];
+        foreach ($sheet['rows'] as $row) {
+            $rows[$row['date']->format('Y-m-d')] = $row;
+        }
+
+        $this->assertSame(MonthlyTimesheetBuilder::STATUS_ABSENCE, $rows['2026-02-09']['status']);
+        $this->assertSame('strike', $rows['2026-02-09']['absenceType']);
+    }
+
+    /**
+     * Las jornadas a medias (entrada sin salida, tramos descuadrados) se cuentan
+     * aparte de los huecos: es lo que dice el cierre del mes.
+     */
+    public function testCuentaLasJornadasAMedias(): void
+    {
+        $open = $this->workedDay('2026-02-04', 0);
+        $open['open'] = true;
+        $anomaly = $this->workedDay('2026-02-05', 60);
+        $anomaly['anomaly'] = true;
+
+        $sheet = $this->build(['2026-02-04' => $open, '2026-02-05' => $anomaly, '2026-02-06' => $this->workedDay('2026-02-06', 480)], [], [], null);
+
+        $this->assertSame(2, $sheet['issueDays']);
     }
 }

@@ -5,8 +5,8 @@ namespace App\Service\Staff;
 /**
  * Construye la hoja mensual de jornada de un trabajador: una fila por cada día
  * natural del mes, con sus tramos trabajados, el total del día y una
- * clasificación (trabajado / fin de semana / festivo / ausencia / hueco /
- * anterior al alta / futuro). Es la base del PDF justificante que se entrega al
+ * clasificación (trabajado / fin de semana / descanso / festivo / ausencia /
+ * hueco / anterior al alta / futuro). Es la base del PDF justificante que se entrega al
  * trabajador como ancla de integridad del registro fuera de la BBDD.
  *
  * Lógica pura y sin estado: recibe ya resueltos los días trabajados
@@ -18,17 +18,19 @@ class MonthlyTimesheetBuilder
 {
     /** El día es laborable y se trabajó (hay tramos). */
     public const STATUS_WORKED = 'worked';
-    /** Fin de semana. */
+    /** Fin de semana en el que no le toca trabajar. */
     public const STATUS_WEEKEND = 'weekend';
+    /** Día entre semana en el que no le toca trabajar según su horario. */
+    public const STATUS_REST = 'rest';
     /** Festivo. */
     public const STATUS_HOLIDAY = 'holiday';
     /** Cubierto por una ausencia aprobada (vacaciones, baja, permiso…). */
     public const STATUS_ABSENCE = 'absence';
-    /** Día laborable pasado sin fichaje ni ausencia: hueco en el registro. */
+    /** Día que le tocaba, ya pasado, sin fichaje ni ausencia: hueco en el registro. */
     public const STATUS_MISSING = 'missing';
     /** Anterior a la fecha de alta del trabajador (no hay registro legítimo). */
     public const STATUS_BEFORE_HIRE = 'before_hire';
-    /** Posterior a hoy: aún no ha ocurrido. */
+    /** Hoy o posterior: aún no ha terminado, no es un olvido. */
     public const STATUS_FUTURE = 'future';
 
     /**
@@ -41,6 +43,7 @@ class MonthlyTimesheetBuilder
      *        Días trabajados indexados por 'Y-m-d' (de {@see WorkdayBuilder::buildDays()}).
      * @param array<string, string>   $coveredAbsences Tipo de ausencia por día 'Y-m-d'.
      * @param array<string, string>   $holidayNames    Nombre del festivo por día 'Y-m-d'.
+     * @param WorkingWeek             $workingWeek   Días de la semana que le toca trabajar.
      * @param \DateTimeImmutable|null $hireDate      Fecha de alta (suelo del registro), o null.
      * @param \DateTimeImmutable      $today         Día de hoy (para marcar futuros).
      * @return array{
@@ -48,8 +51,10 @@ class MonthlyTimesheetBuilder
      *     totalMinutes: int,
      *     workedDays: int,
      *     missingDays: int,
+     *     issueDays: int,
      *     manualDays: int
      * }
+     *     `issueDays` = días con una jornada sin cerrar o descuadrada.
      */
     public function build(
         int $year,
@@ -58,6 +63,7 @@ class MonthlyTimesheetBuilder
         array $workedDays,
         array $coveredAbsences,
         array $holidayNames,
+        WorkingWeek $workingWeek,
         ?\DateTimeImmutable $hireDate,
         \DateTimeImmutable $today,
     ): array {
@@ -70,6 +76,7 @@ class MonthlyTimesheetBuilder
         $totalMinutes = 0;
         $workedCount = 0;
         $missingCount = 0;
+        $issueCount = 0;
         $manualCount = 0;
 
         while ($cursor < $monthEnd) {
@@ -77,7 +84,7 @@ class MonthlyTimesheetBuilder
             $dow = (int) $cursor->format('N'); // 1 (lunes) .. 7 (domingo)
             $worked = $workedDays[$key] ?? null;
 
-            $status = $this->classify($key, $dow, $worked, $coveredAbsences, $holidayNames, $hireKey, $todayKey);
+            $status = $this->classify($cursor, $worked, $coveredAbsences, $holidayNames, $workingWeek, $hireKey, $todayKey);
 
             $minutes = $worked['totalMinutes'] ?? 0;
             if ($status === self::STATUS_WORKED) {
@@ -86,6 +93,9 @@ class MonthlyTimesheetBuilder
             }
             if ($status === self::STATUS_MISSING) {
                 $missingCount++;
+            }
+            if (($worked['open'] ?? false) || ($worked['anomaly'] ?? false)) {
+                $issueCount++;
             }
             if ($worked['manual'] ?? false) {
                 $manualCount++;
@@ -112,6 +122,7 @@ class MonthlyTimesheetBuilder
             'totalMinutes' => $totalMinutes,
             'workedDays' => $workedCount,
             'missingDays' => $missingCount,
+            'issueDays' => $issueCount,
             'manualDays' => $manualCount,
         ];
     }
@@ -121,24 +132,26 @@ class MonthlyTimesheetBuilder
      * manda sobre el calendario; un fichaje en fin de semana o festivo cuenta como
      * trabajado, no se oculta.
      *
-     * @param string                $key             Día 'Y-m-d'.
-     * @param int                   $dow             Día de la semana (1-7).
+     * @param \DateTimeImmutable    $day             Día.
      * @param array|null            $worked          Día trabajado, o null.
      * @param array<string, string> $coveredAbsences Ausencias por día.
      * @param array<string, string> $holidayNames    Festivos por día.
+     * @param WorkingWeek           $workingWeek     Días que le toca trabajar.
      * @param string|null           $hireKey         Fecha de alta 'Y-m-d', o null.
      * @param string                $todayKey        Hoy 'Y-m-d'.
      * @return string Una de las constantes STATUS_*.
      */
     private function classify(
-        string $key,
-        int $dow,
+        \DateTimeImmutable $day,
         ?array $worked,
         array $coveredAbsences,
         array $holidayNames,
+        WorkingWeek $workingWeek,
         ?string $hireKey,
         string $todayKey,
     ): string {
+        $key = $day->format('Y-m-d');
+
         // Si se fichó, fue jornada trabajada, caiga en el día que caiga.
         if ($worked !== null && $worked['segments'] !== []) {
             return self::STATUS_WORKED;
@@ -156,11 +169,12 @@ class MonthlyTimesheetBuilder
             return self::STATUS_HOLIDAY;
         }
 
-        if ($dow >= 6) {
-            return self::STATUS_WEEKEND;
+        if (!$workingWeek->includes($day)) {
+            return (int) $day->format('N') >= 6 ? self::STATUS_WEEKEND : self::STATUS_REST;
         }
 
-        if ($key > $todayKey) {
+        // El día en curso aún puede ficharse: no es un olvido.
+        if ($key >= $todayKey) {
             return self::STATUS_FUTURE;
         }
 

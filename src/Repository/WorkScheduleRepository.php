@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\Worker;
 use App\Entity\WorkSchedule;
+use App\Service\Staff\WorkingWeek;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -32,6 +33,23 @@ class WorkScheduleRepository extends ServiceEntityRepository
     public function forWorkerAndDay(Worker $worker, int $dayOfWeek): ?WorkSchedule
     {
         return $this->findOneForSlot($worker, $dayOfWeek) ?? $this->findOneForSlot(null, $dayOfWeek);
+    }
+
+    /**
+     * Días de la semana en los que le toca trabajar, según su horario aplicable
+     * (ver {@see WorkingWeek::fromSchedules()}). Una sola consulta para los 7
+     * días, no una por día.
+     *
+     * @param Worker $worker Trabajador.
+     * @return WorkingWeek
+     */
+    public function workingWeekFor(Worker $worker): WorkingWeek
+    {
+        return WorkingWeek::fromSchedules($this->createQueryBuilder('s')
+            ->andWhere('s.worker = :worker OR s.worker IS NULL')
+            ->setParameter('worker', $worker)
+            ->getQuery()
+            ->getResult());
     }
 
     /**

@@ -32,14 +32,30 @@ class Absence
     public const TYPE_SICK_LEAVE = 'sick_leave';
     /** Permiso retribuido (mudanza, médico, etc.). */
     public const TYPE_PERMIT = 'permit';
+    /**
+     * Huelga: el contrato queda en suspenso ese día y no se paga. Va aparte de
+     * «otra ausencia» porque quien haga la nómina o una inspección tiene que
+     * distinguirla de un permiso retribuido sin leer comentarios.
+     */
+    public const TYPE_STRIKE = 'strike';
     /** Cualquier otra ausencia. */
     public const TYPE_OTHER = 'other';
+
+    /** Nombre de cada tipo, el mismo en pantallas, formularios y PDF. */
+    public const TYPE_LABELS = [
+        self::TYPE_VACATION => 'Vacaciones',
+        self::TYPE_SICK_LEAVE => 'Baja médica',
+        self::TYPE_PERMIT => 'Permiso',
+        self::TYPE_STRIKE => 'Huelga',
+        self::TYPE_OTHER => 'Otra ausencia',
+    ];
 
     /** Tipos válidos de ausencia. */
     public const TYPES = [
         self::TYPE_VACATION,
         self::TYPE_SICK_LEAVE,
         self::TYPE_PERMIT,
+        self::TYPE_STRIKE,
         self::TYPE_OTHER,
     ];
 

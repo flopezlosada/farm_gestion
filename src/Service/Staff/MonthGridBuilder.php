@@ -7,7 +7,7 @@ use App\Service\Calendar\MonthGrid;
 /**
  * Construye la rejilla de un calendario mensual (semanas de lunes a domingo que
  * cubren el mes completo), marcando cada día con su total de horas, su ausencia
- * o su condición de hueco. Lógica pura y compartida por el calendario del
+ * o su condición de hueco (día que le tocaba, según {@see WorkingWeek}). Lógica pura y compartida por el calendario del
  * supervisor y el del trabajador: recibe los datos ya resueltos (totales por día
  * y días cubiertos por ausencia) y solo arma la cuadrícula.
  */
@@ -22,6 +22,7 @@ class MonthGridBuilder
      * @param \DateTimeImmutable     $today    Hoy (para marcar hoy y no contar futuro/hueco).
      * @param \DateTimeImmutable|null $hireDate Alta del trabajador (no hay hueco antes).
      * @param array<string, string>  $holidays Nombre del festivo por día, clave 'Y-m-d'.
+     * @param WorkingWeek            $workingWeek Días de la semana que le toca trabajar.
      * @return array<int, array<int, array>> Semanas, cada una con 7 celdas.
      */
     public function build(
@@ -32,15 +33,15 @@ class MonthGridBuilder
         array $covered,
         \DateTimeImmutable $today,
         ?\DateTimeImmutable $hireDate,
-        array $holidays = [],
+        array $holidays,
+        WorkingWeek $workingWeek,
     ): array {
         $hireDay = $hireDate?->setTime(0, 0);
 
         // Las semanas las da la rejilla común; aquí sólo se decora cada día.
-        return array_map(fn (array $days): array => array_map(function (\DateTimeImmutable $cursor) use ($month, $totals, $covered, $today, $hireDay, $holidays): array {
+        return array_map(fn (array $days): array => array_map(function (\DateTimeImmutable $cursor) use ($month, $totals, $covered, $today, $hireDay, $holidays, $workingWeek): array {
             $key = $cursor->format('Y-m-d');
             $inMonth = MonthGrid::inMonth($cursor, $month);
-            $weekday = (int) $cursor->format('N');
             $hasEntries = isset($totals[$key]);
             $isPast = $cursor < $today;
             $afterHire = $hireDay === null || $cursor >= $hireDay;
@@ -54,7 +55,7 @@ class MonthGridBuilder
                 'total' => $hasEntries ? $totals[$key] : null,
                 'absence' => $covered[$key] ?? null,
                 'holiday' => $holiday,
-                'isGap' => $inMonth && $weekday <= 5 && $isPast && $afterHire && !$hasEntries && !isset($covered[$key]) && $holiday === null,
+                'isGap' => $inMonth && $workingWeek->includes($cursor) && $isPast && $afterHire && !$hasEntries && !isset($covered[$key]) && $holiday === null,
                 'isToday' => $key === $today->format('Y-m-d'),
                 'isFuture' => $cursor > $today,
             ];

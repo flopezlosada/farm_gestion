@@ -5,7 +5,7 @@
  # Espera: weeks, day_route, base_params, madrid.
  # ============================================================ #}
 {% import 'staff/_manual.html.twig' as m %}
-{% set absence_labels = { vacation: 'Vacaciones', sick_leave: 'Baja', permit: 'Permiso', other: 'Ausencia' } %}
+{% set absence_labels = constant('App\\Entity\\Absence::TYPE_LABELS') %}
 <table class="cal-grid">
     <thead>
         <tr><th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th><th>Sáb</th><th>Dom</th></tr>

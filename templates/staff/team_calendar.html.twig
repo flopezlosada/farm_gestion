@@ -62,7 +62,7 @@
 
 {% block csa_main %}
     {% set month_names = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'] %}
-    {% set abs_type = { vacation: 'Vacaciones', sick_leave: 'Baja médica', permit: 'Permiso', other: 'Ausencia' } %}
+    {% set abs_type = constant('App\\Entity\\Absence::TYPE_LABELS') %}
 
     {{ csa.page_header('Personal', 'Calendario del equipo', 'Vacaciones y ausencias de todo el equipo en el año. Usa los toggles para mostrar u ocultar cada persona.') }}
 

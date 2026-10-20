@@ -6,7 +6,7 @@ mes queda cerrado y, a quien trabaja a tiempo parcial, se le manda el resumen de
 sus horas.
 
 {% for row in pending %}
-- {{ row.worker.name }}{% if row.issues > 0 %} — {{ row.issues }} día(s) con la jornada sin cerrar o descuadrada: hay que corregirlos antes de aprobar{% endif %}{% if row.worker.workdayType is null %} — falta el tipo de jornada en su ficha{% endif %}
+- {{ row.worker.name }}{% if row.issues > 0 %} — {{ row.issues }} día(s) sin fichar, sin cerrar o descuadrados: hay que corregirlos o justificarlos antes de aprobar{% endif %}{% if row.worker.workdayType is null %} — falta el tipo de jornada en su ficha{% endif %}
 
 {% endfor %}
 Revisar y aprobar: {{ close_url }}

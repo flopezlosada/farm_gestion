@@ -3,13 +3,16 @@
  #
  # El controller pasa:
  #   - month   WorkMonth que se revisa
- #   - rows    list<{ worker, sheet, close, issues }> (WorkMonthClosing::rowsFor)
+ #   - rows    list<{ worker, sheet, close, issues }> (WorkMonthClosing::rowsFor);
+ #             issues = jornadas a medias + días sin fichar ni ausencia
  #   - ended   ¿ha terminado ya el mes? (sólo entonces se aprueba)
  #   - prev    WorkMonth anterior; next: el siguiente o null
  #   - stats   { approved, pending, issues }
  #
  # Aprobar bloquea el mes: ni fichajes, ni correcciones, ni ausencias. Para
- # corregir algo se reabre, y queda escrito quién y cuándo.
+ # corregir algo se reabre, y queda escrito quién y cuándo. Sólo se aprueba
+ # con cada día que le tocaba explicado: un hueco se justifica con una
+ # ausencia (enlace en cada día) o se corrige en «Ver mes».
  # ============================================================ #}
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
@@ -37,6 +40,9 @@
         .prl-table .actions .mc-actions a.prl-btn { width: auto; height: auto; color: var(--prl-ink); }
         .prl-table .actions .mc-actions .prl-btn { white-space: nowrap; }
         .mc-warn { color: var(--prl-terra-d); font-weight: 600; }
+        .mc-gaps { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 2px; }
+        .mc-gap { font-size: 12px; background: #fef3c7; color: #92400e; border-radius: 6px; padding: 1px 6px; text-decoration: none; }
+        a.mc-gap:hover { background: #fde68a; color: #92400e; }
     </style>
 {% endblock %}
 
@@ -46,7 +52,7 @@
     {{ csa.page_header(
         'Personal · Cierre de mes',
         month.label|capitalize,
-        'Revisa el mes de cada trabajador y apruébalo. Un mes aprobado ya no se puede cambiar; si hay que corregir algo, se reabre.'
+        'Revisa el mes de cada trabajador y apruébalo. Para aprobarlo, cada día que le tocaba tiene que estar fichado o justificado con una ausencia (permiso, huelga…): pulsa el día sin fichar para registrarla. Un mes aprobado ya no se puede cambiar; si hay que corregir algo, se reabre.'
     ) }}
 
     <div class="prl-stats">
@@ -119,10 +125,27 @@
                                             <span class="prl-person__meta">
                                                 Aprobado el {{ close.approvedAt|date('d/m/Y H:i', 'Europe/Madrid') }}{{ close.approvedBy ? ' por ' ~ close.approvedBy.displayName : '' }}
                                             </span>
-                                        {% elseif row.issues > 0 %}
-                                            <span class="prl-person__meta mc-warn">
-                                                {{ row.issues }} día{{ row.issues == 1 ? '' : 's' }} con la jornada sin cerrar o descuadrada
-                                            </span>
+                                        {% else %}
+                                            {% set broken = row.sheet.issueDays %}
+                                            {% if broken > 0 %}
+                                                <span class="prl-person__meta mc-warn">
+                                                    {{ broken }} día{{ broken == 1 ? '' : 's' }} con la jornada sin cerrar o descuadrada
+                                                </span>
+                                            {% endif %}
+                                            {% set gaps = row.sheet.rows|filter(r => r.status == 'missing') %}
+                                            {% if gaps is not empty %}
+                                                <span class="prl-person__meta mc-warn">Sin fichar ni ausencia:</span>
+                                                <span class="mc-gaps">
+                                                    {% for g in gaps %}
+                                                        {% set label = g.date|format_date(pattern='EEE d', locale='es', timezone='Europe/Madrid') %}
+                                                        {% if is_granted('ROLE_GESTION_LABORAL_EDIT') %}
+                                                            <a class="mc-gap" href="{{ path('staff_absence_new', { id: w.id, date: g.date|date('Y-m-d', 'Europe/Madrid'), back: 'close' }) }}" title="Registrar una ausencia (permiso, huelga…) para este día">{{ label }}</a>
+                                                        {% else %}
+                                                            <span class="mc-gap">{{ label }}</span>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </span>
+                                            {% endif %}
                                         {% endif %}
                                     </div>
                                 </div>

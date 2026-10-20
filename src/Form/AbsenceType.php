@@ -26,12 +26,7 @@ class AbsenceType extends AbstractType
         if (!$options['only_vacation']) {
             $builder->add('type', ChoiceType::class, [
                 'label' => 'Tipo',
-                'choices' => [
-                    'Vacaciones' => Absence::TYPE_VACATION,
-                    'Baja médica' => Absence::TYPE_SICK_LEAVE,
-                    'Permiso' => Absence::TYPE_PERMIT,
-                    'Otra ausencia' => Absence::TYPE_OTHER,
-                ],
+                'choices' => array_flip(Absence::TYPE_LABELS),
             ]);
         }
 

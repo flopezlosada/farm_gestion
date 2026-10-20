@@ -75,7 +75,7 @@
 {% endblock %}
 
 {% block csa_main %}
-    {% set abs_type = { vacation: 'Vacaciones', sick_leave: 'Baja médica', permit: 'Permiso', other: 'Ausencia' } %}
+    {% set abs_type = constant('App\\Entity\\Absence::TYPE_LABELS') %}
     {% set month_names = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'] %}
     {% set abs_state = { requested: ['Pendiente','#92400e','#fef3c7'], approved: ['Aprobada','#2f6f43','#e7f3ea'], rejected: ['Rechazada','#9b1c1c','#fde2e2'], cancelled: ['Cancelada','#6b7280','#f3f4f6'] } %}
 

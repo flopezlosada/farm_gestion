@@ -9,6 +9,7 @@ use App\Entity\Worker;
 use App\Repository\AbsenceRepository;
 use App\Repository\HolidayRepository;
 use App\Repository\TimeEntryRepository;
+use App\Repository\WorkScheduleRepository;
 use App\Service\Staff\MonthGridBuilder;
 use App\Service\Staff\MonthlyTimesheetReport;
 use App\Service\Staff\ClosedWorkMonthException;
@@ -112,6 +113,7 @@ class WorkController extends AbstractController
      * @param WorkdayBuilder      $workdays
      * @param MonthGridBuilder    $gridBuilder
      * @param HolidayRepository   $holidays
+     * @param WorkScheduleRepository $schedules
      * @return Response
      */
     #[Route('/calendar', name: 'work_calendar', methods: ['GET'])]
@@ -122,6 +124,7 @@ class WorkController extends AbstractController
         WorkdayBuilder $workdays,
         MonthGridBuilder $gridBuilder,
         HolidayRepository $holidays,
+        WorkScheduleRepository $schedules,
     ): Response {
         if (($redirect = $this->ensureWorker()) !== null) {
             return $redirect;
@@ -146,20 +149,13 @@ class WorkController extends AbstractController
             $totals[$day['date']->format('Y-m-d')] = $day;
         }
 
-        $covered = [];
-        foreach ($absences->findApprovedForWorkerBetween($worker, $monthStart, $monthEnd) as $absence) {
-            $cursor = $absence->getStartDate();
-            while ($cursor <= $absence->getEndDate()) {
-                $covered[$cursor->format('Y-m-d')] = $absence->getType();
-                $cursor = $cursor->modify('+1 day');
-            }
-        }
+        $covered = $absences->coveredDaysForWorkerBetween($worker, $monthStart, $monthEnd);
 
         $holidayDates = $holidays->findNamesBetween($monthStart, $monthEnd->modify('-1 day'));
 
         return $this->render('work/calendar.html.twig', [
             'worker' => $worker,
-            'weeks' => $gridBuilder->build($year, $month, $madrid, $totals, $covered, $today, $worker->getHireDate(), $holidayDates),
+            'weeks' => $gridBuilder->build($year, $month, $madrid, $totals, $covered, $today, $worker->getHireDate(), $holidayDates, $schedules->workingWeekFor($worker)),
             'month_label' => $monthStart,
             'prev' => $monthStart->modify('-1 month'),
             'next' => $monthStart->modify('+1 month'),

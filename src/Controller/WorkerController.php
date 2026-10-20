@@ -11,6 +11,7 @@ use App\Repository\AbsenceRepository;
 use App\Repository\HolidayRepository;
 use App\Repository\TimeEntryRepository;
 use App\Repository\WorkerRepository;
+use App\Repository\WorkScheduleRepository;
 use App\Security\WorkerAccessMailer;
 use App\Security\WorkerUserProvisioner;
 use App\Service\Staff\GapReport;
@@ -240,6 +241,10 @@ class WorkerController extends AbstractController
      * Registra una ausencia desde la administración: queda APROBADA directamente
      * (el supervisor es quien la concede).
      *
+     * Es también la forma de JUSTIFICAR un día sin fichar (un permiso que se le
+     * dio, una huelga…): desde el hueco se llega con `date` (el día, ya puesto en
+     * el formulario) y `back` (a qué pantalla volver: `close`, `day` o `gaps`).
+     *
      * @param Request                $request
      * @param Worker                 $worker
      * @param EntityManagerInterface $em
@@ -250,15 +255,22 @@ class WorkerController extends AbstractController
     #[Route('/{id}/absence/new', name: 'staff_absence_new', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     public function newAbsence(Request $request, Worker $worker, EntityManagerInterface $em, AbsenceRepository $absences, ClosedWorkMonths $closedMonths): Response
     {
+        $day = \DateTimeImmutable::createFromFormat('!Y-m-d', (string) $request->query->get('date', '')) ?: null;
+        $back = (string) $request->query->get('back', '');
+
         $absence = (new Absence())->setWorker($worker);
+        if ($day !== null) {
+            $absence->setStartDate($day)->setEndDate($day);
+        }
         $form = $this->createForm(AbsenceType::class, $absence);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
+            $day ??= $absence->getStartDate();
             if ($absences->findOverlappingForWorker($worker, $absence->getStartDate(), $absence->getEndDate()) !== []) {
                 $this->addFlash('error', 'Ese trabajador ya tiene una ausencia en esas fechas.');
 
-                return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
+                return $this->redirectAfterAbsence($back, $worker, $day);
             }
             // Se registra ya aprobada, así que cambia el registro de esos meses.
             try {
@@ -266,7 +278,7 @@ class WorkerController extends AbstractController
             } catch (ClosedWorkMonthException $e) {
                 $this->addFlash('error', $e->getMessage());
 
-                return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
+                return $this->redirectAfterAbsence($back, $worker, $day);
             }
             $absence->setStatus(Absence::STATUS_APPROVED);
             $absence->setApprovedBy($this->getUser());
@@ -274,13 +286,34 @@ class WorkerController extends AbstractController
             $em->flush();
             $this->addFlash('success', 'Ausencia registrada.');
 
-            return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
+            return $this->redirectAfterAbsence($back, $worker, $day);
         }
 
         return $this->render('staff/absence_new.html.twig', [
             'worker' => $worker,
             'form' => $form->createView(),
+            'cancel_url' => $this->redirectAfterAbsence($back, $worker, $day)->getTargetUrl(),
         ]);
+    }
+
+    /**
+     * A dónde se vuelve tras registrar una ausencia: a la pantalla desde la que
+     * se fue a justificar el hueco, o a la ficha. `back` es una lista cerrada,
+     * no una URL, para que nadie pueda usarlo de redirección abierta.
+     *
+     * @param string                  $back   `close`, `day`, `gaps` o cualquier otra cosa (ficha).
+     * @param Worker                  $worker Trabajador.
+     * @param \DateTimeImmutable|null $day    Día que se justificaba (para volver a su mes o a su día).
+     * @return RedirectResponse
+     */
+    private function redirectAfterAbsence(string $back, Worker $worker, ?\DateTimeImmutable $day): RedirectResponse
+    {
+        return match (true) {
+            $back === 'close' && $day !== null => $this->redirectToRoute('staff_month_close', ['year' => (int) $day->format('Y'), 'month' => (int) $day->format('n')]),
+            $back === 'day' && $day !== null => $this->redirectToRoute('staff_day', ['id' => $worker->getId(), 'date' => $day->format('Y-m-d')]),
+            $back === 'gaps' => $this->redirectToRoute('staff_gaps'),
+            default => $this->redirectToRoute('staff_show', ['id' => $worker->getId()]),
+        };
     }
 
     /**
@@ -709,6 +742,7 @@ class WorkerController extends AbstractController
      * @param WorkdayBuilder      $workdays
      * @param MonthGridBuilder    $gridBuilder
      * @param HolidayRepository   $holidays
+     * @param WorkScheduleRepository $schedules
      * @return Response
      */
     #[Route('/{id}/calendar', name: 'staff_calendar', methods: ['GET'], requirements: ['id' => '\d+'])]
@@ -720,6 +754,7 @@ class WorkerController extends AbstractController
         WorkdayBuilder $workdays,
         MonthGridBuilder $gridBuilder,
         HolidayRepository $holidays,
+        WorkScheduleRepository $schedules,
     ): Response {
         $madrid = new \DateTimeZone('Europe/Madrid');
         $today = new \DateTimeImmutable('today', $madrid);
@@ -741,17 +776,10 @@ class WorkerController extends AbstractController
         }
 
         // Días cubiertos por ausencia aprobada → etiqueta corta para la celda.
-        $covered = [];
-        foreach ($absences->findApprovedForWorkerBetween($worker, $monthStart, $monthEnd) as $absence) {
-            $cursor = $absence->getStartDate();
-            while ($cursor <= $absence->getEndDate()) {
-                $covered[$cursor->format('Y-m-d')] = $absence->getType();
-                $cursor = $cursor->modify('+1 day');
-            }
-        }
+        $covered = $absences->coveredDaysForWorkerBetween($worker, $monthStart, $monthEnd);
 
         $holidayDates = $holidays->findNamesBetween($monthStart, $monthEnd->modify('-1 day'));
-        $weeks = $gridBuilder->build($year, $month, $madrid, $totals, $covered, $today, $worker->getHireDate(), $holidayDates);
+        $weeks = $gridBuilder->build($year, $month, $madrid, $totals, $covered, $today, $worker->getHireDate(), $holidayDates, $schedules->workingWeekFor($worker));
 
         return $this->render('staff/calendar.html.twig', [
             'worker' => $worker,
@@ -809,6 +837,7 @@ class WorkerController extends AbstractController
      * @param TimeEntryRepository $timeEntries
      * @param WorkdayBuilder      $workdays
      * @param ClosedWorkMonths    $closedMonths
+     * @param AbsenceRepository   $absences
      * @return Response
      */
     #[Route('/{id}/day/{date}', name: 'staff_day', methods: ['GET'], requirements: ['id' => '\d+', 'date' => '\d{4}-\d{2}-\d{2}'])]
@@ -818,6 +847,7 @@ class WorkerController extends AbstractController
         TimeEntryRepository $timeEntries,
         WorkdayBuilder $workdays,
         ClosedWorkMonths $closedMonths,
+        AbsenceRepository $absences,
     ): Response {
         $madrid = new \DateTimeZone('Europe/Madrid');
 
@@ -840,6 +870,7 @@ class WorkerController extends AbstractController
             'entries' => $entries,
             'voided' => $timeEntries->findVoidedForWorkerBetween($worker, $dayStart, $dayEnd),
             'closed' => $closedMonths->isClosed($worker, $dayStart),
+            'absence_type' => $absences->coveredDaysForWorkerBetween($worker, $dayStart, $dayStart)[$date] ?? null,
         ]);
     }
 

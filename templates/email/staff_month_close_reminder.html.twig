@@ -18,7 +18,7 @@
             <li style="margin-bottom: 6px;">
                 <strong>{{ row.worker.name }}</strong>
                 {% if row.issues > 0 %}
-                    <span style="color: #9b1c1c;">— {{ row.issues }} día(s) con la jornada sin cerrar o descuadrada: hay que corregirlos antes de aprobar</span>
+                    <span style="color: #9b1c1c;">— {{ row.issues }} día(s) sin fichar, sin cerrar o descuadrados: hay que corregirlos o justificarlos antes de aprobar</span>
                 {% endif %}
                 {% if row.worker.workdayType is null %}
                     <span style="color: #9b1c1c;">— falta el tipo de jornada en su ficha</span>

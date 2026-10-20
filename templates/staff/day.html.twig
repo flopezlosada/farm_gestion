@@ -59,6 +59,19 @@
         </div>
     </div>
 
+    {# Un día que no se trabajó no se rellena con el horario: se explica con una
+     # ausencia (permiso, huelga…), que es lo que deja aprobar el mes. #}
+    {% if absence_type %}
+        <div class="csa-callout csa-callout--info" style="max-width:560px; margin-bottom: 1rem;">
+            Día cubierto por una ausencia: <strong>{{ constant('App\\Entity\\Absence::TYPE_LABELS')[absence_type]|default('Ausencia') }}</strong>.
+        </div>
+    {% elseif segments is empty and not closed and is_granted('ROLE_GESTION_LABORAL_EDIT') %}
+        <div class="csa-row" style="max-width:560px; margin-bottom: 1rem; align-items: center; gap: .8rem;">
+            <span style="color:#6b7280;">¿No vino a trabajar (un permiso, una huelga…)?</span>
+            {{ csa.btn('Registrar la ausencia', { variant: 'secondary', icon: 'fa-calendar-times-o', href: path('staff_absence_new', { id: worker.id, date: ymd, back: 'day' }) }) }}
+        </div>
+    {% endif %}
+
     {# Traza del día: cómo entró cada fichaje y lo que se anuló. Es lo que el
      # supervisor mira para aprobar el mes; sin esto, un día tecleado entero a
      # posteriori se ve igual que uno fichado en el momento. #}
