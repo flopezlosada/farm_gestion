@@ -6,6 +6,7 @@ use App\Entity\User;
 use App\Repository\PartnerRepository;
 use App\Repository\UserRepository;
 use App\Security\MagicLinkMailer;
+use App\Security\ManagementRoles;
 use App\Security\PartnerUserProvisioner;
 use App\Security\UserChecker;
 use App\Service\AppSettings;
@@ -41,22 +42,25 @@ class SecurityController extends AbstractController
     }
 
     /**
-     * Dispatcher tras el login. Si el User tiene cualquier rol de
-     * gestión va al dashboard de gestión; si solo tiene ROLE_PARTNER
-     * va al panel. Solución al 403 que sufría un socix recién logueado
-     * cuando el default_target_path apuntaba a /gestion/dashboard sin
-     * que tuviera permisos sobre /gestion.
+     * Dispatcher tras el login: manda a cada cual a la zona que puede abrir.
+     * Gestión (cualquier rol de {@see ManagementRoles}) va al dashboard; quien
+     * trabaja para la asociación, a fichar, que es lo que viene a hacer a diario
+     * (si además es socix, el conmutador de áreas le lleva a su panel); el resto,
+     * al panel del socix. Sin la rama del trabajador, uno que no es socix
+     * acababa en /panel, que exige ROLE_PARTNER: un 403 nada más entrar.
+     *
+     * @return Response Redirección a la zona de destino.
      */
     #[Route('/post-login', name: 'app_post_login')]
     public function postLogin(): Response
     {
-        $managementRoles = ['ROLE_ADMIN', 'ROLE_GESTION_GRANJA', 'ROLE_GESTION_SOCIXS', 'ROLE_GESTION_REPARTO', 'ROLE_BLOG'];
-        foreach ($managementRoles as $role) {
-            if ($this->isGranted($role)) {
-                return $this->redirectToRoute('dashboard');
-            }
-        }
-        return $this->redirectToRoute('panel');
+        $isManager = array_filter(ManagementRoles::ALL, fn (string $role): bool => $this->isGranted($role)) !== [];
+
+        return $this->redirectToRoute(match (true) {
+            $isManager => 'dashboard',
+            $this->isGranted('ROLE_WORKER') && $this->isGranted('FEATURE_LABORAL') => 'work',
+            default => 'panel',
+        });
     }
 
     /**

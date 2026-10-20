@@ -6,6 +6,7 @@ use App\Entity\User;
 use App\Service\AppSettings;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Exception\CustomUserMessageAccountStatusException;
+use Symfony\Component\Security\Core\Role\RoleHierarchyInterface;
 use Symfony\Component\Security\Core\User\UserCheckerInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 
@@ -21,32 +22,9 @@ use Symfony\Component\Security\Core\User\UserInterface;
  */
 class UserChecker implements UserCheckerInterface
 {
-    /**
-     * Roles que dan acceso a la zona de gestión (espejo del access_control de
-     * `^/gestion` en security.yaml). Un User que tenga al menos uno es "del
-     * equipo" y entra siempre; el resto son socixs, sujetos al feature-flag de
-     * acceso. ROLE_ADMIN es alias de todos, pero se almacena explícito en el
-     * User, así que basta con mirar los roles directos.
-     */
-    private const TEAM_ROLES = [
-        'ROLE_ADMIN',
-        'ROLE_GESTION_GRANJA',
-        'ROLE_GESTION_SOCIXS',
-        'ROLE_GESTION_REPARTO',
-        'ROLE_BLOG',
-        // Secciones con el modelo lectura/escritura partido: se listan AMBOS
-        // roles (lectura y _EDIT) porque getRoles() devuelve los roles
-        // ALMACENADOS sin expandir la jerarquía — a un usuario de escritura se
-        // le guarda solo el _EDIT (la lectura le llega por jerarquía en los
-        // voters, no aquí).
-        'ROLE_GESTION_ENCUESTAS',
-        'ROLE_GESTION_ENCUESTAS_EDIT',
-        'ROLE_GESTION_ALBERGUE',
-        'ROLE_GESTION_ALBERGUE_EDIT',
-    ];
-
     public function __construct(
         private readonly AppSettings $settings,
+        private readonly RoleHierarchyInterface $roleHierarchy,
     ) {
     }
 
@@ -104,21 +82,20 @@ class UserChecker implements UserCheckerInterface
     }
 
     /**
-     * ¿El User pertenece al equipo de gestión (tiene algún rol de {@see self::TEAM_ROLES})?
+     * ¿El User pertenece al equipo de gestión (alcanza algún rol de
+     * {@see ManagementRoles})?
      *
-     * OJO: `getRoles()` devuelve los roles DIRECTOS del usuario (los de BBDD +
-     * ROLE_USER), NO los derivados de la jerarquía de `security.yaml` — ésa la
-     * resuelve el RoleHierarchyVoter durante la AUTORIZACIÓN, no aquí (preAuth).
-     * Hoy es correcto porque los roles de equipo se asignan directamente; si en
-     * el futuro un rol de equipo pasara a derivarse sólo por jerarquía (p. ej.
-     * ROLE_X → ROLE_GESTION_*), este chequeo no lo vería y habría que inyectar
-     * el RoleHierarchyInterface y expandir aquí.
+     * `getRoles()` devuelve los roles ALMACENADOS (más los derivados de sus
+     * vínculos), sin la jerarquía de security.yaml, que sólo resuelve el voter
+     * durante la autorización. Aquí (preAuth) se expande a mano: a quien escribe
+     * en una sección se le guarda sólo el `_EDIT`, y la lectura le llega por
+     * jerarquía.
      *
      * @param User $user Usuario a comprobar.
-     * @return bool true si entra a /gestion, false si es socix puro.
+     * @return bool true si entra a /gestion, false si no.
      */
     private function belongsToTeam(User $user): bool
     {
-        return array_intersect(self::TEAM_ROLES, $user->getRoles()) !== [];
+        return array_intersect(ManagementRoles::ALL, $this->roleHierarchy->getReachableRoleNames($user->getRoles())) !== [];
     }
 }
