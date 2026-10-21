@@ -5,7 +5,6 @@ namespace App\Service\Staff;
 use App\Entity\Absence;
 use App\Entity\Notification;
 use App\Entity\User;
-use App\Repository\UserRepository;
 use App\Service\Notification\NotificationInbox;
 use App\Service\Notification\NotificationLink;
 use App\Service\Notification\StaffAudience;
@@ -23,8 +22,8 @@ use App\Service\Push\PushSender;
  * cada admin por cada día de permiso sería ruido, así que va a quien tiene el
  * permiso de personal sin ser admin ({@see StaffAudience::responsiblesFor()}).
  * Si no hay ningún responsable, nadie recibe push; queda la bandeja.
- * AL TRABAJADOR, BANDEJA Y PUSH: es su respuesta, y «Mi jornada» no tiene otro
- * canal.
+ * AL TRABAJADOR, BANDEJA Y PUSH ({@see WorkerNotifier}): es su respuesta, y «Mi
+ * jornada» no tiene otro canal.
  */
 class AbsenceNotifier
 {
@@ -33,7 +32,7 @@ class AbsenceNotifier
 
     public function __construct(
         private readonly StaffAudience $staff,
-        private readonly UserRepository $users,
+        private readonly WorkerNotifier $workers,
         private readonly NotificationInbox $inbox,
         private readonly PushSender $push,
         private readonly NotificationLink $link,
@@ -59,7 +58,7 @@ class AbsenceNotifier
             return 0;
         }
 
-        $own = $this->accountOf($absence);
+        $own = $this->workers->accountOf($worker);
         $notOwn = static fn (User $user): bool => $user->getId() !== $own?->getId();
 
         $pending = Absence::STATUS_REQUESTED === $absence->getStatus();
@@ -98,8 +97,8 @@ class AbsenceNotifier
      */
     public function decided(Absence $absence): int
     {
-        $account = $this->accountOf($absence);
-        if (null === $account) {
+        $worker = $absence->getWorker();
+        if (null === $worker) {
             return 0;
         }
 
@@ -107,24 +106,7 @@ class AbsenceNotifier
         $title = sprintf('Solicitud %s: %s', $approved ? 'aprobada' : 'rechazada', mb_strtolower($this->label($absence)));
         $body = trim($this->range($absence) . ($approved ? '' : ' Si quieres otras fechas, pídelas de nuevo o habla con quien lleva el personal.'));
 
-        $this->inbox->deliver([$account], Notification::KIND_WORK_ABSENCE_DECIDED, $title, $body);
-        $this->push->sendToUser($account, $title, $body, $this->link->pathForKind(Notification::KIND_WORK_ABSENCE_DECIDED), 'work_absence_decided');
-
-        return 1;
-    }
-
-    /**
-     * La cuenta con la que entra el trabajador, si tiene.
-     *
-     * @param Absence $absence La ausencia.
-     *
-     * @return User|null Su cuenta, o null si no tiene acceso.
-     */
-    private function accountOf(Absence $absence): ?User
-    {
-        $worker = $absence->getWorker();
-
-        return null === $worker ? null : $this->users->findOneBy(['worker' => $worker]);
+        return $this->workers->notify($worker, Notification::KIND_WORK_ABSENCE_DECIDED, $title, $body, 'work_absence_decided') ? 1 : 0;
     }
 
     /**
