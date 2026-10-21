@@ -68,6 +68,8 @@ class NotificationExtension extends AbstractExtension
         'staff_open_shift_alert' => 'Salida sin fichar en el registro de jornada',
         'staff_month_close_reminder' => 'Meses de jornada sin aprobar',
         'staff_monthly_summary' => 'Resumen mensual de jornada',
+        'staff_absence_requested' => 'Ausencia de un trabajador por decidir',
+        'work_absence_decided' => 'Ausencia aprobada o rechazada',
         'volunteer_call' => 'Convocatoria de voluntariado',
         'volunteer_change' => 'Cambio en un turno de voluntariado',
         'volunteer_reminder' => 'Recordatorio de voluntariado',

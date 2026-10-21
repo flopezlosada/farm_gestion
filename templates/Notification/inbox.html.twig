@@ -167,8 +167,13 @@
 
         {#- El trabajador no tiene pantalla de preferencias (no hay temas que elegir:
             sus avisos son todos de su jornada), así que el permiso del móvil se
-            pide aquí, junto a lo que va a llegar. -#}
-        {% if soy_trabajador %}
+            pide aquí, junto a lo que va a llegar.
+
+            A una cuenta de gestión, sólo si es responsable de una sección que avisa
+            al móvil (App\Service\Notification\StaffAudience::PUSH_ROLES). Al admin
+            no le llega ningún push por administrar: ofrecérselo sería prometerle
+            algo que no pasa. -#}
+        {% if soy_trabajador or (not soy_socix and receives_staff_push) %}
             {% include '_components/push_device_card.html.twig' %}
         {% endif %}
     </div>

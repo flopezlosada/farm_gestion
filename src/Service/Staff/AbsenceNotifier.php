@@ -18,10 +18,13 @@ use App\Service\Push\PushSender;
  * Antes no avisaba nadie: el trabajador pedía vacaciones con un «te avisaremos»
  * que nunca llegaba, y quien aprueba sólo se enteraba si abría la ficha.
  *
- * A QUIEN GESTIONA, SÓLO BANDEJA: es el criterio de los demás avisos de gestión,
- * y ROLE_GESTION_LABORAL_EDIT lo tienen también los admins por jerarquía; un push
- * a cada admin por cada día de permiso sería ruido. AL TRABAJADOR, BANDEJA Y
- * PUSH: es su respuesta, y «Mi jornada» no tiene otro canal.
+ * A QUIEN GESTIONA, BANDEJA A TODOS Y PUSH SÓLO A LOS RESPONSABLES. La bandeja
+ * le llega a quien puede decidir, admins incluidos por jerarquía. El push no: a
+ * cada admin por cada día de permiso sería ruido, así que va a quien tiene el
+ * permiso de personal sin ser admin ({@see StaffAudience::responsiblesFor()}).
+ * Si no hay ningún responsable, nadie recibe push; queda la bandeja.
+ * AL TRABAJADOR, BANDEJA Y PUSH: es su respuesta, y «Mi jornada» no tiene otro
+ * canal.
  */
 class AbsenceNotifier
 {
@@ -42,8 +45,8 @@ class AbsenceNotifier
      * trabajador: unas vacaciones pendientes de decidir, o una baja o permiso
      * que ya constan.
      *
-     * Se excluye la cuenta del propio trabajador: si además gestiona el personal,
-     * avisarle de lo que acaba de hacer él mismo es ruido.
+     * Se excluye la cuenta del propio trabajador, de los dos canales: si además
+     * gestiona el personal, avisarle de lo que acaba de hacer él mismo es ruido.
      *
      * @param Absence $absence La ausencia recién guardada.
      *
@@ -57,21 +60,33 @@ class AbsenceNotifier
         }
 
         $own = $this->accountOf($absence);
-        $recipients = array_values(array_filter(
-            $this->staff->withRole(self::ROLE_STAFF),
-            static fn (User $user): bool => $user->getId() !== $own?->getId(),
-        ));
+        $notOwn = static fn (User $user): bool => $user->getId() !== $own?->getId();
 
         $pending = Absence::STATUS_REQUESTED === $absence->getStatus();
+        $title = $pending
+            ? sprintf('%s pide %s', $worker->getName(), mb_strtolower($this->label($absence)))
+            : sprintf('%s ha registrado: %s', $worker->getName(), mb_strtolower($this->label($absence)));
+        $body = $this->range($absence) . ($pending ? ' Falta aprobarlas o rechazarlas en su ficha.' : ' Ya consta en su registro.');
 
-        return $this->inbox->deliver(
-            $recipients,
+        $delivered = $this->inbox->deliver(
+            array_values(array_filter($this->staff->withRole(self::ROLE_STAFF), $notOwn)),
             Notification::KIND_STAFF_ABSENCE_REQUESTED,
-            $pending
-                ? sprintf('%s pide %s', $worker->getName(), mb_strtolower($this->label($absence)))
-                : sprintf('%s ha registrado: %s', $worker->getName(), mb_strtolower($this->label($absence))),
-            $this->range($absence) . ($pending ? ' Falta aprobarlas o rechazarlas en su ficha.' : ' Ya consta en su registro.'),
+            $title,
+            $body,
         );
+
+        $responsibles = array_values(array_filter($this->staff->responsiblesFor(self::ROLE_STAFF), $notOwn));
+        if ([] !== $responsibles) {
+            $this->push->sendToMany(
+                $responsibles,
+                $title,
+                $body,
+                $this->link->pathForKind(Notification::KIND_STAFF_ABSENCE_REQUESTED),
+                'staff_absence_requested',
+            );
+        }
+
+        return $delivered;
     }
 
     /**
