@@ -51,7 +51,7 @@ class MonthlyTimesheetBuilder
      * @param int                     $year          Año.
      * @param int                     $month         Mes (1-12).
      * @param \DateTimeZone           $tz            Zona con la que se decide el día.
-     * @param array<string, array{date: \DateTimeImmutable, segments: array, totalMinutes: int, open: bool, anomaly: bool, manual?: bool}> $workedDays
+     * @param array<string, array{date: \DateTimeImmutable, segments: array, totalMinutes: int, open: bool, anomaly: bool, deferred?: bool}> $workedDays
      *        Días trabajados indexados por 'Y-m-d' (de {@see WorkdayBuilder::buildDays()}).
      * @param array<string, string>   $coveredAbsences Tipo de ausencia por día 'Y-m-d'.
      * @param array<string, string>   $holidayNames    Nombre del festivo por día 'Y-m-d'.
@@ -59,12 +59,12 @@ class MonthlyTimesheetBuilder
      * @param \DateTimeImmutable|null $hireDate      Fecha de alta (suelo del registro), o null.
      * @param \DateTimeImmutable      $today         Día de hoy (para marcar futuros).
      * @return array{
-     *     rows: array<int, array{date: \DateTimeImmutable, dow: int, segments: array, totalMinutes: int, status: string, absenceType: string|null, holidayName: string|null, open: bool, anomaly: bool, manual: bool}>,
+     *     rows: array<int, array{date: \DateTimeImmutable, dow: int, segments: array, totalMinutes: int, status: string, absenceType: string|null, holidayName: string|null, open: bool, anomaly: bool, deferred: bool}>,
      *     totalMinutes: int,
      *     workedDays: int,
      *     missingDays: int,
      *     issueDays: int,
-     *     manualDays: int
+     *     deferredDays: int
      * }
      *     `issueDays` = días con una jornada sin cerrar o descuadrada.
      */
@@ -89,7 +89,7 @@ class MonthlyTimesheetBuilder
         $workedCount = 0;
         $missingCount = 0;
         $issueCount = 0;
-        $manualCount = 0;
+        $deferredCount = 0;
 
         while ($cursor < $monthEnd) {
             $key = $cursor->format('Y-m-d');
@@ -109,8 +109,8 @@ class MonthlyTimesheetBuilder
             if (($worked['open'] ?? false) || ($worked['anomaly'] ?? false)) {
                 $issueCount++;
             }
-            if ($worked['manual'] ?? false) {
-                $manualCount++;
+            if ($worked['deferred'] ?? false) {
+                $deferredCount++;
             }
 
             $rows[] = [
@@ -123,7 +123,7 @@ class MonthlyTimesheetBuilder
                 'holidayName' => $holidayNames[$key] ?? null,
                 'open' => $worked['open'] ?? false,
                 'anomaly' => $worked['anomaly'] ?? false,
-                'manual' => $worked['manual'] ?? false,
+                'deferred' => $worked['deferred'] ?? false,
             ];
 
             $cursor = $cursor->modify('+1 day');
@@ -135,7 +135,7 @@ class MonthlyTimesheetBuilder
             'workedDays' => $workedCount,
             'missingDays' => $missingCount,
             'issueDays' => $issueCount,
-            'manualDays' => $manualCount,
+            'deferredDays' => $deferredCount,
         ];
     }
 

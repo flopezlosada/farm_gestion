@@ -27,14 +27,14 @@
 
             <span class="pun__view" data-pun-view>
                 <span class="stf-pun__time">{{ t }}</span>
-                {% if entry.manual %}
-                    {# Apuntado a mano (olvido, corrección, relleno con el horario o
-                     # el supervisor): se ve SIEMPRE, no es un detalle opcional.
+                {% if entry.deferred %}
+                    {# Registro diferido (olvido, corrección, relleno con el
+                     # horario): se ve SIEMPRE, no es un detalle opcional.
                      # El desglose de cuándo y quién va en el title. #}
-                    {% set trail = 'Apuntado el ' ~ entry.recordedAt|date('d/m/Y H:i', madrid)
+                    {% set trail = 'Registro diferido: apuntado el ' ~ entry.recordedAt|date('d/m/Y H:i', madrid)
                         ~ (entry.author ? ' por ' ~ entry.author.displayName : '')
                         ~ (entry.note ? ' · ' ~ entry.note : '') %}
-                    {% import 'staff/_manual.html.twig' as m %}
+                    {% import 'staff/_deferred.html.twig' as m %}
                     <span class="stf-late" title="{{ trail }}">{{ m.label(entry, madrid) }}</span>
                 {% endif %}
                 {% if not opts.readonly|default(false) %}

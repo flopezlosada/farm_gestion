@@ -1,5 +1,5 @@
 {% extends '_layouts/csa_work.html.twig' %}
-{% import 'staff/_manual.html.twig' as m %}
+{% import 'staff/_deferred.html.twig' as m %}
 
 {% block title %}Fichar{% endblock %}
 
@@ -58,7 +58,7 @@
                         <i class="fa {{ entry.in ? 'fa-sign-in' : 'fa-sign-out' }}"></i>
                     </span>
                     <span class="wk-row__type">{{ entry.in ? 'Entrada' : 'Salida' }}</span>
-                    {% if entry.manual %}<span class="wk-chip-manual" title="No se fichó en el momento">{{ m.label(entry, madrid) }}</span>{% endif %}
+                    {% if entry.deferred %}<span class="wk-chip-deferred" title="Registro diferido: no se hizo en su momento">{{ m.label(entry, madrid) }}</span>{% endif %}
                     <span class="wk-row__time">{{ entry.occurredAt|date('H:i', madrid) }}</span>
                 </div>
             {% else %}

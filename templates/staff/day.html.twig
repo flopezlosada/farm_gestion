@@ -83,10 +83,12 @@
                 {% for e in entries %}
                     <div class="stf-trail">
                         <strong>{{ type_label[e.type]|default(e.type) }} {{ e.occurredAt|date('H:i', madrid) }}</strong>
-                        {% if e.manual %}
+                        {% if e.deferred %}
                             <span class="stf-trail__meta">
-                                apuntado el {{ e.recordedAt|date('d/m/Y H:i', madrid) }}{{ e.author ? ' por ' ~ e.author.displayName : '' }}{{ e.note ? ' · «' ~ e.note ~ '»' : '' }}
+                                registro diferido: apuntado el {{ e.recordedAt|date('d/m/Y H:i', madrid) }}{{ e.author ? ' por ' ~ e.author.displayName : '' }}{{ e.note ? ' · «' ~ e.note ~ '»' : '' }}
                             </span>
+                        {% elseif e.source == constant('App\\Entity\\TimeEntry::SOURCE_SUPERVISOR') %}
+                            <span class="stf-trail__meta">apuntado en el momento{{ e.author ? ' por ' ~ e.author.displayName : ' por el supervisor' }}{{ e.note ? ' · «' ~ e.note ~ '»' : '' }}</span>
                         {% else %}
                             <span class="stf-trail__meta">fichado en el momento</span>
                         {% endif %}

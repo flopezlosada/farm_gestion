@@ -286,7 +286,7 @@ class StaffControllerTest extends WebTestCase
     public function testDayShowsHowEachEntryCameInAndWhatWasVoided(): void
     {
         $worker = $this->makeWorker();
-        // addEntry() los crea con origen supervisor: cuentan como apuntados a mano.
+        // addEntry() los apunta hoy por un día pasado: son registros diferidos.
         $this->addEntry($worker, TimeEntry::TYPE_IN, '2026-03-02 09:00');
         $wrong = $this->addEntry($worker, TimeEntry::TYPE_OUT, '2026-03-02 13:00');
         $admin = $this->em->getRepository(User::class)->loadUserByIdentifier('admin');

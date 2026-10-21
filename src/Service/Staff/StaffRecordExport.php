@@ -116,14 +116,14 @@ class StaffRecordExport
             $this->dateTime($entry->getRecordedAt()),
             TimeEntry::SOURCE_SUPERVISOR === $entry->getSource() ? 'Apuntado por gestión' : 'Fichado por el trabajador/a',
             $this->who($entry->getAuthor()),
-            $entry->isManual() ? 'Sí' : 'No',
+            $entry->isDeferred() ? 'Sí' : 'No',
             $entry->getNote() ?? '',
             $this->dateTime($entry->getVoidedAt()),
             $this->who($entry->getVoidedBy()),
             $entry->getVoidReason() ?? '',
         ], $this->timeEntries->findAllBetween($period->start(), $period->end()));
 
-        return $this->csv(['Trabajador/a', 'Tipo', 'Hora del fichaje', 'Apuntado el', 'Origen', 'Apuntado por', 'A mano', 'Nota', 'Anulado el', 'Anulado por', 'Motivo de la anulación'], $rows);
+        return $this->csv(['Trabajador/a', 'Tipo', 'Hora del fichaje', 'Apuntado el', 'Origen', 'Apuntado por', 'Diferido', 'Nota', 'Anulado el', 'Anulado por', 'Motivo de la anulación'], $rows);
     }
 
     /**
@@ -189,7 +189,7 @@ class StaffRecordExport
 
     /**
      * Lo que el PDF dice del día además de la situación: tipo de ausencia o
-     * festivo, jornada sin cerrar o descuadrada, y si algo se apuntó a mano.
+     * festivo, jornada sin cerrar o descuadrada, y si hay algún registro diferido.
      *
      * @param array $day Fila de {@see MonthlyTimesheetBuilder::build()}.
      * @return string
@@ -201,7 +201,7 @@ class StaffRecordExport
             $day['holidayName'],
             $day['open'] ? 'Jornada sin cerrar' : null,
             $day['anomaly'] ? 'Salida sin entrada: revisar' : null,
-            $day['manual'] ? 'Apuntado a mano' : null,
+            $day['deferred'] ? 'Registro diferido' : null,
         ]));
     }
 

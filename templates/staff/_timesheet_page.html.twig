@@ -68,7 +68,7 @@
                     <td class="total{{ row.status == 'worked' ? ' tot-b' : '' }}">{{ m.hm(row.totalMinutes) }}</td>
                     <td class="obs">
                         {%- if row.status == 'worked' and row.absenceType %}{{ abs_labels[row.absenceType]|default('') }}{% endif -%}
-                        {%- if row.manual %}{{ row.status == 'worked' and row.absenceType ? ' · ' : '' }}Apuntado a mano{% endif -%}
+                        {%- if row.deferred %}{{ row.status == 'worked' and row.absenceType ? ' · ' : '' }}Registro diferido{% endif -%}
                     </td>
                 </tr>
             {% endfor %}
@@ -85,7 +85,7 @@
     <div class="totals">
         <span>Días trabajados: <strong>{{ sheet.workedDays }}</strong></span>
         {% if sheet.missingDays > 0 %}<span style="color:#9b1c1c;">Días laborables sin fichar: <strong>{{ sheet.missingDays }}</strong></span>{% endif %}
-        {% if sheet.manualDays > 0 %}<span>Días con registros apuntados a mano: <strong>{{ sheet.manualDays }}</strong></span>{% endif %}
+        {% if sheet.deferredDays > 0 %}<span>Días con registros diferidos: <strong>{{ sheet.deferredDays }}</strong></span>{% endif %}
     </div>
 
     {% if sheet.close %}
@@ -101,7 +101,8 @@
 
     <p class="foot">
         Documento generado automáticamente a partir del registro de fichajes. Las horas se calculan emparejando
-        entradas y salidas; los apuntes son inmutables (las correcciones quedan trazadas). «Apuntado a mano»: algún
-        registro del día no se fichó en el momento (olvido añadido después, hora corregida o anotado por el supervisor).
+        entradas y salidas; los apuntes son inmutables (las correcciones quedan trazadas). «Registro diferido»: algún
+        registro del día no se hizo en su momento, sino más tarde (olvido añadido después u hora corregida).
+        Quién apuntó cada registro consta en la traza.
         Conservar durante 4 años.
     </p>

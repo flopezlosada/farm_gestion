@@ -122,8 +122,8 @@ class StaffRecordControllerTest extends WebTestCase
         $this->assertResponseHeaderSame('Content-Type', 'text/csv; charset=UTF-8');
         $this->assertStringStartsWith("\xEF\xBB\xBF", $csv);
         $day = sprintf('10/%02d/%d', $this->month->month, $this->month->year);
-        // Fichados a mano en el test (se registran hoy por un día pasado): el
-        // final del renglón lleva «Apuntado a mano», y quizá un festivo.
+        // Registros diferidos en el test (se registran hoy por un día pasado):
+        // el final del renglón lleva «Registro diferido», y quizá un festivo.
         $this->assertStringContainsString(sprintf("\n'=Activa;%s;09:00;14:00;5:00;7:30;Trabajado;", $day), $csv);
         $this->assertStringContainsString(sprintf("\n'=Activa;%s;15:00;17:30;2:30;7:30;Trabajado;", $day), $csv);
         $this->assertStringContainsString(sprintf("\n\"Inactiva que fichó\";%s;08:00;12:00;4:00;4:00;Trabajado;", $day), $csv);

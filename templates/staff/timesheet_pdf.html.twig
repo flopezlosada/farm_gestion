@@ -3,7 +3,7 @@
  # Recibe (de WorkerController::monthlyPdf / WorkController::monthlyPdf):
  #   - worker        Worker.
  #   - sheet         estructura de MonthlyTimesheetReport::forMonth()
- #                   ({ rows, totalMinutes, workedDays, missingDays, manualDays, close }).
+ #                   ({ rows, totalMinutes, workedDays, missingDays, deferredDays, close }).
  #                   `close` es la aprobación vigente del mes, o null.
  #   - year, month   del periodo.
  #   - month_label   \DateTimeImmutable del primer día del mes.

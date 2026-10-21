@@ -9,6 +9,7 @@ use App\Entity\TimeEntry;
 use App\Entity\User;
 use App\Entity\Worker;
 use App\Service\AppSettings;
+use App\Tests\Entity\StampsTimeEntryRecordedAt;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -21,6 +22,8 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
  */
 class WorkControllerTest extends WebTestCase
 {
+    use StampsTimeEntryRecordedAt;
+
     private KernelBrowser $client;
     private EntityManagerInterface $em;
     private Worker $worker;
@@ -180,31 +183,38 @@ class WorkControllerTest extends WebTestCase
     }
 
     /**
-     * El panel pinta los fichajes de hoy y sólo marca «A mano» los que no se
-     * ficharon en el momento: el del botón sale limpio, el que metió el
-     * supervisor lleva el chip.
+     * El panel pinta los fichajes de hoy y sólo marca los registros diferidos:
+     * el del botón y lo que el supervisor apunta en el momento salen limpios; lo
+     * que se apuntó más tarde lleva el chip, que dice cuándo y quién.
      */
-    public function testTodayListMarksOnlyManualEntries(): void
+    public function testTodayListMarksOnlyDeferredEntries(): void
     {
         $token = $this->csrf('/work');
         $this->client->request('POST', '/work/clock', ['_csrf_token' => $token]);
         $crawler = $this->client->followRedirect();
         $this->assertResponseIsSuccessful();
         $this->assertCount(1, $crawler->filter('.wk-row'));
-        $this->assertCount(0, $crawler->filter('.wk-chip-manual'), 'Lo fichado con el botón no es «a mano».');
+        $this->assertCount(0, $crawler->filter('.wk-chip-deferred'), 'Lo fichado con el botón no es diferido.');
 
+        $madrid = new \DateTimeZone('Europe/Madrid');
+        $worker = $this->em->find(Worker::class, $this->worker->getId());
         $this->em->persist((new TimeEntry())
-            ->setWorker($this->em->find(Worker::class, $this->worker->getId()))
+            ->setWorker($worker)
             ->setType(TimeEntry::TYPE_OUT)
-            ->setOccurredAt(new \DateTimeImmutable('now', new \DateTimeZone('Europe/Madrid')))
+            ->setOccurredAt(new \DateTimeImmutable('now', $madrid))
             ->setSource(TimeEntry::SOURCE_SUPERVISOR));
+        $this->em->persist($this->setRecordedAt((new TimeEntry())
+            ->setWorker($worker)
+            ->setType(TimeEntry::TYPE_IN)
+            ->setOccurredAt(new \DateTimeImmutable('today 00:00', $madrid))
+            ->setSource(TimeEntry::SOURCE_SUPERVISOR), new \DateTimeImmutable('today 00:30', $madrid)));
         $this->em->flush();
 
         $crawler = $this->client->request('GET', '/work');
         $this->assertResponseIsSuccessful();
-        $this->assertCount(2, $crawler->filter('.wk-row'));
-        $this->assertCount(1, $crawler->filter('.wk-chip-manual'), 'Lo que metió el supervisor sí es «a mano».');
-        $this->assertSame('Apuntado por el supervisor', trim($crawler->filter('.wk-chip-manual')->text()), 'El chip dice quién lo apuntó.');
+        $this->assertCount(3, $crawler->filter('.wk-row'));
+        $this->assertCount(1, $crawler->filter('.wk-chip-deferred'), 'Sólo lo apuntado más tarde es diferido, lo apunte quien lo apunte.');
+        $this->assertSame('Apuntado a las 00:30 por el supervisor', trim($crawler->filter('.wk-chip-deferred')->text()), 'El chip dice cuándo y quién lo apuntó.');
     }
 
     /**
@@ -226,7 +236,7 @@ class WorkControllerTest extends WebTestCase
         $this->assertResponseIsSuccessful();
         $this->assertSame(
             'Apuntado el ' . (new \DateTimeImmutable('now', $madrid))->format('d/m'),
-            trim($crawler->filter('.cal-badge--manual')->text()),
+            trim($crawler->filter('.cal-badge--deferred')->text()),
         );
     }
 
