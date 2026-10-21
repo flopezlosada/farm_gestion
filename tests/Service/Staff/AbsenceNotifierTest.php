@@ -12,6 +12,7 @@ use App\Service\Notification\NotificationLink;
 use App\Service\Notification\StaffAudience;
 use App\Service\Push\PushSender;
 use App\Service\Staff\AbsenceNotifier;
+use App\Service\Staff\WorkerNotifier;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Security\Core\Role\RoleHierarchy;
 
@@ -87,6 +88,34 @@ class AbsenceNotifierTest extends TestCase
         $this->notifier([$self, $other], $self, $inbox, $push)->requested($this->absence(Absence::STATUS_REQUESTED));
     }
 
+    /** La decisión le llega al trabajador, por bandeja y al móvil. */
+    public function testLaDecisionLlegaAlTrabajador(): void
+    {
+        $account = $this->user(7, 'lucia', ['ROLE_WORKER']);
+
+        $inbox = $this->createMock(NotificationInbox::class);
+        $inbox->expects($this->once())->method('deliver')
+            ->with([$account], Notification::KIND_WORK_ABSENCE_DECIDED, 'Solicitud rechazada: vacaciones', $this->stringContains('Del 02/11/2026 al 06/11/2026.'));
+
+        $push = $this->createMock(PushSender::class);
+        $push->expects($this->once())->method('sendToUser')
+            ->with($account, 'Solicitud rechazada: vacaciones', $this->anything(), '/gestion/staff', 'work_absence_decided');
+
+        $this->assertSame(1, $this->notifier([], $account, $inbox, $push)->decided($this->absence(Absence::STATUS_REJECTED)));
+    }
+
+    /** Un trabajador sin cuenta no tiene dónde enterarse: no sale nada. */
+    public function testSinCuentaNoSeAvisaALaDecision(): void
+    {
+        $inbox = $this->createMock(NotificationInbox::class);
+        $inbox->expects($this->never())->method('deliver');
+
+        $push = $this->createMock(PushSender::class);
+        $push->expects($this->never())->method('sendToUser');
+
+        $this->assertSame(0, $this->notifier([], null, $inbox, $push)->decided($this->absence(Absence::STATUS_APPROVED)));
+    }
+
     /**
      * El notificador con la jerarquía real y la red de envío simulada.
      *
@@ -104,7 +133,7 @@ class AbsenceNotifierTest extends TestCase
 
         return new AbsenceNotifier(
             new StaffAudience($users, new RoleHierarchy(self::HIERARCHY)),
-            $users,
+            new WorkerNotifier($users, $inbox, $push, $link),
             $inbox,
             $push,
             $link,
