@@ -61,6 +61,11 @@
                         <span class="csa-topbar__util-label">Ver web</span>
                     </a>
 
+                    {# La campanita, igual que en los otros dos shells: los avisos de
+                     # la jornada (vacaciones, días sin fichar) llegan a la bandeja
+                     # de la cuenta, y sin ella aquí no habría dónde verlos. #}
+                    {% include '_components/csa_bell.html.twig' %}
+
                     {% if app.user %}
                         {# El nombre de la faceta laboral: el del Worker si está
                          # vinculado, con caída al identificador del User. #}
