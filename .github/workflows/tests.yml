@@ -50,6 +50,9 @@ jobs:
         with:
           php-version: '8.3'
           extensions: mbstring, intl, pdo_mysql, gd, exif, iconv
+          # La app opera en hora española (ver TimeEntry): sin esto PHP corre en
+          # UTC y las horas que van y vuelven de la BBDD se desplazan.
+          ini-values: date.timezone=Europe/Madrid
           tools: composer:2.2
           coverage: none
 
