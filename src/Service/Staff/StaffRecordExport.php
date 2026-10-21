@@ -80,9 +80,10 @@ class StaffRecordExport
         foreach ($this->pages($workers, $period, $now) as $page) {
             $approved = $page['sheet']['close']?->getApprovedAt()->setTimezone(new \DateTimeZone(self::TZ))->format('d/m/Y');
             foreach ($page['sheet']['rows'] as $day) {
-                // Por fecha y no por situación: un sábado que aún no ha llegado
-                // está clasificado como fin de semana, no como futuro.
-                if (MonthlyTimesheetBuilder::STATUS_BEFORE_HIRE === $day['status'] || $day['date']->format('Y-m-d') >= $todayKey) {
+                // Lo que aún no ha pasado, por fecha y no por situación (un sábado
+                // por venir está clasificado como fin de semana); hoy, si ya
+                // tiene tramos, sí entra, como en el PDF.
+                if (MonthlyTimesheetBuilder::STATUS_BEFORE_HIRE === $day['status'] || ([] === $day['segments'] && $day['date']->format('Y-m-d') >= $todayKey)) {
                     continue;
                 }
                 $common = [$page['worker']->getName(), $day['date']->format('d/m/Y')];
@@ -154,12 +155,36 @@ class StaffRecordExport
         $pages = [];
         foreach ($workers as $worker) {
             $sheets = $this->report->forRange($worker, $period, $tz, $today);
+            $until = $this->lastRecordedMonth($worker, $period);
             foreach ($period->months() as $month) {
+                if (null !== $until && $month->start() > $until->start()) {
+                    break;
+                }
                 $pages[] = ['worker' => $worker, 'month' => $month, 'sheet' => $sheets[$month->key()]];
             }
         }
 
         return $pages;
+    }
+
+    /**
+     * Hasta qué mes hay registro de un trabajador ya inactivo: el de su último
+     * fichaje del periodo. Sin fecha de baja en Worker, más allá no se sabe si
+     * aún trabajaba, y sus meses saldrían enteros como «Sin fichar» ante la
+     * Inspección. Para un activo, null: todo el periodo.
+     *
+     * @param Worker     $worker El trabajador.
+     * @param WorkPeriod $period Los meses.
+     * @return WorkMonth|null Último mes con registro, o null si no hay que cortar.
+     */
+    private function lastRecordedMonth(Worker $worker, WorkPeriod $period): ?WorkMonth
+    {
+        if ($worker->isActive()) {
+            return null;
+        }
+        $last = $this->timeEntries->findLastEffectiveForWorkerBetween($worker, $period->start(), $period->end());
+
+        return null === $last ? null : WorkMonth::containing($last->getOccurredAt());
     }
 
     /**
@@ -227,7 +252,7 @@ class StaffRecordExport
     }
 
     /**
-     * Escribe un CSV con «;» y BOM. Una celda que empieza por =, +, - o @ se
+     * Escribe un CSV con «;» y BOM. Una celda que empieza por =, +, -, @, tabulador o retorno se
      * escapa con una comilla simple: la hoja de cálculo la tomaría por una
      * fórmula, y los nombres, notas y motivos los escribe una persona.
      *
@@ -240,7 +265,7 @@ class StaffRecordExport
         $out = fopen('php://temp', 'r+');
         fwrite($out, "\xEF\xBB\xBF");
         foreach ([$header, ...$rows] as $row) {
-            fputcsv($out, array_map(static fn (string $cell): string => preg_match('/^[=+\-@]/', $cell) ? "'" . $cell : $cell, $row), ';', '"', '');
+            fputcsv($out, array_map(static fn (string $cell): string => preg_match('/^[=+\-@\t\r]/', $cell) ? "'" . $cell : $cell, $row), ';', '"', '');
         }
         rewind($out);
         $csv = (string) stream_get_contents($out);

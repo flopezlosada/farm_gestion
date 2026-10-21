@@ -82,9 +82,15 @@ class StaffRecordController extends AbstractController
     {
         $from = (string) $request->query->get('from');
         $to = (string) $request->query->get('to');
-        $now = $this->now();
         try {
             $period = $this->period($from, $to);
+        } catch (\InvalidArgumentException) {
+            // La pantalla vuelve a validar el periodo y cuenta por qué no vale.
+            return $this->redirectToRoute('staff_record', ['from' => $from, 'to' => $to]);
+        }
+
+        $now = $this->now();
+        try {
             $content = match ($format) {
                 'pdf' => $export->pdf($period, $now),
                 'daily' => $export->dailyCsv($period, $now),

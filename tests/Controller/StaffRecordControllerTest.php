@@ -161,6 +161,29 @@ class StaffRecordControllerTest extends WebTestCase
         }
     }
 
+    /**
+     * Un inactivo sólo tiene registro hasta el mes de su último fichaje: sin
+     * fecha de baja, los meses siguientes saldrían enteros como «Sin fichar».
+     */
+    public function testUnInactivoNoSaleDespuesDeSuUltimoFichaje(): void
+    {
+        $gone = $this->worker('Se fue', false);
+        $before = $this->month->previous();
+        $entry = (new TimeEntry())
+            ->setWorker($gone)
+            ->setType(TimeEntry::TYPE_IN)
+            ->setOccurredAt(new \DateTimeImmutable($before->key() . '-10 09:00', new \DateTimeZone('Europe/Madrid')))
+            ->setSource(TimeEntry::SOURCE_SELF);
+        $this->em->persist($entry);
+        $this->em->flush();
+
+        $this->client->request('GET', sprintf('/gestion/staff/record/download/daily?from=%s&to=%s', $before->key(), $this->month->key()));
+        $csv = (string) $this->client->getResponse()->getContent();
+
+        $this->assertStringContainsString(sprintf("Se fue\";10/%02d/%d;09:00", $before->month, $before->year), $csv);
+        $this->assertStringNotContainsString(sprintf('/%02d/%d;', $this->month->month, $this->month->year), $csv);
+    }
+
     /** La traza lleva también lo anulado: quién lo anuló y por qué. */
     public function testCsvDeTrazaConLoAnulado(): void
     {

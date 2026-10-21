@@ -97,6 +97,7 @@ class TimeEntryRepository extends ServiceEntityRepository
             ->setParameter('from', $from)
             ->setParameter('to', $to)
             ->orderBy('w.name', 'ASC')
+            ->addOrderBy('w.id', 'ASC')
             ->addOrderBy('t.occurredAt', 'ASC')
             ->addOrderBy('t.id', 'ASC')
             ->getQuery()
