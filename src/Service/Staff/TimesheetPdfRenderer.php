@@ -13,7 +13,8 @@ use Twig\Environment;
  * Renderiza el PDF del resumen mensual de jornada a partir de la hoja ya
  * construida ({@see MonthlyTimesheetReport}). Aísla el uso de dompdf para que lo
  * compartan el panel del supervisor, el del trabajador y el envío por correo sin
- * duplicar la configuración de la fuente ni las cabeceras de descarga.
+ * duplicar la configuración de la fuente ni las cabeceras de descarga. También
+ * el registro de todo el equipo para la Inspección, con las mismas páginas.
  */
 class TimesheetPdfRenderer
 {
@@ -61,6 +62,38 @@ class TimesheetPdfRenderer
             'generated_at' => $generatedAt,
         ]);
 
+        return $this->toPdf($html);
+    }
+
+    /**
+     * El registro de jornada de todo el equipo en un periodo, el que se entrega a
+     * la Inspección: una portada y la misma página mensual que recibe cada
+     * trabajador, una por trabajador y mes.
+     *
+     * @param Worker[]           $workers     Quién entra en el periodo.
+     * @param array              $pages       list<{worker, month: WorkMonth, sheet}>, por trabajador y mes.
+     * @param WorkPeriod         $period      Los meses.
+     * @param \DateTimeImmutable $generatedAt Instante de generación.
+     * @return string Bytes del PDF.
+     */
+    public function renderRecord(array $workers, array $pages, WorkPeriod $period, \DateTimeImmutable $generatedAt): string
+    {
+        return $this->toPdf($this->twig->render('staff/record_pdf.html.twig', [
+            'workers' => $workers,
+            'pages' => $pages,
+            'period' => $period,
+            'generated_at' => $generatedAt,
+        ]));
+    }
+
+    /**
+     * Pasa el HTML a PDF en A4 vertical.
+     *
+     * @param string $html Documento completo.
+     * @return string Bytes del PDF.
+     */
+    private function toPdf(string $html): string
+    {
         // DejaVu Sans: dompdf necesita una fuente con cobertura latina completa
         // para acentos y la ñ (la fuente por defecto los rompe).
         $options = new Options();

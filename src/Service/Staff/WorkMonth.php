@@ -37,6 +37,24 @@ final class WorkMonth
     }
 
     /**
+     * El mes de una clave 'YYYY-MM', la de {@see self::key()} y la que manda un
+     * campo de formulario de tipo mes.
+     *
+     * @param string $key Clave 'YYYY-MM'.
+     * @return self
+     *
+     * @throws \InvalidArgumentException Si no es una clave de mes válida.
+     */
+    public static function fromKey(string $key): self
+    {
+        if (1 !== preg_match('/^(\d{4})-(\d{2})$/', $key, $parts)) {
+            throw new \InvalidArgumentException(sprintf('Mes no válido: «%s».', $key));
+        }
+
+        return self::of((int) $parts[1], (int) $parts[2]);
+    }
+
+    /**
      * El mes al que pertenece un instante, contado en hora de Madrid.
      *
      * @param \DateTimeInterface $at Instante.

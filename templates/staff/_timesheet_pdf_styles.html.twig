@@ -1,0 +1,28 @@
+{# Estilos de la página del resumen mensual ({@see _timesheet_page}). #}
+    <style>
+        * { font-family: 'DejaVu Sans', sans-serif; }
+        body { font-size: 10px; color: #1f2937; margin: 0; }
+        h1 { font-size: 16px; margin: 0 0 2px; }
+        .sub { color: #6b7280; font-size: 10px; margin: 0; }
+        .head { border-bottom: 2px solid #2f6f43; padding-bottom: 8px; margin-bottom: 10px; }
+        .meta { width: 100%; margin-bottom: 12px; font-size: 10px; }
+        .meta td { padding: 1px 0; }
+        .meta .lbl { color: #6b7280; width: 130px; }
+        table.sheet { width: 100%; border-collapse: collapse; }
+        table.sheet th { background: #2f6f43; color: #fff; font-size: 9px; text-align: left; padding: 4px 6px; }
+        table.sheet td { border-bottom: 1px solid #e5e7eb; padding: 3px 6px; font-size: 9.5px; }
+        td.day { white-space: nowrap; width: 86px; }
+        td.total { text-align: right; white-space: nowrap; width: 64px; }
+        td.tot-b { font-weight: bold; }
+        tr.weekend td, tr.rest td, tr.before_hire td, tr.future td { color: #9ca3af; }
+        tr.weekend td.day, tr.rest td.day { background: #f9fafb; }
+        tr.missing td { background: #fef3f2; }
+        tr.missing td.obs { color: #9b1c1c; }
+        .badge { font-size: 8.5px; }
+        tfoot td { border-top: 2px solid #2f6f43; padding: 6px; font-weight: bold; }
+        .totals { margin-top: 10px; font-size: 10px; }
+        .totals span { margin-right: 18px; }
+        .approval { margin-top: 18px; padding: 8px 10px; border: 1px solid #2f6f43; color: #2f6f43; font-size: 10px; }
+        .approval--pending { border-color: #b45309; color: #b45309; }
+        .foot { margin-top: 16px; color: #9ca3af; font-size: 8px; }
+    </style>

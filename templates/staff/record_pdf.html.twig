@@ -1,0 +1,65 @@
+{# ============================================================
+ # Registro de jornada de todo el equipo en un periodo (dompdf), el que se
+ # entrega a la Inspección de Trabajo. Standalone: NO extiende el shell.
+ # Recibe (de StaffRecordExport):
+ #   - workers       Worker[] del periodo, por nombre.
+ #   - pages         list<{ worker, month: WorkMonth, sheet }>, por trabajador y mes.
+ #   - period        WorkPeriod con los meses.
+ #   - generated_at  \DateTimeImmutable de la generación.
+ #
+ # Una portada con el periodo y el equipo, y detrás la misma página mensual que
+ # recibe cada trabajador ({@see _timesheet_page}), una por trabajador y mes.
+ # ============================================================ #}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    {% include 'staff/_timesheet_pdf_styles.html.twig' %}
+    <style>
+        .page { page-break-before: always; }
+        .cover h1 { font-size: 20px; margin: 0 0 4px; }
+        .cover .team { margin-top: 14px; width: 60%; }
+    </style>
+</head>
+<body>
+    <div class="cover">
+        <div class="head">
+            <h1>Registro de jornada</h1>
+            <p class="sub">CSA Vega de Jarama · Registro diario de jornada (art. 34.9 ET)</p>
+        </div>
+        <table class="meta">
+            <tr><td class="lbl">Periodo</td><td><strong>{{ period.label|capitalize }}</strong></td></tr>
+            <tr><td class="lbl">Generado</td><td>{{ generated_at|date('d/m/Y H:i') }}</td></tr>
+        </table>
+
+        {% if workers is empty %}
+            <p>Nadie tiene registro de jornada en este periodo.</p>
+        {% else %}
+            <table class="sheet team">
+                <thead><tr><th>Trabajador/a</th><th>Fecha de alta</th></tr></thead>
+                <tbody>
+                    {% for worker in workers %}
+                        <tr><td>{{ worker.name }}</td><td>{{ worker.hireDate ? worker.hireDate|date('d/m/Y') : '—' }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <p class="foot">
+                Detrás, una página por trabajador/a y mes, con cada día del mes, sus tramos de entrada y salida y el
+                total. Las horas salen del registro de fichajes; el detalle de cada apunte (cuándo se registró, quién
+                lo apuntó y qué se anuló) va en el fichero de traza que acompaña a este documento.
+            </p>
+        {% endif %}
+    </div>
+
+    {% for page in pages %}
+        <div class="page">
+            {% include 'staff/_timesheet_page.html.twig' with {
+                worker: page.worker,
+                sheet: page.sheet,
+                year: page.month.year,
+                month: page.month.month,
+            } %}
+        </div>
+    {% endfor %}
+</body>
+</html>
