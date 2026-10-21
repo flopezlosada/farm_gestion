@@ -3,6 +3,7 @@
 namespace App\Tests\Controller;
 
 use App\Entity\Absence;
+use App\Entity\Notification;
 use App\Entity\Setting;
 use App\Entity\TimeEntry;
 use App\Entity\User;
@@ -55,6 +56,9 @@ class WorkControllerTest extends WebTestCase
     protected function tearDown(): void
     {
         $em = static::getContainer()->get(EntityManagerInterface::class);
+        foreach ($em->getRepository(Notification::class)->findBy(['kind' => [Notification::KIND_STAFF_ABSENCE_REQUESTED, Notification::KIND_WORK_ABSENCE_DECIDED]]) as $n) {
+            $em->remove($n);
+        }
         foreach ($em->getRepository(TimeEntry::class)->findAll() as $e) {
             $em->remove($e);
         }
@@ -218,5 +222,30 @@ class WorkControllerTest extends WebTestCase
         $absences = $this->em->getRepository(Absence::class)->findBy(['type' => Absence::TYPE_VACATION]);
         $this->assertCount(1, $absences);
         $this->assertSame(Absence::STATUS_REQUESTED, $absences[0]->getStatus(), 'Las vacaciones (art. 38 ET) sí pasan por aprobación.');
+    }
+
+    /**
+     * Pedir vacaciones deja el aviso en la bandeja de quien las aprueba (el
+     * admin de las fixtures lo es por jerarquía) y no en la del propio trabajador.
+     */
+    public function testVacationRequestReachesStaffInboxButNotTheWorker(): void
+    {
+        $token = $this->csrf('/work/vacations');
+        $this->client->request('POST', '/work/vacations/request', [
+            '_csrf_token' => $token,
+            'type' => Absence::TYPE_VACATION,
+            'start_date' => '2026-10-05',
+            'end_date' => '2026-10-09',
+        ]);
+        $this->assertResponseRedirects('/work/vacations');
+
+        $this->em->clear();
+        $notices = $this->em->getRepository(Notification::class)->findBy(['kind' => Notification::KIND_STAFF_ABSENCE_REQUESTED]);
+        $recipients = array_map(static fn (Notification $n): string => (string) $n->getRecipient()->getUsername(), $notices);
+
+        $this->assertContains('admin', $recipients, 'Quien aprueba vacaciones tiene que enterarse de que se han pedido.');
+        $this->assertNotContains('worker-test-panel', $recipients, 'El trabajador no se avisa a sí mismo.');
+        $this->assertSame('Trabajadora de prueba pide vacaciones', $notices[0]->getTitle());
+        $this->assertSame('Del 05/10/2026 al 09/10/2026. Falta aprobarlas o rechazarlas en su ficha.', $notices[0]->getBody());
     }
 }

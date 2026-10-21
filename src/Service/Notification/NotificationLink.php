@@ -106,6 +106,13 @@ class NotificationLink
             // última: quien no ha entrado en dos meses quiere ver lo que se
             // perdió, no la de esta semana suelta.
             str_starts_with($kind, 'news.') => $this->urlGenerator->generate('news_index'),
+            // La solicitud de un trabajador lleva al listado del personal: aquí
+            // sólo se sabe la clase de aviso, no de qué ficha era. El aviso dice
+            // el nombre, y la ficha (donde se aprueba) está a un clic.
+            str_starts_with($kind, 'staff.') => $this->urlGenerator->generate('staff_index'),
+            // La respuesta a sus vacaciones lleva al trabajador a sus vacaciones,
+            // donde ve el estado y los días que le quedan.
+            str_starts_with($kind, 'work.') => $this->urlGenerator->generate('work_vacations'),
             // Cualquier otro no tiene mejor sitio que la bandeja. Es el caso de
             // un aviso viejo cuyo `kind` ya no se emite, y de uno nuevo al que se
             // le olvidó su línea aquí: molesta, pero no deja a nadie en un 404.

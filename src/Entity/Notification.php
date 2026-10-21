@@ -127,6 +127,17 @@ class Notification
     public const KIND_PARTNERS_INCOMPLETE = 'partners.incomplete';
 
     /**
+     * Un trabajador ha pedido vacaciones o ha registrado una baja o un permiso
+     * (va a quien gestiona el personal). Las vacaciones esperan respuesta; la
+     * baja y el permiso ya constan, pero quien organiza el trabajo tiene que
+     * saber que esa persona no estará.
+     */
+    public const KIND_STAFF_ABSENCE_REQUESTED = 'staff.absence_requested';
+
+    /** Se ha aprobado o rechazado tu solicitud de vacaciones (va al trabajador). */
+    public const KIND_WORK_ABSENCE_DECIDED = 'work.absence_decided';
+
+    /**
      * @ORM\Id
      * @ORM\GeneratedValue
      * @ORM\Column(type="integer")
