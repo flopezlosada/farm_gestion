@@ -346,10 +346,14 @@ class StaffControllerTest extends WebTestCase
         $this->em->persist($absence);
         $this->em->flush();
         $id = $worker->getId();
+        $absenceId = $absence->getId();
+        // Sin reinicio del kernel el Worker sigue en memoria con su colección de
+        // ausencias de antes del alta: la ficha no vería la nueva.
+        $this->em->clear();
 
         $crawler = $this->client->request('GET', '/gestion/staff/' . $id);
-        $token = $crawler->filter('form[action$="/absence/' . $absence->getId() . '/reject"] input[name="_token"]')->attr('value');
-        $this->client->request('POST', '/gestion/staff/' . $id . '/absence/' . $absence->getId() . '/reject', ['_token' => $token]);
+        $token = $crawler->filter('form[action$="/absence/' . $absenceId . '/reject"] input[name="_token"]')->attr('value');
+        $this->client->request('POST', '/gestion/staff/' . $id . '/absence/' . $absenceId . '/reject', ['_token' => $token]);
         $this->assertResponseRedirects('/gestion/staff/' . $id);
 
         $this->em->clear();
