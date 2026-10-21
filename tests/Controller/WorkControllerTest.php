@@ -116,6 +116,25 @@ class WorkControllerTest extends WebTestCase
     }
 
     /**
+     * Con la jornada de hoy ya cerrada, el panel no invita a «empezar tu
+     * jornada»: dice a qué hora salió y que otra entrada abre un tramo nuevo.
+     */
+    public function testAfterClockingOutThePanelSaysSoInsteadOfStartYourDay(): void
+    {
+        foreach ([1, 2] as $_) {
+            $token = $this->csrf('/work');
+            $this->client->request('POST', '/work/clock', ['_csrf_token' => $token]);
+            $this->assertResponseRedirects('/work');
+        }
+
+        $crawler = $this->client->request('GET', '/work');
+        $this->assertResponseIsSuccessful();
+        $this->assertStringContainsString('Has fichado la salida a las', $crawler->filter('.wk-clock__state')->text());
+        $this->assertStringContainsString('Fichar otra entrada', $crawler->filter('.wk-clock button')->text());
+        $this->assertStringNotContainsString('empezar tu jornada', $crawler->filter('.wk-clock')->text());
+    }
+
+    /**
      * El panel pinta los fichajes de hoy y sólo marca «A mano» los que no se
      * ficharon en el momento: el del botón sale limpio, el que metió el
      * supervisor lleva el chip.
