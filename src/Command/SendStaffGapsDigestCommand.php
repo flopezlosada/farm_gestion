@@ -2,47 +2,45 @@
 
 namespace App\Command;
 
-use App\Service\AppSettings;
+use App\Entity\Notification;
 use App\Service\Staff\GapReport;
-use Symfony\Bridge\Twig\Mime\TemplatedEmail;
+use App\Service\Staff\WorkerNotifier;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
-use Symfony\Component\Mailer\MailerInterface;
 
 /**
- * Digest SEMANAL al supervisor con los huecos del registro de jornada: por cada
- * trabajador activo, los días laborables recientes sin fichar y sin ausencia
- * justificada. Es el mismo panel de huecos de la web, pero empujado al correo
- * para que el supervisor lo persiga sin tener que entrar.
+ * Aviso SEMANAL a cada trabajador de sus días laborables recientes sin fichar y
+ * sin ausencia justificada (según su horario).
+ *
+ * VA AL TRABAJADOR Y NO A QUIEN SUPERVISA: el trabajador es quien sabe si aquel
+ * día trabajó (y añade los fichajes) o no (y pide que se registre la ausencia).
+ * Antes iba por correo a un supervisor que tenía que perseguirle; quien supervisa
+ * ya ve los huecos en /gestion/staff/gaps y al aprobar el mes, que no se aprueba
+ * con días sin explicar.
  *
  * Deliberadamente SEMANAL, no diario: un goteo diario se acaba ignorando
  * (fatiga). El aviso en caliente (salida abierta), que sí se degrada rápido, va
  * en un comando aparte ({@see SendStaffOpenShiftAlertCommand}).
- *
- * Si no hay ningún hueco en el período, no envía nada (no se manda correo vacío).
- * Pensado para cron semanal. El interruptor general de email ({@see \App\Mailer\KillSwitchMailer})
- * sigue mandando por encima de todo.
  */
-#[AsCommand(name: 'app:send-staff-gaps-digest', description: 'Digest semanal al supervisor con los huecos del registro de jornada.')]
+#[AsCommand(name: 'app:send-staff-gaps-digest', description: 'Avisa a cada trabajador de sus días recientes sin fichar.')]
 class SendStaffGapsDigestCommand extends AbstractCronCommand
 {
     private const DEFAULT_DAYS = 7;
 
     /**
-     * Clase de efecto con la que se apunta el envío: uno por día. La ventana de
-     * huecos es "los últimos N días" y no se consume al avisar, así que dos
-     * pasadas del reloj el mismo día repetirían el mismo digest.
+     * Clase de efecto con la que se apunta el aviso: uno por trabajador y día. La
+     * ventana es "los últimos N días" y no se consume al avisar, así que dos
+     * pasadas del reloj el mismo día repetirían el mismo aviso.
      */
     private const EFFECT_KIND = 'staff_gaps_digest';
 
     public function __construct(
         private readonly GapReport $gapReport,
-        private readonly MailerInterface $mailer,
-        private readonly AppSettings $settings,
+        private readonly WorkerNotifier $notifier,
     ) {
         parent::__construct();
     }
@@ -50,26 +48,15 @@ class SendStaffGapsDigestCommand extends AbstractCronCommand
     protected function configure(): void
     {
         $this
-            ->addOption('to', null, InputOption::VALUE_REQUIRED, 'Email del supervisor (obligatorio si no es dry-run)')
             ->addOption('days', null, InputOption::VALUE_REQUIRED, 'Cuántos días hacia atrás revisar', self::DEFAULT_DAYS)
-            ->addOption('force', null, InputOption::VALUE_NONE, 'Ignora el gate de la tarea programada (ejecución manual); no afecta a los toggles de email')
-            ->addOption('resend', null, InputOption::VALUE_NONE, 'Repite el envío aunque ya conste emitido hoy (para un correo que no llegó)')
-            ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Lista los huecos que enviaría sin enviar nada');
+            ->addOption('force', null, InputOption::VALUE_NONE, 'Ignora el gate de la tarea programada (ejecución manual)')
+            ->addOption('resend', null, InputOption::VALUE_NONE, 'Repite el aviso aunque ya conste emitido hoy')
+            ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Lista los huecos que avisaría sin avisar');
     }
 
     protected function doExecute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-
-        $dryRun = (bool) $input->getOption('dry-run');
-        // --to si se pasa; si no, el ajuste de /gestion/settings, para no
-        // depender de la línea del crontab del hosting (que no vemos).
-        $to = $input->getOption('to') ?: $this->settings->getString(AppSettings::EMAIL_STAFF_GAPS_TO);
-
-        if (!$dryRun && !$to) {
-            $io->warning('Sin destinatario configurado: rellénalo en /gestion/settings o pasa --to=email.');
-            return $this->nothingToDo('Sin destinatario configurado');
-        }
 
         $madrid = new \DateTimeZone('Europe/Madrid');
         $today = new \DateTimeImmutable('today', $madrid);
@@ -77,53 +64,76 @@ class SendStaffGapsDigestCommand extends AbstractCronCommand
         $from = $today->modify(sprintf('-%d days', $days));
 
         $rows = $this->gapReport->activeWorkersGaps($from, $today);
-
         if ($rows === []) {
-            $io->success('Sin huecos en el período. No se envía nada.');
+            $io->success('Sin huecos en el período. No se avisa a nadie.');
             return $this->nothingToDo(sprintf('Sin huecos en los últimos %d días', $days));
         }
 
-        $tableRows = [];
-        foreach ($rows as $row) {
-            $tableRows[] = [
-                $row['worker']->getName(),
-                count($row['gaps']),
-                implode(', ', array_map(static fn (\DateTimeImmutable $d) => $d->format('d/m'), $row['gaps'])),
-            ];
-        }
-        $io->table(['Trabajador', 'Huecos', 'Días'], $tableRows);
+        $io->table(['Trabajador', 'Huecos', 'Días'], array_map(
+            fn (array $row) => [$row['worker']->getName(), count($row['gaps']), $this->dayList($row['gaps'])],
+            $rows,
+        ));
 
-        if ($dryRun) {
-            $io->success(sprintf('Dry-run: %d trabajador(es) con huecos. Sin envío.', count($rows)));
+        if ($input->getOption('dry-run')) {
+            $io->success(sprintf('Dry-run: %d trabajador(es) con huecos. Sin avisos.', count($rows)));
             return Command::SUCCESS;
         }
 
-        $message = (new TemplatedEmail())
-            ->to($to)
-            ->subject(sprintf('CSA Vega · Huecos del registro de jornada (últimos %d días)', $days))
-            ->htmlTemplate('email/staff_gaps_digest.html.twig')
-            ->textTemplate('email/staff_gaps_digest.txt.twig')
-            ->context([
-                'from' => $from,
-                'today' => $today,
-                'days' => $days,
-                'rows' => $rows,
-            ]);
+        $notified = 0;
+        $withoutAccount = [];
+        foreach ($rows as $row) {
+            $worker = $row['worker'];
+            if (null === $this->notifier->accountOf($worker)) {
+                $withoutAccount[] = $worker->getName();
+                continue;
+            }
 
-        $emitted = $this->emitOnce(
-            self::EFFECT_KIND,
-            fn () => $this->mailer->send($message),
-            $input,
-            target: (string) $to,
-        );
-
-        if (!$emitted) {
-            $io->note('El digest de hoy ya se había enviado. No se repite.');
-            return $this->nothingToDo('El digest de hoy ya se había enviado');
+            $count = count($row['gaps']);
+            $emitted = $this->emitOnce(
+                self::EFFECT_KIND,
+                fn () => $this->notifier->notify(
+                    $worker,
+                    Notification::KIND_WORK_GAPS,
+                    1 === $count ? 'Tienes un día sin fichar' : sprintf('Tienes %d días sin fichar', $count),
+                    sprintf(
+                        '%s. Si trabajaste, añade los fichajes en tu calendario; si no, díselo a quien lleva el personal para que registre la ausencia.',
+                        $this->dayList($row['gaps']),
+                    ),
+                    self::EFFECT_KIND,
+                ),
+                $input,
+                'worker-' . $worker->getId(),
+                $today,
+            );
+            if ($emitted) {
+                ++$notified;
+            }
         }
 
-        $io->success(sprintf('Enviado a %s · %d trabajador(es) con huecos.', $to, count($rows)));
+        if ($withoutAccount !== []) {
+            $io->warning('Sin cuenta de acceso, no se les puede avisar: ' . implode(', ', $withoutAccount));
+        }
+        if ($notified === 0) {
+            return $this->nothingToDo('Nadie a quien avisar hoy (ya avisados o sin cuenta)');
+        }
 
-        return $this->didWork(sprintf('%d trabajadores con huecos avisados a %s', count($rows), $to));
+        $io->success(sprintf('%d trabajador(es) avisado(s) de sus huecos.', $notified));
+
+        return $this->didWork(sprintf('%d trabajadores avisados de sus huecos', $notified));
+    }
+
+    /**
+     * Los días en una lista corta: «14/10, 15/10 y 16/10».
+     *
+     * @param list<\DateTimeImmutable> $days Los días sin fichar, en orden.
+     *
+     * @return string La lista para leer.
+     */
+    private function dayList(array $days): string
+    {
+        $labels = array_map(static fn (\DateTimeImmutable $d): string => $d->format('d/m'), $days);
+        $last = array_pop($labels);
+
+        return [] === $labels ? (string) $last : implode(', ', $labels) . ' y ' . $last;
     }
 }
