@@ -196,31 +196,25 @@ class WorkControllerTest extends WebTestCase
         $this->assertCount(1, $crawler->filter('.wk-row'));
         $this->assertCount(0, $crawler->filter('.wk-chip-deferred'), 'Lo fichado con el botón no es diferido.');
 
-        // Instantes reales en la zona por defecto: la BBDD guarda la hora sin
-        // zona y la devuelve en la de PHP, que en la CI no es la de Madrid.
+        $madrid = new \DateTimeZone('Europe/Madrid');
         $worker = $this->em->find(Worker::class, $this->worker->getId());
-        $recordedAt = new \DateTimeImmutable('now');
         $this->em->persist((new TimeEntry())
             ->setWorker($worker)
             ->setType(TimeEntry::TYPE_OUT)
-            ->setOccurredAt($recordedAt)
+            ->setOccurredAt(new \DateTimeImmutable('now', $madrid))
             ->setSource(TimeEntry::SOURCE_SUPERVISOR));
         $this->em->persist($this->setRecordedAt((new TimeEntry())
             ->setWorker($worker)
             ->setType(TimeEntry::TYPE_IN)
-            ->setOccurredAt($recordedAt->modify('-10 minutes'))
-            ->setSource(TimeEntry::SOURCE_SUPERVISOR), $recordedAt));
+            ->setOccurredAt(new \DateTimeImmutable('today 00:00', $madrid))
+            ->setSource(TimeEntry::SOURCE_SUPERVISOR), new \DateTimeImmutable('today 00:30', $madrid)));
         $this->em->flush();
 
         $crawler = $this->client->request('GET', '/work');
         $this->assertResponseIsSuccessful();
         $this->assertCount(3, $crawler->filter('.wk-row'));
         $this->assertCount(1, $crawler->filter('.wk-chip-deferred'), 'Sólo lo apuntado más tarde es diferido, lo apunte quien lo apunte.');
-        $this->assertSame(
-            'Apuntado a las ' . $recordedAt->setTimezone(new \DateTimeZone('Europe/Madrid'))->format('H:i') . ' por el supervisor',
-            trim($crawler->filter('.wk-chip-deferred')->text()),
-            'El chip dice cuándo y quién lo apuntó.',
-        );
+        $this->assertSame('Apuntado a las 00:30 por el supervisor', trim($crawler->filter('.wk-chip-deferred')->text()), 'El chip dice cuándo y quién lo apuntó.');
     }
 
     /**
