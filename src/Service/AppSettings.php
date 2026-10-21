@@ -89,9 +89,6 @@ class AppSettings
     /** Envío del recordatorio de llegadas/salidas del albergue al equipo (app:send-albergue-arrivals-reminder). */
     public const EMAIL_ALBERGUE_REMINDER = 'email.albergue_reminder';
 
-    /** Envío de los avisos de huecos del registro de jornada al supervisor (digest semanal + salida abierta). */
-    public const EMAIL_STAFF_GAPS = 'email.staff_gaps';
-
     /** Aviso a gestión laboral de que hay meses del registro de jornada sin aprobar (app:send-staff-month-close-reminder). */
     public const EMAIL_STAFF_MONTH_CLOSE = 'email.staff_month_close';
 
@@ -119,13 +116,6 @@ class AppSettings
      * — que no vemos ni podemos editar. Por eso esa tarea nunca llegó a correr.
      */
     public const EMAIL_ALBERGUE_REMINDER_TO = 'email.albergue_reminder_to';
-
-    /**
-     * Destinatario(s) de los dos avisos de jornada (huecos y salidas sin
-     * cerrar). Uno solo para los dos, igual que comparten interruptor: los dos
-     * van a quien supervisa.
-     */
-    public const EMAIL_STAFF_GAPS_TO = 'email.staff_gaps_to';
 
     /**
      * Destinatario(s) del listado de reparto que sale al cerrar el plazo de cada
@@ -666,24 +656,28 @@ class AppSettings
         ],
         self::CRON_STAFF_GAPS_DIGEST => [
             'command' => 'app:send-staff-gaps-digest',
-            'channels' => ['email'],
-            'needs_recipient' => true,
+            'channels' => ['push', 'inbox'],
+            'needs_recipient' => false,
             'confirm' => true,
             'dry' => true,
             'schedule' => ['freq' => 'weekly', 'dow' => 1, 'hour' => 8],
             'max_delay_hours' => 192,
-            'requires' => [self::EMAIL_ENABLED, self::EMAIL_STAFF_GAPS],
+            // Va a la bandeja y al móvil de cada trabajador: no depende del correo,
+            // sólo de que el módulo laboral esté encendido.
+            'requires' => [self::FEATURE_LABORAL],
             'depends_on' => [],
         ],
         self::CRON_STAFF_OPEN_SHIFT_ALERT => [
             'command' => 'app:send-staff-open-shift-alert',
-            'channels' => ['email'],
-            'needs_recipient' => true,
+            'channels' => ['push', 'inbox'],
+            'needs_recipient' => false,
             'confirm' => true,
             'dry' => true,
             'schedule' => ['freq' => 'daily', 'hour' => 10],
             'max_delay_hours' => 36,
-            'requires' => [self::EMAIL_ENABLED, self::EMAIL_STAFF_GAPS],
+            // Va a la bandeja y al móvil de cada trabajador: no depende del correo,
+            // sólo de que el módulo laboral esté encendido.
+            'requires' => [self::FEATURE_LABORAL],
             'depends_on' => [],
         ],
         // A diario aunque el aviso sea de principio de mes: la tarea decide sola
@@ -904,12 +898,6 @@ class AppSettings
             'help' => 'Aviso al equipo con las llegadas y salidas confirmadas de los próximos días en el albergue (preparar camas, etc.). Se envía a la dirección configurada en el cron.',
             'default' => false,
         ],
-        self::EMAIL_STAFF_GAPS => [
-            'group' => 'Emails internos',
-            'label' => 'Avisos de huecos del registro de jornada',
-            'help' => 'Cubre los dos avisos al supervisor del control horario: el digest semanal con los días laborables sin fichar de cada trabajador, y el aviso de “salida abierta” cuando alguien se deja una entrada sin cerrar de un día anterior. Se envían a la dirección configurada en cada cron.',
-            'default' => false,
-        ],
         self::EMAIL_STAFF_MONTH_CLOSE => [
             'group' => 'Emails internos',
             'label' => 'Avisar de que hay que aprobar el registro de jornada',
@@ -1093,7 +1081,7 @@ class AppSettings
         self::CRON_STAFF_GAPS_DIGEST => [
             'group' => 'Tareas programadas',
             'label' => 'Enviar el resumen de huecos de jornada',
-            'help' => 'Manda al supervisor el resumen de días laborables sin fichar de cada trabajador (app:send-staff-gaps-digest). Semanal a propósito, para no saturar. Independiente del email de jornada.',
+            'help' => 'Avisa a cada trabajador, en su bandeja y en el móvil, de sus días laborables de la última semana sin fichar ni ausencia (app:send-staff-gaps-digest). Semanal a propósito, para no saturar.',
             'default' => false,
         ],
         self::CRON_STAFF_MONTH_CLOSE_REMINDER => [
@@ -1111,7 +1099,7 @@ class AppSettings
         self::CRON_STAFF_OPEN_SHIFT_ALERT => [
             'group' => 'Tareas programadas',
             'label' => 'Avisar de salidas abiertas',
-            'help' => 'Avisa al supervisor si algún trabajador se dejó una entrada sin cerrar de un día anterior (app:send-staff-open-shift-alert). Solo envía si hay alguna. Independiente del email de jornada.',
+            'help' => 'Avisa al trabajador, en su bandeja y en el móvil, si se dejó una entrada sin cerrar de un día anterior (app:send-staff-open-shift-alert). Solo avisa a quien tiene alguna.',
             'default' => false,
         ],
     ];
@@ -1219,13 +1207,6 @@ class AppSettings
             'group' => 'Emails internos',
             'label' => 'Destinatario(s) del recordatorio del albergue',
             'help' => 'Dirección(es) de correo (separadas por comas) que reciben el aviso de llegadas y salidas próximas. Vacío = la tarea no envía nada aunque esté encendida.',
-            'default' => '',
-            'general' => true,
-        ],
-        self::EMAIL_STAFF_GAPS_TO => [
-            'group' => 'Emails internos',
-            'label' => 'Destinatario(s) de los avisos de jornada',
-            'help' => 'Dirección(es) de correo (separadas por comas) que reciben el resumen semanal de huecos y el aviso de salidas sin cerrar. Vacío = esas tareas no envían nada aunque estén encendidas.',
             'default' => '',
             'general' => true,
         ],

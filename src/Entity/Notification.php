@@ -108,6 +108,12 @@ class Notification
     /** A tu ficha le faltan datos que puedes rellenar tú (va al socix). */
     public const KIND_PROFILE_INCOMPLETE = 'profile.incomplete';
 
+    /** Días laborables recientes sin fichar ni ausencia (va al trabajador). */
+    public const KIND_WORK_GAPS = 'work.gaps';
+
+    /** Se dejó una entrada sin cerrar de un día anterior (va al trabajador). */
+    public const KIND_WORK_OPEN_SHIFT = 'work.open_shift';
+
     /**
      * Hay cosas nuevas en la web que se han contado a lxs socixs.
      *

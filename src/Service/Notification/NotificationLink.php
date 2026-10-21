@@ -60,6 +60,11 @@ class NotificationLink
     public function pathForKind(string $kind): string
     {
         return match (true) {
+            // Los olvidos de fichar llevan al calendario de la jornada: es donde
+            // se elige el día y se añade lo que falta. Aquí no se sabe qué día era
+            // (el aviso lo dice).
+            Notification::KIND_WORK_GAPS === $kind,
+            Notification::KIND_WORK_OPEN_SHIFT === $kind => $this->urlGenerator->generate('work_calendar'),
             // La petición del otro hogar lleva a donde se contesta, y va ANTES que la
             // familia 'pickup.' porque si no la absorbe: un aviso que pide algo tiene
             // que abrir el sitio donde se hace, no el panel donde no hay botón.
