@@ -79,6 +79,31 @@ class AbsenceRepository extends ServiceEntityRepository
     }
 
     /**
+     * Los días que cubren las ausencias APROBADAS de un trabajador que solapan
+     * [from, to], con el tipo de ausencia de cada uno. Es lo que necesitan el
+     * calendario, el resumen del mes y el panel de huecos: no la ausencia, sino
+     * qué días deja explicados.
+     *
+     * @param Worker             $worker Trabajador.
+     * @param \DateTimeImmutable $from   Inicio del rango (incluido).
+     * @param \DateTimeImmutable $to     Fin del rango (incluido).
+     * @return array<string, string> Tipo de ausencia por día 'Y-m-d'.
+     */
+    public function coveredDaysForWorkerBetween(Worker $worker, \DateTimeImmutable $from, \DateTimeImmutable $to): array
+    {
+        $covered = [];
+        foreach ($this->findApprovedForWorkerBetween($worker, $from, $to) as $absence) {
+            $cursor = $absence->getStartDate();
+            while ($cursor <= $absence->getEndDate()) {
+                $covered[$cursor->format('Y-m-d')] = $absence->getType();
+                $cursor = $cursor->modify('+1 day');
+            }
+        }
+
+        return $covered;
+    }
+
+    /**
      * Ausencias VIGENTES (solicitadas o aprobadas) de un trabajador que solapan el
      * rango [from, to]. Sirve para impedir solicitar/registrar dos ausencias en las
      * mismas fechas. Las rechazadas y canceladas no cuentan (no ocupan).

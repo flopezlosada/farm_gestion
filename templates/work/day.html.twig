@@ -6,14 +6,14 @@
 {% set madrid = 'Europe/Madrid' %}
 {% set ymd = date|date('Y-m-d', madrid) %}
 
-{% block title %}Mi jornada · {{ date|date('j M Y', madrid) }}{% endblock %}
+{% block title %}Mi jornada · {{ date|format_date(pattern='d MMM y', locale='es', timezone=madrid) }}{% endblock %}
 
 {% block csa_crumbs %}
     <a href="{{ path('work') }}">Mi jornada</a>
     <span class="csa-topbar__crumbs-sep">/</span>
     <a href="{{ path('work_calendar', { year: date|date('Y', madrid), month: date|date('n', madrid) }) }}">Calendario</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <span class="csa-topbar__crumb-active">{{ date|date('j M', madrid) }}</span>
+    <span class="csa-topbar__crumb-active">{{ date|format_date(pattern='d MMM', locale='es', timezone=madrid) }}</span>
 {% endblock %}
 
 {% block more_css %}
@@ -22,7 +22,7 @@
 {% endblock %}
 
 {% block csa_main %}
-    {{ csa.page_header('Mi jornada', date|date('l, j F Y', madrid)|capitalize,
+    {{ csa.page_header('Mi jornada', date|format_date('full', locale='es', timezone=madrid)|capitalize,
         'Total del día: ' ~ (total // 60) ~ 'h ' ~ '%02d'|format(total % 60) ~ 'm.') }}
 
     {% set popts = { csrf_id: 'work_entry', correct_route: 'work_entry_correct', void_route: 'work_entry_void', base_params: {}, return_to: ymd, readonly: closed } %}

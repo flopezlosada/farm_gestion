@@ -8,6 +8,7 @@ use App\Repository\AbsenceRepository;
 use App\Repository\HolidayRepository;
 use App\Repository\TimeEntryRepository;
 use App\Repository\WorkerRepository;
+use App\Repository\WorkScheduleRepository;
 
 /**
  * Reúne, para los trabajadores activos, los huecos del registro de jornada y los
@@ -26,6 +27,7 @@ class GapReport
         private readonly AbsenceRepository $absences,
         private readonly GapFinder $gapFinder,
         private readonly HolidayRepository $holidays,
+        private readonly WorkScheduleRepository $schedules,
     ) {
     }
 
@@ -49,16 +51,9 @@ class GapReport
                 $worked[$entry->getOccurredAt()->format('Y-m-d')] = true;
             }
 
-            $covered = [];
-            foreach ($this->absences->findApprovedForWorkerBetween($worker, $from, $today) as $absence) {
-                $cursor = $absence->getStartDate();
-                while ($cursor <= $absence->getEndDate()) {
-                    $covered[$cursor->format('Y-m-d')] = true;
-                    $cursor = $cursor->modify('+1 day');
-                }
-            }
+            $covered = $this->absences->coveredDaysForWorkerBetween($worker, $from, $today);
 
-            $gaps = $this->gapFinder->gapsFor($from, $today, $worker->getHireDate(), $worked, $covered, $holidayDates);
+            $gaps = $this->gapFinder->gapsFor($from, $today, $worker->getHireDate(), $worked, $covered, $holidayDates, $this->schedules->workingWeekFor($worker));
             if ($gaps !== []) {
                 $rows[] = ['worker' => $worker, 'gaps' => $gaps];
             }

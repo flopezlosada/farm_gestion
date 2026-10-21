@@ -18,7 +18,7 @@
 {% import _self as m %}
 {% set dow_names = { 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb', 7: 'Dom' } %}
 {% set month_names = { 1: 'enero', 2: 'febrero', 3: 'marzo', 4: 'abril', 5: 'mayo', 6: 'junio', 7: 'julio', 8: 'agosto', 9: 'septiembre', 10: 'octubre', 11: 'noviembre', 12: 'diciembre' } %}
-{% set abs_labels = { vacation: 'Vacaciones', sick_leave: 'Baja médica', permit: 'Permiso', other: 'Ausencia' } %}
+{% set abs_labels = constant('App\\Entity\\Absence::TYPE_LABELS') %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -38,8 +38,8 @@
         td.day { white-space: nowrap; width: 86px; }
         td.total { text-align: right; white-space: nowrap; width: 64px; }
         td.tot-b { font-weight: bold; }
-        tr.weekend td, tr.before_hire td, tr.future td { color: #9ca3af; }
-        tr.weekend td.day { background: #f9fafb; }
+        tr.weekend td, tr.rest td, tr.before_hire td, tr.future td { color: #9ca3af; }
+        tr.weekend td.day, tr.rest td.day { background: #f9fafb; }
         tr.missing td { background: #fef3f2; }
         tr.missing td.obs { color: #9b1c1c; }
         .badge { font-size: 8.5px; }
@@ -96,6 +96,8 @@
                                 <span class="badge">Festivo{{ row.holidayName ? ': ' ~ row.holidayName : '' }}</span>
                             {%- elseif row.status == 'weekend' -%}
                                 <span class="badge">Fin de semana</span>
+                            {%- elseif row.status == 'rest' -%}
+                                <span class="badge">Descanso</span>
                             {%- elseif row.status == 'missing' -%}
                                 <span class="badge">Sin fichar</span>
                             {%- else -%}

@@ -34,7 +34,8 @@ class WorkMonthClosing
      * @param WorkMonth          $month Mes.
      * @param \DateTimeImmutable $today Hoy (Madrid), para no contar como hueco lo que aún no ha llegado.
      * @return list<array{worker: Worker, sheet: array, close: WorkMonthClose|null, issues: int}>
-     *         `issues` = días con una jornada sin cerrar o descuadrada.
+     *         `issues` = días que impiden aprobar: jornada sin cerrar o
+     *         descuadrada, o día que le tocaba sin fichar ni ausencia.
      */
     public function rowsFor(WorkMonth $month, \DateTimeImmutable $today): array
     {
@@ -56,7 +57,7 @@ class WorkMonthClosing
                 'worker' => $worker,
                 'sheet' => $sheet,
                 'close' => $sheet['close'],
-                'issues' => \count(array_filter($sheet['rows'], static fn (array $r) => $r['open'] || $r['anomaly'])),
+                'issues' => $sheet['issueDays'] + ($worker->isActive() ? $sheet['missingDays'] : 0),
             ];
         }
 
@@ -79,10 +80,12 @@ class WorkMonthClosing
      * Aprueba el mes de un trabajador. Desde ese momento el mes queda bloqueado
      * ({@see ClosedWorkMonths}).
      *
-     * Sólo se aprueba un mes TERMINADO y sin jornadas a medias: una entrada sin
-     * salida no suma horas, así que aprobarla dejaría un resumen que dice menos
-     * de lo que se trabajó. Los días sin fichar sí se pueden aprobar: son lo que
-     * hay, y quedan escritos como tales en el resumen.
+     * Sólo se aprueba un mes TERMINADO en el que cada día que le tocaba está
+     * explicado: una entrada sin salida no suma horas, así que aprobarla dejaría
+     * un resumen que dice menos de lo que se trabajó; y un día sin fichar ni
+     * ausencia es una pregunta sin contestar (¿trabajó y no fichó, o no vino?).
+     * Lo que no se trabajó se justifica con una ausencia (permiso, huelga…),
+     * nunca rellenando el horario: el registro es de la jornada REAL.
      *
      * @param Worker             $worker Trabajador.
      * @param WorkMonth          $month  Mes.
@@ -108,13 +111,26 @@ class WorkMonthClosing
             throw new \DomainException(sprintf('%s de %s ya estaba aprobado.', ucfirst($month->label()), $worker->getName()));
         }
 
-        $issues = \count(array_filter($sheet['rows'], static fn (array $r) => $r['open'] || $r['anomaly']));
+        $issues = $sheet['issueDays'];
         if ($issues > 0) {
             throw new \DomainException(sprintf(
                 '%s tiene %d día%s con una jornada sin cerrar o descuadrada. Corrígelo antes de aprobar el mes.',
                 $worker->getName(),
                 $issues,
                 $issues === 1 ? '' : 's',
+            ));
+        }
+
+        // Quien ya no trabaja aquí no tiene fecha de baja en su ficha: los días
+        // después de irse saldrían como huecos y no habría forma honesta de
+        // justificarlos. Para esa persona sólo bloquean las jornadas a medias.
+        $missing = $worker->isActive() ? $sheet['missingDays'] : 0;
+        if ($missing > 0) {
+            throw new \DomainException(sprintf(
+                '%s tiene %d día%s sin fichar y sin ausencia. Corrige los fichajes o registra la ausencia (permiso, huelga…) antes de aprobar el mes.',
+                $worker->getName(),
+                $missing,
+                $missing === 1 ? '' : 's',
             ));
         }
 

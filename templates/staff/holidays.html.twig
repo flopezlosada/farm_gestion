@@ -77,7 +77,7 @@
                     {% set ymd = holiday.date|date('Y-m-d') %}
                     <tr data-hol-row="{{ holiday.id }}">
                         <td class="csa-table__primary">{{ holiday.date|date('d/m/Y') }}</td>
-                        <td class="csa-table__col-tight csa-muted" style="text-transform: capitalize;">{{ holiday.date|date('l', 'Europe/Madrid')|capitalize }}</td>
+                        <td class="csa-table__col-tight csa-muted" style="text-transform: capitalize;">{{ holiday.date|format_date(pattern='EEEE', locale='es', timezone='Europe/Madrid')|capitalize }}</td>
                         <td>{{ holiday.name }}</td>
                         <td class="csa-table__actions">
                             <button type="button" class="hol-icon-btn" title="Editar" aria-label="Editar" data-hol-edit="{{ holiday.id }}"><i class="fa fa-pencil"></i></button>

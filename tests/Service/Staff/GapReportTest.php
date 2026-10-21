@@ -8,6 +8,7 @@ use App\Repository\AbsenceRepository;
 use App\Repository\HolidayRepository;
 use App\Repository\TimeEntryRepository;
 use App\Repository\WorkerRepository;
+use App\Repository\WorkScheduleRepository;
 use App\Service\Staff\GapFinder;
 use App\Service\Staff\GapReport;
 use PHPUnit\Framework\TestCase;
@@ -55,6 +56,7 @@ class GapReportTest extends TestCase
             $this->createMock(AbsenceRepository::class),
             new GapFinder(),
             $this->createMock(HolidayRepository::class),
+            $this->createMock(WorkScheduleRepository::class),
         );
     }
 

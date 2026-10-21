@@ -76,7 +76,7 @@
     </div>
 
     {# ===== Vacaciones y ausencias ===== #}
-    {% set abs_type = { vacation: 'Vacaciones', sick_leave: 'Baja médica', permit: 'Permiso', other: 'Otra ausencia' } %}
+    {% set abs_type = constant('App\\Entity\\Absence::TYPE_LABELS') %}
     {% set abs_state = { requested: ['Solicitada','#92400e','#fef3c7'], approved: ['Aprobada','#2f6f43','#e7f3ea'], rejected: ['Rechazada','#9b1c1c','#fde2e2'], cancelled: ['Cancelada','#6b7280','#f3f4f6'] } %}
     <div class="stf-access" style="background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:1.1rem 1.2rem; margin-bottom:1.6rem;">
         <div class="csa-row-between" style="margin-bottom:.8rem;">
@@ -130,7 +130,7 @@
         {% for day in days %}
             <div class="stf-day">
                 <div class="stf-day__head" style="display:flex; align-items:center; gap:.6rem;">
-                    <span>{{ day.date|date('l, j M', madrid) }}</span>
+                    <span>{{ day.date|format_date(pattern='EEEE, d MMM', locale='es', timezone=madrid) }}</span>
                     {% if day.anomaly %}<span class="stf-late" style="background:#fde2e2; color:#9b1c1c;">Revisar</span>{% endif %}
                     {% if day.open %}<span class="stf-late" style="background:#e0f2fe; color:#075985;">En curso</span>{% endif %}
                     <span style="margin-left:auto; font-variant-numeric:tabular-nums; font-weight:600;">

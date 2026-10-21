@@ -3,6 +3,7 @@
 namespace App\Tests\Service\Staff;
 
 use App\Service\Staff\MonthGridBuilder;
+use App\Service\Staff\WorkingWeek;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -48,6 +49,7 @@ class MonthGridBuilderTest extends TestCase
             $today,
             new \DateTimeImmutable('2020-01-01', $this->tz),
             ['2026-06-17' => 'San Festivo'],      // festivo
+            WorkingWeek::mondayToFriday(),
         );
 
         $holiday = $this->cell($weeks, '2026-06-17');
@@ -59,5 +61,25 @@ class MonthGridBuilderTest extends TestCase
         $gap = $this->cell($weeks, '2026-06-16');
         $this->assertNull($gap['holiday']);
         $this->assertTrue($gap['isGap']);
+    }
+
+    /**
+     * Con media jornada de lunes a jueves, el viernes sin fichar no se pinta
+     * como «Sin fichar».
+     */
+    public function testElDiaQueNoLeTocaNoEsHueco(): void
+    {
+        $weeks = $this->builder->build(
+            2026, 6, $this->tz,
+            [],
+            [],
+            new \DateTimeImmutable('2026-06-30 00:00:00', $this->tz),
+            new \DateTimeImmutable('2020-01-01', $this->tz),
+            [],
+            WorkingWeek::of(1, 2, 3, 4),
+        );
+
+        $this->assertFalse($this->cell($weeks, '2026-06-19')['isGap']);
+        $this->assertTrue($this->cell($weeks, '2026-06-18')['isGap']);
     }
 }

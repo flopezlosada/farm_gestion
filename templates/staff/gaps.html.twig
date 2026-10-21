@@ -21,13 +21,15 @@
         .gap-card__name:hover { text-decoration:underline; }
         .gap-card__count { margin-left:auto; font-size:.8rem; color:#9b1c1c; background:#fde2e2; border-radius:999px; padding:.15rem .6rem; font-weight:600; }
         .gap-chips { display:flex; flex-wrap:wrap; gap:.4rem; }
-        .gap-chip { font-size:.8rem; background:#fef3c7; color:#92400e; border-radius:8px; padding:.25rem .55rem; text-transform:capitalize; }
+        .gap-chip { font-size:.8rem; background:#fef3c7; color:#92400e; border-radius:8px; padding:.25rem .55rem; text-transform:capitalize; text-decoration:none; }
+        a.gap-chip:hover { background:#fde68a; }
+        .gap-card__hint { font-size:.8rem; color:#6b7280; margin:.6rem 0 0; }
         .gap-ok { background:#fff; border:1px solid #cfe3cf; border-radius:12px; padding:2rem 1.2rem; text-align:center; color:#2f6f43; }
     </style>
 {% endblock %}
 
 {% block csa_main %}
-    {{ csa.page_header('Personal', 'Huecos del registro', 'Días laborables de los últimos ' ~ days ~ ' días sin fichaje y sin ausencia justificada. Revísalos antes de que se acumulen.') }}
+    {{ csa.page_header('Personal', 'Huecos del registro', 'Días que les tocaba trabajar, de los últimos ' ~ days ~ ' días, sin fichaje y sin ausencia justificada. Revísalos antes de que se acumulen.') }}
 
     {{ csa.callout('Los festivos del calendario laboral (menú Personal · Festivos) no cuentan como hueco. Mantenlo al día para que un festivo entre semana no salga aquí como olvido.', 'info') }}
 
@@ -39,9 +41,18 @@
             </div>
             <div class="gap-chips">
                 {% for gap in row.gaps %}
-                    <span class="gap-chip">{{ gap|date('D j M', 'Europe/Madrid') }}</span>
+                    {# format_date y no `date`: éste pinta los días en inglés. #}
+                    {% set label = gap|format_date(pattern='EEE d MMM', locale='es', timezone='Europe/Madrid') %}
+                    {% if is_granted('ROLE_GESTION_LABORAL_EDIT') %}
+                        <a class="gap-chip" href="{{ path('staff_absence_new', { id: row.worker.id, date: gap|date('Y-m-d', 'Europe/Madrid'), back: 'gaps' }) }}" title="Registrar una ausencia (permiso, huelga…) para este día">{{ label }}</a>
+                    {% else %}
+                        <span class="gap-chip">{{ label }}</span>
+                    {% endif %}
                 {% endfor %}
             </div>
+            {% if is_granted('ROLE_GESTION_LABORAL_EDIT') %}
+                <p class="gap-card__hint">Si no vino a trabajar (permiso, huelga…), pulsa el día y registra la ausencia. Si trabajó y no fichó, corrígelo en <a href="{{ path('staff_calendar', { id: row.worker.id }) }}">su calendario</a>.</p>
+            {% endif %}
         </div>
     {% else %}
         <div class="gap-ok">
