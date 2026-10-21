@@ -14,8 +14,11 @@ use App\Entity\PartnerEvent;
 use App\Entity\Production;
 use App\Entity\UsageHit;
 use App\Entity\User;
+use App\Repository\AbsenceRepository;
 use App\Service\Delivery\NodeDeliveryCounter;
 use App\Service\Delivery\NodeDeliveryDate;
+use App\Service\Staff\WorkMonth;
+use App\Service\Staff\WorkMonthClosing;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -47,6 +50,8 @@ class DefaultController extends AbstractController
         EntityManagerInterface $em,
         NodeDeliveryDate $nodeDeliveryDate,
         NodeDeliveryCounter $deliveryCounter,
+        AbsenceRepository $absences,
+        WorkMonthClosing $closing,
     ): Response {
         $dash = [];
 
@@ -69,9 +74,44 @@ class DefaultController extends AbstractController
             if ($this->isGranted('ROLE_BLOG')) {
                 $dash['comunicacion'] = $this->comunicacionSummary($em);
             }
+            if ($this->isGranted('ROLE_GESTION_LABORAL') && $this->isGranted('FEATURE_LABORAL')) {
+                $dash['laboral'] = $this->laboralSummary($absences, $closing);
+            }
         }
 
         return $this->render('Default/dashboard.html.twig', ['dash' => $dash]);
+    }
+
+    /**
+     * Lo que espera a quien lleva el personal: vacaciones por decidir, bajas y
+     * permisos que los trabajadores han registrado esta semana (no pasan por
+     * aprobación, así que no salen en ninguna cola) y el mes anterior sin
+     * aprobar.
+     *
+     * Sólo el mes anterior: el en curso aún no se puede cerrar, y uno más viejo
+     * sin aprobar ya lo persigue el recordatorio de los días 1, 5 y 10.
+     *
+     * @param AbsenceRepository $absences Ausencias.
+     * @param WorkMonthClosing  $closing  Aprobación mensual del registro.
+     *
+     * @return array{
+     *     requests: \App\Entity\Absence[],
+     *     self_registered: \App\Entity\Absence[],
+     *     month: WorkMonth,
+     *     pending_months: list<array{worker: \App\Entity\Worker, sheet: array, close: null, issues: int}>
+     * }
+     */
+    private function laboralSummary(AbsenceRepository $absences, WorkMonthClosing $closing): array
+    {
+        $today = new \DateTimeImmutable('today', new \DateTimeZone('Europe/Madrid'));
+        $month = WorkMonth::containing($today)->previous();
+
+        return [
+            'requests' => $absences->findPendingRequests(),
+            'self_registered' => $absences->findSelfRegisteredSince($today->modify('-7 days')),
+            'month' => $month,
+            'pending_months' => $closing->pendingFor($month, $today),
+        ];
     }
 
     /**

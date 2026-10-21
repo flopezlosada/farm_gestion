@@ -164,4 +164,29 @@ class AbsenceRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * Bajas y permisos que el propio trabajador ha registrado desde una fecha.
+     *
+     * No pasan por aprobación (constan al guardarlos), así que quien lleva el
+     * personal no las ve en ninguna cola: sólo se entera si abre la ficha. Se
+     * distinguen de las que registra el supervisor porque éste siempre queda
+     * como `approvedBy`; las del trabajador no tienen a nadie.
+     *
+     * @param \DateTimeImmutable $since Desde cuándo (fecha de registro, no de la ausencia).
+     *
+     * @return Absence[] De la más reciente a la más antigua.
+     */
+    public function findSelfRegisteredSince(\DateTimeImmutable $since): array
+    {
+        return $this->createQueryBuilder('a')
+            ->andWhere('a.status = :status')
+            ->andWhere('a.approvedBy IS NULL')
+            ->andWhere('a.created >= :since')
+            ->setParameter('status', Absence::STATUS_APPROVED)
+            ->setParameter('since', $since)
+            ->orderBy('a.created', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
 }
