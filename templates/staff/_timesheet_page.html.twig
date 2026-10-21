@@ -1,0 +1,107 @@
+{# ============================================================
+ # Una página del resumen mensual de jornada (dompdf): la de un trabajador y un
+ # mes. La comparten el PDF de un mes (timesheet_pdf) y el registro completo
+ # para la Inspección (record_pdf), para que el documento sea el mismo.
+ #
+ # Recibe: worker, sheet, year, month, generated_at (ver timesheet_pdf).
+ # ============================================================ #}
+{% macro hm(minutes) %}{% if minutes > 0 %}{{ (minutes // 60) }}h {{ '%02d'|format(minutes % 60) }}m{% else %}—{% endif %}{% endmacro %}
+{% import _self as m %}
+{% set dow_names = { 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb', 7: 'Dom' } %}
+{% set month_names = { 1: 'enero', 2: 'febrero', 3: 'marzo', 4: 'abril', 5: 'mayo', 6: 'junio', 7: 'julio', 8: 'agosto', 9: 'septiembre', 10: 'octubre', 11: 'noviembre', 12: 'diciembre' } %}
+{% set abs_labels = constant('App\\Entity\\Absence::TYPE_LABELS') %}
+    <div class="head">
+        <h1>Resumen mensual de jornada — {{ month_names[month] }} {{ year }}</h1>
+        <p class="sub">CSA Vega de Jarama · Registro diario de jornada (art. 34.9 ET) totalizado por mes</p>
+    </div>
+
+    <table class="meta">
+        <tr>
+            <td class="lbl">Trabajador/a</td><td><strong>{{ worker.name }}</strong></td>
+            <td class="lbl">Periodo</td><td>{{ month_names[month] }} de {{ year }}</td>
+        </tr>
+        <tr>
+            <td class="lbl">Fecha de alta</td><td>{{ worker.hireDate ? worker.hireDate|date('d/m/Y') : '—' }}</td>
+            <td class="lbl">Generado</td><td>{{ generated_at|date('d/m/Y H:i') }}</td>
+        </tr>
+        <tr>
+            <td class="lbl">Jornada</td><td>{{ worker.workdayTypeLabel ?? 'Sin definir' }}</td>
+            <td></td><td></td>
+        </tr>
+    </table>
+
+    <table class="sheet">
+        <thead>
+            <tr>
+                <th>Día</th>
+                <th>Jornada (entrada – salida)</th>
+                <th style="text-align:right;">Total</th>
+                <th>Observación</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in sheet.rows %}
+                <tr class="{{ row.status }}">
+                    <td class="day">{{ dow_names[row.dow] }} {{ row.date|date('d/m') }}</td>
+                    <td>
+                        {%- for seg in row.segments -%}
+                            {%- if not loop.first %} · {% endif -%}
+                            {{ seg.in ? seg.in.occurredAt|date('H:i') : '··' }}–{{ seg.out ? seg.out.occurredAt|date('H:i') : '··' }}
+                        {%- else -%}
+                            {%- if row.status == 'absence' -%}
+                                <span class="badge">{{ abs_labels[row.absenceType]|default('Ausencia') }}</span>
+                            {%- elseif row.status == 'holiday' -%}
+                                <span class="badge">Festivo{{ row.holidayName ? ': ' ~ row.holidayName : '' }}</span>
+                            {%- elseif row.status == 'weekend' -%}
+                                <span class="badge">Fin de semana</span>
+                            {%- elseif row.status == 'rest' -%}
+                                <span class="badge">Descanso</span>
+                            {%- elseif row.status == 'missing' -%}
+                                <span class="badge">Sin fichar</span>
+                            {%- else -%}
+                                —
+                            {%- endif -%}
+                        {%- endfor -%}
+                        {%- if row.open %} <span class="badge">(en curso)</span>{% endif -%}
+                        {%- if row.anomaly %} <span class="badge">(revisar)</span>{% endif -%}
+                    </td>
+                    <td class="total{{ row.status == 'worked' ? ' tot-b' : '' }}">{{ m.hm(row.totalMinutes) }}</td>
+                    <td class="obs">
+                        {%- if row.status == 'worked' and row.absenceType %}{{ abs_labels[row.absenceType]|default('') }}{% endif -%}
+                        {%- if row.manual %}{{ row.status == 'worked' and row.absenceType ? ' · ' : '' }}Apuntado a mano{% endif -%}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="2">TOTAL DEL MES</td>
+                <td class="total">{{ m.hm(sheet.totalMinutes) }}</td>
+                <td></td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <div class="totals">
+        <span>Días trabajados: <strong>{{ sheet.workedDays }}</strong></span>
+        {% if sheet.missingDays > 0 %}<span style="color:#9b1c1c;">Días laborables sin fichar: <strong>{{ sheet.missingDays }}</strong></span>{% endif %}
+        {% if sheet.manualDays > 0 %}<span>Días con registros apuntados a mano: <strong>{{ sheet.manualDays }}</strong></span>{% endif %}
+    </div>
+
+    {% if sheet.close %}
+        <div class="approval">
+            <strong>Mes aprobado por la asociación</strong> el {{ sheet.close.approvedAt|date('d/m/Y H:i', 'Europe/Madrid') }}{{ sheet.close.approvedBy ? ' (' ~ sheet.close.approvedBy.displayName ~ ')' : '' }}.
+            Desde la aprobación, el registro de este mes no se puede modificar.
+        </div>
+    {% else %}
+        <div class="approval approval--pending">
+            <strong>Pendiente de aprobación.</strong> Este resumen puede cambiar mientras el mes no esté aprobado.
+        </div>
+    {% endif %}
+
+    <p class="foot">
+        Documento generado automáticamente a partir del registro de fichajes. Las horas se calculan emparejando
+        entradas y salidas; los apuntes son inmutables (las correcciones quedan trazadas). «Apuntado a mano»: algún
+        registro del día no se fichó en el momento (olvido añadido después, hora corregida o anotado por el supervisor).
+        Conservar durante 4 años.
+    </p>

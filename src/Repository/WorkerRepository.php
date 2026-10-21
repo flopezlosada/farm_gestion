@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Entity\TimeEntry;
 use App\Entity\Worker;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -29,6 +30,30 @@ class WorkerRepository extends ServiceEntityRepository
     {
         return $this->createQueryBuilder('w')
             ->andWhere('w.active = true')
+            ->orderBy('w.name', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Quién entra en un registro de jornada de un periodo: los activos dados de
+     * alta antes de que acabe, y los ya inactivos que fichasen dentro. Un
+     * inactivo sin fichajes en el periodo no se incluye: no hay fecha de baja con
+     * la que saber si aún trabajaba, y pintaría todo el periodo como huecos.
+     *
+     * @param \DateTimeImmutable $from Inicio del periodo, incluido.
+     * @param \DateTimeImmutable $to   Fin del periodo, excluido.
+     * @return Worker[] Ordenados por nombre.
+     */
+    public function findForRecordBetween(\DateTimeImmutable $from, \DateTimeImmutable $to): array
+    {
+        return $this->createQueryBuilder('w')
+            ->andWhere(sprintf(
+                '(w.active = true AND w.hireDate < :to) OR EXISTS (SELECT t.id FROM %s t WHERE t.worker = w AND t.occurredAt >= :from AND t.occurredAt < :to)',
+                TimeEntry::class,
+            ))
+            ->setParameter('from', $from)
+            ->setParameter('to', $to)
             ->orderBy('w.name', 'ASC')
             ->getQuery()
             ->getResult();

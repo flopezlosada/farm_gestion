@@ -33,6 +33,18 @@ class MonthlyTimesheetBuilder
     /** Hoy o posterior: aún no ha terminado, no es un olvido. */
     public const STATUS_FUTURE = 'future';
 
+    /** Cómo se llama cada clasificación en un documento. */
+    public const STATUS_LABELS = [
+        self::STATUS_WORKED => 'Trabajado',
+        self::STATUS_WEEKEND => 'Fin de semana',
+        self::STATUS_REST => 'Descanso',
+        self::STATUS_HOLIDAY => 'Festivo',
+        self::STATUS_ABSENCE => 'Ausencia',
+        self::STATUS_MISSING => 'Sin fichar',
+        self::STATUS_BEFORE_HIRE => 'Antes del alta',
+        self::STATUS_FUTURE => 'Por venir',
+    ];
+
     /**
      * Monta la hoja del mes indicado.
      *

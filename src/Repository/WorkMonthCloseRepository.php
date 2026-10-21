@@ -5,6 +5,7 @@ namespace App\Repository;
 use App\Entity\Worker;
 use App\Entity\WorkMonthClose;
 use App\Service\Staff\WorkMonth;
+use App\Service\Staff\WorkPeriod;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -37,6 +38,35 @@ class WorkMonthCloseRepository extends ServiceEntityRepository
             ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult();
+    }
+
+    /**
+     * Las aprobaciones vigentes de un trabajador en un rango de meses, de una
+     * vez. Es lo que necesita un resumen de varios meses: preguntar mes a mes
+     * serían tantas consultas como meses.
+     *
+     * @param Worker     $worker Trabajador.
+     * @param WorkPeriod $period Los meses.
+     * @return array<string, WorkMonthClose> Aprobación por clave de mes 'YYYY-MM'.
+     */
+    public function findStandingForWorkerBetween(Worker $worker, WorkPeriod $period): array
+    {
+        $closes = $this->createQueryBuilder('c')
+            ->andWhere('c.worker = :worker')->setParameter('worker', $worker)
+            ->andWhere('c.year * 100 + c.month >= :from')
+            ->andWhere('c.year * 100 + c.month <= :to')
+            ->setParameter('from', $period->from->year * 100 + $period->from->month)
+            ->setParameter('to', $period->to->year * 100 + $period->to->month)
+            ->andWhere('c.reopenedAt IS NULL')
+            ->getQuery()
+            ->getResult();
+
+        $byMonth = [];
+        foreach ($closes as $close) {
+            $byMonth[$close->getMonth()->key()] = $close;
+        }
+
+        return $byMonth;
     }
 
     /**

@@ -53,4 +53,32 @@ class WorkMonthTest extends TestCase
 
         WorkMonth::of(2026, 13);
     }
+
+    public function testDeClaveAMesYVuelta(): void
+    {
+        $this->assertSame('2026-03', WorkMonth::fromKey('2026-03')->key());
+    }
+
+    /**
+     * Lo que puede llegar de un campo de mes manipulado o vacío.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function clavesNoValidas(): iterable
+    {
+        yield 'vacía' => [''];
+        yield 'mes 13' => ['2026-13'];
+        yield 'mes 0' => ['2026-00'];
+        yield 'sin cero' => ['2026-3'];
+        yield 'con día' => ['2026-03-01'];
+        yield 'texto' => ['marzo'];
+    }
+
+    /** @dataProvider clavesNoValidas */
+    public function testClaveNoValidaSeRechaza(string $key): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        WorkMonth::fromKey($key);
+    }
 }

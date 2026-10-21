@@ -1,0 +1,89 @@
+{# ============================================================
+ # Registro de jornada para la Inspección: elegir el periodo y descargarlo.
+ #
+ # El controller pasa:
+ #   - from, to     claves 'YYYY-MM' del periodo propuesto (o el que se tecleó)
+ #   - period       WorkPeriod elegido y válido, o null (aún no se ha elegido o no vale)
+ #   - error        por qué no vale el periodo tecleado, o null
+ #   - current      WorkMonth en curso (tope del selector)
+ #   - max_months   tope de meses de un periodo
+ #
+ # Dos pasos: se elige el periodo y salen sus descargas, un PDF por año.
+ # ============================================================ #}
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Registro para la Inspección{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('staff_index') }}">Personal</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Registro para la Inspección</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    <style>
+        .rec-actions { display: flex; flex-wrap: wrap; gap: var(--csa-sp-3); margin-top: var(--csa-sp-4); }
+        .rec-formats { margin: var(--csa-sp-4) 0 0; padding-left: 1.2em; color: var(--csa-ink-soft); }
+        .rec-formats li { margin-bottom: 4px; }
+        .rec-title { margin: var(--csa-sp-5) 0 0; font-size: 1.05rem; }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header(
+        'Personal',
+        'Registro para la Inspección',
+        'El registro de jornada de todo el equipo en el periodo que elijas, listo para entregarlo si la Inspección de Trabajo lo pide. La ley obliga a conservarlo cuatro años.'
+    ) }}
+
+    <div class="csa-card csa-form-narrow">
+        <form method="get" action="{{ path('staff_record') }}">
+            <div class="csa-form-grid">
+                <div class="csa-field">
+                    <div class="csa-field__label-row"><label class="csa-field__label" for="rec-from">Desde</label></div>
+                    <input type="month" id="rec-from" name="from" class="csa-input" value="{{ from }}" max="{{ current.key }}" required>
+                </div>
+                <div class="csa-field">
+                    <div class="csa-field__label-row"><label class="csa-field__label" for="rec-to">Hasta</label></div>
+                    <input type="month" id="rec-to" name="to" class="csa-input" value="{{ to }}" max="{{ current.key }}" required>
+                </div>
+            </div>
+            <div class="rec-actions">
+                <button type="submit" class="csa-btn csa-btn--primary"><i class="fa fa-search" aria-hidden="true"></i> Preparar descargas</button>
+            </div>
+        </form>
+
+        {% if error %}
+            <div style="margin-top: var(--csa-sp-4);">{{ csa.callout(error, 'warning') }}</div>
+        {% endif %}
+
+        {% if period %}
+            {% set range = { from: period.from.key, to: period.to.key } %}
+            <h3 class="rec-title">{{ period.label|capitalize }}</h3>
+            <div class="rec-actions">
+                {% for year_period in period.byYear %}
+                    <a class="csa-btn" href="{{ path('staff_record_download', { format: 'pdf', from: year_period.from.key, to: year_period.to.key }) }}">
+                        <i class="fa fa-file-pdf-o" aria-hidden="true"></i> PDF {{ year_period.from.year }}
+                    </a>
+                {% endfor %}
+                <a class="csa-btn" href="{{ path('staff_record_download', { format: 'daily' }|merge(range)) }}">
+                    <i class="fa fa-table" aria-hidden="true"></i> CSV diario
+                </a>
+                <a class="csa-btn" href="{{ path('staff_record_download', { format: 'trail' }|merge(range)) }}">
+                    <i class="fa fa-history" aria-hidden="true"></i> CSV de traza
+                </a>
+            </div>
+        {% endif %}
+
+        <ul class="rec-formats">
+            <li><b>PDF</b>: una página por trabajador y mes, la misma que recibe cada trabajador, con una portada. Va un PDF por año: el documento entero de varios años no cabe en la memoria del servidor.</li>
+            <li><b>CSV diario</b>: un renglón por tramo de entrada y salida, y por cada día sin fichajes con su motivo (festivo, ausencia, sin fichar…). Para cuadrar horas en una hoja de cálculo.</li>
+            <li><b>CSV de traza</b>: cada fichaje tal cual, también los anulados, con cuándo se apuntó, quién lo apuntó y por qué se anuló. Es lo que demuestra que el registro no se ha retocado sin dejar rastro.</li>
+        </ul>
+        <p class="csa-muted" style="margin-top: var(--csa-sp-3);">Hasta {{ max_months }} meses por periodo. Entran quienes están en activo y quienes, ya de baja, ficharon en el periodo.</p>
+    </div>
+{% endblock %}

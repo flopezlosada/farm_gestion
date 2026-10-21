@@ -76,6 +76,35 @@ class TimeEntryRepository extends ServiceEntityRepository
     }
 
     /**
+     * TODOS los fichajes de todo el equipo en [desde, hasta), vigentes y anulados,
+     * con trabajador, autor y quien anuló ya cargados. Es la traza completa que se
+     * entrega a la Inspección: qué se fichó, cuándo se apuntó, quién y qué se quitó.
+     * Ordenados por trabajador y hora de ocurrencia.
+     *
+     * @param \DateTimeImmutable $from Inicio del rango, incluido.
+     * @param \DateTimeImmutable $to   Fin del rango, excluido.
+     * @return TimeEntry[]
+     */
+    public function findAllBetween(\DateTimeImmutable $from, \DateTimeImmutable $to): array
+    {
+        return $this->createQueryBuilder('t')
+            ->addSelect('w', 'a', 'v')
+            ->leftJoin('t.worker', 'w')
+            ->leftJoin('t.author', 'a')
+            ->leftJoin('t.voidedBy', 'v')
+            ->andWhere('t.occurredAt >= :from')
+            ->andWhere('t.occurredAt < :to')
+            ->setParameter('from', $from)
+            ->setParameter('to', $to)
+            ->orderBy('w.name', 'ASC')
+            ->addOrderBy('w.id', 'ASC')
+            ->addOrderBy('t.occurredAt', 'ASC')
+            ->addOrderBy('t.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Último fichaje vigente de un trabajador (por hora de ocurrencia). Sirve
      * para saber si tiene un tramo abierto (último = entrada) y pintar el botón
      * correcto (fichar entrada vs. salida).

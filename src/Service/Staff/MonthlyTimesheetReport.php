@@ -43,22 +43,46 @@ class MonthlyTimesheetReport
      */
     public function forMonth(Worker $worker, int $year, int $month, \DateTimeZone $tz, \DateTimeImmutable $today): array
     {
-        $monthStart = new \DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $year, $month), $tz);
-        $monthEnd = $monthStart->modify('first day of next month');
+        $only = WorkMonth::of($year, $month);
 
-        $entries = $this->timeEntries->findEffectiveForWorkerBetween($worker, $monthStart, $monthEnd);
+        return $this->forRange($worker, WorkPeriod::single($only), $tz, $today)[$only->key()];
+    }
+
+    /**
+     * Construye las hojas de varios meses seguidos de un trabajador. Las fuentes
+     * se cargan una sola vez para todo el rango y luego se reparten por mes: el
+     * export para la Inspección pide años enteros de todo el equipo, y mes a mes
+     * serían cinco consultas por cada trabajador y mes.
+     *
+     * @param Worker             $worker Trabajador.
+     * @param WorkPeriod         $period Los meses.
+     * @param \DateTimeZone      $tz     Zona horaria (Madrid).
+     * @param \DateTimeImmutable $today  Día de hoy (para marcar días futuros).
+     * @return array<string, array> Hoja de cada mes (ver {@see self::forMonth()}) por clave 'YYYY-MM', en orden.
+     */
+    public function forRange(Worker $worker, WorkPeriod $period, \DateTimeZone $tz, \DateTimeImmutable $today): array
+    {
+        $rangeStart = $period->start();
+        $rangeEnd = $period->end();
+
         $workedDays = [];
+        $entries = $this->timeEntries->findEffectiveForWorkerBetween($worker, $rangeStart, $rangeEnd);
         foreach ($this->workdays->buildDays($entries, $tz) as $day) {
             $workedDays[$day['date']->format('Y-m-d')] = $day;
         }
 
-        $covered = $this->absences->coveredDaysForWorkerBetween($worker, $monthStart, $monthEnd);
+        $covered = $this->absences->coveredDaysForWorkerBetween($worker, $rangeStart, $rangeEnd);
+        $holidayNames = $this->holidays->findNamesBetween($rangeStart, $rangeEnd->modify('-1 day'));
+        $workingWeek = $this->schedules->workingWeekFor($worker);
+        $closes = $this->closes->findStandingForWorkerBetween($worker, $period);
 
-        $holidayNames = $this->holidays->findNamesBetween($monthStart, $monthEnd->modify('-1 day'));
+        $sheets = [];
+        foreach ($period->months() as $month) {
+            $sheet = $this->builder->build($month->year, $month->month, $tz, $workedDays, $covered, $holidayNames, $workingWeek, $worker->getHireDate(), $today);
+            $sheet['close'] = $closes[$month->key()] ?? null;
+            $sheets[$month->key()] = $sheet;
+        }
 
-        $sheet = $this->builder->build($year, $month, $tz, $workedDays, $covered, $holidayNames, $this->schedules->workingWeekFor($worker), $worker->getHireDate(), $today);
-        $sheet['close'] = $this->closes->findStanding($worker, WorkMonth::of($year, $month));
-
-        return $sheet;
+        return $sheets;
     }
 }
