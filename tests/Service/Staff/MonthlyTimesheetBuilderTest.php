@@ -20,12 +20,12 @@ class MonthlyTimesheetBuilderTest extends TestCase
     /**
      * Un día trabajado (con tramos) construido al estilo de WorkdayBuilder.
      *
-     * @param string $key     Día 'Y-m-d'.
-     * @param int    $minutes Total del día.
-     * @param bool   $manual  Si algún fichaje del día se apuntó a mano.
+     * @param string $key      Día 'Y-m-d'.
+     * @param int    $minutes  Total del día.
+     * @param bool   $deferred Si algún fichaje del día es un registro diferido.
      * @return array
      */
-    private function workedDay(string $key, int $minutes, bool $manual = false): array
+    private function workedDay(string $key, int $minutes, bool $deferred = false): array
     {
         return [
             'date' => new \DateTimeImmutable($key . ' 00:00:00', $this->madrid),
@@ -33,7 +33,7 @@ class MonthlyTimesheetBuilderTest extends TestCase
             'totalMinutes' => $minutes,
             'open' => false,
             'anomaly' => false,
-            'manual' => $manual,
+            'deferred' => $deferred,
         ];
     }
 
@@ -138,7 +138,7 @@ class MonthlyTimesheetBuilderTest extends TestCase
     {
         $sheet = $this->build(
             [
-                '2026-02-04' => $this->workedDay('2026-02-04', 480, manual: true),
+                '2026-02-04' => $this->workedDay('2026-02-04', 480, deferred: true),
                 '2026-02-05' => $this->workedDay('2026-02-05', 480),
             ],
             [],
@@ -151,11 +151,11 @@ class MonthlyTimesheetBuilderTest extends TestCase
             $rows[$row['date']->format('Y-m-d')] = $row;
         }
 
-        $this->assertSame(1, $sheet['manualDays']);
-        $this->assertTrue($rows['2026-02-04']['manual']);
-        $this->assertFalse($rows['2026-02-05']['manual']);
-        // Un día sin fichajes no es manual, aunque sea hueco.
-        $this->assertFalse($rows['2026-02-06']['manual']);
+        $this->assertSame(1, $sheet['deferredDays']);
+        $this->assertTrue($rows['2026-02-04']['deferred']);
+        $this->assertFalse($rows['2026-02-05']['deferred']);
+        // Un día sin fichajes no es diferido, aunque sea hueco.
+        $this->assertFalse($rows['2026-02-06']['deferred']);
     }
 
     /**

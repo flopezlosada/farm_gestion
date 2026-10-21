@@ -8,6 +8,8 @@ use PHPUnit\Framework\TestCase;
 
 class TimeEntryTest extends TestCase
 {
+    use StampsTimeEntryRecordedAt;
+
     public function testEntradaSeReconoceComoIn(): void
     {
         $entry = (new TimeEntry())->setType(TimeEntry::TYPE_IN);
@@ -38,25 +40,25 @@ class TimeEntryTest extends TestCase
         $this->assertEquals($at, $entry->getVoidedAt());
     }
 
-    public function testFichajeEnTiempoRealNoEsManual(): void
+    public function testFichajeEnTiempoRealNoEsDiferido(): void
     {
         $entry = new TimeEntry();
         $entry->setOccurredAt(new \DateTimeImmutable('2026-06-20 09:00:00'));
         $this->setRecordedAt($entry, new \DateTimeImmutable('2026-06-20 09:00:01'));
 
-        $this->assertFalse($entry->isManual());
+        $this->assertFalse($entry->isDeferred());
     }
 
-    public function testFichajeRegistradoUnDiaDespuesEsManual(): void
+    public function testFichajeRegistradoUnDiaDespuesEsDiferido(): void
     {
         $entry = new TimeEntry();
         $entry->setOccurredAt(new \DateTimeImmutable('2026-06-19 18:00:00'));
         $this->setRecordedAt($entry, new \DateTimeImmutable('2026-06-20 08:30:00'));
 
-        $this->assertTrue($entry->isManual());
+        $this->assertTrue($entry->isDeferred());
     }
 
-    public function testRellenoDelMismoDiaHorasDespuesEsManual(): void
+    public function testRellenoDelMismoDiaHorasDespuesEsDiferido(): void
     {
         // «Rellenar con mi horario» a las 10:30 deja una entrada de las 09:00:
         // mismo día, pero no se fichó en el momento.
@@ -64,45 +66,40 @@ class TimeEntryTest extends TestCase
         $entry->setOccurredAt(new \DateTimeImmutable('2026-06-20 09:00:00'));
         $this->setRecordedAt($entry, new \DateTimeImmutable('2026-06-20 10:30:00'));
 
-        $this->assertTrue($entry->isManual());
+        $this->assertTrue($entry->isDeferred());
     }
 
-    public function testDesfaseDentroDelMargenNoEsManual(): void
+    public function testDesfaseDentroDelMargenNoEsDiferido(): void
     {
         $entry = new TimeEntry();
         $entry->setOccurredAt(new \DateTimeImmutable('2026-06-20 09:00:00'));
-        $this->setRecordedAt($entry, (new \DateTimeImmutable('2026-06-20 09:00:00'))->modify(sprintf('+%d seconds', TimeEntry::MANUAL_MARGIN_SECONDS)));
+        $this->setRecordedAt($entry, (new \DateTimeImmutable('2026-06-20 09:00:00'))->modify(sprintf('+%d seconds', TimeEntry::DEFERRED_MARGIN_SECONDS)));
 
-        $this->assertFalse($entry->isManual());
+        $this->assertFalse($entry->isDeferred());
     }
 
-    public function testLoDelSupervisorEsManualAunqueCoincidanLasHoras(): void
+    public function testLoQueElSupervisorApuntaEnElMomentoNoEsDiferido(): void
     {
+        // Diferido mide el cuándo, no el quién: el origen ya dice que fue él.
         $entry = (new TimeEntry())->setSource(TimeEntry::SOURCE_SUPERVISOR);
         $entry->setOccurredAt(new \DateTimeImmutable('2026-06-20 09:00:00'));
         $this->setRecordedAt($entry, new \DateTimeImmutable('2026-06-20 09:00:00'));
 
-        $this->assertTrue($entry->isManual());
+        $this->assertFalse($entry->isDeferred());
     }
 
-    public function testSinSellosNoEsManual(): void
+    public function testLoQueElSupervisorApuntaDespuesEsDiferido(): void
+    {
+        $entry = (new TimeEntry())->setSource(TimeEntry::SOURCE_SUPERVISOR);
+        $entry->setOccurredAt(new \DateTimeImmutable('2026-06-19 18:00:00'));
+        $this->setRecordedAt($entry, new \DateTimeImmutable('2026-06-20 08:30:00'));
+
+        $this->assertTrue($entry->isDeferred());
+    }
+
+    public function testSinSellosNoEsDiferido(): void
     {
         // Fila aún sin persistir (recordedAt null): no hay con qué comparar.
-        $this->assertFalse((new TimeEntry())->setOccurredAt(new \DateTimeImmutable('2026-06-20 09:00:00'))->isManual());
-    }
-
-    /**
-     * El sello recordedAt lo estampa el PrePersist al guardar y no tiene setter;
-     * en un test sin BBDD lo inyectamos por reflexión para ejercitar isManual().
-     *
-     * @param TimeEntry          $entry      Fichaje a modificar.
-     * @param \DateTimeImmutable $recordedAt Sello de inserción simulado.
-     * @return void
-     */
-    private function setRecordedAt(TimeEntry $entry, \DateTimeImmutable $recordedAt): void
-    {
-        $property = new \ReflectionProperty(TimeEntry::class, 'recordedAt');
-        $property->setAccessible(true);
-        $property->setValue($entry, $recordedAt);
+        $this->assertFalse((new TimeEntry())->setOccurredAt(new \DateTimeImmutable('2026-06-20 09:00:00'))->isDeferred());
     }
 }

@@ -4,10 +4,13 @@ namespace App\Tests\Service\Staff;
 
 use App\Entity\TimeEntry;
 use App\Service\Staff\WorkdayBuilder;
+use App\Tests\Entity\StampsTimeEntryRecordedAt;
 use PHPUnit\Framework\TestCase;
 
 class WorkdayBuilderTest extends TestCase
 {
+    use StampsTimeEntryRecordedAt;
+
     private \DateTimeZone $utc;
 
     protected function setUp(): void
@@ -94,20 +97,20 @@ class WorkdayBuilderTest extends TestCase
         $this->assertSame(480, $days[1]['totalMinutes']);
     }
 
-    public function testMarcaElDiaComoManualSiAlgunFichajeLoEs(): void
+    public function testMarcaElDiaComoDiferidoSiAlgunFichajeLoEs(): void
     {
-        // El 20 tiene la salida añadida por el supervisor; el 18 es todo en tiempo real
-        // (sin sello, como una fila aún sin persistir: no cuenta como manual).
+        // El 20 tiene la salida apuntada al día siguiente; el 18 es todo en tiempo
+        // real (sin sello, como una fila aún sin persistir: no cuenta como diferido).
         $days = (new WorkdayBuilder())->buildDays([
             $this->entry(TimeEntry::TYPE_IN, '2026-06-18 09:00'),
             $this->entry(TimeEntry::TYPE_OUT, '2026-06-18 17:00'),
             $this->entry(TimeEntry::TYPE_IN, '2026-06-20 08:00'),
-            $this->entry(TimeEntry::TYPE_OUT, '2026-06-20 15:00')->setSource(TimeEntry::SOURCE_SUPERVISOR),
+            $this->setRecordedAt($this->entry(TimeEntry::TYPE_OUT, '2026-06-20 15:00'), new \DateTimeImmutable('2026-06-21 08:00', $this->utc)),
         ], $this->utc);
 
-        $this->assertTrue($days[0]['manual']);
-        $this->assertFalse($days[1]['manual']);
-        $this->assertSame(TimeEntry::TYPE_OUT, $days[0]['lastManual']?->getType(), 'El chip del día sale del fichaje manual.');
-        $this->assertNull($days[1]['lastManual']);
+        $this->assertTrue($days[0]['deferred']);
+        $this->assertFalse($days[1]['deferred']);
+        $this->assertSame(TimeEntry::TYPE_OUT, $days[0]['lastDeferred']?->getType(), 'El chip del día sale del registro diferido.');
+        $this->assertNull($days[1]['lastDeferred']);
     }
 }

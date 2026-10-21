@@ -28,10 +28,10 @@ use Symfony\Component\Validator\Constraints as Assert;
  * simple y correcto operar todo en Madrid; el caso del cambio de hora (nadie
  * ficha a las 2:30 del cambio DST) es despreciable.
  *
- * FICHAJE A MANO: el desfase entre `occurredAt` (cuándo dice que ocurrió) y
- * `recordedAt` (cuándo lo puso el servidor) marca por sí solo los apuntes
- * apuntados a mano, sin campo extra ({@see TimeEntry::isManual()}). Es lo que hace
- * imposible disfrazar de fichaje en tiempo real un relleno del pasado.
+ * REGISTRO DIFERIDO: el desfase entre `occurredAt` (cuándo dice que ocurrió) y
+ * `recordedAt` (cuándo lo puso el servidor) marca por sí solo los apuntes que no
+ * se registraron en su momento, sin campo extra ({@see TimeEntry::isDeferred()}).
+ * Es lo que hace imposible disfrazar de fichaje en tiempo real un relleno del pasado.
  *
  * @ORM\Table(name="time_entry")
  * @ORM\Entity(repositoryClass="App\Repository\TimeEntryRepository")
@@ -62,11 +62,11 @@ class TimeEntry
     ];
 
     /**
-     * Desfase entre la hora del fichaje y su registro a partir del cual se da por
-     * apuntado a mano ({@see self::isManual()}). Holgado a propósito: un fichaje
-     * en tiempo real tarda milisegundos, y cinco minutos no tapan ningún olvido.
+     * Desfase entre la hora del fichaje y su registro a partir del cual el
+     * registro es diferido ({@see self::isDeferred()}). Holgado a propósito: un
+     * fichaje en tiempo real tarda milisegundos, y cinco minutos no tapan ningún olvido.
      */
-    public const MANUAL_MARGIN_SECONDS = 300;
+    public const DEFERRED_MARGIN_SECONDS = 300;
 
     /**
      * @var int|null
@@ -330,29 +330,28 @@ class TimeEntry
     }
 
     /**
-     * ¿Se apuntó a mano? Cierto si lo metió el supervisor, o si entre la hora que
-     * dice el fichaje y el momento en que entró en la BBDD hay más de
-     * {@see self::MANUAL_MARGIN_SECONDS}: un olvido añadido después, una hora
-     * corregida, el relleno con el horario habitual. El botón de fichar estampa
-     * las dos horas a la vez, así que nunca lo cumple.
+     * ¿Es un registro diferido? Cierto si entre la hora que dice el fichaje y el
+     * momento en que entró en la BBDD hay más de {@see self::DEFERRED_MARGIN_SECONDS}:
+     * un olvido añadido después, una hora corregida, el relleno con el horario
+     * habitual. El botón de fichar estampa las dos horas a la vez, así que nunca
+     * lo cumple.
      *
-     * Es la señal que el supervisor necesita para aprobar el mes con criterio: un
-     * registro tecleado a posteriori vale, pero no vale lo mismo que uno fichado
-     * en el momento, y no puede verse igual. Sale de los sellos que ya hay, sin
-     * campo extra.
+     * Mide sólo el CUÁNDO, no el cómo ni el quién: lo que el supervisor apunta en
+     * el momento (alguien que no puede fichar y avisa) no es diferido; que lo
+     * apuntó él ya consta en el origen ({@see self::SOURCE_SUPERVISOR}). Es la
+     * señal que el supervisor necesita para aprobar el mes con criterio: un
+     * registro tecleado a posteriori vale, pero no vale lo mismo que uno hecho en
+     * su momento, y no puede verse igual.
      *
      * @return bool
      */
-    public function isManual(): bool
+    public function isDeferred(): bool
     {
-        if ($this->source === self::SOURCE_SUPERVISOR) {
-            return true;
-        }
         if ($this->occurredAt === null || $this->recordedAt === null) {
             return false;
         }
 
-        return abs($this->recordedAt->getTimestamp() - $this->occurredAt->getTimestamp()) > self::MANUAL_MARGIN_SECONDS;
+        return abs($this->recordedAt->getTimestamp() - $this->occurredAt->getTimestamp()) > self::DEFERRED_MARGIN_SECONDS;
     }
 
     /**

@@ -1,0 +1,15 @@
+{# ============================================================
+ # Texto del chip de un registro diferido, el que no se hizo en su momento
+ # ({@see TimeEntry::isDeferred()}). Dice el hecho, no la categoría: cuándo se
+ # apuntó (el día si fue otro, la hora si fue el mismo) y, si lo apuntó el
+ # supervisor, quién. Una sola fuente para calendario, ficha, día y panel del
+ # trabajador.
+ # ============================================================ #}
+{% macro label(entry, madrid) -%}
+    {%- if entry.recordedAt|date('Y-m-d', madrid) != entry.occurredAt|date('Y-m-d', madrid) -%}
+        Apuntado el {{ entry.recordedAt|date('d/m', madrid) }}
+    {%- else -%}
+        Apuntado a las {{ entry.recordedAt|date('H:i', madrid) }}
+    {%- endif -%}
+    {%- if entry.source == constant('App\\Entity\\TimeEntry::SOURCE_SUPERVISOR') %} por {{ entry.author ? entry.author.displayName : 'el supervisor' }}{% endif -%}
+{%- endmacro %}
