@@ -119,41 +119,8 @@
          # «Móvil» pueda llegar. Por eso va después de la tabla y se llama por lo
          # que hace.
          #
-         # Sin claves VAPID no se pinta: ahí activar es imposible y el botón sólo
-         # podría fallar. Se puede ocultar sin dejar a nadie tirado porque sin
-         # claves nunca hubo suscripción posible. #}
-        {% if app_vapid_public_key is not empty %}
-            {% embed '_components/csa_card.html.twig' with {
-                title: 'Recibir avisos en este dispositivo',
-                icon: 'fa-mobile'
-            } %}
-                {% block body %}
-                    {# ESTRUCTURA FIJA, rellenada por push.js. Antes el botón cargaba
-                     # con todo —era a la vez la acción y el estado— y push.js se
-                     # inventaba un <p> con la explicación insertándolo DENTRO del
-                     # <p> del botón: un <p> no puede contener otro, el navegador
-                     # cerraba el primero y la maquetación se deshacía.
-                     #
-                     # Ahora cada cosa tiene su sitio: el estado se lee arriba, el
-                     # botón dice sólo lo que va a hacer y la explicación aparece
-                     # debajo cuando hay algo que explicar. #}
-                    {# El estado arranca VACÍO y no en «Comprobando…»: ese texto
-                     # sólo es cierto mientras el script pregunta al navegador, y si
-                     # el script no llega —bloqueado, caché vieja, un error arriba—
-                     # se queda ahí para siempre diciendo que está comprobando algo
-                     # que nadie está comprobando. Vacío, la tarjeta no miente; y
-                     # push.js pone «Comprobando…» en cuanto arranca, que es cuando
-                     # es verdad. #}
-                    <div class="csa-push">
-                        <div class="csa-push__main">
-                            <div class="csa-push__state" data-push-status></div>
-                            <p class="csa-push__note" data-push-hint hidden></p>
-                        </div>
-                        <button type="button" class="csa-btn csa-btn--secondary csa-btn--sm csa-push__btn" data-push-toggle hidden></button>
-                    </div>
-                {% endblock %}
-            {% endembed %}
-        {% endif %}
+         # Componente compartido con la bandeja del trabajador. #}
+        {% include '_components/push_device_card.html.twig' %}
 
     </div>
 

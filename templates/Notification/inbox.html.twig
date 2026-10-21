@@ -15,16 +15,24 @@
  # personal sin nada personal que enseñar. La ficha vinculada sí distingue, y es
  # además lo que el propio layout del panel usa para pintar el nombre.
  #
- # Los dos layouts declaran los mismos bloques (csa_crumbs, csa_main), que es lo
+ # QUIEN SÓLO TIENE FICHA LABORAL entra por «Mi jornada»: un trabajador sin ficha
+ # de socix ni rol de gestión caía en el shell de gestión, con un lateral de
+ # secciones que no puede abrir. Se pide el Worker vinculado Y el flag, la misma
+ # condición del conmutador de áreas: con FEATURE_LABORAL apagado /work da 403 y
+ # el layout sería un menú de enlaces rotos.
+ #
+ # Los tres layouts declaran los mismos bloques (csa_crumbs, csa_main), que es lo
  # que permite el extends condicional.
  # ============================================================ #}
-{% extends app.user.partner ? '_layouts/csa_panel.html.twig' : '_layouts/csa_shell.html.twig' %}
+{% set soy_trabajador = app.user.partner is null and app.user.worker is not null and is_granted('FEATURE_LABORAL') %}
+{% extends app.user.partner ? '_layouts/csa_panel.html.twig'
+    : (soy_trabajador ? '_layouts/csa_work.html.twig' : '_layouts/csa_shell.html.twig') %}
 {% import '_macros/csa.html.twig' as csa %}
 
 {% block title %}Avisos{% endblock %}
 
 {% block csa_crumbs %}
-    <a href="{{ app.user.partner ? path('panel') : path('dashboard') }}">Inicio</a>
+    <a href="{{ app.user.partner ? path('panel') : (soy_trabajador ? path('work') : path('dashboard')) }}">Inicio</a>
     <span class="csa-topbar__crumbs-sep">/</span>
     <span class="csa-topbar__crumb-active">Avisos</span>
 {% endblock %}
@@ -82,7 +90,7 @@
         existe para ella. -#}
     {% set soy_socix = app.user.partner is not null %}
     {{ csa.page_header(
-        soy_socix ? 'Mi área · Avisos' : 'Mi cuenta · Avisos',
+        soy_socix ? 'Mi área · Avisos' : (soy_trabajador ? 'Mi jornada · Avisos' : 'Mi cuenta · Avisos'),
         'Mis avisos',
         soy_socix
             ? 'Todo lo que te hemos avisado. Aquí no se pierde nada, aunque tengas el correo y el móvil apagados.'
@@ -97,7 +105,7 @@
         {#- `soy_socix` viaja en el `with` porque un `set` de fuera NO llega al bloque
             de un embed: es el mismo motivo por el que el macro se importa por ruta
             unas líneas más abajo. -#}
-        {% embed '_components/csa_card.html.twig' with { title: 'Avisos', icon: 'fa-bell-o', soy_socix: soy_socix } %}
+        {% embed '_components/csa_card.html.twig' with { title: 'Avisos', icon: 'fa-bell-o', soy_socix: soy_socix, soy_trabajador: soy_trabajador } %}
             {% block body %}
                 {#- El macro se importa POR RUTA y no con `_self`: dentro de un embed,
                     `_self` es la tarjeta embebida y no este fichero, y los imports del
@@ -112,6 +120,9 @@
                         {%- if soy_socix %}
                             Todavía no tienes avisos. Aquí irán apareciendo los de tu cesta
                             —cuándo y dónde recoges— y los de voluntariado.
+                        {%- elseif soy_trabajador %}
+                            Todavía no tienes avisos. Aquí irán apareciendo los de tu jornada
+                            y tus vacaciones.
                         {%- else %}
                             Todavía no tienes avisos. Aquí aparecerán los de las secciones
                             que gestionas.
@@ -150,6 +161,13 @@
                 — elige qué quieres recibir por correo y en el móvil. Esta bandeja no se
                 apaga: lo que apagues sigue llegando aquí.
             </p>
+        {% endif %}
+
+        {#- El trabajador no tiene pantalla de preferencias (no hay temas que elegir:
+            sus avisos son todos de su jornada), así que el permiso del móvil se
+            pide aquí, junto a lo que va a llegar. -#}
+        {% if soy_trabajador %}
+            {% include '_components/push_device_card.html.twig' %}
         {% endif %}
     </div>
 {% endblock %}

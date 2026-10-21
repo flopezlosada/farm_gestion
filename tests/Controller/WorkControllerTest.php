@@ -96,6 +96,47 @@ class WorkControllerTest extends WebTestCase
         }
     }
 
+    /**
+     * La campanita está en «Mi jornada»: los avisos del trabajador llegan a la
+     * bandeja de su cuenta y sin ella no habría dónde verlos.
+     */
+    public function testWorkPanelShowsTheBell(): void
+    {
+        $this->client->request('GET', '/work');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorExists('a.csa-topbar__bell[href="/avisos"]');
+    }
+
+    /**
+     * Un trabajador sin ficha de socix ve la bandeja dentro de «Mi jornada», no
+     * en el shell de gestión, cuyo lateral sólo tiene secciones que no puede abrir.
+     */
+    public function testInboxOfAWorkerUsesTheWorkShell(): void
+    {
+        $this->client->request('GET', '/avisos');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorTextContains('.csa-sidebar__brand-sub', 'Mi jornada');
+        $this->assertSelectorTextContains('.csa-page-header', 'Mi jornada · Avisos');
+        $this->assertSelectorExists('.csa-topbar__crumbs a[href="/work"]');
+    }
+
+    /**
+     * Con el módulo laboral apagado /work da 403: la bandeja no puede montarse
+     * sobre un layout cuyos enlaces rebotan, así que cae al shell de la cuenta.
+     */
+    public function testInboxOfAWorkerFallsBackWhenLaboralIsOff(): void
+    {
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_LABORAL, false);
+
+        $this->client->request('GET', '/avisos');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorTextContains('.csa-page-header', 'Mi cuenta · Avisos');
+        $this->assertSelectorNotExists('.csa-topbar__crumbs a[href="/work"]');
+    }
+
     public function testTimesheetPdfIsAPdf(): void
     {
         $this->client->request('GET', '/work/timesheet.pdf');
