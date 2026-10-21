@@ -595,6 +595,78 @@
         {% endif %}
 
         {# ============================================================
+         # PERSONAL — lo que espera decisión de quien lleva el personal.
+         # Las bajas y permisos que registra el trabajador no se aprueban, así
+         # que no aparecen en ninguna cola: si no salieran aquí, sólo se verían
+         # abriendo su ficha.
+         # ============================================================ #}
+        {% if dash.laboral is defined %}
+            {% set l = dash.laboral %}
+            {% set abs_type = constant('App\\Entity\\Absence::TYPE_LABELS') %}
+            <div class="dash-section">
+                <h2 class="dash-section__title">Personal</h2>
+
+                <div class="dash-stats dash-stats--3" style="margin-bottom: 16px;">
+                    {{ ui.stat(l.requests|length, null, 'Vacaciones por decidir', null, null, l.requests is empty ? 'green' : 'ochre') }}
+                    {{ ui.stat(l.self_registered|length, null, 'Ausencias nuevas', 'registradas por el trabajador · 7 días', null, 'sky') }}
+                    {{ ui.stat(l.pending_months|length, null, 'Sin aprobar', l.month.label, null, l.pending_months is empty ? 'green' : 'terra') }}
+                </div>
+
+                <div class="dash-grid">
+                    <div class="dash-col">
+                        <div class="dash-card">
+                            <div class="dash-card__head">
+                                <div class="dash-card__title">Pendiente</div>
+                                <div class="dash-card__sub">lo que espera tu decisión o que no has visto</div>
+                            </div>
+                            <div class="dash-card__body dash-card__body--flush">
+                                {% if l.requests is empty and l.self_registered is empty and l.pending_months is empty %}
+                                    <div class="dash-empty">Nada pendiente: sin solicitudes y {{ l.month.label }} aprobado.</div>
+                                {% else %}
+                                    {% for a in l.requests %}
+                                        <a class="dash-row" href="{{ path('staff_show', { id: a.worker.id }) }}">
+                                            <div class="dash-row__body">
+                                                <div class="dash-row__title">{{ a.worker.name }} pide {{ abs_type[a.type]|default('una ausencia')|lower }}</div>
+                                                <div class="dash-row__sub">{{ a.startDate|date('d/m/Y') }}{% if a.endDate != a.startDate %} – {{ a.endDate|date('d/m/Y') }}{% endif %} · {{ a.calendarDayCount }} día{{ a.calendarDayCount == 1 ? '' : 's' }}</div>
+                                            </div>
+                                            <div class="dash-row__metric dash-row__metric--ochre">Decidir</div>
+                                        </a>
+                                    {% endfor %}
+                                    {% for a in l.self_registered %}
+                                        <a class="dash-row" href="{{ path('staff_show', { id: a.worker.id }) }}">
+                                            <div class="dash-row__body">
+                                                <div class="dash-row__title">{{ a.worker.name }} · {{ abs_type[a.type]|default('Ausencia') }}</div>
+                                                <div class="dash-row__sub">{{ a.startDate|date('d/m/Y') }}{% if a.endDate != a.startDate %} – {{ a.endDate|date('d/m/Y') }}{% endif %} · registrada el {{ a.created|date('d/m') }}</div>
+                                            </div>
+                                            <div class="dash-row__metric dash-row__metric--sky">Nueva</div>
+                                        </a>
+                                    {% endfor %}
+                                    {% if l.pending_months is not empty %}
+                                        <a class="dash-row" href="{{ path('staff_month_close', { year: l.month.year, month: l.month.month }) }}">
+                                            <div class="dash-row__body">
+                                                <div class="dash-row__title">Registro de {{ l.month.label }} sin aprobar</div>
+                                                <div class="dash-row__sub">{{ l.pending_months|map(r => r.worker.name)|join(', ') }}</div>
+                                            </div>
+                                            <div class="dash-row__metric dash-row__metric--terra">{{ l.pending_months|length }}</div>
+                                        </a>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <aside class="dash-col">
+                        <div class="dash-actions">
+                            <a class="dash-btn" href="{{ path('staff_index') }}"><i class="fa fa-users" aria-hidden="true"></i> Ver personal</a>
+                            <a class="dash-btn" href="{{ path('staff_month_close', { year: l.month.year, month: l.month.month }) }}"><i class="fa fa-check-square-o" aria-hidden="true"></i> Cierre de mes</a>
+                            <a class="dash-btn" href="{{ path('staff_gaps') }}"><i class="fa fa-calendar-times-o" aria-hidden="true"></i> Días sin fichar</a>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+        {% endif %}
+
+        {# ============================================================
          # ADMINISTRACIÓN
          # ============================================================ #}
         {% if dash.admin is defined %}
