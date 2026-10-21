@@ -21,8 +21,9 @@ class StaffAudienceTest extends TestCase
 {
     /** Un trozo fiel de la jerarquía de security.yaml. */
     private const HIERARCHY = [
-        'ROLE_ADMIN' => ['ROLE_GESTION_SOCIXS_EDIT'],
+        'ROLE_ADMIN' => ['ROLE_GESTION_SOCIXS_EDIT', 'ROLE_GESTION_LABORAL_EDIT'],
         'ROLE_GESTION_SOCIXS_EDIT' => ['ROLE_GESTION_SOCIXS'],
+        'ROLE_GESTION_LABORAL_EDIT' => ['ROLE_GESTION_LABORAL'],
     ];
 
     /** Quien tiene el rol escrito, evidentemente, entra. */
@@ -74,6 +75,32 @@ class StaffAudienceTest extends TestCase
         $audience = $this->audience([$this->user('socia@test.org', ['ROLE_PARTNER'])]);
 
         $this->assertSame([], $audience->emailsWithRole('ROLE_ADMIN'));
+    }
+
+    /**
+     * Responsable es quien tiene el permiso sin contar ROLE_ADMIN: al admin le
+     * llega todo por jerarquía, y el móvil es para quien lleva la sección.
+     */
+    public function testLosResponsablesNoIncluyenAlAdminPorJerarquia(): void
+    {
+        $admin = $this->user('admin@test.org', ['ROLE_ADMIN']);
+        $responsible = $this->user('personal@test.org', ['ROLE_GESTION_LABORAL_EDIT']);
+        $readOnly = $this->user('lectura@test.org', ['ROLE_GESTION_LABORAL']);
+
+        $audience = $this->audience([$admin, $responsible, $readOnly]);
+
+        $this->assertSame([$responsible], $audience->responsiblesFor('ROLE_GESTION_LABORAL_EDIT'));
+        $this->assertTrue($audience->receivesPush($responsible));
+        $this->assertFalse($audience->receivesPush($admin), 'Al admin no le llega ningún push por administrar.');
+        $this->assertFalse($audience->receivesPush($readOnly), 'Quien sólo puede mirar no decide nada.');
+    }
+
+    /** El admin al que además se le dio el permiso de la sección sí es responsable. */
+    public function testElAdminConElPermisoEscritoSiEsResponsable(): void
+    {
+        $admin = $this->user('admin@test.org', ['ROLE_ADMIN', 'ROLE_GESTION_LABORAL_EDIT']);
+
+        $this->assertSame([$admin], $this->audience([$admin])->responsiblesFor('ROLE_GESTION_LABORAL_EDIT'));
     }
 
     /**

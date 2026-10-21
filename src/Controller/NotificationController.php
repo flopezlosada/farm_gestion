@@ -6,6 +6,7 @@ use App\Entity\Notification;
 use App\Entity\User;
 use App\Repository\NotificationRepository;
 use App\Service\Notification\NotificationLink;
+use App\Service\Notification\StaffAudience;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -50,14 +51,16 @@ class NotificationController extends AbstractController
      *
      * @param User                   $user          la cuenta que mira
      * @param NotificationRepository $notifications repositorio de avisos
+     * @param StaffAudience          $staff         decide si le llegan avisos de gestión al móvil
      *
      * @return Response la bandeja
      */
     #[Route('', name: 'notification_inbox', methods: ['GET'])]
-    public function inbox(#[CurrentUser] User $user, NotificationRepository $notifications): Response
+    public function inbox(#[CurrentUser] User $user, NotificationRepository $notifications, StaffAudience $staff): Response
     {
         return $this->render('Notification/inbox.html.twig', [
             'notifications' => $notifications->findRecentFor($user),
+            'receives_staff_push' => $staff->receivesPush($user),
         ]);
     }
 

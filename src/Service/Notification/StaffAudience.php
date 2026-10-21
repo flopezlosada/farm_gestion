@@ -24,6 +24,13 @@ use Symfony\Component\Security\Core\Role\RoleHierarchyInterface;
  */
 class StaffAudience
 {
+    /**
+     * Permisos cuyos responsables reciben avisos de gestión en el móvil. Quien
+     * mande un push a los responsables de otra sección la añade aquí, o su gente
+     * no verá dónde activar el push en la bandeja de gestión.
+     */
+    public const PUSH_ROLES = ['ROLE_GESTION_LABORAL_EDIT'];
+
     public function __construct(
         private readonly UserRepository $users,
         private readonly RoleHierarchyInterface $roleHierarchy,
@@ -48,6 +55,60 @@ class StaffAudience
         }
 
         return $found;
+    }
+
+    /**
+     * Las cuentas habilitadas que tienen ese permiso como responsables de la
+     * sección, no por administrar.
+     *
+     * La diferencia con {@see withRole()} es ROLE_ADMIN: por jerarquía alcanza
+     * todos los permisos, así que un aviso al móvil a «quien puede aprobar»
+     * le llegaría al admin de cada sección. La bandeja aguanta ese volumen; el
+     * móvil no, y es justo el canal que debe quedar para quien lleva la sección.
+     *
+     * @param string $role Rol buscado, p. ej. "ROLE_GESTION_LABORAL_EDIT".
+     * @return list<User>
+     */
+    public function responsiblesFor(string $role): array
+    {
+        return array_values(array_filter(
+            $this->users->findEnabled(),
+            fn (User $user): bool => $this->isResponsibleFor($user, $role),
+        ));
+    }
+
+    /**
+     * ¿Le llega a esta cuenta algún aviso de gestión al móvil? Decide si la
+     * bandeja de gestión le ofrece activar el push: a quien no le va a llegar
+     * nada, ofrecérselo es prometerle algo que no pasa.
+     *
+     * @param User $user La cuenta.
+     * @return bool
+     */
+    public function receivesPush(User $user): bool
+    {
+        foreach (self::PUSH_ROLES as $role) {
+            if ($this->isResponsibleFor($user, $role)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * ¿Alcanza el rol sin contar ROLE_ADMIN? Un admin al que además se le dio
+     * el permiso de la sección sí cuenta: eso es haberle hecho responsable.
+     *
+     * @param User   $user La cuenta.
+     * @param string $role Rol buscado.
+     * @return bool
+     */
+    private function isResponsibleFor(User $user, string $role): bool
+    {
+        $own = array_values(array_diff($user->getRoles(), ['ROLE_ADMIN']));
+
+        return \in_array($role, $this->roleHierarchy->getReachableRoleNames($own), true);
     }
 
     /**
