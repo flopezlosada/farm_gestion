@@ -13,6 +13,7 @@ use App\Repository\WorkScheduleRepository;
 use App\Service\Staff\MonthGridBuilder;
 use App\Service\Staff\MonthlyTimesheetReport;
 use App\Service\Staff\ClosedWorkMonthException;
+use App\Service\Staff\AbsenceNotifier;
 use App\Service\Staff\ClosedWorkMonths;
 use App\Service\Staff\PunchSequenceException;
 use App\Service\Staff\ScheduleAutofill;
@@ -375,10 +376,11 @@ class WorkController extends AbstractController
      * @param EntityManagerInterface $em
      * @param AbsenceRepository      $absences
      * @param ClosedWorkMonths       $closedMonths
+     * @param AbsenceNotifier        $notifier
      * @return Response
      */
     #[Route('/vacations/request', name: 'work_vacation_request', methods: ['POST'])]
-    public function requestVacation(Request $request, EntityManagerInterface $em, AbsenceRepository $absences, ClosedWorkMonths $closedMonths): Response
+    public function requestVacation(Request $request, EntityManagerInterface $em, AbsenceRepository $absences, ClosedWorkMonths $closedMonths, AbsenceNotifier $notifier): Response
     {
         if (($redirect = $this->ensureWorker()) !== null) {
             return $redirect;
@@ -437,6 +439,7 @@ class WorkController extends AbstractController
 
         $em->persist($absence);
         $em->flush();
+        $notifier->requested($absence);
         $this->addFlash('notice', match (true) {
             $type === Absence::TYPE_SICK_LEAVE => 'Baja registrada.',
             $type === Absence::TYPE_PERMIT => 'Permiso registrado.',

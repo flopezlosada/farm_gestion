@@ -18,6 +18,7 @@ use App\Service\Staff\GapReport;
 use App\Service\Staff\MonthGridBuilder;
 use App\Service\Staff\MonthlyTimesheetReport;
 use App\Service\Staff\ClosedWorkMonthException;
+use App\Service\Staff\AbsenceNotifier;
 use App\Service\Staff\ClosedWorkMonths;
 use App\Service\Staff\PunchSequenceException;
 use App\Service\Staff\TimesheetPdfRenderer;
@@ -331,6 +332,7 @@ class WorkerController extends AbstractController
      * @param Absence                $absence
      * @param EntityManagerInterface $em
      * @param ClosedWorkMonths       $closedMonths
+     * @param AbsenceNotifier        $notifier
      * @return Response
      */
     #[Route('/{id}/absence/{absenceId}/approve', name: 'staff_absence_approve', methods: ['POST'], requirements: ['id' => '\d+', 'absenceId' => '\d+'])]
@@ -340,6 +342,7 @@ class WorkerController extends AbstractController
         #[MapEntity(id: 'absenceId')] Absence $absence,
         EntityManagerInterface $em,
         ClosedWorkMonths $closedMonths,
+        AbsenceNotifier $notifier,
     ): Response {
         // Aprobarla la mete en el registro de esos meses: si alguno ya está
         // aprobado, antes hay que reabrirlo.
@@ -351,7 +354,7 @@ class WorkerController extends AbstractController
             return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
         }
 
-        return $this->changeAbsenceStatus($request, $worker, $absence, Absence::STATUS_APPROVED, 'Ausencia aprobada.', $em);
+        return $this->changeAbsenceStatus($request, $worker, $absence, Absence::STATUS_APPROVED, 'Ausencia aprobada.', $em, $notifier);
     }
 
     /**
@@ -361,6 +364,7 @@ class WorkerController extends AbstractController
      * @param Worker                 $worker
      * @param Absence                $absence
      * @param EntityManagerInterface $em
+     * @param AbsenceNotifier        $notifier
      * @return Response
      */
     #[Route('/{id}/absence/{absenceId}/reject', name: 'staff_absence_reject', methods: ['POST'], requirements: ['id' => '\d+', 'absenceId' => '\d+'])]
@@ -369,8 +373,9 @@ class WorkerController extends AbstractController
         Worker $worker,
         #[MapEntity(id: 'absenceId')] Absence $absence,
         EntityManagerInterface $em,
+        AbsenceNotifier $notifier,
     ): Response {
-        return $this->changeAbsenceStatus($request, $worker, $absence, Absence::STATUS_REJECTED, 'Solicitud rechazada.', $em);
+        return $this->changeAbsenceStatus($request, $worker, $absence, Absence::STATUS_REJECTED, 'Solicitud rechazada.', $em, $notifier);
     }
 
     /**
@@ -438,6 +443,7 @@ class WorkerController extends AbstractController
      * @param string                 $status   Nuevo estado.
      * @param string                 $message  Flash de éxito.
      * @param EntityManagerInterface $em
+     * @param AbsenceNotifier        $notifier Avisa al trabajador de la decisión.
      * @return Response
      */
     private function changeAbsenceStatus(
@@ -447,6 +453,7 @@ class WorkerController extends AbstractController
         string $status,
         string $message,
         EntityManagerInterface $em,
+        AbsenceNotifier $notifier,
     ): Response {
         if (!$this->isCsrfTokenValid('staff_absence' . $worker->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
@@ -461,6 +468,7 @@ class WorkerController extends AbstractController
         $absence->setStatus($status);
         $absence->setApprovedBy($this->getUser());
         $em->flush();
+        $notifier->decided($absence);
         $this->addFlash('success', $message);
 
         return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);

@@ -3,6 +3,7 @@
 namespace App\Tests\Controller;
 
 use App\Entity\Absence;
+use App\Entity\Notification;
 use App\Entity\Setting;
 use App\Entity\TimeEntry;
 use App\Entity\User;
@@ -44,6 +45,9 @@ class StaffControllerTest extends WebTestCase
     protected function tearDown(): void
     {
         $em = static::getContainer()->get(EntityManagerInterface::class);
+        foreach ($em->getRepository(Notification::class)->findBy(['kind' => Notification::KIND_WORK_ABSENCE_DECIDED]) as $n) {
+            $em->remove($n);
+        }
         foreach ($em->getRepository(TimeEntry::class)->findAll() as $e) {
             $em->remove($e);
         }
@@ -316,5 +320,47 @@ class StaffControllerTest extends WebTestCase
             $this->assertResponseIsSuccessful();
             $this->assertSame('Trabajadores', trim($crawler->filter('.csa-sidebar__link--active')->text()), $url);
         }
+    }
+
+    /**
+     * Rechazar unas vacaciones se lo dice al trabajador en su bandeja: antes la
+     * pantalla le prometía «te avisaremos» y no le avisaba nadie.
+     */
+    public function testRejectingAVacationTellsTheWorker(): void
+    {
+        $worker = $this->makeWorker();
+        $user = (new User())
+            ->setUsername('worker-test-decided')
+            ->setEmail('worker-test-decided@example.test')
+            ->setPassword('x')
+            ->setEnabled(true)
+            ->setPasswordSet(true)
+            ->setWorker($worker);
+        $absence = (new Absence())
+            ->setWorker($worker)
+            ->setType(Absence::TYPE_VACATION)
+            ->setStartDate(new \DateTimeImmutable('2026-12-21'))
+            ->setEndDate(new \DateTimeImmutable('2026-12-23'))
+            ->setStatus(Absence::STATUS_REQUESTED);
+        $this->em->persist($user);
+        $this->em->persist($absence);
+        $this->em->flush();
+        $id = $worker->getId();
+        $absenceId = $absence->getId();
+        // Sin reinicio del kernel el Worker sigue en memoria con su colección de
+        // ausencias de antes del alta: la ficha no vería la nueva.
+        $this->em->clear();
+
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $id);
+        $token = $crawler->filter('form[action$="/absence/' . $absenceId . '/reject"] input[name="_token"]')->attr('value');
+        $this->client->request('POST', '/gestion/staff/' . $id . '/absence/' . $absenceId . '/reject', ['_token' => $token]);
+        $this->assertResponseRedirects('/gestion/staff/' . $id);
+
+        $this->em->clear();
+        $notices = $this->em->getRepository(Notification::class)->findBy(['kind' => Notification::KIND_WORK_ABSENCE_DECIDED]);
+        $this->assertCount(1, $notices);
+        $this->assertSame('worker-test-decided', $notices[0]->getRecipient()->getUsername());
+        $this->assertSame('Solicitud rechazada: vacaciones', $notices[0]->getTitle());
+        $this->assertStringStartsWith('Del 21/12/2026 al 23/12/2026.', (string) $notices[0]->getBody());
     }
 }
