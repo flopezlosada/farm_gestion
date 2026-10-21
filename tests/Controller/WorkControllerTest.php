@@ -196,8 +196,9 @@ class WorkControllerTest extends WebTestCase
         $this->assertCount(1, $crawler->filter('.wk-row'));
         $this->assertCount(0, $crawler->filter('.wk-chip-deferred'), 'Lo fichado con el botón no es diferido.');
 
-        // Instantes reales en la zona por defecto: la BBDD guarda la hora sin
-        // zona y la devuelve en la de PHP, que en la CI no es la de Madrid.
+        // Instantes reales en la zona por defecto de PHP: la BBDD guarda la hora
+        // sin zona y la devuelve en esa zona, así el viaje de ida y vuelta no
+        // desplaza nada aunque PHP no corra en Madrid.
         $worker = $this->em->find(Worker::class, $this->worker->getId());
         $recordedAt = new \DateTimeImmutable('now');
         $this->em->persist((new TimeEntry())
