@@ -5,6 +5,7 @@ namespace App\Entity;
 use Doctrine\ORM\Mapping as ORM;
 use Gedmo\Mapping\Annotation as Gedmo;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 /**
  * Ausencia de un {@see Worker}: vacaciones, baja, permiso. NO es un fichaje: el
@@ -120,10 +121,13 @@ class Absence
      * Último día de la ausencia (incluido). Intervalo cerrado [inicio, fin]: una
      * ausencia de un solo día tiene inicio = fin.
      *
+     * Null = baja ABIERTA: la baja médica empieza sin fecha de alta conocida
+     * (la pone el parte de alta). Sólo la baja puede quedar así: unas
+     * vacaciones o un permiso tienen siempre fin, y del fin depende el saldo.
+     *
      * @var \DateTimeImmutable|null
-     * @ORM\Column(name="end_date", type="date_immutable")
+     * @ORM\Column(name="end_date", type="date_immutable", nullable=true)
      */
-    #[Assert\NotNull]
     #[Assert\GreaterThanOrEqual(propertyPath: "startDate", message: "La fecha de fin no puede ser anterior al inicio.")]
     private $endDate;
 
@@ -238,12 +242,73 @@ class Absence
     }
 
     /**
-     * @param \DateTimeImmutable $endDate
+     * @param \DateTimeImmutable|null $endDate Null para una baja abierta.
      * @return self
      */
-    public function setEndDate(\DateTimeImmutable $endDate): self
+    public function setEndDate(?\DateTimeImmutable $endDate): self
     {
         $this->endDate = $endDate;
+
+        return $this;
+    }
+
+    /**
+     * ¿Es una baja sin fecha de alta todavía?
+     *
+     * @return bool
+     */
+    public function isOpen(): bool
+    {
+        return $this->endDate === null;
+    }
+
+    /**
+     * Último día de la ausencia, o `$ifOpen` si sigue abierta. Cada pantalla
+     * decide hasta dónde llega una baja abierta: un informe, hasta el final del
+     * rango que pinta; un calendario, hasta hoy (lo de después aún no se sabe).
+     *
+     * @param \DateTimeImmutable $ifOpen Hasta dónde se da por cubierta si está abierta.
+     * @return \DateTimeImmutable
+     */
+    public function getEndDateOr(\DateTimeImmutable $ifOpen): \DateTimeImmutable
+    {
+        return $this->endDate ?? $ifOpen;
+    }
+
+    /**
+     * Sólo una baja médica puede quedar sin fecha de fin.
+     *
+     * @param ExecutionContextInterface $context
+     * @return void
+     */
+    #[Assert\Callback]
+    public function validateOpenEnd(ExecutionContextInterface $context): void
+    {
+        if ($this->isOpen() && $this->type !== self::TYPE_SICK_LEAVE) {
+            $context->buildViolation('Indica la fecha de fin: sólo una baja médica puede quedar abierta.')
+                ->atPath('endDate')
+                ->addViolation();
+        }
+    }
+
+    /**
+     * Da el alta a una baja abierta: `$lastDay` es su último día de baja.
+     *
+     * @param \DateTimeImmutable $lastDay Último día de baja (incluido).
+     * @return self
+     *
+     * @throws \DomainException Si no está abierta o el día es anterior al inicio.
+     */
+    public function closeOn(\DateTimeImmutable $lastDay): self
+    {
+        if (!$this->isOpen()) {
+            throw new \DomainException('Esta ausencia ya tiene fecha de fin.');
+        }
+        if ($this->startDate !== null && $lastDay < $this->startDate) {
+            throw new \DomainException('El último día de baja no puede ser anterior al inicio.');
+        }
+
+        $this->endDate = $lastDay;
 
         return $this;
     }
@@ -335,7 +400,8 @@ class Absence
     /**
      * Nº de días naturales que abarca la ausencia, ambos extremos incluidos. El
      * cómputo en días LABORABLES (descontando findes y festivos) para el saldo
-     * vive en el servicio, que es quien conoce el calendario.
+     * vive en el servicio, que es quien conoce el calendario. Una baja abierta
+     * no tiene cuenta todavía: 0, y la pantalla la pinta como abierta.
      *
      * @return int
      */
@@ -356,7 +422,8 @@ class Absence
      *    ya disfrutados. Devuelve {@see Absence::CANCEL_TOO_LATE}.
      *  - Si aún no ha empezado (inicio > hoy), se cancela entera (estado
      *    CANCELLED). Devuelve {@see Absence::CANCEL_FULL}.
-     *  - Si está en curso (inicio ≤ hoy ≤ fin), se TRUNCA a hoy: se conservan
+     *  - Si está en curso (inicio ≤ hoy ≤ fin, o una baja abierta que ya
+     *    empezó), se TRUNCA a hoy: se conservan
      *    los días disfrutados hasta hoy incluido y se libera el resto. Devuelve
      *    {@see Absence::CANCEL_TRUNCATED}.
      *
@@ -368,13 +435,14 @@ class Absence
      */
     public function cancelAsOf(\DateTimeImmutable $today): string
     {
-        // Sin fechas completas no hay nada que truncar ni cancelar con sentido:
-        // se trata como "ya no se puede" para no mutar una ausencia malformada.
-        if ($this->startDate === null || $this->endDate === null) {
+        // Sin inicio no hay nada que truncar ni cancelar con sentido: se trata
+        // como "ya no se puede" para no mutar una ausencia malformada.
+        if ($this->startDate === null) {
             return self::CANCEL_TOO_LATE;
         }
 
-        if ($this->endDate < $today) {
+        // Una baja abierta no ha terminado: siempre se puede cancelar o truncar.
+        if ($this->endDate !== null && $this->endDate < $today) {
             return self::CANCEL_TOO_LATE;
         }
 

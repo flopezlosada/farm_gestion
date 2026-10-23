@@ -132,7 +132,9 @@ class WorkerController extends AbstractController
             $teamWorkers[] = ['index' => $index, 'name' => $worker->getName()];
             foreach ($absences->findOverlappingForWorker($worker, $yearStart, $yearEnd) as $absence) {
                 $cursor = $absence->getStartDate() > $yearStart ? $absence->getStartDate() : $yearStart;
-                $end = $absence->getEndDate() < $yearEnd ? $absence->getEndDate() : $yearEnd;
+                // Una baja abierta se pinta hasta hoy: después aún no se sabe.
+                $absenceEnd = $absence->getEndDateOr($today);
+                $end = $absenceEnd < $yearEnd ? $absenceEnd : $yearEnd;
                 while ($cursor <= $end) {
                     $byDay[$cursor->format('Y-m-d')][] = [
                         'index' => $index,
@@ -186,17 +188,19 @@ class WorkerController extends AbstractController
         // Reconstruye las jornadas (tramos + total) a partir de los fichajes.
         $days = $workdays->buildDays($entries, $madrid);
 
-        $year = (int) (new \DateTimeImmutable('today', $madrid))->format('Y');
+        $today = new \DateTimeImmutable('today', $madrid);
+        $year = (int) $today->format('Y');
         $yearStart = new \DateTimeImmutable(sprintf('%d-01-01', $year), $madrid);
         $yearEnd = new \DateTimeImmutable(sprintf('%d-12-31', $year), $madrid);
 
         // Festivos de una sola consulta que cubra el año y las ausencias mostradas.
+        // Una baja abierta se cuenta hasta hoy.
         $sorted = $this->sortedAbsences($worker);
         $minDate = $yearStart;
         $maxDate = $yearEnd;
         foreach ($sorted as $absence) {
             $minDate = $absence->getStartDate() < $minDate ? $absence->getStartDate() : $minDate;
-            $maxDate = $absence->getEndDate() > $maxDate ? $absence->getEndDate() : $maxDate;
+            $maxDate = $absence->getEndDateOr($today) > $maxDate ? $absence->getEndDateOr($today) : $maxDate;
         }
         $holidayDates = $holidays->findNamesBetween($minDate, $maxDate);
 
@@ -208,7 +212,7 @@ class WorkerController extends AbstractController
 
         $absenceWorkingDays = [];
         foreach ($sorted as $absence) {
-            $absenceWorkingDays[$absence->getId()] = $workingDays->count($absence->getStartDate(), $absence->getEndDate(), $holidayDates);
+            $absenceWorkingDays[$absence->getId()] = $workingDays->count($absence->getStartDate(), $absence->getEndDateOr($today), $holidayDates);
         }
 
         return $this->render('staff/show.html.twig', [
@@ -280,9 +284,11 @@ class WorkerController extends AbstractController
 
                 return $this->redirectAfterAbsence($back, $worker, $day);
             }
-            // Se registra ya aprobada, así que cambia el registro de esos meses.
+            // Se registra ya aprobada, así que cambia el registro de esos meses
+            // (los de una baja abierta, hasta hoy).
+            $today = new \DateTimeImmutable('today', new \DateTimeZone('Europe/Madrid'));
             try {
-                $closedMonths->assertRangeOpen($worker, $absence->getStartDate(), $absence->getEndDate());
+                $closedMonths->assertRangeOpen($worker, $absence->getStartDate(), $absence->getEndDateOr($today));
             } catch (ClosedWorkMonthException $e) {
                 $this->addFlash('error', $e->getMessage());
 
@@ -346,8 +352,9 @@ class WorkerController extends AbstractController
     ): Response {
         // Aprobarla la mete en el registro de esos meses: si alguno ya está
         // aprobado, antes hay que reabrirlo.
+        $today = new \DateTimeImmutable('today', new \DateTimeZone('Europe/Madrid'));
         try {
-            $closedMonths->assertRangeOpen($worker, $absence->getStartDate(), $absence->getEndDate());
+            $closedMonths->assertRangeOpen($worker, $absence->getStartDate(), $absence->getEndDateOr($today));
         } catch (ClosedWorkMonthException $e) {
             $this->addFlash('error', $e->getMessage());
 
@@ -431,6 +438,72 @@ class WorkerController extends AbstractController
         }
 
         return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
+    }
+
+    /**
+     * Da el alta a una baja abierta: fija su último día de baja (el del parte de
+     * alta). Puede ser un día ya pasado, si el alta se registra tarde; entonces
+     * los días posteriores dejan de estar cubiertos, y si caen en un mes ya
+     * aprobado hay que reabrirlo antes.
+     *
+     * @param Request                $request
+     * @param Worker                 $worker
+     * @param Absence                $absence
+     * @param EntityManagerInterface $em
+     * @param ClosedWorkMonths       $closedMonths
+     * @return Response
+     */
+    #[Route('/{id}/absence/{absenceId}/close', name: 'staff_absence_close', methods: ['POST'], requirements: ['id' => '\d+', 'absenceId' => '\d+'])]
+    public function closeAbsence(
+        Request $request,
+        Worker $worker,
+        #[MapEntity(id: 'absenceId')] Absence $absence,
+        EntityManagerInterface $em,
+        ClosedWorkMonths $closedMonths,
+    ): Response {
+        $back = $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
+        if (!$this->isCsrfTokenValid('staff_absence' . $worker->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $back;
+        }
+
+        if ($absence->getWorker()?->getId() !== $worker->getId()) {
+            throw $this->createNotFoundException('La ausencia no pertenece a este trabajador.');
+        }
+
+        // Ida y vuelta por el formato: createFromFormat acepta un 31 de febrero.
+        $raw = (string) $request->request->get('end_date', '');
+        $lastDay = \DateTimeImmutable::createFromFormat('!Y-m-d', $raw) ?: null;
+        if ($lastDay?->format('Y-m-d') !== $raw) {
+            $this->addFlash('error', 'Indica el último día de baja.');
+
+            return $back;
+        }
+
+        $today = new \DateTimeImmutable('today', new \DateTimeZone('Europe/Madrid'));
+        if ($lastDay < $today) {
+            try {
+                $closedMonths->assertRangeOpen($worker, $lastDay->modify('+1 day'), $today);
+            } catch (ClosedWorkMonthException $e) {
+                $this->addFlash('error', $e->getMessage());
+
+                return $back;
+            }
+        }
+
+        try {
+            $absence->closeOn($lastDay);
+        } catch (\DomainException $e) {
+            $this->addFlash('error', $e->getMessage());
+
+            return $back;
+        }
+
+        $em->flush();
+        $this->addFlash('success', sprintf('Alta registrada: último día de baja el %s.', $lastDay->format('d/m/Y')));
+
+        return $back;
     }
 
     /**

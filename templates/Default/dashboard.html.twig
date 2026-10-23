@@ -636,7 +636,7 @@
                                         <a class="dash-row" href="{{ path('staff_show', { id: a.worker.id }) }}">
                                             <div class="dash-row__body">
                                                 <div class="dash-row__title">{{ a.worker.name }} · {{ abs_type[a.type]|default('Ausencia') }}</div>
-                                                <div class="dash-row__sub">{{ a.startDate|date('d/m/Y') }}{% if a.endDate != a.startDate %} – {{ a.endDate|date('d/m/Y') }}{% endif %} · registrada el {{ a.created|date('d/m') }}</div>
+                                                <div class="dash-row__sub">{{ a.startDate|date('d/m/Y') }}{% if a.open %}, sin alta{% elseif a.endDate != a.startDate %} – {{ a.endDate|date('d/m/Y') }}{% endif %} · registrada el {{ a.created|date('d/m') }}</div>
                                             </div>
                                             <div class="dash-row__metric dash-row__metric--sky">Nueva</div>
                                         </a>
