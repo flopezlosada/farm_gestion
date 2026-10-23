@@ -292,7 +292,8 @@ class WorkController extends AbstractController
         $madrid = $this->madrid();
         // Año navegable: se puede mirar años pasados y el siguiente (pedir en
         // diciembre las vacaciones de Navidad del año que viene).
-        $currentYear = (int) (new \DateTimeImmutable('today', $madrid))->format('Y');
+        $today = new \DateTimeImmutable('today', $madrid);
+        $currentYear = (int) $today->format('Y');
         $year = (int) $request->query->get('year', (string) $currentYear);
         if ($year < $currentYear - 10 || $year > $currentYear + 1) {
             $year = $currentYear;
@@ -301,14 +302,15 @@ class WorkController extends AbstractController
         $mine = $worker->getAbsences()->toArray();
         usort($mine, static fn (Absence $a, Absence $b) => $b->getStartDate() <=> $a->getStartDate());
 
-        // Festivos de una sola consulta que cubra el año Y todas las ausencias mostradas.
+        // Festivos de una sola consulta que cubra el año Y todas las ausencias
+        // mostradas. Una baja abierta se cuenta y se pinta hasta hoy.
         $yearStart = new \DateTimeImmutable(sprintf('%d-01-01', $year), $madrid);
         $yearEnd = new \DateTimeImmutable(sprintf('%d-12-31', $year), $madrid);
         $minDate = $yearStart;
         $maxDate = $yearEnd;
         foreach ($mine as $absence) {
             $minDate = $absence->getStartDate() < $minDate ? $absence->getStartDate() : $minDate;
-            $maxDate = $absence->getEndDate() > $maxDate ? $absence->getEndDate() : $maxDate;
+            $maxDate = $absence->getEndDateOr($today) > $maxDate ? $absence->getEndDateOr($today) : $maxDate;
         }
         $holidayDates = $holidays->findNamesBetween($minDate, $maxDate);
 
@@ -333,7 +335,7 @@ class WorkController extends AbstractController
         // Días laborables de cada ausencia, para la etiqueta de la lista.
         $absenceWorkingDays = [];
         foreach ($mine as $absence) {
-            $absenceWorkingDays[$absence->getId()] = $workingDays->count($absence->getStartDate(), $absence->getEndDate(), $holidayDates);
+            $absenceWorkingDays[$absence->getId()] = $workingDays->count($absence->getStartDate(), $absence->getEndDateOr($today), $holidayDates);
         }
 
         $absenceDays = [];
@@ -342,7 +344,8 @@ class WorkController extends AbstractController
                 continue;
             }
             $cursor = $absence->getStartDate() > $yearStart ? $absence->getStartDate() : $yearStart;
-            $end = $absence->getEndDate() < $yearEnd ? $absence->getEndDate() : $yearEnd;
+            $absenceEnd = $absence->getEndDateOr($today);
+            $end = $absenceEnd < $yearEnd ? $absenceEnd : $yearEnd;
             while ($cursor <= $end) {
                 $key = $cursor->format('Y-m-d');
                 // La aprobada manda sobre la pendiente si solapan. Se guarda tipo y
@@ -364,8 +367,8 @@ class WorkController extends AbstractController
             'current_year' => $currentYear,
             'min_year' => $absences->earliestStartYear($worker) ?? $currentYear,
             'year_has_holidays' => $yearHasHolidays,
-            'today_ymd' => (new \DateTimeImmutable('today', $madrid))->format('Y-m-d'),
-            'year_calendar' => $yearCalendar->build($year, $madrid, new \DateTimeImmutable('today', $madrid), $holidayDates, $absenceDays),
+            'today_ymd' => $today->format('Y-m-d'),
+            'year_calendar' => $yearCalendar->build($year, $madrid, $today, $holidayDates, $absenceDays),
         ]);
     }
 

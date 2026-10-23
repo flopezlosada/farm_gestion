@@ -126,14 +126,17 @@ class AbsenceNotifier
      *
      * @param Absence $absence La ausencia.
      *
-     * @return string «Del 03/11/2026 al 07/11/2026.»
+     * @return string «Del 03/11/2026 al 07/11/2026.», o «Desde el …» si es una baja abierta.
      */
     private function range(Absence $absence): string
     {
         $start = $absence->getStartDate();
         $end = $absence->getEndDate();
-        if (null === $start || null === $end) {
+        if (null === $start) {
             return '';
+        }
+        if (null === $end) {
+            return sprintf('Desde el %s, sin fecha de alta todavía.', $start->format('d/m/Y'));
         }
 
         return $start == $end

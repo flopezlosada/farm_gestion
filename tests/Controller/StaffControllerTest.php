@@ -363,4 +363,150 @@ class StaffControllerTest extends WebTestCase
         $this->assertSame('Solicitud rechazada: vacaciones', $notices[0]->getTitle());
         $this->assertStringStartsWith('Del 21/12/2026 al 23/12/2026.', (string) $notices[0]->getBody());
     }
+
+    /**
+     * Una baja médica sin fecha de alta se registra dejando «Hasta» vacío, y
+     * todas las pantallas que pintan ausencias la aguantan: antes el fin era
+     * obligatorio y había que inventarse una fecha prevista.
+     */
+    public function testOpenSickLeaveIsRegisteredWithoutEndDateAndScreensLoad(): void
+    {
+        $worker = $this->makeWorker();
+        $id = $worker->getId();
+
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $id . '/absence/new');
+        $form = $crawler->selectButton('Registrar ausencia')->form([
+            'absence[type]' => Absence::TYPE_SICK_LEAVE,
+            'absence[startDate]' => '2026-10-05',
+            'absence[endDate]' => '',
+        ]);
+        $this->client->submit($form);
+        $this->assertResponseRedirects();
+
+        $this->em->clear();
+        $saved = $this->em->getRepository(Absence::class)->findBy(['worker' => $id]);
+        $this->assertCount(1, $saved);
+        $this->assertTrue($saved[0]->isOpen());
+        $this->assertSame(Absence::STATUS_APPROVED, $saved[0]->getStatus());
+
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $id);
+        $this->assertResponseIsSuccessful();
+        $this->assertStringContainsString('sin alta todavía', $crawler->text());
+        $this->assertCount(1, $crawler->filter('form[action$="/absence/' . $saved[0]->getId() . '/close"]'));
+
+        foreach (['/gestion/staff/calendar', '/gestion/staff/gaps', '/gestion/staff/' . $id . '/calendar', '/gestion/staff/' . $id . '/day/2026-10-07', '/gestion/dashboard'] as $url) {
+            $this->client->request('GET', $url);
+            $this->assertResponseIsSuccessful($url);
+        }
+    }
+
+    /**
+     * Unas vacaciones sin fecha de fin no se guardan: sólo la baja puede quedar
+     * abierta, porque del fin depende el saldo.
+     */
+    public function testVacationWithoutEndDateIsRejected(): void
+    {
+        $worker = $this->makeWorker();
+        $id = $worker->getId();
+
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $id . '/absence/new');
+        $form = $crawler->selectButton('Registrar ausencia')->form([
+            'absence[type]' => Absence::TYPE_VACATION,
+            'absence[startDate]' => '2026-10-05',
+            'absence[endDate]' => '',
+        ]);
+        $this->client->submit($form);
+
+        // Vuelve a pintar el formulario con el error, sin redirigir.
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorTextContains('body', 'sólo una baja médica puede quedar abierta');
+        $this->assertSame([], $this->em->getRepository(Absence::class)->findBy(['worker' => $id]));
+    }
+
+    /**
+     * Mientras la baja no tiene alta, ocupa todo lo posterior: no se puede
+     * registrar otra ausencia detrás sin cerrarla antes.
+     */
+    public function testOpenSickLeaveBlocksLaterAbsences(): void
+    {
+        $worker = $this->makeWorker();
+        $id = $worker->getId();
+        $this->persistOpenSickLeave($worker, '2026-10-05');
+        $this->em->clear();
+
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $id . '/absence/new');
+        $form = $crawler->selectButton('Registrar ausencia')->form([
+            'absence[type]' => Absence::TYPE_VACATION,
+            'absence[startDate]' => '2027-03-01',
+            'absence[endDate]' => '2027-03-05',
+        ]);
+        $this->client->submit($form);
+        $this->assertResponseRedirects();
+
+        $this->em->clear();
+        $this->assertCount(1, $this->em->getRepository(Absence::class)->findBy(['worker' => $id]));
+    }
+
+    /**
+     * Dar el alta con un día ya pasado (el parte llega tarde) cierra la baja en
+     * ese día.
+     */
+    public function testClosingAnOpenSickLeaveSetsItsLastDay(): void
+    {
+        $worker = $this->makeWorker();
+        $id = $worker->getId();
+        $absenceId = $this->persistOpenSickLeave($worker, '2026-10-05')->getId();
+        $this->em->clear();
+
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $id);
+        $token = $crawler->filter('form[action$="/absence/' . $absenceId . '/close"] input[name="_token"]')->attr('value');
+        $this->client->request('POST', '/gestion/staff/' . $id . '/absence/' . $absenceId . '/close', ['_token' => $token, 'end_date' => '2026-10-16']);
+        $this->assertResponseRedirects('/gestion/staff/' . $id);
+
+        $this->em->clear();
+        $closed = $this->em->getRepository(Absence::class)->find($absenceId);
+        $this->assertFalse($closed->isOpen());
+        $this->assertEquals(new \DateTimeImmutable('2026-10-16'), $closed->getEndDate());
+    }
+
+    /**
+     * Un alta anterior al inicio, o con una fecha que no existe, no toca la baja.
+     */
+    public function testClosingWithAnInvalidDayLeavesTheLeaveOpen(): void
+    {
+        $worker = $this->makeWorker();
+        $id = $worker->getId();
+        $absenceId = $this->persistOpenSickLeave($worker, '2026-10-05')->getId();
+        $this->em->clear();
+
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $id);
+        $token = $crawler->filter('form[action$="/absence/' . $absenceId . '/close"] input[name="_token"]')->attr('value');
+        foreach (['2026-10-04', '2026-02-31', ''] as $day) {
+            $this->client->request('POST', '/gestion/staff/' . $id . '/absence/' . $absenceId . '/close', ['_token' => $token, 'end_date' => $day]);
+            $this->assertResponseRedirects('/gestion/staff/' . $id);
+        }
+
+        $this->em->clear();
+        $this->assertTrue($this->em->getRepository(Absence::class)->find($absenceId)->isOpen());
+    }
+
+    /**
+     * Guarda una baja médica aprobada sin fecha de alta.
+     *
+     * @param Worker $worker Trabajador.
+     * @param string $start  Primer día de baja, 'Y-m-d'.
+     * @return Absence
+     */
+    private function persistOpenSickLeave(Worker $worker, string $start): Absence
+    {
+        $absence = (new Absence())
+            ->setWorker($worker)
+            ->setType(Absence::TYPE_SICK_LEAVE)
+            ->setStatus(Absence::STATUS_APPROVED)
+            ->setStartDate(new \DateTimeImmutable($start));
+        $this->em->persist($absence);
+        $this->em->flush();
+
+        return $absence;
+    }
 }
