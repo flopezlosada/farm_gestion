@@ -15,6 +15,7 @@ use App\Form\VolunteerCategoryType;
 use App\Form\VolunteerOfferType;
 use App\Form\VolunteerPlaceType;
 use App\Form\VolunteerShiftType;
+use App\Http\QueryId;
 use App\Repository\PartnerRepository;
 use App\Repository\UserRepository;
 use App\Repository\VolunteerCallRepository;
@@ -105,7 +106,7 @@ class VolunteeringController extends AbstractController
     ): Response {
         $now = new \DateTime();
         $scope = $request->query->getAlpha('ver') ?: 'upcoming';
-        $categoryId = $request->query->getInt('tipo') ?: null;
+        $categoryId = QueryId::from($request->query, 'tipo');
         $category = null !== $categoryId ? $categories->find($categoryId) : null;
         $query = trim((string) $request->query->get('q'));
         $mine = $scopeOf->categories();
@@ -144,7 +145,7 @@ class VolunteeringController extends AbstractController
         VolunteerScope $scopeOf,
     ): Response {
         $scope = $request->query->getAlpha('ver') ?: VolunteerOffer::STATUS_PUBLISHED;
-        $categoryId = $request->query->getInt('tipo') ?: null;
+        $categoryId = QueryId::from($request->query, 'tipo');
         $category = null !== $categoryId ? $categories->find($categoryId) : null;
         $query = trim((string) $request->query->get('q'));
         $mine = $scopeOf->categories();
@@ -187,7 +188,7 @@ class VolunteeringController extends AbstractController
         PaginatorInterface $paginator,
         VolunteerScope $scopeOf,
     ): Response {
-        $filter = $request->query->getInt('tipo') ?: null;
+        $filter = QueryId::from($request->query, 'tipo');
         $category = null !== $filter ? $categories->find($filter) : null;
         $scope = $request->query->getAlpha('ver') ?: 'declared';
         $query = trim((string) $request->query->get('q'));
@@ -245,14 +246,14 @@ class VolunteeringController extends AbstractController
 
         // El historial de una persona: no hay ficha de socix dentro del módulo,
         // así que se entra aquí desde su fila en "Quién hay".
-        $who = $request->query->getInt('socix') ?: null;
+        $who = QueryId::from($request->query, 'socix');
         $who = null !== $who ? $partners->find($who) : null;
 
         // Filtro por área, que es por dónde se entra desde su ficha. El
         // parámetro se llama `area` y no `tipo` porque `tipo` ya es el tipo de
         // EVENTO en esta pantalla, y reusarlo dejaría dos filtros peleándose por
         // el mismo nombre.
-        $areaId = $request->query->getInt('area') ?: null;
+        $areaId = QueryId::from($request->query, 'area');
         $area = null !== $areaId ? $categories->find($areaId) : null;
 
         // El alcance de quien mira; null significa que lo ve todo.
@@ -312,8 +313,8 @@ class VolunteeringController extends AbstractController
         // marcada y no hay que volver a elegirla en una lista. Sólo si existe y
         // se sigue ofreciendo; una retirada no se ofrece ni por la puerta de
         // atrás. Se ignora en el POST: ahí manda lo que se envió.
-        $areaId = $request->query->getInt('area');
-        if ($areaId > 0 && !$request->isMethod('POST')) {
+        $areaId = QueryId::from($request->query, 'area');
+        if ($areaId !== null && !$request->isMethod('POST')) {
             $area = $em->find(VolunteerCategory::class, $areaId);
             if (null !== $area && $area->isActive()) {
                 $offer->addCategory($area);
@@ -458,9 +459,9 @@ class VolunteeringController extends AbstractController
         $now = new \DateTimeImmutable();
         $month = MonthGrid::monthFrom($request->query->getString('mes'), $now);
 
-        $categoryId = $request->query->getInt('tipo') ?: null;
+        $categoryId = QueryId::from($request->query, 'tipo');
         $category = null !== $categoryId ? $categories->find($categoryId) : null;
-        $offerId = $request->query->getInt('tarea') ?: null;
+        $offerId = QueryId::from($request->query, 'tarea');
         $offer = null !== $offerId ? $offers->find($offerId) : null;
         $mine = $scopeOf->categories();
 

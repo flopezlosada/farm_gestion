@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\CronRun;
 use App\Entity\NotificationLog;
+use App\Http\QueryId;
 use App\Repository\CronRunRepository;
 use App\Repository\EmittedEffectRepository;
 use App\Repository\NotificationLogRepository;
@@ -324,7 +325,7 @@ class NotificationLogController extends AbstractController
             'status' => $this->whitelisted($request, 'status', $allowedStatuses),
             'task' => trim($request->query->getString('task')) ?: null,
             'q' => trim($request->query->getString('q')) ?: null,
-            'run' => $request->query->getInt('run') ?: null,
+            'run' => QueryId::from($request->query, 'run'),
         ];
     }
 

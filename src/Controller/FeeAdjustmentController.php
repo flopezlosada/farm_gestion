@@ -7,6 +7,7 @@ use App\Entity\FeeAdjustment;
 use App\Entity\Partner;
 use App\Entity\User;
 use App\Form\FeeAdjustmentType;
+use App\Http\QueryId;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -32,7 +33,8 @@ class FeeAdjustmentController extends AbstractController
     #[Route('/{id}/fee-adjustments/new', name: 'fee_adjustment_new', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     public function new(Request $request, Partner $partner, EntityManagerInterface $em): Response
     {
-        $initiative = $request->query->getInt('initiative') > 0 ? $em->find(DonationInitiative::class, $request->query->getInt('initiative')) : null;
+        $initiativeId = QueryId::from($request->query, 'initiative');
+        $initiative = $initiativeId !== null ? $em->find(DonationInitiative::class, $initiativeId) : null;
         $form = $this->createForm(FeeAdjustmentType::class, [
             'direction' => $initiative !== null ? FeeAdjustmentType::MORE : null,
             'initiative' => $initiative?->isOpen() ? $initiative : null,
