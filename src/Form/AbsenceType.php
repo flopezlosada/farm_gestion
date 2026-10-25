@@ -38,7 +38,10 @@ class AbsenceType extends AbstractType
             ->add('endDate', DateType::class, [
                 'label' => 'Hasta',
                 'widget' => 'single_text',
-                'help' => 'Último día de la ausencia (incluido).',
+                // Una baja médica empieza sin fecha de alta: se deja vacío y se
+                // cierra al llegar el parte de alta.
+                'required' => false,
+                'help' => 'Último día de la ausencia (incluido). En una baja médica sin fecha de alta, déjalo vacío.',
             ])
             ->add('note', TextareaType::class, [
                 'label' => 'Comentario',

@@ -22,7 +22,7 @@
     {% form_theme form 'form_div_layout.html.twig' %}
     {{ form_start(form, { attr: { class: 'csa-form-narrow' } }) }}
         <div class="csa-stack-lg">
-            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Ausencia', subtitle: 'Tipo y fechas (ambos días incluidos).' } %}
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Ausencia', subtitle: 'Tipo y fechas (ambos días incluidos). Una baja médica sin fecha de alta se deja sin «Hasta».' } %}
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">

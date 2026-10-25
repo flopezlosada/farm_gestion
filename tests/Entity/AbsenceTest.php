@@ -3,7 +3,9 @@
 namespace App\Tests\Entity;
 
 use App\Entity\Absence;
+use App\Entity\Worker;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Validator\Validation;
 
 class AbsenceTest extends TestCase
 {
@@ -144,5 +146,104 @@ class AbsenceTest extends TestCase
         $this->assertSame(Absence::CANCEL_TOO_LATE, $absence->cancelAsOf(new \DateTimeImmutable('2026-08-10')));
         $this->assertSame(Absence::STATUS_APPROVED, $absence->getStatus());
         $this->assertNull($absence->getEndDate());
+    }
+
+    public function testBajaSinFechaDeAltaEstaAbiertaYCubreHastaLoQueSePida(): void
+    {
+        $absence = $this->openSickLeave('2026-10-05');
+        $horizon = new \DateTimeImmutable('2026-10-23');
+
+        $this->assertTrue($absence->isOpen());
+        $this->assertEquals($horizon, $absence->getEndDateOr($horizon));
+        $this->assertSame(0, $absence->getCalendarDayCount());
+    }
+
+    public function testAusenciaCerradaIgnoraElHorizonte(): void
+    {
+        $absence = $this->openSickLeave('2026-10-05')->setEndDate(new \DateTimeImmutable('2026-10-09'));
+
+        $this->assertFalse($absence->isOpen());
+        $this->assertEquals(new \DateTimeImmutable('2026-10-09'), $absence->getEndDateOr(new \DateTimeImmutable('2026-12-31')));
+    }
+
+    public function testDarElAltaFijaElUltimoDiaDeBaja(): void
+    {
+        $absence = $this->openSickLeave('2026-10-05');
+
+        $absence->closeOn(new \DateTimeImmutable('2026-10-20'));
+
+        $this->assertFalse($absence->isOpen());
+        $this->assertEquals(new \DateTimeImmutable('2026-10-20'), $absence->getEndDate());
+    }
+
+    public function testElAltaElMismoDiaDelInicioEsUnDiaDeBaja(): void
+    {
+        $absence = $this->openSickLeave('2026-10-05');
+
+        $absence->closeOn(new \DateTimeImmutable('2026-10-05'));
+
+        $this->assertSame(1, $absence->getCalendarDayCount());
+    }
+
+    public function testNoSePuedeDarElAltaAntesDelInicio(): void
+    {
+        $absence = $this->openSickLeave('2026-10-05');
+
+        $this->expectException(\DomainException::class);
+        $absence->closeOn(new \DateTimeImmutable('2026-10-04'));
+    }
+
+    public function testNoSePuedeDarElAltaDosVeces(): void
+    {
+        $absence = $this->openSickLeave('2026-10-05');
+        $absence->closeOn(new \DateTimeImmutable('2026-10-20'));
+
+        $this->expectException(\DomainException::class);
+        $absence->closeOn(new \DateTimeImmutable('2026-10-21'));
+    }
+
+    public function testCancelarUnaBajaAbiertaEnCursoLaCierraHoy(): void
+    {
+        $absence = $this->openSickLeave('2026-10-05');
+        $today = new \DateTimeImmutable('2026-10-23');
+
+        $this->assertSame(Absence::CANCEL_TRUNCATED, $absence->cancelAsOf($today));
+        $this->assertEquals($today, $absence->getEndDate());
+        $this->assertSame(Absence::STATUS_APPROVED, $absence->getStatus());
+    }
+
+    public function testCancelarUnaBajaAbiertaQueNoHaEmpezadoLaAnula(): void
+    {
+        $absence = $this->openSickLeave('2026-11-02');
+
+        $this->assertSame(Absence::CANCEL_FULL, $absence->cancelAsOf(new \DateTimeImmutable('2026-10-23')));
+        $this->assertSame(Absence::STATUS_CANCELLED, $absence->getStatus());
+        $this->assertTrue($absence->isOpen());
+    }
+
+    public function testSoloLaBajaMedicaPuedeQuedarSinFechaDeFin(): void
+    {
+        $validator = Validation::createValidatorBuilder()->enableAttributeMapping()->getValidator();
+
+        $this->assertCount(0, $validator->validate($this->openSickLeave('2026-10-05')), 'Una baja abierta es válida.');
+
+        foreach ([Absence::TYPE_VACATION, Absence::TYPE_PERMIT, Absence::TYPE_STRIKE, Absence::TYPE_OTHER] as $type) {
+            $violations = $validator->validate($this->openSickLeave('2026-10-05')->setType($type));
+            $this->assertCount(1, $violations, $type . ' sin fecha de fin no debe validar.');
+            $this->assertSame('endDate', $violations[0]->getPropertyPath());
+        }
+    }
+
+    /**
+     * Baja médica aprobada, sin fecha de alta. Lleva un Worker para que la
+     * validación de la entidad entera no falle por otra cosa.
+     */
+    private function openSickLeave(string $start): Absence
+    {
+        return (new Absence())
+            ->setWorker(new Worker())
+            ->setType(Absence::TYPE_SICK_LEAVE)
+            ->setStatus(Absence::STATUS_APPROVED)
+            ->setStartDate(new \DateTimeImmutable($start));
     }
 }
