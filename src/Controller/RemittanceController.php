@@ -13,12 +13,15 @@ use App\Repository\PartnerRepository;
 use App\Repository\RemittanceRepository;
 use App\Service\Accounting\Invoice\LedgerSheet;
 use App\Service\Accounting\Remittance\BasketFeeExpectations;
+use App\Service\Accounting\Remittance\FlatRemittance;
 use App\Service\Accounting\Remittance\MandatesToPartners;
+use App\Service\Accounting\Remittance\RemittanceBase;
 use App\Service\Accounting\Remittance\RemittanceFromFees;
 use App\Service\Accounting\Remittance\RemittancePartnerMatcher;
 use App\Service\Accounting\Remittance\RemittancePeriodText;
 use App\Service\Accounting\Remittance\RemittanceReview;
 use App\Service\Accounting\Remittance\RemittanceSheet;
+use App\Service\Partner\Fee\FeeStatement;
 use App\Service\Partner\Fee\MonthlyFeeCalculator;
 use Doctrine\ORM\EntityManagerInterface;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -73,6 +76,8 @@ class RemittanceController extends AbstractController
         return $this->render('accounting/remittances.html.twig', [
             'remittances' => $remittances->findAllNewestFirst(),
             'next' => $next,
+            'kindLabels' => Remittance::KIND_LABELS,
+            'bases' => RemittanceBase::cases(),
         ]);
     }
 
@@ -173,6 +178,67 @@ class RemittanceController extends AbstractController
         $this->addFlash('success', $latest !== null
             ? sprintf('Borrador preparado con los %d recibos de «%s». Revisa los avisos antes de descargarla.', $remittance->getLines()->count(), $latest->getLabel())
             : 'Borrador vacío: es la primera de su tipo. Añade los recibos uno a uno.');
+
+        return $this->redirectToRoute('accounting_remittance_show', ['id' => $remittance->getId()]);
+    }
+
+    /**
+     * Preparar una remesa del mismo importe para toda una base: una derrama o la cuota
+     * de socix. La base se elige: todxs lxs socixs, o quien paga cesta ese mes (del
+     * cálculo de las cuotas, que ya sabe quién paga una cesta compartida). Sale en
+     * borrador: se quita a quien no toque antes de enviarla.
+     */
+    #[Route('/flat', name: 'accounting_remittance_flat', methods: ['POST'])]
+    #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
+    public function flat(Request $request, RemittanceRepository $remittances, PartnerRepository $partners, MonthlyFeeCalculator $calculator, FlatRemittance $builder, EntityManagerInterface $em): Response
+    {
+        $back = $this->redirectToRoute('accounting_remittances');
+        if (!$this->isCsrfTokenValid('prepare-remittance', (string) $request->request->get('_token'))) {
+            $this->addFlash('danger', 'La página había caducado. Vuelve a intentarlo.');
+
+            return $back;
+        }
+
+        $kind = (string) $request->request->get('kind');
+        $period = \DateTimeImmutable::createFromFormat('!Y-m', (string) $request->request->get('period'));
+        $base = RemittanceBase::tryFrom((string) $request->request->get('base'));
+        $rawAmount = str_replace(',', '.', trim((string) $request->request->get('amount')));
+        if (!\in_array($kind, [Remittance::KIND_MEMBERSHIP, Remittance::KIND_OTHER], true) || $period === false || $base === null) {
+            $this->addFlash('warning', 'Elige el tipo, el mes y a quién.');
+
+            return $back;
+        }
+        if (preg_match('/^\d{1,5}(\.\d{1,2})?$/', $rawAmount) !== 1 || (float) $rawAmount <= 0) {
+            $this->addFlash('warning', 'Pon el importe de cada recibo, en euros (por ejemplo 20 o 12,50).');
+
+            return $back;
+        }
+        if ($remittances->existsFor($kind, $period)) {
+            $this->addFlash('warning', sprintf('Ya hay una remesa de %s de %s.', mb_strtolower(Remittance::KIND_LABELS[$kind]), $period->format('m/Y')));
+
+            return $back;
+        }
+
+        $payers = match ($base) {
+            RemittanceBase::Members => $partners->findMembers(),
+            RemittanceBase::BasketPayers => array_map(static fn (FeeStatement $s): Partner => $s->payer, $calculator->forMonth($period)->getStatements()),
+        };
+        $concept = trim((string) $request->request->get('label'));
+        $label = mb_substr($concept !== '' ? $concept : sprintf('%s %s', Remittance::KIND_LABELS[$kind], $period->format('m/Y')), 0, 255);
+        $remittance = $builder->build($kind, Remittance::firstOfMonth($period), $label, number_format((float) $rawAmount, 2, '.', ''), $payers, $this->actor());
+        if ($remittance->getLines()->isEmpty()) {
+            $this->addFlash('warning', sprintf('Nadie de «%s» tiene el mandato completo: no hay a quién pasarle el recibo.', $base->label()));
+
+            return $back;
+        }
+        $em->persist($remittance);
+        $em->flush();
+
+        $this->addFlash('success', sprintf('Borrador para «%s»: %d recibos (%s €).', $base->label(), $remittance->getLines()->count(), number_format((float) $remittance->getTotal(), 2, ',', '.')));
+        $left = \count(array_unique(array_map(spl_object_id(...), $payers))) - $remittance->getLines()->count();
+        if ($left > 0) {
+            $this->addFlash('warning', sprintf('%d %s sin mandato completo y no %s en la remesa.', $left, $left === 1 ? 'persona está' : 'personas están', $left === 1 ? 'va' : 'van'));
+        }
 
         return $this->redirectToRoute('accounting_remittance_show', ['id' => $remittance->getId()]);
     }

@@ -34,27 +34,11 @@ class RemittanceFromFees
         return $remittance;
     }
 
-    /**
-     * El recibo de una persona: los datos de cobro de su ficha y su cuota del mes.
-     *
-     * Tipo de adeudo FRST en todos, como se envía hoy y Fiare acepta (los 120 recibos
-     * de agosto de 2026 lo llevan). La norma SEPA pediría RCUR desde el segundo cobro
-     * de un mandato; no se cambia sin confirmarlo con el banco, porque un tipo que no
-     * espera le haría rechazar la remesa entera.
-     */
+    /** El recibo de una persona: los datos de cobro de su ficha y su cuota del mes. */
     private function line(FeeStatement $statement, \DateTimeImmutable $period): RemittanceLine
     {
         $payer = $statement->payer;
-        $mandate = (string) $payer->getMandateReference();
 
-        return (new RemittanceLine())
-            ->setPartner($payer)
-            ->setDebtorName(mb_substr(mb_strtoupper($payer->getLegalName()), 0, RemittanceLine::MAX_NAME))
-            ->setIban($payer->getIban())
-            ->setMandateReference($mandate)
-            ->setMandateSignedOn($payer->getMandateSignedOn())
-            ->setDebitReference(mb_substr($mandate . ' ' . $period->format('Ym'), 0, RemittanceLine::MAX_REFERENCE))
-            ->setSequenceType(RemittanceLine::SEQUENCE_FIRST)
-            ->setAmount($statement->getTotal());
+        return RemittanceLine::forPayer($payer, $statement->getTotal(), $payer->getMandateReference().' '.$period->format('Ym'));
     }
 }

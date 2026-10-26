@@ -123,6 +123,31 @@ class RemittanceLine
     private string $amount = '0';
 
     /**
+     * El recibo de una persona con los datos de cobro de su ficha.
+     *
+     * Tipo de adeudo FRST en todos, como se envía hoy y Fiare acepta (los 120 recibos
+     * de agosto de 2026 lo llevan). La norma SEPA pediría RCUR desde el segundo cobro
+     * de un mandato; no se cambia sin confirmarlo con el banco, porque un tipo que no
+     * espera le haría rechazar la remesa entera.
+     *
+     * @param Partner $payer     Quien paga; con mandato completo ({@see Partner::hasDirectDebit}).
+     * @param string  $amount    Lo que se le carga.
+     * @param string  $reference Referencia del adeudo, que distingue este cobro de los demás del mandato.
+     */
+    public static function forPayer(Partner $payer, string $amount, string $reference): self
+    {
+        return (new self())
+            ->setPartner($payer)
+            ->setDebtorName(mb_substr(mb_strtoupper($payer->getLegalName()), 0, self::MAX_NAME))
+            ->setIban($payer->getIban())
+            ->setMandateReference((string) $payer->getMandateReference())
+            ->setMandateSignedOn($payer->getMandateSignedOn())
+            ->setDebitReference(mb_substr($reference, 0, self::MAX_REFERENCE))
+            ->setSequenceType(self::SEQUENCE_FIRST)
+            ->setAmount($amount);
+    }
+
+    /**
      * El mismo recibo para el periodo siguiente: mismos datos, con la referencia del
      * adeudo pasada al mes nuevo.
      */

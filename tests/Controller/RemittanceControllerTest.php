@@ -2,6 +2,7 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\Partner;
 use App\Entity\Remittance;
 use App\Entity\Setting;
 use App\Service\AppSettings;
@@ -27,6 +28,9 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
 
     private ?string $file = null;
 
+    /** El socix al que un test le pone mandato, para quitárselo al acabar. */
+    private ?int $mandatePartnerId = null;
+
     protected function tearDown(): void
     {
         $em = static::getContainer()->get(EntityManagerInterface::class);
@@ -35,6 +39,9 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
             if ($remittance->getPeriod()->format('Y') === '2096') {
                 $em->remove($remittance);
             }
+        }
+        if ($this->mandatePartnerId !== null) {
+            $em->find(Partner::class, $this->mandatePartnerId)?->setIban(null)->setMandateReference(null)->setMandateSignedOn(null);
         }
         foreach ($em->getRepository(Setting::class)->findBy(['name' => AppSettings::FEATURE_CONTABILIDAD]) as $setting) {
             $em->remove($setting);
@@ -140,7 +147,7 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
 
         // 2. Preparar septiembre desde el listado.
         $crawler = $client->request('GET', '/gestion/accounting/remittances');
-        $prepare = $crawler->filter('form[action="/gestion/accounting/remittances/prepare"]')->first()->form();
+        $prepare = $crawler->filter('button[formaction="/gestion/accounting/remittances/prepare"]')->first()->form();
         $prepare['period'] = '2096-09';
         $client->submit($prepare);
         $this->assertResponseRedirects();
@@ -190,7 +197,7 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
         $this->enableModule();
         $this->importAugust($client);
         $crawler = $client->request('GET', '/gestion/accounting/remittances');
-        $prepare = $crawler->filter('form[action="/gestion/accounting/remittances/prepare"]')->first()->form();
+        $prepare = $crawler->filter('button[formaction="/gestion/accounting/remittances/prepare"]')->first()->form();
 
         $prepare['period'] = '2096-10';
         $client->submit($prepare);
@@ -218,9 +225,9 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
 
         $crawler = $client->request('GET', '/gestion/accounting/remittances');
         $this->assertCount(1, $crawler->filter('form[action="/gestion/accounting/remittances/from-fees"]'));
-        $this->assertCount(0, $crawler->filter('form[action="/gestion/accounting/remittances/prepare"] input[name="kind"][value="basket"]'));
+        $this->assertCount(0, $crawler->filter('form[action="/gestion/accounting/remittances/from-fees"] button[formaction]'));
 
-        $prepare = $crawler->filter('form[action="/gestion/accounting/remittances/prepare"]')->first()->form();
+        $prepare = $crawler->filter('button[formaction="/gestion/accounting/remittances/prepare"]')->first()->form();
         $prepare['kind']->setValue(Remittance::KIND_BASKET);
         $prepare['period'] = '2096-09';
         $client->submit($prepare);
@@ -229,5 +236,42 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
             $this->em()->getRepository(Remittance::class)->findOneBy(['kind' => Remittance::KIND_BASKET, 'period' => new \DateTimeImmutable('2096-09-01')]),
             'No nace una remesa de cesta copiada.'
         );
+    }
+
+    /**
+     * Una derrama para todxs lxs socixs: con un importe que no es dinero no nace nada;
+     * con uno bueno sale el borrador con un recibo por quien tiene mandato, a ese importe.
+     */
+    public function testUnaDerramaParaTodxsLxsSocixs(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $member = $this->em()->getRepository(Partner::class)->findOneBy(['status' => Partner::STATUS_ACTIVO]);
+        $this->assertNotNull($member, 'La base de tests trae socixs activxs.');
+        $this->mandatePartnerId = $member->getId();
+        $member->setIban(self::GOOD_IBAN)->setMandateReference('ZZTEST DERRAMA 1')->setMandateSignedOn(new \DateTimeImmutable('2022-11-01'));
+        static::getContainer()->get(EntityManagerInterface::class)->flush();
+
+        $crawler = $client->request('GET', '/gestion/accounting/remittances');
+        $flat = $crawler->filterXPath('//form[@action="/gestion/accounting/remittances/flat"][.//input[@name="kind"][@value="other"]]')->form();
+        $flat['period'] = '2096-11';
+        $flat['base'] = 'members';
+        $flat['amount'] = 'veinte';
+        $client->submit($flat);
+        $this->assertResponseRedirects('/gestion/accounting/remittances');
+        $this->assertNull($this->em()->getRepository(Remittance::class)->findOneBy(['kind' => Remittance::KIND_OTHER, 'period' => new \DateTimeImmutable('2096-11-01')]));
+
+        $flat['amount'] = '12,50';
+        $flat['label'] = 'Derrama tractor';
+        $client->submit($flat);
+        $this->assertResponseRedirects();
+        $derrama = $this->em()->getRepository(Remittance::class)->findOneBy(['kind' => Remittance::KIND_OTHER, 'period' => new \DateTimeImmutable('2096-11-01')]);
+        $this->assertNotNull($derrama);
+        $this->assertTrue($derrama->isDraft());
+        $this->assertSame('Derrama tractor', $derrama->getLabel());
+        $line = $derrama->getLines()->filter(static fn ($l) => $l->getMandateReference() === 'ZZTEST DERRAMA 1')->first();
+        $this->assertNotFalse($line, 'Quien tiene mandato entra en la derrama.');
+        $this->assertSame('12.50', $line->getAmount());
+        $this->assertSame('ZZTEST DERRAMA 1 209611EX', $line->getDebitReference());
     }
 }

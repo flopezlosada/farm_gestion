@@ -126,6 +126,23 @@ class PartnerRepository extends ServiceEntityRepository
     }
 
     /**
+     * Quien es socix: en activo o en pausa, que sigue siendo de la asociación aunque
+     * no reciba cesta. Lleve cesta o no: hay quien paga cuota sin llevarla.
+     *
+     * @return list<Partner> ordenadxs por nombre
+     */
+    public function findMembers(): array
+    {
+        return $this->createQueryBuilder('p')
+            ->where('p.status IN (:statuses)')
+            ->setParameter('statuses', [Partner::STATUS_ACTIVO, Partner::STATUS_PAUSADO])
+            ->orderBy('p.name', 'ASC')
+            ->addOrderBy('p.surname', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Socixs activxs con correo, para elegir a quién mandarle cosas.
      *
      * Sin correo no hay nada que elegir: ofrecer una ficha sin dirección sólo
