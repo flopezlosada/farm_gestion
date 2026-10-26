@@ -121,6 +121,11 @@
        columnas, cifras cortas, se reparten lo que queda. */
     .acc-grid th:first-child { width: 190px; }
     .acc-grid th:first-child, .acc-grid td:first-child { min-width: 150px; }
+    /* Al deslizar la rejilla en horizontal, el nombre de la partida se queda a la vista
+       (fondo opaco: si no, las cifras pasarían por debajo del nombre). */
+    .acc-grid-wrap .acc-grid th:first-child, .acc-grid-wrap .acc-grid td:first-child { position: sticky; left: 0; z-index: 1; background: var(--prl-surface, #fff); }
+    .acc-grid-wrap .acc-grid thead th:first-child { background: var(--prl-bg, #fbfaf6); }
+    .acc-grid-wrap .acc-grid .acc-group-row > td:first-child { background: #f2f2f0; }
     /* La rejilla que se ESCRIBE (presupuesto) lleva casillas de 74px que no caben
        en un reparto a partes iguales: ahí cada columna mide lo que necesita y la
        rejilla se desliza en horizontal. */
