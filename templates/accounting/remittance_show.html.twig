@@ -9,8 +9,9 @@
  # En las dos, lo que cambia respecto a la remesa anterior del mismo tipo.
  #
  # El controller pasa: remittance, previous, problems, warnings (por id de
- # recibo), withoutLine, changes, toPartners (en una enviada: qué falta
- # o no coincide en las fichas).
+ # recibo), withoutLine, changes, cases (en una enviada: los recibos que no
+ # casan con su ficha, {@see RemittanceCases}) y everyone (las fichas, para
+ # enlazar a mano).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -21,6 +22,7 @@
 {% set editable = can_edit and remittance.draft %}
 {% set can_see_partners = is_granted('ROLE_GESTION_SOCIXS') %}
 {% set warned = warnings|filter(w => w is not empty)|length %}
+{% set mandates = remittance.lines|map(l => l.mandateReference) %}
 
 {% block title %}{{ remittance.label }} · Remesas{% endblock %}
 
@@ -48,6 +50,41 @@
         .rem-box { margin-bottom: var(--csa-sp-5, 20px); }
         .rem-box ul { margin: 4px 0 0; padding-left: 18px; }
         .rem-inline-form { display: inline; }
+
+        /* Un recibo que no casa con su ficha: arriba quién es; debajo qué pasa, el
+           arreglo propuesto (lo que haría una persona, con su botón) y las otras salidas. */
+        .rem-cases { display: flex; flex-direction: column; gap: 12px; }
+        .rem-case { background: var(--prl-surface); border: 1px solid var(--prl-line); border-radius: 8px; padding: 14px 18px 16px; }
+        .rem-case__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin-bottom: 8px; }
+        .rem-case__who { font-weight: 600; font-size: 14px; color: var(--prl-ink); }
+        .rem-case__meta { font-size: 12px; color: var(--prl-ink-faint); font-variant-numeric: tabular-nums; }
+        .rem-case__head .prl-chip { margin-left: auto; }
+        .rem-case__what { font-size: 13.5px; line-height: 1.5; color: var(--prl-ink); }
+        .rem-case__what ul { margin: 4px 0 0; padding-left: 18px; }
+        .rem-case a:not(.prl-btn) { color: inherit; text-decoration: underline; text-decoration-color: var(--prl-line-2); text-underline-offset: 3px; }
+        .rem-case a:not(.prl-btn):hover { color: var(--prl-sage-d); text-decoration-color: currentColor; }
+        .rem-case__fix { margin-top: 12px; padding: 12px 14px; border-radius: 8px; background: var(--prl-sage-l); }
+        .rem-case__fix p { margin: 2px 0 0; font-size: 13.5px; line-height: 1.5; }
+        .rem-case__label { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; color: var(--prl-sage-d); }
+        .rem-case__buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .rem-case__or { margin-top: 12px !important; font-size: 12.5px !important; color: var(--prl-ink-soft); }
+        .rem-case__others { list-style: none; margin: 6px 0 0; padding: 0; }
+        .rem-case__others li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px solid rgba(47, 68, 38, 0.12); font-size: 13px; }
+        .rem-case__alt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+        .rem-act { display: inline-flex; margin: 0; }
+        .rem-pick { gap: 8px; align-items: center; flex: 0 1 420px; }
+        .rem-pick select { height: 34px; padding: 0 10px; font-size: 13px; min-width: 0; flex: 1 1 auto; }
+        .rem-pick label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+        /* Las dos cuentas de cuatro en cuatro, en rojo los grupos que cambian. */
+        .rem-iban { margin-top: 8px; border-collapse: collapse; font-family: var(--csa-mono, ui-monospace, monospace); font-size: 12.5px; }
+        .rem-iban th { padding: 2px 10px 2px 0; text-align: left; font-family: var(--csa-sans); font-size: 11px; font-weight: 500; color: var(--prl-ink-faint); }
+        .rem-iban td { padding: 2px 6px; }
+        .rem-iban td.diff { background: rgba(179, 38, 30, 0.06); }
+        .rem-iban .ch { color: #b3261e; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+        .rem-reviewed { margin-top: 14px; }
+        .rem-reviewed summary { cursor: pointer; font-size: 13px; color: var(--prl-ink-soft); margin-bottom: 10px; }
+        /* El segundo recibo de un mismo mandato en la remesa (el alta, una derrama). */
+        .rem-extra { margin-left: 4px; }
     </style>
 {% endblock %}
 
@@ -78,9 +115,9 @@
                 <a href="{{ path('accounting_remittance_line_new', { id: remittance.id }) }}" class="prl-btn"><i class="fa fa-plus"></i> Añadir recibo</a>
             {% endif %}
             {% if can_edit and remittance.deletable %}
-                <form method="post" action="{{ path('accounting_remittance_delete', { id: remittance.id }) }}" onsubmit="return confirm('¿Tirar esta remesa entera? {{ remittance.draft ? 'Es un borrador: no se ha enviado al banco.' : 'Es una importada: se puede volver a importar el Excel.' }}');">
+                <form method="post" action="{{ path('accounting_remittance_delete', { id: remittance.id }) }}" onsubmit="return confirm('¿Borrar esta remesa entera? {{ remittance.draft ? 'Es un borrador: no se ha enviado al banco.' : 'Es una importada: se puede volver a importar el Excel.' }}');">
                     <input type="hidden" name="_token" value="{{ csrf_token('delete-remittance-' ~ remittance.id) }}">
-                    <button type="submit" class="prl-btn"><i class="fa fa-trash-o"></i> Tirar</button>
+                    <button type="submit" class="prl-btn"><i class="fa fa-trash-o"></i> Borrar la remesa</button>
                 </form>
             {% endif %}
         </div>
@@ -126,68 +163,12 @@
         </div>
     {% endif %}
 
-    {% if remittance.sent %}
-        {% include 'accounting/_remittance_returns.html.twig' %}
+    {% if cases %}
+        {% include 'accounting/_remittance_cases.html.twig' %}
     {% endif %}
 
-    {% if toPartners %}
-        {% set fillable = toPartners.mandates|length + toPartners.ibans|length + toPartners.repairs|length %}
-        <h2 class="acc-subhead">Con las fichas</h2>
-        <p class="acc-muted">La cuenta y el mandato con que se cobró a cada socix. Para cobrar desde aquí, cada ficha tiene que tenerlos.</p>
-        <div class="rem-box">
-            {% if fillable > 0 %}
-                <div class="csa-alert csa-alert--info" role="status">
-                    <i class="csa-alert__icon fa fa-id-card-o" aria-hidden="true"></i>
-                    <div class="csa-alert__body">
-                        {% if toPartners.mandates is not empty or toPartners.ibans is not empty %}
-                            {{ toPartners.mandates|length }} {{ toPartners.mandates|length == 1 ? 'ficha no tiene' : 'fichas no tienen' }} mandato
-                            y {{ toPartners.ibans|length }} {{ toPartners.ibans|length == 1 ? 'no tiene' : 'no tienen' }} cuenta: se pueden rellenar con los de esta remesa.
-                        {% endif %}
-                        {% if toPartners.repairs is not empty %}
-                            {% if toPartners.mandates is not empty or toPartners.ibans is not empty %}<br>{% endif %}{{ toPartners.repairs|length }} {{ toPartners.repairs|length == 1 ? 'ficha tiene la cuenta mal escrita' : 'fichas tienen la cuenta mal escrita' }}
-                            (no es un IBAN válido): se corrige{{ toPartners.repairs|length == 1 ? '' : 'n' }} con la del recibo, que es con la que cobró el banco:
-                            {{ toPartners.repairs|map(r => r.partner.legalName)|join(', ') }}.
-                        {% endif %}
-                        {% if can_edit and is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
-                            <form method="post" action="{{ path('accounting_remittance_to_partners', { id: remittance.id }) }}" style="margin-top: 10px;"
-                                  onsubmit="return confirm('Se copiarán a las fichas que no los tengan y se corregirán las cuentas mal escritas. Lo demás que ya tienen no se toca.');">
-                                <input type="hidden" name="_token" value="{{ csrf_token('remittance-to-partners-' ~ remittance.id) }}">
-                                <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-arrow-right"></i> Pasarlos a las fichas</button>
-                            </form>
-                        {% endif %}
-                    </div>
-                </div>
-            {% elseif toPartners.differences is empty %}
-                <div class="csa-alert csa-alert--success" role="status">
-                    <i class="csa-alert__icon fa fa-check" aria-hidden="true"></i>
-                    <div class="csa-alert__body">Todas las fichas enlazadas tienen la cuenta y el mandato de esta remesa.</div>
-                </div>
-            {% endif %}
-            {% if toPartners.unlinked > 0 %}
-                <p class="acc-muted">{{ toPartners.unlinked }} {{ toPartners.unlinked == 1 ? 'recibo no está enlazado' : 'recibos no están enlazados' }} a ningún socix: sus datos no van a ninguna ficha.</p>
-            {% endif %}
-            {% if toPartners.differences is not empty %}
-                <p class="acc-muted">{{ toPartners.differences|length == 1 ? 'Esto no coincide' : 'Estas ' ~ toPartners.differences|length ~ ' cosas no coinciden' }} con lo que ya tiene la ficha. No se cambia solo: mira en la ficha cuál es lo bueno.</p>
-                <div class="prl-table-wrap">
-                    <table class="prl-table">
-                        <thead>
-                            <tr>
-                                <th>Quién</th>
-                                <th>Qué no coincide</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for d in toPartners.differences %}
-                                <tr>
-                                    <td class="tight">{% if can_see_partners %}<a href="{{ path('partner_show', { id: d.partner.id }) }}">{{ d.partner.legalName }}</a>{% else %}{{ d.partner.legalName }}{% endif %}</td>
-                                    <td>{{ d.text }}</td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% endif %}
-        </div>
+    {% if remittance.sent %}
+        {% include 'accounting/_remittance_returns.html.twig' %}
     {% endif %}
 
     {% if withoutLine is not empty %}
@@ -268,7 +249,14 @@
                                 {% if w is not empty %}<div class="rem-warn"><ul>{% for msg in w %}<li>{{ msg }}</li>{% endfor %}</ul></div>{% endif %}
                             </td>
                             <td class="tight acc-muted" title="{{ editable ? line.iban }}">{{ line.maskedIban }}</td>
-                            <td class="tight">{{ line.mandateReference }}</td>
+                            <td class="tight">
+                                {{ line.mandateReference }}
+                                {# Dos recibos del mismo mandato: uno es la cuota y el otro algo
+                                 # aparte (el alta de quien entra, una derrama). Se señala para
+                                 # que no parezca un recibo repetido. #}
+                                {% set same = mandates|filter(m => m == line.mandateReference)|length %}
+                                {% if same > 1 %}<span class="prl-chip prl-chip--neutral rem-extra" title="Hay {{ same }} recibos con este mandato en la remesa: la cuota y otro aparte, como el alta.">{{ same }} con este mandato</span>{% endif %}
+                            </td>
                             <td class="tight">{{ line.mandateSignedOn ? line.mandateSignedOn|date('d/m/Y') : '—' }}</td>
                             <td class="tight">{{ line.debitReference }}</td>
                             <td class="tight">{{ line.sequenceType }}</td>

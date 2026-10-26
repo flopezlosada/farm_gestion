@@ -4,6 +4,7 @@ namespace App\Tests\Controller;
 
 use App\Entity\Partner;
 use App\Entity\Remittance;
+use App\Entity\RemittanceLine;
 use App\Entity\Setting;
 use App\Service\AppSettings;
 use App\Service\Accounting\Remittance\RemittanceSheet;
@@ -273,5 +274,79 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
         $this->assertNotFalse($line, 'Quien tiene mandato entra en la derrama.');
         $this->assertSame('12.50', $line->getAmount());
         $this->assertSame('ZZTEST DERRAMA 1 209611EX', $line->getDebitReference());
+    }
+
+    /**
+     * Una remesa enviada enseña, recibo a recibo, los que no casan con su ficha, y cada
+     * uno se resuelve a mano: enlazarlo, poner en la ficha lo del recibo, dejarlo como
+     * está y volver a abrirlo. Ninguna acción toca otro recibo.
+     */
+    public function testLosRecibosQueNoCasanSeResuelvenUnoAUno(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $em = $this->em();
+        $member = $em->getRepository(Partner::class)->findOneBy(['status' => Partner::STATUS_ACTIVO]);
+        $this->mandatePartnerId = $member->getId();
+        $member->setIban(null)->setMandateReference(null)->setMandateSignedOn(null);
+        $em->flush();
+        $this->importAugust($client);
+        $august = $this->remittance('2096-08');
+        $line = static fn (string $name) => $august->getLines()->filter(static fn ($l) => $l->getDebtorName() === $name)->first();
+        $ana = $line('ZZTEST ANA');
+        $sol = $line('ZZTEST SOL');
+
+        $crawler = $client->request('GET', '/gestion/accounting/remittances/' . $august->getId());
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorTextContains('#casos', 'ZZTEST ANA');
+        $this->assertSelectorTextContains('#casos', 'No hay ninguna ficha con este nombre');
+        $this->assertSelectorNotExists('form[action$="/to-partners"]', 'Nada de un botón que lo arregla todo.');
+        $token = $crawler->filter(sprintf('form[action$="/lines/%d/resolve"] input[name="_token"]', $ana->getId()))->attr('value');
+        $resolve = fn (int $id, string $do, array $extra = []) => $client->request('POST', sprintf('/gestion/accounting/remittances/lines/%d/resolve', $id), ['_token' => $id === $ana->getId() ? $token : $crawler->filter(sprintf('form[action$="/lines/%d/resolve"] input[name="_token"]', $id))->attr('value'), 'do' => $do] + $extra);
+
+        // Enlazar: el recibo pasa a ser de la ficha elegida, y su caso cambia a lo que
+        // le falta a esa ficha.
+        $resolve($ana->getId(), 'link', ['partner' => $member->getId()]);
+        $this->assertResponseRedirects('/gestion/accounting/remittances/' . $august->getId() . '#casos');
+        $this->assertSame($member->getId(), $this->em()->find(RemittanceLine::class, $ana->getId())->getPartner()?->getId());
+        $client->request('GET', '/gestion/accounting/remittances/' . $august->getId());
+        $this->assertSelectorTextContains('#casos', 'le falta la cuenta y el mandato');
+
+        // Poner en la ficha lo del recibo.
+        $resolve($ana->getId(), 'take');
+        $member = $this->em()->find(Partner::class, $member->getId());
+        $this->assertSame(self::GOOD_IBAN, $member->getIban());
+        $this->assertSame('CUOTA MENSUAL 900', $member->getMandateReference());
+
+        // Dejar otro como está, y volver a abrirlo.
+        $resolve($sol->getId(), 'keep');
+        $this->assertNotNull($this->em()->find(RemittanceLine::class, $sol->getId())->getReviewedAt());
+        $client->request('GET', '/gestion/accounting/remittances/' . $august->getId());
+        $this->assertSelectorTextContains('.rem-reviewed', '1 recibo revisado');
+        $resolve($sol->getId(), 'reopen');
+        $this->assertNull($this->em()->find(RemittanceLine::class, $sol->getId())->getReviewedAt());
+        $this->assertNull($this->em()->find(RemittanceLine::class, $sol->getId())->getPartner(), 'Lo decidido con un recibo no toca otro.');
+    }
+
+    /** Resolver casos pide edición de contabilidad; poner datos en una ficha, además, la de socixs. */
+    public function testResolverPideSusPermisos(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->importAugust($client);
+        $august = $this->remittance('2096-08');
+        $ana = $august->getLines()->filter(static fn ($l) => $l->getDebtorName() === 'ZZTEST ANA')->first();
+
+        $client->loginUser($this->createUserWithRoles(['ROLE_GESTION_CONTABILIDAD']));
+        $client->request('POST', sprintf('/gestion/accounting/remittances/lines/%d/resolve', $ana->getId()), ['do' => 'keep']);
+        $this->assertResponseStatusCodeSame(403);
+
+        $client->loginUser($this->createUserWithRoles(['ROLE_GESTION_CONTABILIDAD', 'ROLE_GESTION_CONTABILIDAD_EDIT']));
+        $crawler = $client->request('GET', '/gestion/accounting/remittances/' . $august->getId());
+        $token = $crawler->filter(sprintf('form[action$="/lines/%d/resolve"] input[name="_token"]', $ana->getId()))->attr('value');
+        $this->assertSelectorNotExists('form[action$="/resolve"] input[name="do"][value="take"]', 'Sin permiso de socixs no se ofrece cambiar la ficha.');
+        $client->request('POST', sprintf('/gestion/accounting/remittances/lines/%d/resolve', $ana->getId()), ['_token' => $token, 'do' => 'take']);
+        $client->followRedirect();
+        $this->assertSelectorTextContains('.csa-alerts', 'pide permiso de edición de socixs');
     }
 }

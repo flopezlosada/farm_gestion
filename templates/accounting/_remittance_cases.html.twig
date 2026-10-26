@@ -1,0 +1,232 @@
+{# ============================================================
+ # Los recibos de una remesa enviada que no casan con la ficha de su socix, CASO A
+ # CASO: qué pasa, dicho con palabras, el arreglo que se propone y las otras salidas.
+ # Ningún botón arregla todos a la vez: cada uno lo decide una persona.
+ #
+ # Lo incluye remittance_show; usa cases ({@see RemittanceCases}), everyone (las
+ # fichas, para enlazar a mano), remittance y las variables de permiso de allí.
+ # ============================================================ #}
+{% import 'accounting/_money.html.twig' as fmt %}
+{% set can_fix_partners = can_edit and is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
+
+{# El formulario de una acción sobre un recibo: siempre el mismo, cambia lo que hace. #}
+{% macro act(line, action, label, opts = {}) %}
+    <form method="post" action="{{ path('accounting_remittance_line_resolve', { id: line.id }) }}" class="rem-act">
+        <input type="hidden" name="_token" value="{{ csrf_token('resolve-line-' ~ line.id) }}">
+        <input type="hidden" name="do" value="{{ action }}">
+        {% if opts.partner is defined %}<input type="hidden" name="partner" value="{{ opts.partner }}">{% endif %}
+        <button type="submit" class="prl-btn {{ opts.primary ?? false ? 'prl-btn--primary' : '' }}">
+            {% if opts.icon is defined %}<i class="fa {{ opts.icon }}"></i> {% endif %}{{ label }}
+        </button>
+    </form>
+{% endmacro %}
+
+{# Quién es una ficha, con enlace si se pueden ver. #}
+{% macro who(partner, can_see) %}
+    {%- if can_see -%}
+        <a href="{{ path('partner_show', { id: partner.id }) }}" target="_blank" rel="noopener">{{ partner.legalName }}</a>
+    {%- else -%}
+        {{ partner.legalName }}
+    {%- endif -%}
+{% endmacro %}
+
+{% import _self as here %}
+
+<section id="casos">
+    <div class="acc-section-head">
+        <div>
+            <h2 class="acc-subhead">
+                Recibos que no casan con su ficha
+                {% if cases.open is not empty %}<span class="count">{{ cases.open|length }} por resolver</span>{% endif %}
+            </h2>
+            <p class="acc-lead">
+                Cada recibo dice con qué cuenta y mandato cobró el banco. Aquí salen los
+                que no están enlazados a ninguna ficha o no coinciden con ella, cada uno con
+                el arreglo que se propone. Nada cambia hasta que lo eliges.
+            </p>
+        </div>
+    </div>
+
+    {% if cases.open is empty %}
+        <div class="acc-done"><i class="fa fa-check"></i> Todos los recibos casan con su ficha{{ cases.reviewed is not empty ? ', salvo los que se dejaron como estaban' : '' }}.</div>
+    {% else %}
+        <div class="rem-cases">
+            {% for case in cases.open %}
+                {% set line = case.line %}
+                {% set p = case.partner %}
+                <article class="rem-case rem-case--{{ case.kind }}">
+                    <header class="rem-case__head">
+                        <span class="rem-case__who">{{ line.debtorName }}</span>
+                        <span class="rem-case__meta">
+                            {% if case.siblings > 1 %}{{ case.siblings }} recibos con el mismo mandato (la cuota y otro aparte, como el alta) · {% else %}{{ fmt.money(line.amount) }} · {% endif %}{{ line.mandateReference }} · {{ line.maskedIban }}
+                        </span>
+                        <span class="prl-chip prl-chip--{{ case.kind == 'unlinked' ? 'pausado' : (case.kind == 'blocked' ? 'neutral' : 'baja') }}"><span class="dot"></span>{{ {
+                            unlinked: 'Sin ficha',
+                            bad_iban: 'Cuenta mal escrita',
+                            other: 'Datos distintos',
+                            missing: 'A la ficha le falta',
+                            blocked: 'No se puede pasar',
+                        }[case.kind] }}</span>
+                    </header>
+
+                    {# ---------- QUÉ PASA ---------- #}
+                    <div class="rem-case__what">
+                        {% if case.kind == 'unlinked' %}
+                            {% if case.candidates is empty %}
+                                No hay ninguna ficha con este nombre ni con esta cuenta.
+                            {% else %}
+                                No está enlazado a ninguna ficha: ni la cuenta ni el nombre casan exacto con ninguna.
+                            {% endif %}
+                        {% elseif case.kind == 'missing' %}
+                            A la ficha de {{ here.who(p, can_see_partners) }} le falta {{ case.fills|join(' y ') }}, y el recibo {{ case.fills|length > 1 ? 'los tiene' : 'lo tiene' }}.
+                        {% elseif case.kind == 'bad_iban' %}
+                            La cuenta de la ficha de {{ here.who(p, can_see_partners) }} está mal escrita: no es un IBAN válido. La del recibo sí lo es, y es con la que cobró el banco.
+                        {% else %}
+                            Con la ficha de {{ here.who(p, can_see_partners) }}:
+                        {% endif %}
+                        {% if case.details is not empty %}
+                            <ul>{% for d in case.details %}<li>{{ d }}</li>{% endfor %}</ul>
+                        {% endif %}
+                        {% if case.ibans and can_see_partners %}
+                            <table class="rem-iban" aria-label="Las dos cuentas, de cuatro en cuatro">
+                                {% for row in [['Ficha', 'a'], ['Recibo', 'b']] %}
+                                    <tr>
+                                        <th>{{ row[0] }}</th>
+                                        {% for g in case.ibans %}
+                                            <td class="{{ g.differs ? 'diff' : '' }}">{% for ch in g.chars %}<span class="{{ ch.differs ? 'ch' : '' }}">{{ ch[row[1]] }}</span>{% endfor %}</td>
+                                        {% endfor %}
+                                    </tr>
+                                {% endfor %}
+                            </table>
+                        {% endif %}
+                    </div>
+
+                    {# ---------- ARREGLO PROPUESTO ---------- #}
+                    {% if can_edit %}
+                        <div class="rem-case__fix">
+                            <span class="rem-case__label">Arreglo propuesto</span>
+                            {% if case.kind == 'unlinked' and case.candidates is not empty %}
+                                {% set c = case.candidates|first %}
+                                <p>
+                                    Es la ficha de <b>{{ here.who(c.partner, can_see_partners) }}</b>: {{ c.reasons|join('; ') }}.
+                                    {% if c.rename %}
+                                        <br>Su ficha dice <b>{{ c.partner.name }}</b> / <b>{{ c.partner.surname }}</b>; corregirla a
+                                        <b>{{ c.rename.name }}</b> / <b>{{ c.rename.surname }}</b> <span class="acc-muted">(nombre / apellidos)</span>.
+                                    {% endif %}
+                                </p>
+                                <div class="rem-case__buttons">
+                                    {% if c.rename and can_fix_partners %}
+                                        {{ here.act(line, 'link_rename', 'Enlazar y corregir la ficha', { partner: c.partner.id, primary: true, icon: 'fa-check' }) }}
+                                        {{ here.act(line, 'link', 'Sólo enlazar', { partner: c.partner.id }) }}
+                                    {% else %}
+                                        {{ here.act(line, 'link', 'Enlazar con esta ficha', { partner: c.partner.id, primary: true, icon: 'fa-link' }) }}
+                                    {% endif %}
+                                </div>
+                                {% if case.candidates|length > 1 %}
+                                    <p class="rem-case__or">¿O es otra?</p>
+                                    <ul class="rem-case__others">
+                                        {% for o in case.candidates|slice(1) %}
+                                            <li>
+                                                <span>{{ here.who(o.partner, can_see_partners) }} <span class="acc-muted">· {{ o.reasons|join('; ') }}</span></span>
+                                                {{ here.act(line, 'link', 'Es ésta', { partner: o.partner.id }) }}
+                                            </li>
+                                        {% endfor %}
+                                    </ul>
+                                {% endif %}
+                            {% elseif case.kind == 'unlinked' %}
+                                <p>Si es una persona nueva, crea su ficha y vuelve aquí a enlazarla. Si paga la cesta de otra persona, elige la ficha de esa persona.</p>
+                            {% elseif case.kind == 'missing' %}
+                                <p>Ponerle {{ case.fills|join(' y ') }} del recibo: es con lo que el banco cobró.</p>
+                                {% if can_fix_partners %}
+                                    <div class="rem-case__buttons">{{ here.act(line, 'take', 'Poner en la ficha', { primary: true, icon: 'fa-arrow-right' }) }}</div>
+                                {% endif %}
+                            {% elseif case.kind == 'bad_iban' %}
+                                <p>Poner en la ficha la cuenta del recibo{{ case.ibans and can_see_partners ? ' (subrayadas en rojo, las cifras que cambian)' : '' }}.</p>
+                                {% if can_fix_partners %}
+                                    <div class="rem-case__buttons">{{ here.act(line, 'take', 'Poner la del recibo', { primary: true, icon: 'fa-arrow-right' }) }}</div>
+                                {% endif %}
+                            {% elseif case.kind == 'other' %}
+                                <p>
+                                    Elegir cuál es la buena. Si la persona cambió de cuenta o de mandato
+                                    después de esta remesa, la de la ficha; si la ficha está mal, la del
+                                    recibo, que es con la que cobró el banco.
+                                </p>
+                                <div class="rem-case__buttons">
+                                    {% if can_fix_partners and case.fixable %}
+                                        {{ here.act(line, 'take', 'La del recibo: ponerla en la ficha', { icon: 'fa-arrow-right' }) }}
+                                    {% endif %}
+                                    {{ here.act(line, 'keep', 'La de la ficha: dejarla', { icon: 'fa-check' }) }}
+                                </div>
+                            {% else %}
+                                <p>No hay nada que poner en la ficha: si te cuadra, déjalo como está; si no, corrígelo en la ficha.</p>
+                                <div class="rem-case__buttons">{{ here.act(line, 'keep', 'Entendido, dejarlo así', { icon: 'fa-check' }) }}</div>
+                            {% endif %}
+                            {% if not can_fix_partners and case.kind in ['missing', 'bad_iban', 'other'] %}
+                                <p class="acc-muted acc-small">Cambiar la ficha pide permiso de edición de socixs.</p>
+                            {% endif %}
+                        </div>
+
+                        {# ---------- OTRAS SALIDAS ---------- #}
+                        <div class="rem-case__alt">
+                            {% if case.kind == 'unlinked' %}
+                                <form method="post" action="{{ path('accounting_remittance_line_resolve', { id: line.id }) }}" class="rem-act rem-pick">
+                                    <input type="hidden" name="_token" value="{{ csrf_token('resolve-line-' ~ line.id) }}">
+                                    <input type="hidden" name="do" value="link">
+                                    <label class="sr-only" for="rem-pick-{{ line.id }}">Elegir la ficha</label>
+                                    <select name="partner" id="rem-pick-{{ line.id }}" class="csa-input" required>
+                                        <option value="">{{ case.candidates is empty ? 'Elegir la ficha de quien tiene la cesta…' : 'Otra ficha…' }}</option>
+                                        {# Primero quien sigue de alta, que es casi siempre quien paga. #}
+                                        <optgroup label="De alta">
+                                            {% for f in everyone|filter(f => f.status != 'BAJA') %}<option value="{{ f.id }}">{{ f.legalName }}</option>{% endfor %}
+                                        </optgroup>
+                                        <optgroup label="De baja">
+                                            {% for f in everyone|filter(f => f.status == 'BAJA') %}<option value="{{ f.id }}">{{ f.legalName }}</option>{% endfor %}
+                                        </optgroup>
+                                    </select>
+                                    <button type="submit" class="prl-btn {{ case.candidates is empty ? 'prl-btn--primary' : '' }}"><i class="fa fa-link"></i> Enlazar</button>
+                                </form>
+                                {% if is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
+                                    <a href="{{ path('partner_new') }}" class="prl-btn" target="_blank" rel="noopener"><i class="fa fa-user-plus"></i> Crear su ficha</a>
+                                {% endif %}
+                                {{ here.act(line, 'keep', 'Dejarlo sin enlazar') }}
+                            {% else %}
+                                {% if case.kind in ['missing', 'bad_iban'] %}
+                                    {{ here.act(line, 'keep', 'No tocar la ficha') }}
+                                {% endif %}
+                                {{ here.act(line, 'unlink', 'No es su ficha: quitar el enlace') }}
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </article>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    {% if cases.reviewed is not empty %}
+        <details class="rem-reviewed">
+            <summary>{{ cases.reviewed|length }} {{ cases.reviewed|length == 1 ? 'recibo revisado que se queda' : 'recibos revisados que se quedan' }} como está{{ cases.reviewed|length == 1 ? '' : 'n' }}</summary>
+            <div class="prl-table-wrap">
+                <table class="prl-table">
+                    <thead>
+                        <tr>
+                            <th>Recibo</th>
+                            <th>Ficha</th>
+                            <th class="tight">Revisado</th>
+                            {% if can_edit %}<th class="tight"></th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for line in cases.reviewed %}
+                            <tr>
+                                <td>{{ line.debtorName }}</td>
+                                <td>{{ line.partner ? here.who(line.partner, can_see_partners) : 'sin enlazar' }}</td>
+                                <td class="tight">{{ line.reviewedAt|date('d/m/Y') }}</td>
+                                {% if can_edit %}<td class="tight">{{ here.act(line, 'reopen', 'Volver a revisar') }}</td>{% endif %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </details>
+    {% endif %}
+</section>

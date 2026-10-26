@@ -171,6 +171,43 @@ class MandatesToPartnersTest extends TestCase
         $this->service()->apply($draft, ['mandates' => [], 'ibans' => [], 'repairs' => []]);
     }
 
+    /**
+     * Resolver un solo recibo: lo que le falta a su ficha y, si quien revisa dice que
+     * lo bueno es lo del recibo, también su mandato y su cuenta en lugar de los de la
+     * ficha. Nunca lo de otro recibo ni un mandato que ya es de otrx.
+     */
+    public function testLaParteDelPlanDeUnSoloRecibo(): void
+    {
+        $empty = $this->partner('Ana');
+        $other = $this->partner('Bea')->setIban(self::IBAN_B)->setMandateReference('CUOTA MENSUAL 300')->setMandateSignedOn(new \DateTimeImmutable('2020-01-01'));
+        $holder = $this->partner('Carla')->setMandateReference('CUOTA MENSUAL 302')->setMandateSignedOn(new \DateTimeImmutable('2020-01-01'));
+        $wantsTaken = $this->partner('Dani')->setMandateReference('CUOTA MENSUAL 309')->setMandateSignedOn(new \DateTimeImmutable('2020-01-01'));
+        $remittance = $this->sent([
+            $toEmpty = $this->line($empty, 'CUOTA MENSUAL 200'),
+            $toOther = $this->line($other, 'CUOTA MENSUAL 301', self::IBAN_A),
+            $taken = $this->line($wantsTaken, 'CUOTA MENSUAL 302'),
+        ]);
+        $service = $this->service();
+        $plan = $service->plan($remittance, [$other, $holder, $wantsTaken]);
+
+        $part = $service->forLine($plan, $toEmpty);
+        $this->assertSame([$empty], array_column($part['mandates'], 'partner'));
+        $this->assertSame([$empty], array_column($part['ibans'], 'partner'));
+        $this->assertSame([], $part['repairs']);
+
+        $part = $service->forLine($plan, $toOther);
+        $this->assertSame([$toOther], array_column($part['mandates'], 'line'), 'Elegido el recibo, su mandato va a la ficha.');
+        $this->assertSame([$toOther], array_column($part['repairs'], 'line'), 'Y su cuenta, en lugar de la de la ficha.');
+        $service->apply($remittance, $part);
+        $this->assertSame('CUOTA MENSUAL 301', $other->getMandateReference());
+        $this->assertSame(self::IBAN_A, $other->getIban());
+        $this->assertNull($empty->getMandateReference(), 'Lo de otro recibo no se toca.');
+
+        $takenDifferences = array_values(array_filter($plan['differences'], static fn (array $d): bool => $d['line'] === $taken));
+        $this->assertSame([MandatesToPartners::FIELD_MANDATE_TAKEN], array_column($takenDifferences, 'field'), 'Un mandato que es de otrx no es una diferencia que se pueda resolver.');
+        $this->assertSame([], $service->forLine($plan, $taken)['mandates']);
+    }
+
     /** Un IBAN no lleva signos: el punto final que traía un Excel real no es parte de la cuenta. */
     public function testLaCuentaSeGuardaSinSignos(): void
     {
