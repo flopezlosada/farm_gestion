@@ -64,7 +64,7 @@
                 <dt>Forma de pago</dt>
                 <dd>{{ invoice.paymentLabel }} <span class="acc-muted">(según la factura)</span></dd>
                 <dt>Subida</dt>
-                <dd>{{ invoice.createdAt ? invoice.createdAt|date('d/m/Y H:i') : '—' }}{% if invoice.uploadedBy %} por {{ invoice.uploadedBy.username }}{% endif %}</dd>
+                <dd>{{ invoice.createdAt ? invoice.createdAt|date('d/m/Y H:i') : '—' }}{% if invoice.uploadedBy %} por {{ invoice.uploadedBy.username }}{% elseif invoice.source == 'email' %} · llegó al buzón de facturas{% endif %}</dd>
                 {% if invoice.readByModel %}
                     <dt>Leída</dt>
                     <dd>{{ invoice.readAt ? invoice.readAt|date('d/m/Y H:i') : '—' }} <span class="acc-muted">· {{ invoice.readByModel }}</span></dd>

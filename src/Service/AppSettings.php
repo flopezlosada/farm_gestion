@@ -376,6 +376,12 @@ class AppSettings
     public const CRON_READ_INVOICES = 'cron.read_invoices';
 
     /**
+     * Recoge las facturas que los proveedores mandan al buzón de facturas y las
+     * deja en cola en la bandeja. No manda nada a nadie.
+     */
+    public const CRON_INVOICE_MAIL = 'cron.invoice_mail';
+
+    /**
      * Copia de seguridad fuera del hosting: cifrada y bloqueada contra el borrado
      * en Backblaze B2: un volcado de la base y los documentos de var/documentos.
      */
@@ -756,6 +762,21 @@ class AppSettings
             'requires' => [self::FEATURE_CONTABILIDAD],
             'depends_on' => [],
         ],
+        // Una vez al día basta: una factura no corre prisa por horas. A las 6, para
+        // que la lectura horaria las tenga leídas cuando alguien abra la bandeja.
+        self::CRON_INVOICE_MAIL => [
+            'command' => 'app:fetch-invoice-mail',
+            // Ningún canal: no entrega nada a nadie, deja las facturas en la
+            // bandeja de contabilidad.
+            'channels' => [],
+            'needs_recipient' => false,
+            'confirm' => false,
+            'dry' => true,
+            'schedule' => ['freq' => 'daily', 'hour' => 6],
+            'max_delay_hours' => 36,
+            'requires' => [self::FEATURE_CONTABILIDAD],
+            'depends_on' => [],
+        ],
         // De madrugada, cuando nadie toca las facturas ni el libro. NACE APAGADA:
         // sin las claves en el .env.local no hace nada, y se enciende cuando la
         // primera copia esté subida a mano con el botón (la ejecución manual
@@ -998,6 +1019,12 @@ class AppSettings
             'group' => 'Tareas programadas',
             'label' => 'Leer las facturas en cola',
             'help' => 'Cada hora vuelve a intentar leer las facturas recibidas que no se pudieron leer al subirlas, porque el servicio de lectura estaba saturado o sin cupo (app:read-received-invoices). No manda nada a nadie. Apagada, esas facturas se quedan en cola hasta que alguien suba otra. Requiere la contabilidad encendida.',
+            'default' => true,
+        ],
+        self::CRON_INVOICE_MAIL => [
+            'group' => 'Tareas programadas',
+            'label' => 'Recoger las facturas del buzón',
+            'help' => 'Cada mañana recoge los adjuntos de los correos que han llegado al buzón de facturas y los deja en la bandeja de facturas recibidas, en cola para leerlos (app:fetch-invoice-mail). Los correos no se borran: se archivan en la carpeta «Archivadas» del buzón, o en «Revisar» si no traían nada que valga como factura (sin adjunto, o con un enlace para descargarla). No manda nada a nadie. Requiere la contabilidad encendida y el buzón configurado en el servidor.',
             'default' => true,
         ],
         self::CRON_OFFSITE_BACKUP => [

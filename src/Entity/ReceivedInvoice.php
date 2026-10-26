@@ -55,6 +55,9 @@ class ReceivedInvoice
     /** Mandada al bot de Telegram. */
     public const SOURCE_TELEGRAM = 'telegram';
 
+    /** Adjunta a un correo al buzón de facturas. */
+    public const SOURCE_EMAIL = 'email';
+
     public const PAYMENT_CARD = 'tarjeta';
     public const PAYMENT_CASH = 'efectivo';
     public const PAYMENT_TRANSFER = 'transferencia';
@@ -94,7 +97,7 @@ class ReceivedInvoice
     private string $mimeType;
 
     /**
-     * Por dónde entró: la web o Telegram; el buzón de correo, más adelante.
+     * Por dónde entró: la web, Telegram o el buzón de facturas.
      * @ORM\Column(type="string", length=20)
      */
     private string $source;
