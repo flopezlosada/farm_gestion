@@ -60,6 +60,11 @@ class BudgetScenarioControllerTest extends AbstractAuthenticatedTest
             ->setPayments(PaySchedule::Fourteen)
             ->setEmployerSsRate('31.40')
             ->setValidFrom(new \DateTimeImmutable('2090-01-01')));
+
+        // La primera petición comparte este EntityManager: sin vaciarlo, el grupo sale
+        // del mapa de identidad con su colección de partidas vacía (setGroup() no la
+        // rellena) y la rejilla no ve la partida. Una petición de verdad lee de la base.
+        $this->em->clear();
     }
 
     protected function tearDown(): void
