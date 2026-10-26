@@ -16,9 +16,12 @@ use App\Repository\RemittanceReturnRepository;
 use App\Service\Accounting\Invoice\LedgerSheet;
 use App\Service\Accounting\Remittance\BankReturns;
 use App\Service\Accounting\Remittance\BasketFeeExpectations;
+use App\Service\Accounting\Remittance\CaseAction;
 use App\Service\Accounting\Remittance\FlatRemittance;
 use App\Service\Accounting\Remittance\MandatesToPartners;
+use App\Service\Accounting\Remittance\PartnerNameMatcher;
 use App\Service\Accounting\Remittance\RemittanceBase;
+use App\Service\Accounting\Remittance\RemittanceCases;
 use App\Service\Accounting\Remittance\RemittanceFromFees;
 use App\Service\Accounting\Remittance\RemittancePartnerMatcher;
 use App\Service\Accounting\Remittance\RemittancePeriodText;
@@ -298,8 +301,10 @@ class RemittanceController extends AbstractController
 
     /** Una remesa: sus recibos, y en un borrador lo que hay que revisar antes de enviarla. */
     #[Route('/{id}', name: 'accounting_remittance_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(Remittance $remittance, RemittanceRepository $remittances, RemittanceReview $review, BasketFeeExpectations $fees, ValidatorInterface $validator, MandatesToPartners $transfer, PartnerRepository $partners, RemittanceReturnRepository $returnRepository, BankReturns $bankReturns): Response
+    public function show(Remittance $remittance, RemittanceRepository $remittances, RemittanceReview $review, BasketFeeExpectations $fees, ValidatorInterface $validator, RemittanceCases $cases, PartnerRepository $partners, RemittanceReturnRepository $returnRepository, BankReturns $bankReturns): Response
     {
+        $everyone = $remittance->isSent() ? $partners->findBy([], ['surname' => 'ASC', 'name' => 'ASC']) : [];
+
         $previous = $remittances->findLatestOfKind($remittance->getKind(), $remittance->getPeriod());
         $remittances->loadLinesWithPartners($remittance, $previous);
         $expected = $remittance->isDraft() && $remittance->isBasketFees() ? $fees->forMonth($remittance->getPeriod()) : [];
@@ -312,9 +317,11 @@ class RemittanceController extends AbstractController
             'warnings' => $review->lineWarnings($remittance, $expected),
             'withoutLine' => $review->familiesWithoutLine($remittance, $expected),
             'changes' => $review->changesFrom($previous, $remittance),
-            // Una enviada dice con qué cuenta y mandato se cobró: lo que las fichas
-            // aún no tienen, o tienen distinto.
-            'toPartners' => $remittance->isSent() ? $transfer->plan($remittance, $partners->findWithMandate()) : null,
+            // Una enviada dice con qué cuenta y mandato se cobró: cada recibo que no
+            // casa con su ficha, para resolverlo a mano, y todas las fichas para
+            // enlazar el que no tiene.
+            'cases' => $remittance->isSent() ? $cases->build($remittance, $partners->findWithMandate(), $everyone) : null,
+            'everyone' => $everyone,
             // Enviada: sus devoluciones, las del banco aún sin recibo con los que
             // pueden ser, y los recibos que se pueden dar por devueltos sin apunte.
             'returns' => $returns,
@@ -368,37 +375,91 @@ class RemittanceController extends AbstractController
     }
 
     /**
-     * Pasar a las fichas de socixs la cuenta y el mandato con que se les cobró en una
-     * remesa enviada. Sólo rellena lo que falta; lo que no coincide lo enseña.
+     * Resolver a mano un recibo de una remesa enviada que no casa con la ficha de su
+     * socix ({@see RemittanceCases}): enlazarlo, poner en la ficha lo del recibo,
+     * corregir su nombre o dejarlo como está. Uno cada vez: lo decide una persona.
      */
-    #[Route('/{id}/to-partners', name: 'accounting_remittance_to_partners', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[Route('/lines/{id}/resolve', name: 'accounting_remittance_line_resolve', methods: ['POST'], requirements: ['id' => '\d+'])]
     #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
-    #[IsGranted('ROLE_GESTION_SOCIXS_EDIT')]
-    public function toPartners(Request $request, Remittance $remittance, RemittanceRepository $remittances, PartnerRepository $partners, MandatesToPartners $transfer, EntityManagerInterface $em): Response
+    public function resolve(Request $request, RemittanceLine $line, RemittanceRepository $remittances, PartnerRepository $partners, MandatesToPartners $transfer, EntityManagerInterface $em): Response
     {
-        $back = $this->redirectToRoute('accounting_remittance_show', ['id' => $remittance->getId()]);
-        if (!$this->isCsrfTokenValid('remittance-to-partners-' . $remittance->getId(), (string) $request->request->get('_token'))) {
+        $remittance = $line->getRemittance();
+        $back = $this->redirect($this->generateUrl('accounting_remittance_show', ['id' => $remittance->getId()]) . '#casos');
+        $action = CaseAction::tryFrom((string) $request->request->get('do'));
+        if (!$this->isCsrfTokenValid('resolve-line-' . $line->getId(), (string) $request->request->get('_token')) || $action === null) {
             $this->addFlash('danger', 'La página había caducado. Vuelve a intentarlo.');
 
             return $back;
         }
         if (!$remittance->isSent()) {
-            $this->addFlash('warning', 'Sólo se pasan a las fichas los datos de una remesa enviada.');
+            $this->addFlash('warning', 'Los recibos de un borrador se cambian en el propio recibo.');
+
+            return $back;
+        }
+        if ($action->touchesPartner() && !$this->isGranted('ROLE_GESTION_SOCIXS_EDIT')) {
+            $this->addFlash('warning', 'Cambiar la ficha de un socix pide permiso de edición de socixs.');
 
             return $back;
         }
 
-        $remittances->loadLinesWithPartners($remittance);
-        $plan = $transfer->plan($remittance, $partners->findWithMandate());
-        $transfer->apply($remittance, $plan);
-        $em->flush();
+        $who = $line->getDebtorName();
+        switch ($action) {
+            case CaseAction::Link:
+            case CaseAction::LinkAndRename:
+                $partner = $partners->find($request->request->getInt('partner'));
+                if ($partner === null) {
+                    $this->addFlash('warning', 'Elige la ficha de quien paga este recibo.');
 
-        $this->addFlash('success', sprintf(
-            'Fichas actualizadas: %d %s, %d %s y %d %s. Lo que no coincide sigue abajo, sin cambiar.',
-            \count($plan['mandates']), \count($plan['mandates']) === 1 ? 'mandato' : 'mandatos',
-            \count($plan['ibans']), \count($plan['ibans']) === 1 ? 'cuenta' : 'cuentas',
-            \count($plan['repairs']), \count($plan['repairs']) === 1 ? 'cuenta corregida' : 'cuentas corregidas',
-        ));
+                    return $back;
+                }
+                foreach (RemittanceCases::siblings($remittance, $line) as $sibling) {
+                    $sibling->setPartner($partner);
+                }
+                // El nombre nuevo lo calcula el servidor, no viene del formulario: es
+                // el mismo que se enseñó, sin poder cambiarlo por el camino.
+                $rename = $action === CaseAction::LinkAndRename
+                    ? (PartnerNameMatcher::candidates($who, [$partner])[0]['rename'] ?? null)
+                    : null;
+                if ($rename !== null) {
+                    $partner->setName($rename['name'])->setSurname($rename['surname']);
+                }
+                $message = $rename !== null
+                    ? sprintf('«%s» enlazado con su ficha, que ahora se llama %s %s.', $who, $rename['name'], $rename['surname'])
+                    : sprintf('«%s» enlazado con la ficha de %s.', $who, $partner->getLegalName());
+                break;
+            case CaseAction::Unlink:
+                $line->setPartner(null);
+                $message = sprintf('«%s» ya no está enlazado con ninguna ficha.', $who);
+                break;
+            case CaseAction::TakeReceipt:
+                $remittances->loadLinesWithPartners($remittance);
+                $part = $transfer->forLine($transfer->plan($remittance, $partners->findWithMandate()), $line);
+                if ($part === ['mandates' => [], 'ibans' => [], 'repairs' => []]) {
+                    $this->addFlash('warning', 'No hay nada del recibo que se pueda poner en la ficha.');
+
+                    return $back;
+                }
+                $transfer->apply($remittance, $part);
+                $message = sprintf('Puesto en la ficha de %s lo del recibo: %s.', $line->getPartner()?->getLegalName(), implode(' y ', array_filter([
+                    $part['mandates'] !== [] ? 'el mandato' : null,
+                    $part['ibans'] !== [] || $part['repairs'] !== [] ? 'la cuenta' : null,
+                ])));
+                break;
+            case CaseAction::Keep:
+                foreach (RemittanceCases::siblings($remittance, $line) as $sibling) {
+                    $sibling->setReviewedAt(new \DateTimeImmutable());
+                }
+                $message = sprintf('«%s» se queda como está.', $who);
+                break;
+            case CaseAction::Reopen:
+                foreach (RemittanceCases::siblings($remittance, $line) as $sibling) {
+                    $sibling->setReviewedAt(null);
+                }
+                $message = sprintf('«%s» vuelve a la lista para revisarlo.', $who);
+                break;
+        }
+        $em->flush();
+        $this->addFlash('success', $message);
 
         return $back;
     }
@@ -427,7 +488,7 @@ class RemittanceController extends AbstractController
 
         $em->remove($remittance);
         $em->flush();
-        $this->addFlash('success', 'Remesa tirada.');
+        $this->addFlash('success', 'Remesa borrada.');
 
         return $this->redirectToRoute('accounting_remittances');
     }

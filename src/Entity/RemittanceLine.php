@@ -126,6 +126,15 @@ class RemittanceLine
     private string $amount = '0';
 
     /**
+     * Cuándo una persona miró este recibo contra la ficha de su socix y decidió dejarlo
+     * como está (la ficha es la buena, o paga la cesta de alguien que no está en la
+     * base). Desde entonces la ficha de la remesa no lo vuelve a presentar como caso.
+     *
+     * @ORM\Column(name="reviewed_at", type="datetime_immutable", nullable=true)
+     */
+    private ?\DateTimeImmutable $reviewedAt = null;
+
+    /**
      * El recibo de una persona con los datos de cobro de su ficha.
      *
      * Tipo de adeudo FRST en todos, como se envía hoy y Fiare acepta (los 120 recibos
@@ -165,6 +174,7 @@ class RemittanceLine
         $copy = clone $returned;
         $copy->id = null;
         $copy->remittance = null;
+        $copy->reviewedAt = null;
         $base = str_ends_with($returned->debitReference, self::RETRY_SUFFIX) ? mb_substr($returned->debitReference, 0, -mb_strlen(self::RETRY_SUFFIX)) : $returned->debitReference;
         $copy->debitReference = mb_substr($base, 0, self::MAX_REFERENCE - mb_strlen(self::RETRY_SUFFIX)) . self::RETRY_SUFFIX;
         $partner = $returned->partner;
@@ -184,6 +194,7 @@ class RemittanceLine
         $copy = clone $this;
         $copy->id = null;
         $copy->remittance = null;
+        $copy->reviewedAt = null;
         $copy->debitReference = RemittancePeriodText::rewrite($this->debitReference, $from, $to);
 
         return $copy;
@@ -280,10 +291,30 @@ class RemittanceLine
         return $this->partner;
     }
 
+    /**
+     * El socix al que corresponde. Se puede poner también en una remesa enviada: el
+     * enlace sirve para revisar contra la ficha y no cambia nada de lo que se cobró.
+     * Cambiar de socix deshace lo revisado, que era contra la ficha anterior.
+     */
     public function setPartner(?Partner $partner): self
     {
-        $this->assertEditable();
+        if ($partner !== $this->partner) {
+            $this->reviewedAt = null;
+        }
         $this->partner = $partner;
+
+        return $this;
+    }
+
+    public function getReviewedAt(): ?\DateTimeImmutable
+    {
+        return $this->reviewedAt;
+    }
+
+    /** Que una persona lo ha mirado y se queda como está; null lo vuelve a abrir. */
+    public function setReviewedAt(?\DateTimeImmutable $reviewedAt): self
+    {
+        $this->reviewedAt = $reviewedAt;
 
         return $this;
     }

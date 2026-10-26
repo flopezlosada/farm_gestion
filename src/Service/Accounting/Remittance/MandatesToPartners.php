@@ -24,6 +24,16 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
  */
 class MandatesToPartners
 {
+    /**
+     * De qué es una diferencia. Sólo las de mandato y cuenta distintos se pueden
+     * resolver poniendo en la ficha lo del recibo; un mandato que es de otrx o sin
+     * fecha de firma no puede ir a ninguna ficha.
+     */
+    public const FIELD_MANDATE = 'mandate';
+    public const FIELD_MANDATE_TAKEN = 'mandate_taken';
+    public const FIELD_MANDATE_UNDATED = 'mandate_undated';
+    public const FIELD_IBAN = 'iban';
+
     public function __construct(private readonly ValidatorInterface $validator)
     {
     }
@@ -38,7 +48,7 @@ class MandatesToPartners
      *     mandates: list<array{partner: Partner, line: RemittanceLine}>,
      *     ibans: list<array{partner: Partner, line: RemittanceLine}>,
      *     repairs: list<array{partner: Partner, line: RemittanceLine}>,
-     *     differences: list<array{partner: Partner, text: string}>,
+     *     differences: list<array{partner: Partner, line: RemittanceLine, field: string, text: string}>,
      *     unlinked: int,
      * }
      */
@@ -64,7 +74,7 @@ class MandatesToPartners
             $currentMandate = $partner->getMandateReference() ?? $gettingMandate[spl_object_id($partner)] ?? null;
             $difference = $this->mandateDifference($line, $partner, $currentMandate, $holderOf);
             if ($difference !== null) {
-                $plan['differences'][] = ['partner' => $partner, 'text' => $difference];
+                $plan['differences'][] = ['partner' => $partner, 'line' => $line, 'field' => $difference['field'], 'text' => $difference['text']];
             } elseif ($currentMandate === null) {
                 $plan['mandates'][] = ['partner' => $partner, 'line' => $line];
                 $holderOf[mb_strtoupper($line->getMandateReference())] = $partner;
@@ -79,7 +89,7 @@ class MandatesToPartners
                 if (!$this->isIban($current) && $this->isIban($line->getIban())) {
                     $plan['repairs'][] = ['partner' => $partner, 'line' => $line];
                 } else {
-                    $plan['differences'][] = ['partner' => $partner, 'text' => $this->ibanDifference($current, $line)];
+                    $plan['differences'][] = ['partner' => $partner, 'line' => $line, 'field' => self::FIELD_IBAN, 'text' => $this->ibanDifference($current, $line)];
                 }
             }
         }
@@ -112,23 +122,50 @@ class MandatesToPartners
      *
      * @param string|null            $current  El que tiene la ficha o ya se le va a poner.
      * @param array<string, Partner> $holderOf
+     *
+     * @return array{field: string, text: string}|null
      */
-    private function mandateDifference(RemittanceLine $line, Partner $partner, ?string $current, array $holderOf): ?string
+    private function mandateDifference(RemittanceLine $line, Partner $partner, ?string $current, array $holderOf): ?array
     {
         $reference = $line->getMandateReference();
-        if ($current !== null) {
-            return mb_strtoupper($current) === mb_strtoupper($reference)
-                ? null
-                : sprintf('La ficha tiene el mandato «%s» y en la remesa se le cobró con «%s».', $current, $reference);
-        }
         $holder = $holderOf[mb_strtoupper($reference)] ?? null;
+        if ($current !== null && mb_strtoupper($current) === mb_strtoupper($reference)) {
+            return null;
+        }
         if ($holder !== null && $holder !== $partner) {
-            return sprintf('El mandato «%s» ya lo tiene %s.', $reference, $holder->getLegalName());
+            return ['field' => self::FIELD_MANDATE_TAKEN, 'text' => sprintf('El mandato «%s» ya lo tiene %s.', $reference, $holder->getLegalName())];
+        }
+        if ($current !== null) {
+            return ['field' => self::FIELD_MANDATE, 'text' => sprintf('La ficha tiene el mandato «%s» y en la remesa se le cobró con «%s».', $current, $reference)];
         }
 
         return $line->getMandateSignedOn() === null
-            ? sprintf('El recibo no dice cuándo se firmó el mandato «%s».', $reference)
+            ? ['field' => self::FIELD_MANDATE_UNDATED, 'text' => sprintf('El recibo no dice cuándo se firmó el mandato «%s».', $reference)]
             : null;
+    }
+
+    /**
+     * La parte del plan de un solo recibo, para resolverlo a mano: rellenar lo que le
+     * falta a su ficha y, si quien revisa dice que lo bueno es lo del recibo, poner
+     * también su mandato y su cuenta en lugar de los de la ficha.
+     *
+     * @param array{mandates: list<array{partner: Partner, line: RemittanceLine}>, ibans: list<array{partner: Partner, line: RemittanceLine}>, repairs: list<array{partner: Partner, line: RemittanceLine}>, differences: list<array{partner: Partner, line: RemittanceLine, field: string, text: string}>} $plan
+     *
+     * @return array{mandates: list<array{partner: Partner, line: RemittanceLine}>, ibans: list<array{partner: Partner, line: RemittanceLine}>, repairs: list<array{partner: Partner, line: RemittanceLine}>}
+     */
+    public function forLine(array $plan, RemittanceLine $line): array
+    {
+        $mine = static fn (array $rows): array => array_values(array_filter($rows, static fn (array $r): bool => $r['line'] === $line));
+        $taking = static fn (string $field): array => array_map(
+            static fn (array $d): array => ['partner' => $d['partner'], 'line' => $d['line']],
+            array_values(array_filter($mine($plan['differences']), static fn (array $d): bool => $d['field'] === $field)),
+        );
+
+        return [
+            'mandates' => [...$mine($plan['mandates']), ...$taking(self::FIELD_MANDATE)],
+            'ibans' => $mine($plan['ibans']),
+            'repairs' => [...$mine($plan['repairs']), ...$taking(self::FIELD_IBAN)],
+        ];
     }
 
     /**
