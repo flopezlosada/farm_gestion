@@ -98,20 +98,27 @@ class PendingTransferController extends AbstractController
 
     /** No era un traspaso, o ya estaba anotado: se tira sin tocar el libro. */
     #[Route('/{id}/discard', name: 'accounting_transfer_pending_discard', requirements: ['id' => '\d+'], methods: ['POST'])]
-    public function discard(PendingTransfer $transfer, Request $request, EntityManagerInterface $em): Response
+    public function discard(PendingTransfer $transfer, Request $request, EntityManagerInterface $em, PendingTransferRepository $pending): Response
     {
         if (!$this->isCsrfTokenValid('accounting_transfer_pending_discard_'.$transfer->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
 
             return $this->redirectToRoute('accounting_transfer_pending');
         }
-        if ($transfer->isConfirmed()) {
-            $this->addFlash('warning', 'Ese traspaso ya está en el libro: si no era, bórralo desde Movimientos.');
+        $removed = $em->wrapInTransaction(static function () use ($pending, $transfer, $em): bool {
+            $locked = $pending->findLocked((int) $transfer->getId());
+            if ($locked === null || $locked->isConfirmed()) {
+                return false;
+            }
+            $em->remove($locked);
+
+            return true;
+        });
+        if (!$removed) {
+            $this->addFlash('warning', 'Ese traspaso ya está en el libro o ya se había tirado. Si está en el libro y no era, bórralo desde Movimientos.');
 
             return $this->redirectToRoute('accounting_transfer_pending');
         }
-        $em->remove($transfer);
-        $em->flush();
         $this->addFlash('success', 'Descartado. El libro no se ha tocado.');
 
         return $this->redirectToRoute('accounting_transfer_pending');
