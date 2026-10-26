@@ -1,9 +1,9 @@
 {# ============================================================
- # Pendiente — la portada de contabilidad.
+ # Inicio de contabilidad.
  #
- # Responde a «¿qué tengo que hacer?»: el libro al día y el paquete de la gestoría
- # completo. Arriba, tres cifras; debajo, las tareas de AccountingAgenda, cada una
- # con su enlace. «Cómo vamos» está en Informes.
+ # Responde de un vistazo a «¿cómo están las cuentas?» y «¿qué tengo que hacer?».
+ # Arriba, tres cifras; debajo, a dos columnas, el saldo de cada cuenta y las tareas
+ # de AccountingAgenda, cada una con su enlace. «Cómo vamos» está en Informes.
  #
  # El controller pasa:
  #   year                       año en curso
@@ -22,7 +22,7 @@
 {% import '_macros/csa.html.twig' as csa %}
 {% import 'accounting/_money.html.twig' as fmt %}
 
-{% block title %}Contabilidad · Pendiente{% endblock %}
+{% block title %}Contabilidad{% endblock %}
 
 {% block csa_crumbs %}
     <a href="{{ path('dashboard') }}">Inicio</a>
@@ -36,12 +36,18 @@
     {% include 'accounting/_styles.html.twig' %}
     <style>
         .acc-todo { list-style: none; margin: 0; padding: 0; }
-        .acc-todo > li { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-top: 1px solid rgba(0, 0, 0, 0.06); }
-        .acc-todo > li:first-child { border-top: 0; }
-        .acc-todo .t { font-weight: 600; }
-        .acc-todo .d { margin: 4px 0 0; padding: 0; list-style: none; font-size: 13px; }
-        .acc-todo .go { margin-left: auto; white-space: nowrap; }
-        .acc-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin: 18px 0; }
+        .acc-todo > li + li { border-top: 1px solid var(--prl-line, #ebe7dd); }
+        /* La tarea entera es el enlace: el título dice qué hacer y la flecha, adónde. */
+        .acc-todo a.task { display: grid; grid-template-columns: 10px minmax(0, 1fr) 14px; gap: 12px; align-items: start; padding: 12px 14px; color: inherit; text-decoration: none; }
+        .acc-todo a.task:hover { background: var(--prl-sage-l, #eaf0e2); }
+        .acc-todo .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; background: var(--prl-sage, #5b7a4c); }
+        .acc-todo .dot.soon { background: var(--prl-ochre, #c89a3a); box-shadow: 0 0 0 3px var(--prl-ochre-l, #faf1d8); }
+        .acc-todo .t { font-size: 13.5px; font-weight: 500; line-height: 1.4; color: var(--prl-ink, #1d1c17); }
+        .acc-todo a.task:hover .t { color: var(--prl-sage-d, #2f4426); }
+        .acc-todo .d { margin: 3px 0 0; padding: 0; list-style: none; font-size: 12.5px; line-height: 1.5; color: var(--prl-ink-soft, #5a564a); }
+        .acc-todo .go { margin-top: 3px; font-size: 11px; color: var(--prl-ink-faint, #8d8773); }
+        .acc-todo a.task:hover .go { color: var(--prl-sage-d, #2f4426); }
+        .acc-done { display: flex; gap: 10px; align-items: center; padding: 22px 16px; font-size: 13.5px; color: var(--prl-sage-d, #2f4426); background: var(--prl-sage-l, #eaf0e2); border-radius: 8px; }
     </style>
 {% endblock %}
 
@@ -50,8 +56,8 @@
 
     {{ csa.page_header(
         'Contabilidad',
-        'Pendiente',
-        'Lo que queda por hacer para que el libro esté al día y a la gestoría le llegue el trimestre completo.'
+        'Las cuentas de ' ~ year,
+        'El dinero de cada cuenta, cómo va el año y lo que queda por hacer para que el libro esté al día y a la gestoría le llegue el trimestre completo.'
     ) }}
 
     <div class="prl-toolbar">
@@ -75,13 +81,10 @@
         </div>
         {% if hasBudget %}
             {% set deviation = resultToDate - budgetToDate %}
-            <div class="prl-stat {{ deviation < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}">
+            <a class="prl-stat {{ deviation < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}" href="{{ path('accounting_report') }}" title="Cómo vamos frente al presupuesto">
                 <div class="v">{{ resultToDate|number_format(0, ',', '.') }} €</div>
-                <div class="l">
-                    resultado de {{ year }}, frente a {{ budgetToDate|number_format(0, ',', '.') }} € previstos a la fecha
-                    · <a href="{{ path('accounting_report') }}">cómo vamos</a>
-                </div>
-            </div>
+                <div class="l">resultado de {{ year }} · previsto a la fecha {{ budgetToDate|number_format(0, ',', '.') }} €</div>
+            </a>
         {% else %}
             <div class="prl-stat">
                 <div class="v">{{ resultToDate|number_format(0, ',', '.') }} €</div>
@@ -90,87 +93,124 @@
         {% endif %}
     </div>
 
-    {# ============ POR HACER ============ #}
-    <div class="prl-table-wrap">
-        {% if items is empty %}
-            <div class="prl-empty">Todo al día: no hay nada pendiente.</div>
-        {% else %}
-            <ul class="acc-todo">
-                {% for item in items %}
-                    {% set url = path(item.route, item.routeParams) ~ (item.fragment ? '#' ~ item.fragment : '') %}
-                    <li>
-                        <span class="prl-chip prl-chip--{{ item.urgency.name == 'Soon' ? 'pausado' : 'activo' }}" title="{{ item.urgency.name == 'Soon' ? 'Se acaba el plazo' : 'Pendiente' }}"><span class="dot"></span></span>
-                        <div>
-                            <a href="{{ url }}" class="t">{{ item.title }}</a>
-                            {% if item.details is not empty %}
-                                <ul class="d acc-muted">
-                                    {% for detail in item.details %}<li>{{ detail }}</li>{% endfor %}
-                                </ul>
-                            {% endif %}
-                        </div>
-                        <a href="{{ url }}" class="prl-btn go">Ir <i class="fa fa-arrow-right"></i></a>
-                    </li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    </div>
-
-    <div class="acc-cards">
+    <div class="acc-split">
         {# ============ SALDOS Y ÚLTIMO APUNTE ============ #}
-        {% embed '_components/csa_card.html.twig' with { title: 'Dónde está el dinero', subtitle: 'Saldo de cada cuenta y su último apunte', accent: 'ochre' } %}
-            {% block body %}
-                <table class="prl-table" style="margin: 0;">
+        <section>
+            <div class="acc-section-head">
+                <div>
+                    <h2 class="acc-subhead">Dónde está el dinero</h2>
+                    <p class="acc-lead">Saldo de cada cuenta según el libro. Pulsa una para ver sus movimientos.</p>
+                </div>
+            </div>
+            <div class="prl-table-wrap">
+                <table class="prl-table acc-keep">
+                    <thead>
+                        <tr>
+                            <th>Cuenta</th>
+                            <th class="tight">Último apunte</th>
+                            <th class="acc-num">Saldo</th>
+                        </tr>
+                    </thead>
                     <tbody>
                         {% for row in balances %}
                             <tr>
                                 <td>
-                                    <a href="{{ path('accounting_ledger', { account: row.account.id }) }}">{{ row.account.name }}</a><br>
-                                    <span class="acc-small {{ row.stale ? 'acc-neg' : 'acc-muted' }}">
-                                        {{ row.lastDate ? 'último apunte ' ~ row.lastDate|date('d/m/Y') : 'sin apuntes' }}
-                                    </span>
+                                    <a href="{{ path('accounting_ledger', { account: row.account.id }) }}" class="acc-strong">{{ row.account.name }}</a>
                                     {% if row.account.card and row.balance != 0 %}
                                         <br><span class="acc-small {{ row.balance > 0 ? 'acc-neg' : 'acc-muted' }}">
                                             {{ row.balance < 0 ? 'compras pendientes de liquidar' : 'liquidación sin sus compras' }}
                                         </span>
                                     {% endif %}
                                 </td>
+                                <td class="tight {{ row.stale ? 'acc-neg' : 'acc-muted' }}" title="{{ row.stale ? 'Lleva más de 30 días sin apuntes' : '' }}">
+                                    {{ row.lastDate ? row.lastDate|date('d/m/Y') : 'sin apuntes' }}
+                                </td>
                                 <td class="acc-num">{{ row.balance|number_format(2, ',', '.') }} €</td>
                             </tr>
                         {% endfor %}
-                        <tr>
-                            <td><b>Total</b></td>
-                            <td class="acc-num"><b>{{ totalCash|number_format(2, ',', '.') }} €</b></td>
-                        </tr>
                     </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="2">Total</td>
+                            <td class="acc-num">{{ totalCash|number_format(2, ',', '.') }} €</td>
+                        </tr>
+                    </tfoot>
                 </table>
-            {% endblock %}
-        {% endembed %}
+            </div>
+        </section>
+
+        {# ============ POR HACER ============ #}
+        <section>
+            <div class="acc-section-head">
+                <div>
+                    <h2 class="acc-subhead">Por hacer{% if items is not empty %} <span class="count">{{ items|length }}</span>{% endif %}</h2>
+                    <p class="acc-lead">Primero lo que tiene plazo. Cada tarea lleva a la pantalla donde se hace.</p>
+                </div>
+            </div>
+            {% if items is empty %}
+                <div class="acc-done"><i class="fa fa-check"></i> Todo al día: no hay nada pendiente.</div>
+            {% else %}
+                <div class="prl-table-wrap">
+                    <ul class="acc-todo">
+                        {% for item in items %}
+                            {% set soon = item.urgency.name == 'Soon' %}
+                            <li>
+                                <a class="task" href="{{ path(item.route, item.routeParams) ~ (item.fragment ? '#' ~ item.fragment : '') }}">
+                                    <span class="dot {{ soon ? 'soon' : '' }}" title="{{ soon ? 'Se acaba el plazo' : 'Pendiente' }}"></span>
+                                    <span>
+                                        <span class="t">{{ item.title }}</span>
+                                        {% if item.details is not empty %}
+                                            <ul class="d">
+                                                {% for detail in item.details %}<li>{{ detail }}</li>{% endfor %}
+                                            </ul>
+                                        {% endif %}
+                                    </span>
+                                    <i class="fa fa-chevron-right go" aria-hidden="true"></i>
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        </section>
     </div>
 
     {# ============ TRASPASOS SIN PAREJA ============ #}
     {% if unpairedTransfers|length > 0 %}
-        <div class="prl-table-wrap" id="traspasos">
-            <table class="prl-table">
-                <thead>
-                    <tr><th colspan="4">Traspasos a los que les falta la otra mitad</th></tr>
-                </thead>
-                <tbody>
-                    {% for entry in unpairedTransfers %}
+        <section id="traspasos">
+            <div class="acc-section-head">
+                <div>
+                    <h2 class="acc-subhead">Traspasos a los que les falta la otra mitad <span class="count">{{ unpairedTransfers|length }}</span></h2>
+                    <p class="acc-lead">
+                        Un traspaso mueve dinero de una cuenta propia a otra, así que tiene dos apuntes
+                        que se anulan. Éstos sólo tienen uno: o falta anotar el otro lado, o uno de los
+                        dos lleva un importe distinto.
+                    </p>
+                </div>
+            </div>
+            <div class="prl-table-wrap">
+                <table class="prl-table">
+                    <thead>
                         <tr>
-                            <td class="tight">{{ entry.date ? entry.date|date('d/m/Y') : '—' }}</td>
-                            <td>{{ entry.account.name }}</td>
-                            <td><a href="{{ path('accounting_entry_show', { id: entry.id }) }}">{{ entry.concept }}</a></td>
-                            <td class="acc-num">{{ fmt.money(entry.amount, false) }}</td>
+                            <th class="tight">Fecha</th>
+                            <th class="tight">Cuenta</th>
+                            <th>Concepto</th>
+                            <th class="acc-num">Importe</th>
                         </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        <p class="acc-muted" style="margin: 10px 2px; font-size: 12px;">
-            Un traspaso mueve dinero de una cuenta propia a otra, así que tiene dos apuntes
-            que se anulan. Los de esta lista sólo tienen uno: o falta anotar el otro lado, o
-            uno de los dos lleva un importe distinto.
-        </p>
+                    </thead>
+                    <tbody>
+                        {% for entry in unpairedTransfers %}
+                            <tr>
+                                <td class="tight">{{ entry.date ? entry.date|date('d/m/Y') : '—' }}</td>
+                                <td class="tight">{{ entry.account.name }}</td>
+                                <td><a href="{{ path('accounting_entry_show', { id: entry.id }) }}">{{ entry.concept }}</a></td>
+                                <td class="acc-num">{{ fmt.money(entry.amount, false) }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
     {% endif %}
 
 </div>

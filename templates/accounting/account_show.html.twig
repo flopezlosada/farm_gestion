@@ -28,11 +28,6 @@
     {{ parent() }}
     {% include 'partner/_listing_styles.html.twig' %}
     {% include 'accounting/_styles.html.twig' %}
-    <style>
-        .acc-facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 24px; margin: 0 0 var(--csa-sp-6, 32px); font-size: 14px; }
-        .acc-facts dt { color: var(--csa-ink-soft, #6b6b6b); }
-        .acc-facts dd { margin: 0; }
-    </style>
 {% endblock %}
 
 {% block csa_main %}
@@ -41,43 +36,51 @@
     {{ csa.page_header('Contabilidad · Cuentas', account.name, account.kindLabel ~ (account.active ? '' : ' · retirada')) }}
 
     <div class="prl-toolbar">
-        <div class="counters"><b>{{ fmt.money(balance) }}</b> hoy</div>
         <div class="spacer"></div>
         {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') and account.active %}
-            <a href="{{ path('accounting_entry_new', { account: account.id }) }}" class="prl-btn"><i class="fa fa-plus"></i> Anotar apunte</a>
+            <a href="{{ path('accounting_entry_new', { account: account.id }) }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Anotar apunte</a>
         {% endif %}
         {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
-            <a href="{{ path('accounting_account_edit', { id: account.id }) }}" class="prl-btn prl-btn--primary"><i class="fa fa-pencil"></i> Cambiar datos</a>
+            <a href="{{ path('accounting_account_edit', { id: account.id }) }}" class="prl-btn"><i class="fa fa-pencil"></i> Cambiar datos</a>
         {% endif %}
     </div>
 
-    <dl class="acc-facts">
-        <dt>IBAN</dt>
-        <dd>{{ account.iban ?? '—' }}</dd>
-        <dt>Apertura</dt>
-        <dd>{{ fmt.money(account.openingBalance) }} el {{ account.openingDate ? account.openingDate|date('d/m/Y') : '—' }}</dd>
-        <dt>Apuntes</dt>
-        <dd>{{ count }}</dd>
-    </dl>
+    <div class="prl-stats">
+        <div class="prl-stat {{ balance < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}">
+            <div class="v">{{ balance|number_format(2, ',', '.') }} €</div>
+            <div class="l">saldo hoy, según el libro</div>
+        </div>
+        <div class="prl-stat">
+            <div class="v">{{ account.openingBalance|number_format(2, ',', '.') }} €</div>
+            <div class="l">al abrirla{{ account.openingDate ? ', el ' ~ account.openingDate|date('d/m/Y') : '' }}</div>
+        </div>
+        <div class="prl-stat">
+            <div class="v">{{ count }}</div>
+            <div class="l">{{ count == 1 ? 'apunte' : 'apuntes' }}</div>
+        </div>
+    </div>
 
-    {% if balances is not empty %}
-        {% embed '_components/csa_card.html.twig' with { title: 'Saldo al cerrar cada mes de ' ~ year, accent: 'sky' } %}
-            {% block body %}
-                <div class="acc-months">
-                    {% for m, value in balances %}
-                        <div class="m {{ value is not null and value < 0 ? 'low' : '' }}">
-                            <span class="v">{{ value is null ? '—' : value|number_format(0, ',', '.') ~ ' €' }}</span>
-                            {{ months[m] }}
-                        </div>
-                    {% endfor %}
-                </div>
-            {% endblock %}
-        {% endembed %}
+    {% if account.iban %}
+        <dl class="acc-facts">
+            <dt>IBAN</dt>
+            <dd>{{ account.iban }}</dd>
+        </dl>
     {% endif %}
 
-    <div class="prl-toolbar">
-        <div class="counters">Últimos apuntes</div>
-        <div class="spacer"></div>
+    {% if balances is not empty %}
+        <h2 class="acc-subhead">Saldo al cerrar cada mes de {{ year }}</h2>
+        <div class="acc-months acc-months--year">
+            {% for m, value in balances %}
+                <div class="m {{ value is not null and value < 0 ? 'low' : '' }}">
+                    <span class="v">{{ value is null ? '—' : value|number_format(0, ',', '.') ~ ' €' }}</span>
+                    {{ months[m] }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <div class="acc-section-head">
+        <div><h2 class="acc-subhead">Últimos apuntes</h2></div>
         <a href="{{ path('accounting_ledger', { account: account.id }) }}" class="prl-btn"><i class="fa fa-list"></i> Todos sus movimientos</a>
     </div>
     <div class="prl-table-wrap">

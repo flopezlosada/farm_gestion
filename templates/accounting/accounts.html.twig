@@ -38,12 +38,12 @@
 
     <div class="prl-stats">
         <div class="prl-stat">
-            <b>{{ total|number_format(2, ',', '.') }} €</b>
-            <span>en total, hoy</span>
+            <div class="v">{{ total|number_format(2, ',', '.') }} €</div>
+            <div class="l">en total, hoy</div>
         </div>
         <div class="prl-stat">
-            <b>{{ rows|filter(r => r.account.active)|length }}</b>
-            <span>cuentas abiertas</span>
+            <div class="v">{{ rows|filter(r => r.account.active)|length }}</div>
+            <div class="l">cuentas abiertas</div>
         </div>
     </div>
 

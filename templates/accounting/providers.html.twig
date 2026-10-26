@@ -40,12 +40,12 @@
 
     <div class="prl-stats">
         <div class="prl-stat">
-            <b>{{ rows|filter(r => r.invoices > 0)|length }}</b>
-            <span>con facturas en {{ year }}</span>
+            <div class="v">{{ rows|filter(r => r.invoices > 0)|length }}</div>
+            <div class="l">con facturas en {{ year }}</div>
         </div>
         <div class="prl-stat">
-            <b>{{ over|length }}</b>
-            <span>pasan de {{ threshold|number_format(2, ',', '.') }} € en facturas (modelo 347)</span>
+            <div class="v">{{ over|length }}</div>
+            <div class="l">pasan de {{ threshold|number_format(2, ',', '.') }} € en facturas (modelo 347)</div>
         </div>
     </div>
 

@@ -134,7 +134,7 @@
     </div>
 
     {% if invoice.issued %}
-        <h2 style="font-size: 15px; font-weight: 600; margin: var(--csa-sp-6, 24px) 0 var(--csa-sp-3, 12px);">{{ invoice.rectifying ? 'Devolución' : 'Cobro' }}</h2>
+        <h2 class="acc-subhead">{{ invoice.rectifying ? 'Devolución' : 'Cobro' }}</h2>
         {% if invoice.paid %}
             {% set entry = invoice.accountEntry %}
             <div class="csa-alert csa-alert--success" role="status">
@@ -176,7 +176,7 @@
     {% endif %}
 
     {% if rectifications is not empty %}
-        <h2 style="font-size: 15px; font-weight: 600; margin: var(--csa-sp-6, 24px) 0 var(--csa-sp-3, 12px);">Rectificativas</h2>
+        <h2 class="acc-subhead">Rectificativas</h2>
         <ul>
             {% for r in rectifications %}
                 <li><a href="{{ path('accounting_issued_invoice_show', { id: r.id }) }}">{{ r.issued ? r.numberLabel : 'Borrador' }}</a> · {{ fmt.money(r.total) }}</li>

@@ -58,10 +58,12 @@
                     <option value="{{ c.id }}" {{ filters.category == c.id ? 'selected' : '' }}>{{ c.qualifiedName }}</option>
                 {% endfor %}
             </select>
-            <label class="acc-filter-date">Desde <input type="date" name="from" class="csa-input" value="{{ filters.from ? filters.from|date('Y-m-d') : '' }}"></label>
-            <label class="acc-filter-date">Hasta <input type="date" name="to" class="csa-input" value="{{ filters.to ? filters.to|date('Y-m-d') : '' }}"></label>
+            <span class="acc-filter-range" title="Fechas, ambas incluidas">
+                Del <input type="date" name="from" value="{{ filters.from ? filters.from|date('Y-m-d') : '' }}" aria-label="Desde">
+                al <input type="date" name="to" value="{{ filters.to ? filters.to|date('Y-m-d') : '' }}" aria-label="Hasta">
+            </span>
             <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-filter"></i> Filtrar</button>
-            <a href="{{ path('accounting_ledger') }}" class="prl-btn">Limpiar</a>
+            {% if filters.text or account or filters.category or filters.from or filters.to %}<a href="{{ path('accounting_ledger') }}" class="prl-btn">Quitar filtros</a>{% endif %}
         </form>
     </div>
 
@@ -91,7 +93,7 @@
             <table class="prl-table acc-wrap">
                 <thead>
                     <tr>
-                        <th class="tight">{{ knp_pagination_sortable(pagination, 'Fecha', 'e.date') }}</th>
+                        <th class="tight prl-sortable">{{ knp_pagination_sortable(pagination, 'Fecha', 'e.date') }}</th>
                         <th>Concepto</th>
                         <th>Partida</th>
                         <th class="tight">Cuenta</th>

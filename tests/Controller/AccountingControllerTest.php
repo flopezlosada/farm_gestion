@@ -47,7 +47,7 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
         $client->request('GET', '/gestion/accounting/');
 
         $this->assertResponseIsSuccessful();
-        $this->assertSelectorTextContains('h1', 'Pendiente');
+        $this->assertSelectorTextContains('h1', 'Las cuentas de');
         $this->assertSelectorTextContains('body', 'en las cuentas, según el libro');
         $this->assertSelectorTextContains('body', 'Dónde está el dinero');
     }
