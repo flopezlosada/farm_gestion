@@ -21,6 +21,8 @@ class ExtractedInvoiceTest extends TestCase
             'fecha' => '2026-01-22',
             'proveedor' => 'FERRETERIA TORRELAGUNA',
             'cif_proveedor' => '51454945N',
+            'cliente' => 'ASOCIACION AGROECOLOGICA VEGA DE JARAMA',
+            'cif_cliente' => 'G-87587580',
             'numero_factura' => '2232',
             'lineas_iva' => [['base' => 22.11, 'tipo_iva' => 21, 'cuota' => 4.64]],
             'total' => 26.75,
@@ -38,6 +40,8 @@ class ExtractedInvoiceTest extends TestCase
         $this->assertSame('factura', $data->documentType);
         $this->assertSame('2026-01-22', $data->date?->format('Y-m-d'));
         $this->assertSame('51454945N', $data->providerTaxId);
+        $this->assertSame('ASOCIACION AGROECOLOGICA VEGA DE JARAMA', $data->customerName);
+        $this->assertSame('G87587580', $data->customerTaxId, 'El CIF del cliente se normaliza como el del proveedor.');
         $this->assertSame('26.75', $data->total);
         $this->assertSame([['base' => '22.11', 'rate' => '21.00', 'taxAmount' => '4.64']], $data->taxLines);
         $this->assertSame('28180', $data->providerPostalCode);
@@ -121,6 +125,8 @@ class ExtractedInvoiceTest extends TestCase
         $data = ExtractedInvoice::fromArray(['cif_proveedor' => null, 'numero_factura' => null, 'total' => null]);
 
         $this->assertNull($data->providerTaxId);
+        $this->assertNull($data->customerName, 'Un ticket no trae cliente.');
+        $this->assertNull($data->customerTaxId);
         $this->assertNull($data->invoiceNumber);
         $this->assertNull($data->total);
     }

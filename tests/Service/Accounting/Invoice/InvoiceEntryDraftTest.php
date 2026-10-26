@@ -86,6 +86,8 @@ class InvoiceEntryDraftTest extends TestCase
             date: new \DateTimeImmutable('2026-09-14'),
             providerName: 'Ferretería de prueba',
             providerTaxId: self::TAX_ID,
+            customerName: null,
+            customerTaxId: null,
             invoiceNumber: null,
             total: '18.45',
             taxLines: [],

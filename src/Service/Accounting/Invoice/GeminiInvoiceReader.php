@@ -101,7 +101,7 @@ class GeminiInvoiceReader
 
         return <<<TXT
             Extrae los datos de esta factura o ticket que ha recibido la asociación CSA Vega de Jarama.
-            El cliente es la asociación; el proveedor es quien emite el documento.
+            El proveedor es quien emite el documento; el cliente, a quien va dirigido. "cliente" y "cif_cliente" son el nombre y el CIF o NIF del cliente tal como aparecen escritos, aunque no sean los de la asociación; null si el documento no lleva cliente.
             Importes en euros, con punto decimal. Si un dato no aparece, devuélvelo como null: no lo inventes.
             La dirección, el código postal, el municipio y la provincia son los del PROVEEDOR, nunca los de la asociación.
             "retencion_irpf" es el importe de la retención de IRPF que se descuenta del total (facturas de profesionales o alquileres), en positivo; null si no lleva.
@@ -126,6 +126,8 @@ class GeminiInvoiceReader
                 'fecha' => ['type' => 'STRING', 'nullable' => true, 'description' => 'Fecha de la factura, AAAA-MM-DD'],
                 'proveedor' => $nullableString,
                 'cif_proveedor' => $nullableString,
+                'cliente' => $nullableString,
+                'cif_cliente' => $nullableString,
                 'numero_factura' => $nullableString,
                 'lineas_iva' => [
                     'type' => 'ARRAY',

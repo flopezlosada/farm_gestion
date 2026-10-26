@@ -13,6 +13,7 @@ use App\Repository\AccountEntryRepository;
 use App\Repository\BudgetCategoryRepository;
 use App\Repository\ReceivedInvoiceRepository;
 use App\Service\Accounting\Invoice\GroupedPaymentFinder;
+use App\Service\Accounting\Invoice\InvoiceDataWarnings;
 use App\Service\Accounting\Invoice\InvoiceEntryDraft;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\Invoice\InvoiceProviderResolver;
@@ -132,6 +133,7 @@ class ReceivedInvoiceController extends AbstractController
         InvoiceFileStore $files,
         AccountEntryRepository $entries,
         GroupedPaymentFinder $groupedPayments,
+        InvoiceDataWarnings $dataWarnings,
     ): Response {
         if (!$invoice->isOpen()) {
             // Anotada o descartada ya no se revisa: se enseña tal como quedó. Un envío
@@ -235,6 +237,7 @@ class ReceivedInvoiceController extends AbstractController
         return $this->render('accounting/invoice_review.html.twig', [
             'invoice' => $invoice,
             'twin' => $invoices->findAlreadyConfirmedTwin($invoice),
+            'dataWarnings' => $dataWarnings->for($invoice),
             'hasDocument' => $files->pathTo($invoice->getFileName()) !== null,
             'form' => $form->createView(),
             'suggestions' => AccountEntryType::suggestedDirections($categories->findActive()),

@@ -97,6 +97,10 @@
         {{ csa.callout('La lectura no está segura de estos datos: compáralos con el documento antes de guardar.', 'warning', 'eye') }}
     {% endif %}
 
+    {% for warning in dataWarnings %}
+        {{ csa.callout(warning, 'warning', 'id-card-o') }}
+    {% endfor %}
+
     <div class="inv-review">
 
         {# ============ EL DOCUMENTO ============ #}
@@ -112,6 +116,12 @@
                     <dd>{{ invoice.readAt|date('d/m/Y H:i') }}{% if invoice.confidence %} · confianza {{ invoice.confidence }}{% endif %}</dd>
                     <dt>Forma de pago</dt>
                     <dd>{{ invoice.paymentLabel }} <span class="acc-muted">(según la factura)</span></dd>
+                    {% if invoice.customerName or invoice.customerTaxId %}
+                        {# Se enseña tal cual para echarle un ojo: un nombre mal escrito con
+                         # el CIF bueno no avisa, pero conviene verlo. #}
+                        <dt>A nombre de</dt>
+                        <dd>{{ [invoice.customerName, invoice.customerTaxId]|filter(v => v)|join(' · ') }}</dd>
+                    {% endif %}
                 </dl>
             {% endif %}
 
