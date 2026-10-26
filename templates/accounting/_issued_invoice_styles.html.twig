@@ -21,4 +21,8 @@
     .iss-problems ul { margin: 4px 0 0; padding-left: 18px; }
     .iss-actions { display: flex; flex-wrap: wrap; gap: var(--csa-sp-2, 8px); }
     .iss-actions form { margin: 0; }
+    /* La serie son dos radios: la macro de campo les pone la caja de un input de
+       texto y quedaban pegados («OrdinariaSerie X»). En fila, cada uno con su texto. */
+    #issued_invoice_series { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; height: auto; padding: 8px 0; border: 0; background: transparent; box-shadow: none; }
+    #issued_invoice_series label { margin: 0 0 0 6px; font-weight: 400; cursor: pointer; }
 </style>
