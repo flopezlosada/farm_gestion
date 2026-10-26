@@ -38,6 +38,8 @@
 
     {{ csa.page_header('Contabilidad', 'Remesas', 'Los recibos domiciliados que se suben a Fiare. La de cuotas de cesta sale del cálculo de las cuotas del mes; se revisa, se descarga el Excel y se da por enviada.') }}
 
+    <p><a href="{{ path('accounting_returns') }}"><i class="fa fa-undo"></i> Recibos devueltos</a> <span class="acc-muted">· las devoluciones del banco por resolver</span></p>
+
     {% if can_edit %}
         <div class="rem-prepare">
             {% for kind, n in next %}

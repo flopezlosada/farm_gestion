@@ -10,11 +10,14 @@ use App\Entity\IssuedInvoice;
 use App\Entity\IssuedInvoiceLine;
 use App\Entity\ReceivedInvoice;
 use App\Entity\Remittance;
+use App\Entity\RemittanceLine;
+use App\Entity\RemittanceReturn;
 use App\Repository\AccountEntryRepository;
 use App\Repository\FinancialAccountRepository;
 use App\Repository\IssuedInvoiceRepository;
 use App\Repository\ReceivedInvoiceRepository;
 use App\Repository\RemittanceRepository;
+use App\Repository\RemittanceReturnRepository;
 use App\Service\Accounting\Agenda\AccountingAgenda;
 use App\Service\Accounting\Agenda\AgendaItem;
 use App\Service\Accounting\Agenda\AgendaUrgency;
@@ -332,6 +335,37 @@ class AccountingAgendaTest extends TestCase
     }
 
     /**
+     * Los recibos devueltos: los del banco sin saber de quién son (sólo desde que se
+     * llevan las remesas aquí) y los ya ligados con algo por hacer, contados por lo
+     * que falta.
+     */
+    public function testLosRecibosDevueltosSalenPorLoQueFalta(): void
+    {
+        $august = Remittance::fromImport(Remittance::KIND_BASKET, new \DateTimeImmutable('2026-08-01'), 'Recibos AGOSTO 2026', 'agosto.xlsx', [
+            $ana = (new RemittanceLine())->setDebtorName('ZZTEST ANA')->setAmount('55.00'),
+            $luis = (new RemittanceLine())->setDebtorName('ZZTEST LUIS')->setAmount('36.00'),
+        ], null);
+        $pending = new RemittanceReturn($ana, null, null);
+        $toRecharge = new RemittanceReturn($luis, null, null);
+        $toRecharge->recharge(null);
+        $bank = [(new AccountEntry())->setConcept('bel-liq.rem.devol20260016561')->setAmount('-55.00')];
+
+        $items = $this->agenda(latestRemittance: $august, monthRemittance: $august, openReturns: [$pending, $toRecharge], unlinkedReturns: $bank)
+            ->items(new \DateTimeImmutable('2026-08-20'));
+        $titles = array_map(static fn (AgendaItem $i): string => $i->title, $items);
+        $this->assertContains('Saber de quién es 1 recibo devuelto por el banco', $titles);
+        $this->assertContains('Resolver 2 recibos devueltos', $titles);
+        $resolve = array_values(array_filter($items, static fn (AgendaItem $i): bool => $i->route === 'accounting_returns'))[0];
+        $this->assertSame([
+            '1 sin decidir qué se hace: es deuda de esa persona.',
+            '1 por volver a cobrar: se añaden desde el próximo borrador de remesa.',
+        ], $resolve->details);
+
+        $none = $this->agenda(unlinkedReturns: $bank)->items(new \DateTimeImmutable('2026-08-20'));
+        $this->assertSame([], array_filter($none, static fn (AgendaItem $i): bool => str_contains($i->title, 'devuelto')), 'Sin remesas aquí, las devoluciones no tienen recibo con el que ligarse.');
+    }
+
+    /**
      * @param list<ReceivedInvoice>               $received  del trimestre, para la gestoría
      * @param list<ReceivedInvoice>               $open      en la bandeja
      * @param list<IssuedInvoice>                 $unpaid    emitidas sin apunte
@@ -342,6 +376,8 @@ class AccountingAgendaTest extends TestCase
      * @param list<AccountantDelivery>|null       $deliveries la última entrega de cada trimestre; por omisión,
      *                                                        el 3T2026 entregado, para que la gestoría no salga
      * @param array<int, string>                  $balances  saldo por cuenta; por omisión, 0
+     * @param list<RemittanceReturn>              $openReturns recibos devueltos por resolver
+     * @param list<AccountEntry>                  $unlinkedReturns devoluciones del banco sin recibo
      */
     private function agenda(
         array $received = [],
@@ -355,6 +391,8 @@ class AccountingAgendaTest extends TestCase
         array $withoutInvoice = [],
         ?array $deliveries = null,
         array $balances = [],
+        array $openReturns = [],
+        array $unlinkedReturns = [],
     ): AccountingAgenda {
         $receivedRepo = $this->createStub(ReceivedInvoiceRepository::class);
         $receivedRepo->method('findOpen')->willReturn($open);
@@ -363,10 +401,12 @@ class AccountingAgendaTest extends TestCase
         $remittances = $this->createStub(RemittanceRepository::class);
         $remittances->method('findLatestOfKind')->willReturn($latestRemittance);
         $remittances->method('findOneBy')->willReturn($monthRemittance);
+        $remittances->method('firstPeriod')->willReturn($latestRemittance?->getPeriod());
         $entries = $this->createStub(AccountEntryRepository::class);
         $entries->method('lastDateByAccount')->willReturn($lastDates);
         $entries->method('findUnpairedTransfers')->willReturn($unpaired);
         $entries->method('findExpensesWithoutInvoice')->willReturn($withoutInvoice);
+        $entries->method('findUnlinkedReturnCharges')->willReturn($unlinkedReturns);
         $entries->method('balanceFor')->willReturnCallback(static fn (FinancialAccount $a): string => $balances[$a->getId()] ?? '0.00');
         $latest = [];
         foreach ($deliveries ?? [$this->delivery(2026, 3)] as $delivery) {
@@ -381,6 +421,8 @@ class AccountingAgendaTest extends TestCase
         $package->method('invoicesOf')->willReturn($received);
         $book = $this->createStub(IssuedInvoiceBook::class);
         $book->method('invoicesOf')->willReturn([]);
+        $returns = $this->createStub(RemittanceReturnRepository::class);
+        $returns->method('findOpen')->willReturn($openReturns);
 
         return new AccountingAgenda(
             $receivedRepo,
@@ -392,6 +434,7 @@ class AccountingAgendaTest extends TestCase
             new InvoiceFileStore(sys_get_temp_dir().'/agenda-test-no-existe', new AsciiSlugger(), new Filesystem()),
             $book,
             $closed,
+            $returns,
         );
     }
 

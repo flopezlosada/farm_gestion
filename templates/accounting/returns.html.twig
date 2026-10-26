@@ -1,0 +1,82 @@
+{# ============================================================
+ # Los recibos devueltos que tienen algo por hacer: deudas abiertas, los
+ # que esperan a volver a cobrarse y los que ya están en un borrador.
+ # Cada uno se cierra aquí o desde la ficha de su remesa.
+ #
+ # El controller pasa: returns (abiertas, las más antiguas primero).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
+
+{% set can_edit = is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+{% set can_see_partners = is_granted('ROLE_GESTION_SOCIXS') %}
+
+{% block title %}Contabilidad · Recibos devueltos{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_remittances') }}">Remesas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Recibos devueltos</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+    <style>
+        .rem-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+        .rem-inline-form { display: inline; }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header('Contabilidad · Remesas', 'Recibos devueltos', 'Un recibo devuelto es una deuda de esa persona hasta que se decide qué se hace: volver a cobrárselo en una remesa, enlazar lo que pagó por otro lado, o cerrarlo porque no se debía o se da por perdido. El libro no cambia: la devolución ya la trae el banco.') }}
+
+    <div class="prl-table-wrap">
+        {% if returns is empty %}
+            <div class="prl-empty">Ningún recibo devuelto por resolver.</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th>Quién</th>
+                        <th class="tight">Remesa</th>
+                        <th class="tight acc-num">Importe</th>
+                        <th class="tight">Devuelto</th>
+                        <th>Qué se hace</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ret in returns %}
+                        <tr>
+                            <td>
+                                {{ ret.line.debtorName }}
+                                {% if ret.line.partner %}<br>{% if can_see_partners %}<a class="acc-muted acc-small" href="{{ path('partner_show', { id: ret.line.partner.id }) }}">{{ ret.line.partner.legalName }}</a>{% else %}<span class="acc-muted acc-small">{{ ret.line.partner.legalName }}</span>{% endif %}{% endif %}
+                            </td>
+                            <td class="tight"><a href="{{ path('accounting_remittance_show', { id: ret.line.remittance.id, _fragment: 'devoluciones' }) }}">{{ ret.line.remittance.label }}</a></td>
+                            <td class="acc-num">{{ fmt.money(ret.line.amount) }}</td>
+                            <td class="tight">{{ ret.entry ? ret.entry.date|date('d/m/Y') : 'sin apunte' }}</td>
+                            <td>
+                                {% if can_edit %}
+                                    {% include 'accounting/_return_actions.html.twig' with { ret: ret, from: 'returns' } only %}
+                                {% else %}
+                                    {{ ret.status.label }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

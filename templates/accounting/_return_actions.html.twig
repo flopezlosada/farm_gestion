@@ -1,0 +1,47 @@
+{# ============================================================
+ # Lo que se puede hacer con un recibo devuelto, según en qué punto está.
+ #
+ # Pendiente: las cuatro salidas y quitarlo (si se marcó el recibo que no
+ # era). Por volver a cobrar o cerrado: deshacer lo elegido. En un borrador
+ # o ya cobrado de nuevo: dónde.
+ #
+ # Recibe: ret (RemittanceReturn), from ('remittance' o 'returns', adónde
+ # se vuelve).
+ # ============================================================ #}
+{% import _self as ra %}
+{% set status = ret.status.value %}
+{% set token = csrf_token('resolve-return-' ~ ret.id) %}
+
+{% macro button(ret, from, token, action, icon, text, confirm_text = null) %}
+    <form method="post" class="rem-inline-form" action="{{ path('accounting_return_resolve', { id: ret.id }) }}"{% if confirm_text %} onsubmit="return confirm('{{ confirm_text|e('js') }}');"{% endif %}>
+        <input type="hidden" name="_token" value="{{ token }}">
+        <input type="hidden" name="action" value="{{ action }}">
+        <input type="hidden" name="from" value="{{ from }}">
+        <button type="submit" class="prl-btn"><i class="fa fa-{{ icon }}"></i> {{ text }}</button>
+    </form>
+{% endmacro %}
+
+{% if status == 'pending' %}
+    <div class="rem-actions">
+        {{ ra.button(ret, from, token, 'recharge', 'repeat', 'Volver a cobrar') }}
+        <a href="{{ path('accounting_return_paid', { id: ret.id }) }}" class="prl-btn"><i class="fa fa-link"></i> Pagado aparte</a>
+        {{ ra.button(ret, from, token, 'not_owed', 'ban', 'No se debía') }}
+        {{ ra.button(ret, from, token, 'written_off', 'times', 'Se da por perdido', '¿Dar por perdido el recibo de ' ~ ret.line.debtorName ~ '? No se le volverá a cobrar.') }}
+        {{ ra.button(ret, from, token, 'undo', 'undo', 'No era este recibo', '¿Quitar la devolución del recibo de ' ~ ret.line.debtorName ~ '? El recibo vuelve a contar como cobrado.') }}
+    </div>
+{% elseif status == 'to_recharge' %}
+    <span class="acc-muted">Se añade desde el próximo borrador de remesa.</span>
+    {{ ra.button(ret, from, token, 'reopen', 'undo', 'Deshacer') }}
+{% elseif status == 'recharging' %}
+    <span class="acc-muted">En el borrador <a href="{{ path('accounting_remittance_show', { id: ret.rechargedIn.remittance.id }) }}">{{ ret.rechargedIn.remittance.label }}</a>.</span>
+{% else %}
+    <span class="acc-muted">
+        {{ ret.outcome.label }}
+        {%- if ret.paidWith %}: {{ ret.paidWith.date|date('d/m/Y') }}, «{{ ret.paidWith.concept }}»{% endif %}
+        {%- if ret.rechargedIn %}: en <a href="{{ path('accounting_remittance_show', { id: ret.rechargedIn.remittance.id }) }}">{{ ret.rechargedIn.remittance.label }}</a>{% endif %}
+        {%- if ret.resolvedBy %} · {{ ret.resolvedBy.displayName }}{% endif %}.
+    </span>
+    {% if not ret.rechargedIn %}
+        {{ ra.button(ret, from, token, 'reopen', 'undo', 'Deshacer') }}
+    {% endif %}
+{% endif %}

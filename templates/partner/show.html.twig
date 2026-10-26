@@ -993,6 +993,19 @@
                 </section>
             {% endif %}
 
+            {# Recibos que el banco devolvió y siguen sin resolver: es deuda suya. #}
+            {% if open_returns is not empty %}
+                {% import 'accounting/_money.html.twig' as fmt %}
+                <div class="csa-alert csa-alert--warning" role="status">
+                    <i class="csa-alert__icon fa fa-undo" aria-hidden="true"></i>
+                    <div class="csa-alert__body">
+                        {{ open_returns|length == 1 ? 'Tiene 1 recibo devuelto' : 'Tiene ' ~ open_returns|length ~ ' recibos devueltos' }} sin resolver:
+                        {% for r in open_returns %}{{ fmt.money(r.line.amount) }} de {{ r.line.remittance.label }} ({{ r.status.label|lower }}){{ loop.last ? '.' : ', ' }}{% endfor %}
+                        <a href="{{ path('accounting_returns') }}">Ver los recibos devueltos</a>
+                    </div>
+                </div>
+            {% endif %}
+
             {# Lo que paga de más o de menos sobre la tarifa. #}
             {% include 'partner/_fee_card.html.twig' %}
 

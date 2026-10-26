@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Entity\AccountEntry;
 use App\Entity\IssuedInvoice;
 use App\Entity\Partner;
 use App\Entity\Remittance;
@@ -11,7 +12,9 @@ use App\Form\RemittanceImportType;
 use App\Form\RemittanceLineType;
 use App\Repository\PartnerRepository;
 use App\Repository\RemittanceRepository;
+use App\Repository\RemittanceReturnRepository;
 use App\Service\Accounting\Invoice\LedgerSheet;
+use App\Service\Accounting\Remittance\BankReturns;
 use App\Service\Accounting\Remittance\BasketFeeExpectations;
 use App\Service\Accounting\Remittance\FlatRemittance;
 use App\Service\Accounting\Remittance\MandatesToPartners;
@@ -295,11 +298,12 @@ class RemittanceController extends AbstractController
 
     /** Una remesa: sus recibos, y en un borrador lo que hay que revisar antes de enviarla. */
     #[Route('/{id}', name: 'accounting_remittance_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(Remittance $remittance, RemittanceRepository $remittances, RemittanceReview $review, BasketFeeExpectations $fees, ValidatorInterface $validator, MandatesToPartners $transfer, PartnerRepository $partners): Response
+    public function show(Remittance $remittance, RemittanceRepository $remittances, RemittanceReview $review, BasketFeeExpectations $fees, ValidatorInterface $validator, MandatesToPartners $transfer, PartnerRepository $partners, RemittanceReturnRepository $returnRepository, BankReturns $bankReturns): Response
     {
         $previous = $remittances->findLatestOfKind($remittance->getKind(), $remittance->getPeriod());
         $remittances->loadLinesWithPartners($remittance, $previous);
         $expected = $remittance->isDraft() && $remittance->isBasketFees() ? $fees->forMonth($remittance->getPeriod()) : [];
+        $returns = $remittance->isSent() ? $returnRepository->findByRemittance($remittance) : [];
 
         return $this->render('accounting/remittance_show.html.twig', [
             'remittance' => $remittance,
@@ -311,6 +315,16 @@ class RemittanceController extends AbstractController
             // Una enviada dice con qué cuenta y mandato se cobró: lo que las fichas
             // aún no tienen, o tienen distinto.
             'toPartners' => $remittance->isSent() ? $transfer->plan($remittance, $partners->findWithMandate()) : null,
+            // Enviada: sus devoluciones, las del banco aún sin recibo con los que
+            // pueden ser, y los recibos que se pueden dar por devueltos sin apunte.
+            'returns' => $returns,
+            'bankReturns' => $remittance->isSent() ? array_map(
+                static fn (AccountEntry $e): array => ['entry' => $e, 'candidates' => BankReturns::candidatesFor($e, $remittance, $returns)],
+                $bankReturns->unlinkedFor($remittance),
+            ) : [],
+            'notReturned' => $remittance->isSent() ? BankReturns::notReturned($remittance, $returns) : [],
+            // Borrador: lo devuelto que espera a volver a cobrarse.
+            'toRecharge' => $remittance->isDraft() ? $returnRepository->findToRecharge() : [],
         ]);
     }
 
@@ -392,7 +406,7 @@ class RemittanceController extends AbstractController
     /** Tirarla: un borrador, o una importada que se subió mal. */
     #[Route('/{id}/delete', name: 'accounting_remittance_delete', methods: ['POST'], requirements: ['id' => '\d+'])]
     #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
-    public function delete(Request $request, Remittance $remittance, EntityManagerInterface $em): Response
+    public function delete(Request $request, Remittance $remittance, RemittanceReturnRepository $returns, EntityManagerInterface $em): Response
     {
         if (!$this->isCsrfTokenValid('delete-remittance-' . $remittance->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('danger', 'La página había caducado. Vuelve a intentarlo.');
@@ -401,6 +415,12 @@ class RemittanceController extends AbstractController
         }
         if (!$remittance->isDeletable()) {
             $this->addFlash('warning', 'Una remesa enviada desde aquí es el registro de lo que se cobró: no se tira.');
+
+            return $this->redirectToRoute('accounting_remittance_show', ['id' => $remittance->getId()]);
+        }
+        if ($remittance->isSent() && $returns->findByRemittance($remittance) !== []) {
+            // Tirarla se llevaría sus devoluciones y lo decidido con cada una.
+            $this->addFlash('warning', 'Tiene recibos dados por devueltos: quita antes esas devoluciones.');
 
             return $this->redirectToRoute('accounting_remittance_show', ['id' => $remittance->getId()]);
         }

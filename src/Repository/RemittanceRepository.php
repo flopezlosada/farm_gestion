@@ -80,6 +80,17 @@ class RemittanceRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /** El mes de la remesa más antigua: desde ahí se llevan las remesas aquí. */
+    public function firstPeriod(): ?\DateTimeImmutable
+    {
+        $first = $this->createQueryBuilder('r')
+            ->select('MIN(r.period)')
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return $first !== null ? new \DateTimeImmutable((string) $first) : null;
+    }
+
     public function existsFor(string $kind, \DateTimeInterface $period): bool
     {
         return $this->count(['kind' => $kind, 'period' => Remittance::firstOfMonth($period)]) > 0;

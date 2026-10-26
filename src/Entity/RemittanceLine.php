@@ -47,6 +47,9 @@ class RemittanceLine
     /** Lo más largo que admite el banco en las referencias de mandato y adeudo. */
     public const MAX_REFERENCE = 35;
 
+    /** Final de la referencia del adeudo del recibo que vuelve a cobrar uno devuelto. */
+    public const RETRY_SUFFIX = ' DEV';
+
     /**
      * @ORM\Id
      * @ORM\GeneratedValue
@@ -148,6 +151,31 @@ class RemittanceLine
     }
 
     /**
+     * El recibo que vuelve a cobrar uno devuelto: los mismos datos, con «DEV» en la
+     * referencia del adeudo para que no choque con el recibo del mes y para que el
+     * borrador del mes siguiente no lo copie ({@see isRecurring()}).
+     *
+     * La cuenta sale de la ficha si es el mismo mandato, porque lo normal es que la
+     * devolución viniera de una cuenta mal y ya se haya corregido allí. Si el mandato
+     * es otro, la ficha puede ser de quien tiene la cesta y no de quien paga: se deja la
+     * cuenta del recibo, que se cambia en el borrador si hace falta.
+     */
+    public static function retryOf(self $returned): self
+    {
+        $copy = clone $returned;
+        $copy->id = null;
+        $copy->remittance = null;
+        $base = str_ends_with($returned->debitReference, self::RETRY_SUFFIX) ? mb_substr($returned->debitReference, 0, -mb_strlen(self::RETRY_SUFFIX)) : $returned->debitReference;
+        $copy->debitReference = mb_substr($base, 0, self::MAX_REFERENCE - mb_strlen(self::RETRY_SUFFIX)) . self::RETRY_SUFFIX;
+        $partner = $returned->partner;
+        if ($partner?->hasDirectDebit() && $partner->getMandateReference() === $returned->mandateReference) {
+            $copy->iban = self::normalizeIban($partner->getIban());
+        }
+
+        return $copy;
+    }
+
+    /**
      * El mismo recibo para el periodo siguiente: mismos datos, con la referencia del
      * adeudo pasada al mes nuevo.
      */
@@ -185,10 +213,20 @@ class RemittanceLine
         ]));
     }
 
-    /** Si el recibo se repite el mes siguiente: no lo hacen el último de un mandato ni un cobro único. */
+    /**
+     * Si el recibo se repite el mes siguiente: no lo hacen el último de un mandato, un
+     * cobro único ni el que vuelve a cobrar uno devuelto (copiarlo sería cobrarlo dos
+     * veces).
+     */
     public function isRecurring(): bool
     {
-        return !\in_array($this->sequenceType, [self::SEQUENCE_FINAL, self::SEQUENCE_ONE_OFF], true);
+        return !\in_array($this->sequenceType, [self::SEQUENCE_FINAL, self::SEQUENCE_ONE_OFF], true) && !$this->isRetry();
+    }
+
+    /** Si vuelve a cobrar un recibo devuelto: lo dice el final de su referencia ({@see retryOf()}). */
+    public function isRetry(): bool
+    {
+        return str_ends_with($this->debitReference, self::RETRY_SUFFIX);
     }
 
     /** «ES12 … 3456»: para listados, donde la cuenta entera no hace falta. */

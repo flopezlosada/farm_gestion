@@ -6,23 +6,28 @@ use App\Entity\AccountantDelivery;
 use App\Entity\FinancialAccount;
 use App\Entity\IssuedInvoice;
 use App\Entity\Remittance;
+use App\Entity\RemittanceReturn;
+use App\Entity\ReturnStatus;
 use App\Repository\AccountEntryRepository;
 use App\Repository\FinancialAccountRepository;
 use App\Repository\IssuedInvoiceRepository;
 use App\Repository\ReceivedInvoiceRepository;
 use App\Repository\RemittanceRepository;
+use App\Repository\RemittanceReturnRepository;
 use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\AccountantPackage;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\Invoice\InvoiceQuarter;
 use App\Service\Accounting\IssuedInvoice\IssuedInvoiceBook;
 use App\Service\Accounting\MonthNames;
+use App\Service\Accounting\Remittance\BankReturns;
 
 /**
  * Lo que queda por hacer en la contabilidad, para la portada: el libro de los bancos
  * sin meter, la entrega del trimestre a la gestoría (o volver a mandarlo, si se
  * reabrió), la bandeja de facturas, lo
- * emitido sin cobrar, la remesa del mes y los traspasos a medias. Si no devuelve
+ * emitido sin cobrar, la remesa del mes, los recibos devueltos y los traspasos a
+ * medias. Si no devuelve
  * nada, todo está al día.
  *
  * El módulo existe para que el libro esté al día y el paquete de la gestoría llegue
@@ -47,6 +52,7 @@ class AccountingAgenda
         private readonly InvoiceFileStore $files,
         private readonly IssuedInvoiceBook $issuedBook,
         private readonly ClosedPeriods $closed,
+        private readonly RemittanceReturnRepository $returns,
     ) {
     }
 
@@ -68,6 +74,8 @@ class AccountingAgenda
             $this->openReceivedInvoices(),
             ...$this->uncollectedIssuedInvoices($today),
             $this->monthlyRemittance($today),
+            $this->unidentifiedReturns(),
+            $this->openReturns(),
             $this->unpairedTransfers(),
         ]));
 
@@ -366,6 +374,49 @@ class AccountingAgenda
             ['Está preparada pero no se ha marcado como enviada al banco.'],
             'accounting_remittance_show',
             ['id' => $remittance->getId()],
+        );
+    }
+
+    /**
+     * Las devoluciones que trae el banco sin saber aún de quién son. Desde la primera
+     * remesa que se lleva aquí: las de antes no tienen recibo con el que ligarse.
+     */
+    private function unidentifiedReturns(): ?AgendaItem
+    {
+        $from = $this->remittances->firstPeriod();
+        $count = $from !== null ? \count($this->entries->findUnlinkedReturnCharges(BankReturns::RETURN_PREFIX, $from)) : 0;
+        if ($count === 0) {
+            return null;
+        }
+
+        return new AgendaItem(
+            AgendaUrgency::Normal,
+            $count === 1 ? 'Saber de quién es 1 recibo devuelto por el banco' : sprintf('Saber de quién son %d recibos devueltos por el banco', $count),
+            ['El nombre sale en el detalle del movimiento en la web de Fiare. Se elige en la ficha de su remesa, en «Devoluciones».'],
+            'accounting_remittances',
+        );
+    }
+
+    /** Los recibos devueltos con algo por hacer: decidir, o meterlos en una remesa. */
+    private function openReturns(): ?AgendaItem
+    {
+        $open = $this->returns->findOpen();
+        if ($open === []) {
+            return null;
+        }
+
+        $byStatus = array_count_values(array_map(static fn (RemittanceReturn $r): string => $r->getStatus()->value, $open));
+        $details = array_values(array_filter([
+            isset($byStatus[ReturnStatus::Pending->value]) ? sprintf('%d sin decidir qué se hace: es deuda de esa persona.', $byStatus[ReturnStatus::Pending->value]) : null,
+            isset($byStatus[ReturnStatus::ToRecharge->value]) ? sprintf('%d por volver a cobrar: se añaden desde el próximo borrador de remesa.', $byStatus[ReturnStatus::ToRecharge->value]) : null,
+            isset($byStatus[ReturnStatus::Recharging->value]) ? sprintf('%d en un borrador de remesa que falta enviar.', $byStatus[ReturnStatus::Recharging->value]) : null,
+        ]));
+
+        return new AgendaItem(
+            AgendaUrgency::Normal,
+            \count($open) === 1 ? 'Resolver 1 recibo devuelto' : sprintf('Resolver %d recibos devueltos', \count($open)),
+            $details,
+            'accounting_returns',
         );
     }
 

@@ -7,6 +7,7 @@ use App\Entity\BudgetCategoryGroup;
 use App\Entity\FinancialAccount;
 use App\Entity\IssuedInvoice;
 use App\Entity\ReceivedInvoice;
+use App\Entity\RemittanceReturn;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
@@ -518,6 +519,68 @@ class AccountEntryRepository extends ServiceEntityRepository
             ->setParameter('to', $to)
             ->orderBy('e.date', 'ASC')
             ->addOrderBy('e.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Los apuntes cuyo concepto empieza por un prefijo, entre dos fechas: los abonos y
+     * las devoluciones de remesa de Fiare, que llevan la referencia del banco detrás.
+     *
+     * @return list<AccountEntry>
+     */
+    public function findByConceptPrefix(string $prefix, \DateTimeInterface $from, \DateTimeInterface $to): array
+    {
+        return $this->createQueryBuilder('e')
+            ->andWhere('e.concept LIKE :prefix')->setParameter('prefix', addcslashes($prefix, '%_') . '%')
+            ->andWhere('e.date BETWEEN :from AND :to')
+            ->setParameter('from', $from)
+            ->setParameter('to', $to)
+            ->orderBy('e.date', 'ASC')
+            ->addOrderBy('e.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Los apuntes con ese prefijo desde una fecha que aún no son la devolución de
+     * ningún recibo: lo que el banco ha devuelto sin saber todavía de quién es.
+     *
+     * @return list<AccountEntry>
+     */
+    public function findUnlinkedReturnCharges(string $prefix, \DateTimeInterface $from): array
+    {
+        return $this->createQueryBuilder('e')
+            ->leftJoin(RemittanceReturn::class, 'x', 'WITH', 'x.entry = e')
+            ->andWhere('x.id IS NULL')
+            ->andWhere('e.concept LIKE :prefix')->setParameter('prefix', addcslashes($prefix, '%_') . '%')
+            ->andWhere('e.date >= :from')->setParameter('from', $from)
+            ->orderBy('e.date', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Ingresos de un importe desde una fecha, que pueden ser el pago aparte de un
+     * recibo devuelto: una transferencia o lo que se dejó en caja, que no pague ya otra
+     * devolución. Los más antiguos primero, que el pago suele llegar poco después de la devolución.
+     *
+     * @param string $amount Importe positivo, «55.00».
+     *
+     * @return list<AccountEntry>
+     */
+    public function findIncomeOf(string $amount, \DateTimeInterface $from, int $limit = 10): array
+    {
+        return $this->createQueryBuilder('e')
+            ->innerJoin('e.account', 'a')->addSelect('a')
+            ->andWhere('e.amount = :amount')->setParameter('amount', $amount)
+            ->andWhere('e.date >= :from')->setParameter('from', $from)
+            ->andWhere('e.transferPeer IS NULL')
+            ->leftJoin(RemittanceReturn::class, 'x', 'WITH', 'x.paidWith = e')
+            ->andWhere('x.id IS NULL')
+            ->orderBy('e.date', 'ASC')
+            ->addOrderBy('e.id', 'ASC')
+            ->setMaxResults($limit)
             ->getQuery()
             ->getResult();
     }

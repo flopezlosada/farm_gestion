@@ -1,0 +1,85 @@
+{# ============================================================
+ # «Pagado aparte»: elegir el ingreso con que se pagó un recibo devuelto,
+ # entre los de su importe desde el mes de la remesa.
+ #
+ # El controller pasa: return, candidates (apuntes).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
+
+{% set line = return.line %}
+
+{% block title %}Pagado aparte · Recibos devueltos{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_returns') }}">Recibos devueltos</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Pagado aparte</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Contabilidad · Recibos devueltos',
+        'Pagado aparte',
+        'El recibo de ' ~ line.debtorName ~ ' (' ~ line.amount|number_format(2, ',', '.') ~ ' €, ' ~ line.remittance.label ~ ') se devolvió. Elige el ingreso con que lo pagó.'
+    ) }}
+
+    {% if candidates is empty %}
+        <div class="csa-alert csa-alert--info" role="status">
+            <i class="csa-alert__icon fa fa-info-circle" aria-hidden="true"></i>
+            <div class="csa-alert__body">
+                No hay ningún ingreso de {{ fmt.money(line.amount) }} desde {{ line.remittance.period|date('m/Y') }}.
+                Anota primero el pago en el libro (la transferencia del banco o lo que dejó en caja) y vuelve aquí.
+            </div>
+        </div>
+    {% else %}
+        <form method="post">
+            <input type="hidden" name="_token" value="{{ csrf_token('resolve-return-' ~ return.id) }}">
+            <div class="prl-table-wrap">
+                <table class="prl-table">
+                    <thead>
+                        <tr>
+                            <th class="tight"></th>
+                            <th class="tight">Fecha</th>
+                            <th class="tight">Cuenta</th>
+                            <th>Concepto</th>
+                            <th class="tight acc-num">Importe</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in candidates %}
+                            <tr>
+                                <td class="tight"><input type="radio" name="entry" value="{{ entry.id }}" id="entry-{{ entry.id }}" required{{ loop.first and loop.length == 1 ? ' checked' }}></td>
+                                <td class="tight"><label for="entry-{{ entry.id }}">{{ entry.date|date('d/m/Y') }}</label></td>
+                                <td class="tight">{{ entry.account.name }}</td>
+                                <td>{{ entry.concept }}</td>
+                                <td class="acc-num">{{ fmt.money(entry.amount) }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="prl-toolbar">
+                <a href="{{ path('accounting_returns') }}" class="prl-btn">Volver</a>
+                <div class="spacer"></div>
+                <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-link"></i> Lo pagó con este</button>
+            </div>
+        </form>
+    {% endif %}
+
+</div>
+{% endblock %}

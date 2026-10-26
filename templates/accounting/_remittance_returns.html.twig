@@ -1,0 +1,117 @@
+{# ============================================================
+ # Las devoluciones de una remesa enviada (dentro de remittance_show).
+ #
+ # Arriba, las devoluciones que trae el banco y aún no tienen recibo: con
+ # los recibos de su importe para elegir cuál fue (el nombre sólo sale en
+ # el detalle del movimiento en Fiare). Debajo, los recibos ya dados por
+ # devueltos con lo que se puede hacer con cada uno, y dar por devuelto uno
+ # sin apunte (rechazado antes de cobrarse).
+ #
+ # Usa del controller: remittance, returns, bankReturns ({entry,
+ # candidates}), notReturned; y can_edit de remittance_show.
+ # ============================================================ #}
+{% import 'accounting/_money.html.twig' as fmt %}
+{% set return_token = csrf_token('return-remittance-' ~ remittance.id) %}
+
+<h2 class="acc-subhead" id="devoluciones">Devoluciones</h2>
+
+{% if bankReturns is empty and returns is empty %}
+    <p class="acc-muted rem-box">El banco no ha devuelto ningún recibo de esta remesa.</p>
+{% endif %}
+
+{% if bankReturns is not empty %}
+    <p class="acc-muted">
+        El banco ha devuelto {{ bankReturns|length == 1 ? '1 recibo' : bankReturns|length ~ ' recibos' }} y falta saber de quién.
+        El nombre sale en el detalle del movimiento, en la web de Fiare.
+    </p>
+    <div class="prl-table-wrap rem-box">
+        <table class="prl-table">
+            <thead>
+                <tr>
+                    <th class="tight">Fecha</th>
+                    <th>En el banco</th>
+                    <th class="tight acc-num">Importe</th>
+                    <th>Qué recibo es</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in bankReturns %}
+                    <tr>
+                        <td class="tight">{{ row.entry.date|date('d/m/Y') }}</td>
+                        <td class="acc-muted">{{ row.entry.concept }}</td>
+                        <td class="acc-num">{{ fmt.money(row.entry.amount) }}</td>
+                        <td>
+                            {% if row.candidates is empty %}
+                                <span class="rem-warn">Ningún recibo de esta remesa es de {{ fmt.money(-row.entry.amount) }}: será de otro lote del mismo mes.</span>
+                            {% elseif can_edit %}
+                                <form method="post" class="rem-actions" action="{{ path('accounting_return_new') }}">
+                                    <input type="hidden" name="_token" value="{{ return_token }}">
+                                    <input type="hidden" name="entry" value="{{ row.entry.id }}">
+                                    <select name="line" required>
+                                        {% if row.candidates|length > 1 %}<option value="">— {{ row.candidates|length }} recibos de este importe —</option>{% endif %}
+                                        {% for line in row.candidates %}
+                                            <option value="{{ line.id }}">{{ line.debtorName }} · {{ line.debitReference }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-check"></i> Es este</button>
+                                </form>
+                            {% else %}
+                                <span class="acc-muted">{{ row.candidates|length }} recibos de este importe.</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endif %}
+
+{% if returns is not empty %}
+    <div class="prl-table-wrap rem-box">
+        <table class="prl-table">
+            <thead>
+                <tr>
+                    <th>Recibo devuelto</th>
+                    <th class="tight acc-num">Importe</th>
+                    <th class="tight">Devolución</th>
+                    <th>Qué se hace</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ret in returns %}
+                    <tr{{ ret.status.open ? ' class="rem-has-warn"' }}>
+                        <td>
+                            {{ ret.line.debtorName }}
+                            {% if ret.line.partner %}<br><span class="acc-muted acc-small">{{ ret.line.partner.legalName }}</span>{% endif %}
+                        </td>
+                        <td class="acc-num">{{ fmt.money(ret.line.amount) }}</td>
+                        <td class="tight">{{ ret.entry ? ret.entry.date|date('d/m/Y') : 'sin apunte' }}</td>
+                        <td>
+                            {% if can_edit %}
+                                {% include 'accounting/_return_actions.html.twig' with { ret: ret, from: 'remittance' } only %}
+                            {% else %}
+                                {{ ret.status.label }}{{ ret.outcome ? ' · ' ~ ret.outcome.label }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endif %}
+
+{% if can_edit and notReturned is not empty %}
+    <details class="rem-box">
+        <summary class="acc-muted">Dar por devuelto un recibo que no tiene apunte (el banco lo rechazó antes de cobrarlo)</summary>
+        <form method="post" class="rem-actions" action="{{ path('accounting_return_new') }}" style="margin-top: 8px;">
+            <input type="hidden" name="_token" value="{{ return_token }}">
+            <select name="line" required>
+                <option value="">— Elige el recibo —</option>
+                {% for line in notReturned %}
+                    <option value="{{ line.id }}">{{ line.debtorName }} · {{ line.amount|number_format(2, ',', '.') }} €</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="prl-btn"><i class="fa fa-check"></i> Dar por devuelto</button>
+        </form>
+    </details>
+{% endif %}

@@ -110,6 +110,26 @@
         {% endif %}
     {% endif %}
 
+    {% if toRecharge is not empty %}
+        <div class="csa-alert csa-alert--info rem-box" role="status">
+            <i class="csa-alert__icon fa fa-repeat" aria-hidden="true"></i>
+            <div class="csa-alert__body">
+                {{ toRecharge|length == 1 ? 'Hay 1 recibo devuelto' : 'Hay ' ~ toRecharge|length ~ ' recibos devueltos' }} por volver a cobrar:
+                {% for r in toRecharge %}{{ r.line.debtorName }} ({{ fmt.money(r.line.amount) }}, de {{ r.line.remittance.label }}){{ loop.last ? '.' : ', ' }}{% endfor %}
+                {% if editable %}
+                    <form method="post" action="{{ path('accounting_return_recharge_into', { id: remittance.id }) }}" style="margin-top: 10px;">
+                        <input type="hidden" name="_token" value="{{ csrf_token('recharge-into-' ~ remittance.id) }}">
+                        <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Añadirlos a esta remesa</button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+
+    {% if remittance.sent %}
+        {% include 'accounting/_remittance_returns.html.twig' %}
+    {% endif %}
+
     {% if toPartners %}
         {% set fillable = toPartners.mandates|length + toPartners.ibans|length + toPartners.repairs|length %}
         <h2 class="acc-subhead">Con las fichas</h2>
