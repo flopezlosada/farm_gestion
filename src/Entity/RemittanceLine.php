@@ -148,6 +148,29 @@ class RemittanceLine
     }
 
     /**
+     * El recibo que vuelve a cobrar uno devuelto: los mismos datos, con «DEV» en la
+     * referencia del adeudo para que no choque con el recibo del mes.
+     *
+     * La cuenta sale de la ficha si es el mismo mandato, porque lo normal es que la
+     * devolución viniera de una cuenta mal y ya se haya corregido allí. Si el mandato
+     * es otro, la ficha puede ser de quien tiene la cesta y no de quien paga: se deja la
+     * cuenta del recibo, que se cambia en el borrador si hace falta.
+     */
+    public static function retryOf(self $returned): self
+    {
+        $copy = clone $returned;
+        $copy->id = null;
+        $copy->remittance = null;
+        $copy->debitReference = mb_substr($returned->debitReference, 0, self::MAX_REFERENCE - 4) . ' DEV';
+        $partner = $returned->partner;
+        if ($partner?->hasDirectDebit() && $partner->getMandateReference() === $returned->mandateReference) {
+            $copy->iban = self::normalizeIban($partner->getIban());
+        }
+
+        return $copy;
+    }
+
+    /**
      * El mismo recibo para el periodo siguiente: mismos datos, con la referencia del
      * adeudo pasada al mes nuevo.
      */

@@ -26,6 +26,7 @@ use App\Repository\PartnerPauseRepository;
 use App\Repository\PartnerRepository;
 use App\Repository\PushSubscriptionRepository;
 use App\Repository\RemittanceRepository;
+use App\Repository\RemittanceReturnRepository;
 use App\Service\Delivery\CohortChoiceBuilder;
 use App\Repository\WeeklyBasketGroupRepository;
 use App\Security\MagicLinkMailer;
@@ -310,6 +311,7 @@ class PartnerController extends AbstractController
         FeeAdjustmentRepository $feeAdjustments,
         MonthlyFeeCalculator $feeCalculator,
         PartnerPauseRepository $pauseRepository,
+        RemittanceReturnRepository $returns,
     ): Response {
         $events = $partnerEventRepository->findForPartner($partner);
 
@@ -387,6 +389,8 @@ class PartnerController extends AbstractController
             'fee_adjustments' => $feeAdjustments->findForPartner($partner),
             'this_month' => FeeAdjustment::month(new \DateTimeImmutable('today')),
             'fee_statement' => $feeCalculator->forMonth(new \DateTimeImmutable('today'))->forPartner($partner),
+            // Recibos que el banco le devolvió y siguen sin resolver: su deuda.
+            'open_returns' => $this->isGranted('FEATURE_CONTABILIDAD') && $this->isGranted('ROLE_GESTION_CONTABILIDAD') ? $returns->findOpen($partner) : [],
             // Cuenta utilizable por email canónico (puede ser la de un familiar
             // con buzón compartido, a diferencia de linked_user que va por la
             // relación User->Partner). Alimenta la tarjeta "Acceso a la web".
