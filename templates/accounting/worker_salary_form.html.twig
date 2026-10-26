@@ -1,0 +1,68 @@
+{# ============================================================
+ # Poner o corregir un tramo de sueldo de un trabajador.
+ #
+ # El controller pasa: form, worker, salary (null al crear).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}{{ worker.name }} · Trabajadores{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_workers') }}">Trabajadores</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ salary ? 'Corregir sueldo' : 'Sueldo nuevo' }}</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header(
+        'Contabilidad · Trabajadores',
+        worker.name,
+        salary ? 'Corregir este sueldo: una errata, o ponerle fecha de fin.' : 'Un sueldo nuevo. Si tenía otro abierto, se cierra el día antes de que empiece éste.'
+    ) }}
+
+    {{ form_start(form, { attr: { class: 'csa-form-narrow' } }) }}
+
+        {{ form_errors(form) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Cuándo', subtitle: 'Los días que cobra este sueldo.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.validFrom, 'Desde', { hint: 'el primer día con este sueldo' }) }}
+                        {{ csa.field(form.validTo, 'Hasta', { hint: 'vacío si sigue; con fecha si es temporero o se va' }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Cuánto', subtitle: 'Lo que dice el contrato y la nómina de la gestoría.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.annualGross, 'Bruto anual (€)', { hint: 'el del año entero, con las pagas extra' }) }}
+                        {{ csa.field(form.employerSsRate, 'Seguridad Social de la empresa (%)', { hint: '«aportación empresa» de la nómina entre el bruto; ronda el 31 %' }) }}
+                        {{ csa.field(form.payments, 'Pagas', { full: true }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('accounting_workers') }) }}
+                    {{ form_widget(form.submit, { attr: { class: 'csa-btn csa-btn--primary' } }) }}
+                </div>
+            </div>
+
+        </div>
+
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
+{% endblock %}

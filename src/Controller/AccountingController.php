@@ -161,19 +161,25 @@ class AccountingController extends AbstractController
 
     /**
      * Índice de los ajustes: los catálogos que se tocan al empezar y rara vez después.
+     * Los sueldos de los trabajadores sólo salen a quien administra la aplicación.
      */
     #[Route('/settings', name: 'accounting_settings', methods: ['GET'])]
     public function settings(): Response
     {
+        $links = [
+            ['route' => 'accounting_accounts', 'params' => [], 'icon' => 'fa-university', 'title' => 'Cuentas', 'text' => 'Bancos y cajas de efectivo, con su saldo de apertura.'],
+            ['route' => 'accounting_categories', 'params' => [], 'icon' => 'fa-tags', 'title' => 'Partidas', 'text' => 'En qué se ingresa y en qué se gasta.'],
+            ['route' => 'accounting_providers', 'params' => [], 'icon' => 'fa-truck', 'title' => 'Proveedores', 'text' => 'A quién se le compra.'],
+            ['route' => 'accounting_customers', 'params' => [], 'icon' => 'fa-users', 'title' => 'Clientes', 'text' => 'A quién se le factura.'],
+        ];
+        if ($this->isGranted('ROLE_ADMIN')) {
+            $links[] = ['route' => 'accounting_workers', 'params' => [], 'icon' => 'fa-id-card-o', 'title' => 'Trabajadores', 'text' => 'Lo que cuesta cada persona contratada, mes a mes.'];
+        }
+
         return $this->render('accounting/hub.html.twig', [
             'title' => 'Ajustes',
             'intro' => 'Los catálogos del módulo: se preparan al empezar y se tocan poco.',
-            'links' => [
-                ['route' => 'accounting_accounts', 'params' => [], 'icon' => 'fa-university', 'title' => 'Cuentas', 'text' => 'Bancos y cajas de efectivo, con su saldo de apertura.'],
-                ['route' => 'accounting_categories', 'params' => [], 'icon' => 'fa-tags', 'title' => 'Partidas', 'text' => 'En qué se ingresa y en qué se gasta.'],
-                ['route' => 'accounting_providers', 'params' => [], 'icon' => 'fa-truck', 'title' => 'Proveedores', 'text' => 'A quién se le compra.'],
-                ['route' => 'accounting_customers', 'params' => [], 'icon' => 'fa-users', 'title' => 'Clientes', 'text' => 'A quién se le factura.'],
-            ],
+            'links' => $links,
         ]);
     }
 

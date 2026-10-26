@@ -4,10 +4,12 @@ namespace App\Tests\Controller;
 
 use App\Entity\Absence;
 use App\Entity\Notification;
+use App\Entity\PaySchedule;
 use App\Entity\Setting;
 use App\Entity\TimeEntry;
 use App\Entity\User;
 use App\Entity\Worker;
+use App\Entity\WorkerSalary;
 use App\Service\AppSettings;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -53,6 +55,9 @@ class StaffControllerTest extends WebTestCase
         }
         foreach ($em->getRepository(Absence::class)->findAll() as $a) {
             $em->remove($a);
+        }
+        foreach ($em->getRepository(WorkerSalary::class)->findAll() as $salary) {
+            $em->remove($salary);
         }
         $em->flush();
         foreach ($em->getRepository(User::class)->findAll() as $u) {
@@ -281,6 +286,60 @@ class StaffControllerTest extends WebTestCase
         $this->em->clear();
         $this->assertNotNull($this->em->getRepository(Worker::class)->find($id));
         $this->assertCount(1, $this->em->getRepository(TimeEntry::class)->findAll());
+    }
+
+    /**
+     * Los sueldos son el histórico de costes de contabilidad, que gestión laboral no
+     * ve: borrar la ficha no puede llevárselos.
+     */
+    public function testDeleteBlockedWhenTheWorkerHasSalaries(): void
+    {
+        $worker = $this->makeWorker();
+        $id = $worker->getId();
+        $this->addSalary($worker);
+
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $id);
+        $token = $crawler->filter('#confirm-worker-delete input[name="_token"]')->attr('value');
+
+        $this->client->request('POST', '/gestion/staff/' . $id, ['_token' => $token]);
+        $this->assertResponseRedirects('/gestion/staff/' . $id);
+
+        $this->em->clear();
+        $this->assertNotNull($this->em->getRepository(Worker::class)->find($id));
+        $this->assertCount(1, $this->em->getRepository(WorkerSalary::class)->findBy(['worker' => $id]));
+    }
+
+    /**
+     * El borrado forzado de admin (limpieza de pruebas) sí se lleva los sueldos.
+     */
+    public function testAdminForceDeleteRemovesSalaries(): void
+    {
+        $worker = $this->makeWorker();
+        $id = $worker->getId();
+        $this->addSalary($worker);
+
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $id);
+        $token = $crawler->filter('#confirm-worker-delete input[name="_token"]')->attr('value');
+
+        $this->client->request('POST', '/gestion/staff/' . $id, ['_token' => $token, 'force' => '1']);
+        $this->assertResponseRedirects('/gestion/staff');
+
+        $this->em->clear();
+        $this->assertNull($this->em->getRepository(Worker::class)->find($id));
+        $this->assertSame([], $this->em->getRepository(WorkerSalary::class)->findBy(['worker' => $id]));
+    }
+
+    /**
+     * Un sueldo abierto de 21.000 € en 14 pagas.
+     */
+    private function addSalary(Worker $worker): void
+    {
+        $this->em->persist((new WorkerSalary())->setWorker($worker)
+            ->setValidFrom(new \DateTimeImmutable('2026-01-01'))
+            ->setAnnualGross('21000.00')
+            ->setPayments(PaySchedule::Fourteen)
+            ->setEmployerSsRate('30.00'));
+        $this->em->flush();
     }
 
     public function testDayShowsHowEachEntryCameInAndWhatWasVoided(): void
