@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\AccountEntry;
 use App\Entity\BudgetCategoryGroup;
 use App\Entity\FinancialAccount;
+use App\Entity\ReceivedInvoice;
 use App\Entity\User;
 use App\Form\AccountEntryType;
 use App\Form\AccountTransferType;
@@ -440,7 +441,9 @@ class AccountingController extends AbstractController
         InvoiceFileStore $files,
         ClosedPeriods $closed,
     ): Response {
-        $invoice = $invoices->findOneBy(['accountEntry' => $entry]);
+        // Un pago agrupado explica varias facturas: el documento es el de la primera.
+        $paid = $invoices->findBy(['accountEntry' => $entry], ['id' => 'ASC']);
+        $invoice = $paid[0] ?? null;
         $loose = $entry->isLooseTransfer();
         // La pareja va en sentido contrario: si éste entra, la otra sale.
         $nearby = $loose ? array_values(array_filter(
@@ -451,6 +454,7 @@ class AccountingController extends AbstractController
         return $this->render('accounting/entry_show.html.twig', [
             'entry' => $entry,
             'invoice' => $invoice,
+            'otherInvoices' => \array_slice($paid, 1),
             'issuedInvoice' => $issuedInvoices->findOneBy(['accountEntry' => $entry]),
             'hasDocument' => $invoice !== null && $files->pathTo($invoice->getFileName()) !== null,
             // En un trimestre entregado no se ofrece cambiarlo: lo pararía el guardado.
@@ -607,15 +611,17 @@ class AccountingController extends AbstractController
             $transfers->remove($entry);
             $done = 'Traspaso borrado, con sus dos mitades.';
         } else {
-            $invoice = $invoices->findOneBy(['accountEntry' => $entry]);
-            $invoice?->reopen();
+            // Todas las que explicaba vuelven a la bandeja, también las de un pago agrupado.
+            $paid = $invoices->findBy(['accountEntry' => $entry]);
+            array_walk($paid, static fn (ReceivedInvoice $i) => $i->reopen());
             // El cobro de una emitida se desliga solo (SET NULL), pero sin avisar la
             // factura pasaría a «sin cobrar» sin que nadie lo supiera.
             $issued = $issuedInvoices->findOneBy(['accountEntry' => $entry]);
             $issued?->unmarkPaid();
             $em->remove($entry);
             $done = match (true) {
-                $invoice !== null => 'Apunte borrado. Su factura vuelve a la bandeja.',
+                \count($paid) > 1 => sprintf('Apunte borrado. Sus %d facturas vuelven a la bandeja.', \count($paid)),
+                $paid !== [] => 'Apunte borrado. Su factura vuelve a la bandeja.',
                 $issued !== null => sprintf('Apunte borrado. La factura %s vuelve a estar sin cobrar.', $issued->getNumberLabel()),
                 default => 'Apunte borrado.',
             };

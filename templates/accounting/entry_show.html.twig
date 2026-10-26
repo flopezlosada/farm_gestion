@@ -5,6 +5,7 @@
  # dentro de la página). Sin factura, la ficha ocupa todo el ancho.
  #
  # El controller pasa: entry, invoice (la factura de la que salió, o null),
+ # otherInvoices (las demás que paga, si es el pago agrupado de varias),
  # issuedInvoice (la emitida de la que este apunte es el cobro, o null),
  # hasDocument (si el fichero de esa factura está en el servidor), closedBy (la
 # entrega a la gestoría que cierra su trimestre, o null), y para un
@@ -109,6 +110,11 @@
             {% if invoice %}
                 <h2 class="ent-h"><a href="{{ path('accounting_invoice_review', { id: invoice.id }) }}">La factura</a></h2>
                 {{ invm.facts(invoice) }}
+                {% if otherInvoices is not empty %}
+                    <p class="acc-muted">Este pago explica también
+                        {% for other in otherInvoices %}<a href="{{ path('accounting_invoice_review', { id: other.id }) }}">{{ other.invoiceNumber ?? 'la del ' ~ other.invoiceDate|date('d/m/Y') }}</a> ({{ fmt.money(other.total) }}){{ loop.last ? '.' : (loop.revindex == 2 ? ' y ' : ', ') }}{% endfor %}
+                    </p>
+                {% endif %}
             {% endif %}
 
             {% if editable %}
@@ -117,7 +123,7 @@
                         {{ csa.btn('Corregir', { variant: 'primary', href: path('accounting_entry_edit', { id: entry.id }), icon: 'fa-pencil' }) }}
                     {% endif %}
                     <form method="post" action="{{ path('accounting_entry_delete', { id: entry.id }) }}" style="display:inline;"
-                          onsubmit="return confirm('{{ entry.pairedTransfer ? '¿Borrar el traspaso? Se van los dos apuntes.' : (invoice ? '¿Borrar el apunte? La factura vuelve a la bandeja para anotarla de nuevo.' : (issuedInvoice ? '¿Borrar el apunte? La factura ' ~ issuedInvoice.numberLabel ~ ' volverá a estar sin cobrar.' : '¿Borrar el apunte?')) }}');">
+                          onsubmit="return confirm('{{ entry.pairedTransfer ? '¿Borrar el traspaso? Se van los dos apuntes.' : (otherInvoices is not empty ? '¿Borrar el apunte? Sus ' ~ (otherInvoices|length + 1) ~ ' facturas vuelven a la bandeja.' : (invoice ? '¿Borrar el apunte? La factura vuelve a la bandeja para anotarla de nuevo.' : (issuedInvoice ? '¿Borrar el apunte? La factura ' ~ issuedInvoice.numberLabel ~ ' volverá a estar sin cobrar.' : '¿Borrar el apunte?'))) }}');">
                         <input type="hidden" name="_token" value="{{ csrf_token('accounting_entry_delete_' ~ entry.id) }}">
                         <button type="submit" class="csa-btn csa-btn--ghost"><i class="fa fa-trash"></i> <span>Borrar</span></button>
                     </form>

@@ -82,7 +82,7 @@ class QuarterCashBook
      * La hoja de una cuenta.
      *
      * @param list<AccountEntry> $moves          Sus apuntes del trimestre, por fecha.
-     * @param array<int, int>    $invoiceByEntry Factura de cada apunte que la tiene.
+     * @param array<int, list<int>> $invoiceByEntry Facturas de cada apunte que las tiene.
      * @param array<int, string> $fileByInvoice  Nombre en el ZIP de cada factura del trimestre.
      */
     private function sheet(Worksheet $sheet, FinancialAccount $account, InvoiceQuarter $quarter, array $moves, array $invoiceByEntry, array $fileByInvoice): void
@@ -99,7 +99,11 @@ class QuarterCashBook
         foreach ($moves as $entry) {
             $amount = (float) $entry->getAmount();
             $balance += $amount;
-            $invoice = $invoiceByEntry[(int) $entry->getId()] ?? null;
+            // Un pago agrupado nombra todos sus ficheros: cada factura del ZIP tiene su pago.
+            $files = array_unique(array_map(
+                static fn (int $invoice): string => $fileByInvoice[$invoice] ?? 'en el envío de otro trimestre',
+                $invoiceByEntry[(int) $entry->getId()] ?? [],
+            ));
             $sheet->fromArray([
                 ExcelDate::PHPToExcel($entry->getDate()),
                 $entry->getCategory()?->getName(),
@@ -109,7 +113,7 @@ class QuarterCashBook
                 $amount > 0 ? $amount : null,
                 $amount < 0 ? -$amount : null,
                 round($balance, 2),
-                $invoice === null ? null : ($fileByInvoice[$invoice] ?? 'en el envío de otro trimestre'),
+                $files === [] ? null : implode(', ', $files),
             ], null, 'A'.$row, true);
             ++$row;
         }

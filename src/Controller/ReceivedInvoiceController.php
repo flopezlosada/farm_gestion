@@ -12,6 +12,7 @@ use App\Form\ReceivedInvoiceUploadType;
 use App\Repository\AccountEntryRepository;
 use App\Repository\BudgetCategoryRepository;
 use App\Repository\ReceivedInvoiceRepository;
+use App\Service\Accounting\Invoice\GroupedPaymentFinder;
 use App\Service\Accounting\Invoice\InvoiceEntryDraft;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\Invoice\InvoiceProviderResolver;
@@ -130,6 +131,7 @@ class ReceivedInvoiceController extends AbstractController
         InvoiceProviderResolver $providers,
         InvoiceFileStore $files,
         AccountEntryRepository $entries,
+        GroupedPaymentFinder $groupedPayments,
     ): Response {
         if (!$invoice->isOpen()) {
             // Anotada o descartada ya no se revisa: se enseña tal como quedó. Un envío
@@ -152,10 +154,17 @@ class ReceivedInvoiceController extends AbstractController
         $candidates = (float) $entry->getAmount() !== 0.0 && $entry->getDate() !== null
             ? $entries->findPaymentCandidates($entry->getAmount(), $entry->getDate())
             : [];
+        // El pago de varias facturas del mismo proveedor a la vez, si lo hay.
+        $grouped = $groupedPayments->for($invoice);
+        $othersByPayment = [];
+        foreach ($grouped as $group) {
+            $othersByPayment[$group->payment->getId()] = $group->others;
+        }
         $form = $this->createForm(ReceivedInvoiceConfirmType::class, $invoice, [
             'entry' => $entry,
             'provider' => $providers->knownFor($invoice),
             'candidates' => $candidates,
+            'grouped' => $grouped,
         ]);
         $form->handleRequest($request);
 
@@ -171,13 +180,18 @@ class ReceivedInvoiceController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             /** @var AccountEntry|null $match */
             $match = $form->has('match') ? $form->get('match')->getData() : null;
+            $others = $match !== null ? ($othersByPayment[$match->getId()] ?? []) : [];
             $entry->setCreatedBy($this->currentUser());
-            $confirmed = $this->confirmOnce($em, $invoices, $invoice, static function () use ($em, $invoice, $entry, $match, $providers, $chosen): void {
+            $confirmed = $this->confirmOnce($em, $invoices, [$invoice, ...$others], static function () use ($em, $invoice, $entry, $match, $others, $providers, $chosen): void {
                 $provider = $providers->resolve($invoice, $entry, $chosen);
                 if ($match !== null) {
                     // El pago ya estaba en el libro: la factura lo explica, no lo repite.
+                    // Si paga también otras del mismo proveedor, van con ella.
                     $match->completeFrom($entry);
                     $invoice->confirm($match, $provider);
+                    foreach ($others as $other) {
+                        $other->confirm($match, $provider);
+                    }
 
                     return;
                 }
@@ -185,13 +199,17 @@ class ReceivedInvoiceController extends AbstractController
                 $em->persist($entry);
             });
             if (!$confirmed) {
-                $this->addFlash('warning', 'Esta factura ya estaba anotada: no se ha creado otro apunte.');
+                $this->addFlash('warning', $others === []
+                    ? 'Esta factura ya estaba anotada: no se ha creado otro apunte.'
+                    : 'Alguna de esas facturas ya estaba anotada: no se ha enganchado ninguna.');
 
                 return $this->redirectToRoute('accounting_invoices');
             }
-            $done = $match !== null
-                ? sprintf('Enganchada al pago que ya estaba en el libro: %s.', $match->getConcept())
-                : sprintf('Anotado: %s.', $entry->getConcept());
+            $done = match (true) {
+                $others !== [] => sprintf('Enganchadas %d facturas al pago que ya estaba en el libro: %s.', \count($others) + 1, $match->getConcept()),
+                $match !== null => sprintf('Enganchada al pago que ya estaba en el libro: %s.', $match->getConcept()),
+                default => sprintf('Anotado: %s.', $entry->getConcept()),
+            };
 
             // Quien confirma suele ir una tras otra: la siguiente lista para revisar.
             // El aviso lo dice, porque habla de la factura anterior y la pantalla ya
@@ -308,23 +326,26 @@ class ReceivedInvoiceController extends AbstractController
     }
 
     /**
-     * Confirma la factura y guarda su apunte, una sola vez aunque lleguen dos
-     * peticiones a la vez. Si otra se adelantó, deshace y no guarda nada: tampoco los
+     * Confirma las facturas (la revisada y, en un pago agrupado, las que van con ella)
+     * y guarda su apunte, una sola vez aunque lleguen dos peticiones a la vez. Si otra
+     * se adelantó con cualquiera de ellas, deshace y no guarda nada: tampoco los
      * cambios del formulario, que pisarían la factura ya confirmada.
      *
      * Transacción a mano y no wrapInTransaction(), que hace flush() siempre al
      * terminar, también cuando no hay que guardar.
      *
-     * @param \Closure $write Lo que convierte la factura en apunte; el flush va aquí.
+     * @param list<ReceivedInvoice> $all   Las que se confirman.
+     * @param \Closure              $write Lo que convierte la factura en apunte; el flush va aquí.
      *
-     * @return bool False si la factura ya no estaba abierta.
+     * @return bool False si alguna ya no estaba abierta.
      */
-    private function confirmOnce(EntityManagerInterface $em, ReceivedInvoiceRepository $invoices, ReceivedInvoice $invoice, \Closure $write): bool
+    private function confirmOnce(EntityManagerInterface $em, ReceivedInvoiceRepository $invoices, array $all, \Closure $write): bool
     {
         $connection = $em->getConnection();
         $connection->beginTransaction();
         try {
-            if (!$invoices->reserveForConfirmation($invoice)) {
+            $reserved = array_filter($all, static fn (ReceivedInvoice $i): bool => $invoices->reserveForConfirmation($i));
+            if (\count($reserved) !== \count($all)) {
                 $connection->rollBack();
                 $em->clear();
 
