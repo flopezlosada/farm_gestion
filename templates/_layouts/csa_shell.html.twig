@@ -505,9 +505,9 @@
                         <div class="csa-navgroup{{ sec_collapsed }}">
                             <button type="button" class="csa-navgroup__head">Contabilidad <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
                             <div class="csa-navgroup__items">
-                                {# 6 entradas por el ritmo de trabajo: lo pendiente, lo diario (movimientos,
+                                {# 6 entradas por el ritmo de trabajo: el inicio (saldos y lo pendiente), lo diario (movimientos,
                                  # facturas), lo mensual (remesas) y lo de vez en cuando (informes, ajustes). #}
-                                {{ _self.nav_link('Pendiente', path('accounting_index'), 'fa-check-square-o',
+                                {{ _self.nav_link('Inicio', path('accounting_index'), 'fa-dashboard',
                                    route == 'accounting_index') }}
                                 {{ _self.nav_link('Movimientos', path('accounting_ledger'), 'fa-list',
                                    route starts with 'accounting_ledger' or route starts with 'accounting_month' or route starts with 'accounting_entry' or route starts with 'accounting_transfer') }}

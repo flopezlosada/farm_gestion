@@ -24,10 +24,12 @@
 
 {% block more_css %}
     {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
     {% include 'accounting/_styles.html.twig' %}
 {% endblock %}
 
 {% block csa_main %}
+<div class="prl">
     {% set entry = invoice.accountEntry %}
     {% set providerName = invoice.provider ? invoice.provider.name : (invoice.providerName ?? invoice.originalName) %}
 
@@ -37,12 +39,18 @@
         invoice.status == 'confirmed' ? 'Anotada en el libro.' : 'Descartada: no se anotó.'
     ) }}
 
-    <div class="ent-show">
+    <div class="ent-show{{ hasDocument ? '' : ' ent-show--solo' }}">
         <div class="ent-doc">
             {{ invm.document(invoice, hasDocument, 'ent-doc') }}
         </div>
 
-        <div>
+        <div class="ent-panel">
+            {% if invoice.total is not null %}
+                <div class="ent-amount">
+                    <span class="v">{{ invoice.total|number_format(2, ',', '.') }} €</span>
+                    <span class="l">total de la factura{{ invoice.invoiceDate ? ' del ' ~ invoice.invoiceDate|date('d/m/Y') : '' }}</span>
+                </div>
+            {% endif %}
             <dl class="ent-facts">
                 <dt>Estado</dt>
                 <dd>{{ invoice.status == 'confirmed' ? csa.badge('Anotada', 'green') : csa.badge('Descartada', 'neutral') }}</dd>
@@ -69,14 +77,17 @@
                     <dt>Leída</dt>
                     <dd>{{ invoice.readAt ? invoice.readAt|date('d/m/Y H:i') : '—' }} <span class="acc-muted">· {{ invoice.readByModel }}</span></dd>
                 {% endif %}
+                {% if invoice.invoiceNumber %}
+                    <dt>Nº de factura</dt>
+                    <dd>{{ invoice.invoiceNumber }}</dd>
+                {% endif %}
+                {{ invm.fact_rows(invoice, invoice.total is null) }}
             </dl>
 
-            <h2 class="ent-h">La factura</h2>
-            {{ invm.facts(invoice) }}
-
-            <div class="csa-row" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+            <div class="ent-actions">
                 {{ csa.btn('Volver a facturas', { variant: 'ghost', href: path('accounting_invoices') }) }}
             </div>
         </div>
     </div>
+</div>
 {% endblock %}

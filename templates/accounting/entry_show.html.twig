@@ -33,17 +33,21 @@
 
 {% block more_css %}
     {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
     {% include 'accounting/_styles.html.twig' %}
 {% endblock %}
 
 {% block csa_main %}
+<div class="prl">
     {% import _self as here %}
     {% set editable = is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') and closedBy is null %}
 
+    {# El concepto del banco es una tira larga («trf. semilleros alvarez…»): de título
+     # va quién es, si se sabe, y el concepto entero queda en la ficha. #}
     {{ csa.page_header(
-        'Contabilidad · Movimiento',
-        entry.concept,
-        entry.date|date('d/m/Y') ~ ' · ' ~ entry.account.name
+        'Contabilidad · Apunte',
+        entry.providerName ?: entry.concept|u.truncate(70, '…', false),
+        entry.date|date('d/m/Y') ~ ' · ' ~ entry.account.name ~ (entry.category ? ' · ' ~ entry.category.name : '')
     ) }}
 
     {% if closedBy %}
@@ -57,7 +61,8 @@
         </p>
     {% endif %}
 
-    <div class="ent-show{{ invoice ? '' : ' ent-show--solo' }}">
+    {# Sin documento que enseñar, a una columna: media pantalla vacía no dice nada. #}
+    <div class="ent-show{{ invoice and hasDocument ? '' : ' ent-show--solo' }}">
 
         {% if invoice %}
             <div class="ent-doc">
@@ -65,14 +70,21 @@
             </div>
         {% endif %}
 
-        <div>
+        <div class="ent-panel">
+            <div class="ent-amount">
+                <span class="v {{ entry.incoming ? '' : 'acc-neg' }}">{{ entry.amount|number_format(2, ',', '.') }} €</span>
+                <span class="l">{{ entry.incoming ? 'entra en' : 'sale de' }} {{ entry.account.name }} el {{ entry.date|date('d/m/Y') }}</span>
+            </div>
+
+            {# Una sola lista: lo del apunte y, si vino de una factura, lo que sólo dice la
+             # factura. Antes eran dos bloques que repetían fecha, proveedor y número. #}
             <dl class="ent-facts">
-                <dt>Importe</dt>
-                <dd><b>{{ fmt.money(entry.amount) }}</b> <span class="acc-muted">({{ entry.incoming ? 'entra' : 'sale' }})</span></dd>
+                <dt>Concepto</dt>
+                <dd>{{ entry.concept }}</dd>
                 <dt>Partida</dt>
-                <dd>{{ entry.category ? entry.category.group.name ~ ' / ' ~ entry.category.name : '—' }}</dd>
+                <dd>{% if entry.category %}<a href="{{ path('accounting_category_show', { id: entry.category.id }) }}">{{ entry.category.name }}</a> <span class="acc-muted">· {{ entry.category.group.name }}</span>{% else %}—{% endif %}</dd>
                 <dt>Cuenta</dt>
-                <dd>{{ entry.account.name }}</dd>
+                <dd><a href="{{ path('accounting_ledger', { account: entry.account.id }) }}">{{ entry.account.name }}</a></dd>
                 {% if entry.pairedTransfer %}
                     <dt>Traspaso</dt>
                     <dd>{{ entry.incoming ? 'desde' : 'hacia' }} <a href="{{ path('accounting_entry_show', { id: entry.transferPeer.id }) }}">{{ entry.transferPeer.account.name }}</a></dd>
@@ -93,70 +105,86 @@
                 {% endif %}
                 {% if entry.invoiceNumber %}
                     <dt>Nº de factura</dt>
-                    <dd>{{ entry.invoiceNumber }}</dd>
+                    <dd>
+                        {% if invoice %}<a href="{{ path('accounting_invoice_review', { id: invoice.id }) }}" title="Ver la factura">{{ entry.invoiceNumber }}</a>{% else %}{{ entry.invoiceNumber }}{% endif %}
+                    </dd>
+                {% endif %}
+                {% if invoice %}
+                    {# El total sólo si no es el importe de arriba: en un pago agrupado, el
+                     # apunte paga varias y cada una tiene el suyo. #}
+                    {{ invm.fact_rows(invoice, otherInvoices is not empty) }}
                 {% endif %}
                 {% if entry.notes %}
                     <dt>Notas</dt>
                     <dd>{{ entry.notes|nl2br }}</dd>
                 {% endif %}
                 <dt>Anotado</dt>
-                <dd>{{ entry.createdAt ? entry.createdAt|date('d/m/Y H:i') : '—' }}{% if entry.createdBy %} por {{ entry.createdBy.username }}{% endif %}</dd>
+                <dd class="acc-muted">{{ entry.createdAt ? entry.createdAt|date('d/m/Y H:i') : '—' }}{% if entry.createdBy %} por {{ entry.createdBy.username }}{% endif %}</dd>
             </dl>
 
-            {% if entry.looseTransfer %}
-                {{ here.loose_transfer(entry, nearbyLoose, pairable, peerAccounts, editable) }}
-            {% endif %}
-
-            {% if invoice %}
-                <h2 class="ent-h"><a href="{{ path('accounting_invoice_review', { id: invoice.id }) }}">La factura</a></h2>
-                {{ invm.facts(invoice) }}
-                {% if otherInvoices is not empty %}
-                    <p class="acc-muted">Este pago explica también
-                        {% for other in otherInvoices %}<a href="{{ path('accounting_invoice_review', { id: other.id }) }}">{{ other.invoiceNumber ?? ('la del ' ~ other.invoiceDate|date('d/m/Y')) }}</a> ({{ fmt.money(other.total) }}){{ loop.last ? '.' : (loop.revindex == 2 ? ' y ' : ', ') }}{% endfor %}
-                    </p>
-                {% endif %}
+            {% if otherInvoices is not empty %}
+                <p class="acc-lead">Este pago explica también
+                    {% for other in otherInvoices %}<a href="{{ path('accounting_invoice_review', { id: other.id }) }}">{{ other.invoiceNumber ?? ('la del ' ~ other.invoiceDate|date('d/m/Y')) }}</a> ({{ fmt.money(other.total) }}){{ loop.last ? '.' : (loop.revindex == 2 ? ' y ' : ', ') }}{% endfor %}
+                </p>
             {% endif %}
 
             {% if editable %}
-                <div class="csa-row" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div class="ent-actions">
                     {% if not entry.pairedTransfer %}
                         {{ csa.btn('Corregir', { variant: 'primary', href: path('accounting_entry_edit', { id: entry.id }), icon: 'fa-pencil' }) }}
                     {% endif %}
                     <form method="post" action="{{ path('accounting_entry_delete', { id: entry.id }) }}" style="display:inline;"
                           onsubmit="return confirm('{{ entry.pairedTransfer ? '¿Borrar el traspaso? Se van los dos apuntes.' : (otherInvoices is not empty ? '¿Borrar el apunte? Sus ' ~ (otherInvoices|length + 1) ~ ' facturas vuelven a la bandeja.' : (invoice ? '¿Borrar el apunte? La factura vuelve a la bandeja para anotarla de nuevo.' : (issuedInvoice ? '¿Borrar el apunte? La factura ' ~ issuedInvoice.numberLabel ~ ' volverá a estar sin cobrar.' : '¿Borrar el apunte?'))) }}');">
                         <input type="hidden" name="_token" value="{{ csrf_token('accounting_entry_delete_' ~ entry.id) }}">
-                        <button type="submit" class="csa-btn csa-btn--ghost"><i class="fa fa-trash"></i> <span>Borrar</span></button>
+                        <button type="submit" class="csa-btn csa-btn--ghost"><i class="fa fa-trash"></i> <span>{{ entry.pairedTransfer ? 'Borrar el traspaso' : 'Borrar' }}</span></button>
                     </form>
                 </div>
             {% endif %}
         </div>
     </div>
+
+    {% if entry.looseTransfer %}
+        {{ here.loose_transfer(entry, nearbyLoose, pairable, peerAccounts, editable) }}
+    {% endif %}
+</div>
 {% endblock %}
 
 {# Un traspaso al que le falta la otra mitad: la portada manda aquí. Se arregla
  # emparejándolo con la mitad ya anotada en la otra cuenta o anotando la que falta. #}
 {% macro loose_transfer(entry, nearby, pairable, accounts, editable) %}
     {% import 'accounting/_money.html.twig' as fmt %}
-    <h2 class="ent-h">Le falta la otra mitad</h2>
-    <p class="acc-muted">
+    <h2 class="acc-subhead">Le falta la otra mitad</h2>
+    <p class="acc-lead">
         Un traspaso son dos apuntes que se anulan: lo que sale de una cuenta entra en otra.
         A éste le falta el de la otra cuenta, y hasta que lo tenga el saldo de una de
         las dos no cuadra.
     </p>
     {% if nearby is not empty %}
-        <p>Mitades sueltas en sentido contrario, de otras cuentas y cerca de esta fecha. Si
+        <p class="acc-lead">Mitades sueltas en sentido contrario, de otras cuentas y cerca de esta fecha. Si
            la pareja está pero con otro importe, corrige la que esté mal y vuelve aquí.</p>
+        <div class="prl-table-wrap">
         <table class="prl-table">
+            <thead>
+                <tr>
+                    <th class="tight">Fecha</th>
+                    <th class="tight">Cuenta</th>
+                    <th>Concepto</th>
+                    <th class="acc-num">Importe</th>
+                    <th class="tight"></th>
+                </tr>
+            </thead>
             <tbody>
                 {% for c in nearby %}
                     <tr>
                         <td class="tight">{{ c.date|date('d/m/Y') }}</td>
-                        <td>{{ c.account.name }}</td>
+                        <td class="tight">{{ c.account.name }}</td>
                         <td><a href="{{ path('accounting_entry_show', { id: c.id }) }}">{{ c.concept }}</a></td>
                         <td class="acc-num">{{ fmt.money(c.amount, false) }}</td>
                         {% if c.id not in pairable %}
                             <td class="tight acc-muted acc-small">otro importe</td>
-                        {% elseif editable %}
+                        {% elseif not editable %}
+                            <td class="tight"></td>
+                        {% else %}
                             <td class="tight">
                                 <form method="post" action="{{ path('accounting_entry_pair', { id: entry.id }) }}">
                                     <input type="hidden" name="_token" value="{{ csrf_token('accounting_entry_pair_' ~ entry.id) }}">
@@ -169,8 +197,9 @@
                 {% endfor %}
             </tbody>
         </table>
+        </div>
     {% elseif editable %}
-        <p>No hay ninguna mitad suelta en otra cuenta cerca de esta fecha: anota la que falta.</p>
+        <p class="acc-lead">No hay ninguna mitad suelta en otra cuenta cerca de esta fecha: anota la que falta.</p>
     {% endif %}
     {% if editable and accounts is not empty %}
         <form method="post" action="{{ path('accounting_entry_complete', { id: entry.id }) }}" class="csa-row" style="margin-top: var(--csa-sp-3);">

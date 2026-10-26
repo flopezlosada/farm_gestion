@@ -490,7 +490,7 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $entry = $this->findInvoice('factura-prueba.pdf')->getAccountEntry();
         $crawler = $client->request('GET', sprintf('/gestion/accounting/entry/%d', $entry->getId()));
         $this->assertResponseIsSuccessful();
-        $this->assertCount(1, $crawler->filter(sprintf('iframe[src$="/invoices/%d/file"]', $invoice->getId())), 'La ficha del apunte enseña la factura.');
+        $this->assertCount(1, $crawler->filter(sprintf('iframe[src*="/invoices/%d/file"]', $invoice->getId())), 'La ficha del apunte enseña la factura.');
 
         $crawler = $client->request('GET', '/gestion/accounting/ledger?account=' . $this->account->getId());
         $this->assertCount(1, $crawler->filter('.fa-paperclip'), 'En el libro, el apunte con factura lleva el clip.');

@@ -25,11 +25,6 @@
     {{ parent() }}
     {% include 'partner/_listing_styles.html.twig' %}
     {% include 'accounting/_styles.html.twig' %}
-    <style>
-        .acc-facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 24px; margin: 0 0 var(--csa-sp-6, 32px); font-size: 14px; }
-        .acc-facts dt { color: var(--csa-ink-soft, #6b6b6b); }
-        .acc-facts dd { margin: 0; }
-    </style>
 {% endblock %}
 
 {% block csa_main %}
@@ -54,6 +49,7 @@
         <dd>{{ [provider.contact, provider.phone, provider.email]|filter(v => v)|join(' · ') ?: '—' }}</dd>
     </dl>
 
+    <h2 class="acc-subhead">Facturas{% if invoices is not empty %} <span class="count">{{ invoices|length }}</span>{% endif %}</h2>
     <div class="prl-table-wrap">
         {% if invoices is empty %}
             <div class="prl-empty">No tiene facturas anotadas.</div>

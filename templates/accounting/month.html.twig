@@ -47,7 +47,7 @@
     {# ============ NAVEGACIÓN ENTRE MESES ============ #}
     <div class="prl-tabs">
         {% for n, name in months %}
-            <a class="{{ n == month ? 'is-active' : '' }}" href="{{ path('accounting_month', { year: year, month: n }) }}">
+            <a class="{{ n == month ? 'active' : '' }}" href="{{ path('accounting_month', { year: year, month: n }) }}">
                 {{ name }}
             </a>
         {% endfor %}

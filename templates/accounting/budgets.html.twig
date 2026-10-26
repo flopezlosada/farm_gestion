@@ -89,9 +89,9 @@
                             <td class="acc-num">{{ row.lines }}</td>
                             {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
                                 <td class="tight" style="white-space: nowrap;">
-                                    <a href="{{ path('accounting_budget_lines', { id: row.budget.id }) }}" class="prl-btn" title="Las cifras"><i class="fa fa-table"></i></a>
+                                    <a href="{{ path('accounting_budget_lines', { id: row.budget.id }) }}" class="prl-btn" title="Las cifras, mes a mes"><i class="fa fa-table"></i> Cifras</a>
                                     <a href="{{ path('accounting_budget_edit', { id: row.budget.id }) }}" class="prl-btn" title="Nombre, año y notas"><i class="fa fa-pencil"></i></a>
-                                    <a href="{{ path('accounting_budget_scenario', { id: row.budget.id }) }}" class="prl-btn" title="¿Y si…? Escenarios a partir de este presupuesto"><i class="fa fa-calculator"></i></a>
+                                    <a href="{{ path('accounting_budget_scenario', { id: row.budget.id }) }}" class="prl-btn" title="Escenarios a partir de este presupuesto"><i class="fa fa-calculator"></i> ¿Y si…?</a>
                                     <form method="post" action="{{ path('accounting_budget_duplicate', { id: row.budget.id }) }}" style="display:inline;">
                                         <input type="hidden" name="_token" value="{{ csrf_token('accounting_budget_duplicate_' ~ row.budget.id) }}">
                                         <input type="hidden" name="year" value="{{ row.budget.year }}">

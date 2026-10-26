@@ -39,69 +39,89 @@
     {{ csa.page_header('Contabilidad · Partidas', category.name, category.group.name ~ ' · ' ~ category.group.kindLabel ~ (category.active ? '' : ' · retirada')) }}
 
     <div class="prl-toolbar">
-        <div class="counters">
-            <b>{{ fmt.money(actualTotal) }}</b> en {{ year }}
-            {% if budget and throughMonth > 0 and throughMonth < 12 %}
-                · previsto hasta {{ months[throughMonth]|lower }} <b>{{ fmt.money(plannedToDate) }}</b>
-                ({{ fmt.money(plannedTotal) }} en el año)
-            {% elseif budget %}
-                · previsto <b>{{ fmt.money(plannedTotal) }}</b>
-            {% endif %}
-            · {{ count }} apuntes en total
-        </div>
         <div class="spacer"></div>
         {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
-            <a href="{{ path('accounting_category_edit', { id: category.id }) }}" class="prl-btn prl-btn--primary"><i class="fa fa-pencil"></i> Cambiar</a>
+            <a href="{{ path('accounting_category_edit', { id: category.id }) }}" class="prl-btn"><i class="fa fa-pencil"></i> Cambiar</a>
         {% endif %}
+    </div>
+
+    <div class="prl-stats">
+        <div class="prl-stat">
+            <div class="v">{{ actualTotal|number_format(2, ',', '.') }} €</div>
+            <div class="l">real en {{ year }}</div>
+        </div>
+        {% if budget %}
+            {% set partial = throughMonth > 0 and throughMonth < 12 %}
+            <div class="prl-stat">
+                <div class="v">{{ (partial ? plannedToDate : plannedTotal)|number_format(2, ',', '.') }} €</div>
+                <div class="l">{{ partial ? 'previsto hasta ' ~ months[throughMonth]|lower : 'previsto en el año' }}</div>
+            </div>
+            {% if partial %}
+                <div class="prl-stat">
+                    <div class="v">{{ plannedTotal|number_format(2, ',', '.') }} €</div>
+                    <div class="l">previsto en todo {{ year }}</div>
+                </div>
+            {% endif %}
+        {% endif %}
+        <div class="prl-stat">
+            <div class="v">{{ count }}</div>
+            <div class="l">{{ count == 1 ? 'apunte' : 'apuntes' }} en total</div>
+        </div>
     </div>
 
     {% if not budget %}
         {{ csa.callout('No hay presupuesto para ' ~ year ~ ': sólo se ve lo real.', 'info', 'info-circle') }}
     {% endif %}
 
-    <div class="prl-table-wrap">
-        <table class="prl-table">
-            <thead>
-                <tr>
-                    <th>Mes</th>
-                    {% if budget %}<th class="tight acc-num">Previsto</th>{% endif %}
-                    <th class="tight acc-num">Real</th>
-                    {% if budget %}<th class="tight acc-num">Diferencia</th>{% endif %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for m in 1..12 %}
-                    {% set p = planned[m] ?? 0 %}
-                    {% set a = actual[m] ?? 0 %}
-                    {% if p != 0 or a != 0 %}
+    <div class="acc-split">
+        <section>
+            <div class="acc-section-head"><div><h2 class="acc-subhead">Mes a mes</h2></div></div>
+            <div class="prl-table-wrap">
+                <table class="prl-table acc-keep">
+                    <thead>
                         <tr>
-                            <td><a href="{{ path('accounting_month', { year: year, month: m }) }}">{{ months[m] }}</a></td>
-                            {% if budget %}<td class="acc-num">{{ fmt.money(p) }}</td>{% endif %}
-                            {% if m <= throughMonth %}
-                                <td class="acc-num">{{ fmt.money(a) }}</td>
-                                {% if budget %}<td class="acc-num {{ a - p < 0 ? 'acc-neg' : '' }}">{{ fmt.money(a - p) }}</td>{% endif %}
-                            {% else %}
-                                <td class="acc-num acc-muted" title="Sin anotar todavía">—</td>
-                                {% if budget %}<td class="acc-num acc-muted">—</td>{% endif %}
-                            {% endif %}
+                            <th>Mes</th>
+                            {% if budget %}<th class="acc-num">Previsto</th>{% endif %}
+                            <th class="acc-num">Real</th>
+                            {% if budget %}<th class="acc-num">Diferencia</th>{% endif %}
                         </tr>
-                    {% endif %}
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+                    </thead>
+                    <tbody>
+                        {% for m in 1..12 %}
+                            {% set p = planned[m] ?? 0 %}
+                            {% set a = actual[m] ?? 0 %}
+                            {% if p != 0 or a != 0 %}
+                                <tr>
+                                    <td><a href="{{ path('accounting_month', { year: year, month: m }) }}">{{ months[m] }}</a></td>
+                                    {% if budget %}<td class="acc-num">{{ fmt.money(p) }}</td>{% endif %}
+                                    {% if m <= throughMonth %}
+                                        <td class="acc-num">{{ fmt.money(a) }}</td>
+                                        {% if budget %}<td class="acc-num">{{ fmt.money(a - p, true) }}</td>{% endif %}
+                                    {% else %}
+                                        <td class="acc-num acc-muted" title="Sin anotar todavía">—</td>
+                                        {% if budget %}<td class="acc-num acc-muted">—</td>{% endif %}
+                                    {% endif %}
+                                </tr>
+                            {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
 
-    <div class="prl-toolbar">
-        <div class="counters">Últimos apuntes</div>
-        <div class="spacer"></div>
-        <a href="{{ path('accounting_ledger', { category: category.id }) }}" class="prl-btn"><i class="fa fa-list"></i> Todos sus movimientos</a>
-    </div>
-    <div class="prl-table-wrap">
-        {% if recent is empty %}
-            <div class="prl-empty">Esta partida aún no tiene apuntes.</div>
-        {% else %}
-            {{ rows.table(recent, invoices, 'category') }}
-        {% endif %}
+        <section>
+            <div class="acc-section-head">
+                <div><h2 class="acc-subhead">Últimos apuntes</h2></div>
+                <a href="{{ path('accounting_ledger', { category: category.id }) }}" class="prl-btn"><i class="fa fa-list"></i> Todos sus movimientos</a>
+            </div>
+            <div class="prl-table-wrap">
+                {% if recent is empty %}
+                    <div class="prl-empty">Esta partida aún no tiene apuntes.</div>
+                {% else %}
+                    {{ rows.table(recent, invoices, 'category') }}
+                {% endif %}
+            </div>
+        </section>
     </div>
 
 </div>

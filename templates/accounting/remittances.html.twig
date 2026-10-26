@@ -26,10 +26,20 @@
     {% include 'partner/_listing_styles.html.twig' %}
     {% include 'accounting/_styles.html.twig' %}
     <style>
-        .rem-prepare { display: flex; flex-wrap: wrap; gap: var(--csa-sp-3, 12px); margin-bottom: var(--csa-sp-6, 24px); }
-        .rem-prepare form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--csa-rule); border-radius: 8px; background: var(--csa-surface, #fff); }
-        .rem-prepare b { font-weight: 600; }
-        .rem-prepare input[type=month], .rem-prepare input[type=text], .rem-prepare select { height: 32px; padding: 0 8px; border: 1px solid var(--csa-rule); border-radius: 6px; }
+        /* Una tarjeta por tipo de remesa, las tres del mismo tamaño: cada una dice qué
+           cobra y pide sólo lo que necesita, campo bajo campo. */
+        .rem-prepare { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--csa-sp-4, 16px); }
+        .rem-prepare form { display: flex; flex-direction: column; gap: 10px; padding: 16px 18px; border: 1px solid var(--prl-line); border-radius: 8px; background: var(--prl-surface, #fff); }
+        .rem-prepare h3 { margin: 0; font-family: var(--csa-serif); font-size: 17px; font-weight: 400; }
+        .rem-prepare p { margin: -4px 0 2px; font-size: 12.5px; line-height: 1.45; color: var(--prl-ink-soft); }
+        .rem-prepare label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--prl-ink-faint); font-weight: 600; }
+        .rem-prepare .row2 { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(0, 1fr); gap: 8px; }
+        .rem-prepare input[type=month], .rem-prepare input[type=text], .rem-prepare select {
+            height: 34px; padding: 0 10px; border: 1px solid var(--prl-line); border-radius: 6px; background: #fff;
+            font: inherit; font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--prl-ink); font-weight: 400; width: 100%;
+        }
+        .rem-prepare .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: auto; padding-top: 4px; }
+        .rem-prepare .actions a { font-size: 12.5px; }
     </style>
 {% endblock %}
 
@@ -38,49 +48,10 @@
 
     {{ csa.page_header('Contabilidad', 'Remesas', 'Los recibos domiciliados que se suben a Fiare. La de cuotas de cesta sale del cálculo de las cuotas del mes; se revisa, se descarga el Excel y se da por enviada.') }}
 
-    <p><a href="{{ path('accounting_returns') }}"><i class="fa fa-undo"></i> Recibos devueltos</a> <span class="acc-muted">· las devoluciones del banco por resolver</span></p>
-
-    {% if can_edit %}
-        <div class="rem-prepare">
-            {% for kind, n in next %}
-                {% if kind == 'basket' %}
-                    {# Las cuotas de cesta salen del cálculo (tarifas, cestas y ajustes de
-                     # cada ficha), no de copiar el mes anterior. #}
-                    <form method="post" action="{{ path('accounting_remittance_from_fees') }}">
-                        <input type="hidden" name="_token" value="{{ csrf_token('remittance-from-fees') }}">
-                        <b>Cuotas de cesta</b>
-                        <input type="month" name="period" value="{{ n.period|date('Y-m') }}" aria-label="Mes">
-                        <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-calculator"></i> Preparar desde las cuotas</button>
-                        <a class="acc-muted" href="{{ path('monthly_fee_index', { month: n.period|date('Y-m') }) }}">ver las cuotas del mes</a>
-                    </form>
-                {% else %}
-                    {# Derrama o cuota de socix: el mismo importe para toda una base, que se
-                     # elige porque hay socixs que pagan sin llevar cesta. #}
-                    <form method="post" action="{{ path('accounting_remittance_flat') }}">
-                        <input type="hidden" name="_token" value="{{ csrf_token('prepare-remittance') }}">
-                        <input type="hidden" name="kind" value="{{ kind }}">
-                        <b>{{ kindLabels[kind] }}</b>
-                        <input type="month" name="period" value="{{ n.period|date('Y-m') }}" aria-label="Mes">
-                        <select name="base" class="csa-select" aria-label="A quién">
-                            {% for base in bases %}
-                                <option value="{{ base.value }}">{{ base.label }}</option>
-                            {% endfor %}
-                        </select>
-                        <input type="text" name="amount" inputmode="decimal" size="7" placeholder="€ cada uno" aria-label="Importe de cada recibo" required>
-                        <input type="text" name="label" size="22" placeholder="Concepto (opcional)" aria-label="Concepto">
-                        <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-users"></i> Preparar para todxs</button>
-                        {% if n.from %}
-                            <button type="submit" class="prl-btn" formaction="{{ path('accounting_remittance_prepare') }}" formnovalidate>Copiar «{{ n.from.label }}»</button>
-                        {% endif %}
-                    </form>
-                {% endif %}
-            {% endfor %}
-        </div>
-    {% endif %}
-
     <div class="prl-toolbar">
         <div class="counters"><b>{{ remittances|length }}</b> {{ remittances|length == 1 ? 'remesa' : 'remesas' }}</div>
         <div class="spacer"></div>
+        <a href="{{ path('accounting_returns') }}" class="prl-btn"><i class="fa fa-undo"></i> Recibos devueltos</a>
         {% if can_edit %}
             <a href="{{ path('accounting_remittance_import') }}" class="prl-btn"><i class="fa fa-upload"></i> Importar una enviada</a>
         {% endif %}
@@ -97,8 +68,8 @@
                         <th class="tight">Mes</th>
                         <th>Remesa</th>
                         <th class="tight">Tipo</th>
-                        <th class="tight acc-num">Recibos</th>
-                        <th class="tight acc-num">Total</th>
+                        <th class="acc-num">Recibos</th>
+                        <th class="acc-num">Total</th>
                         <th class="tight">Estado</th>
                     </tr>
                 </thead>
@@ -106,17 +77,79 @@
                     {% for r in remittances %}
                         <tr>
                             <td class="tight">{{ r.period|date('m/Y') }}</td>
-                            <td><a href="{{ path('accounting_remittance_show', { id: r.id }) }}">{{ r.label }}</a></td>
+                            <td><a href="{{ path('accounting_remittance_show', { id: r.id }) }}" class="acc-strong">{{ r.label }}</a></td>
                             <td class="tight acc-muted">{{ r.kindLabel }}</td>
                             <td class="acc-num">{{ r.lines|length }}</td>
                             <td class="acc-num">{{ fmt.money(r.total) }}</td>
-                            <td class="tight{{ r.sent ? ' acc-muted' }}">{{ r.draft ? 'Borrador' : (r.imported ? 'Enviada (importada)' : 'Enviada') }}</td>
+                            <td class="tight">
+                                {% if r.draft %}
+                                    <span class="prl-chip prl-chip--pausado"><span class="dot"></span>Borrador</span>
+                                {% else %}
+                                    <span class="prl-chip prl-chip--activo" title="{{ r.imported ? 'Importada del Excel que se subió al banco' : '' }}"><span class="dot"></span>{{ r.imported ? 'Enviada (importada)' : 'Enviada' }}</span>
+                                {% endif %}
+                            </td>
                         </tr>
                     {% endfor %}
                 </tbody>
             </table>
         {% endif %}
     </div>
+
+    {% if can_edit %}
+        <div class="acc-section-head">
+            <div>
+                <h2 class="acc-subhead">Preparar la siguiente</h2>
+                <p class="acc-lead">Sale en borrador: se revisa, se descarga el Excel para el banco y se da por enviada.</p>
+            </div>
+        </div>
+        <div class="rem-prepare">
+            {% for kind, n in next %}
+                {% if kind == 'basket' %}
+                    {# Las cuotas de cesta salen del cálculo (tarifas, cestas y ajustes de
+                     # cada ficha), no de copiar el mes anterior. #}
+                    <form method="post" action="{{ path('accounting_remittance_from_fees') }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('remittance-from-fees') }}">
+                        <h3>Cuotas de cesta</h3>
+                        <p>Un recibo por familia con lo que le toca pagar el mes, según las cuotas calculadas.</p>
+                        <label>Mes <input type="month" name="period" value="{{ n.period|date('Y-m') }}"></label>
+                        <div class="actions">
+                            <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-calculator"></i> Preparar desde las cuotas</button>
+                            <a href="{{ path('monthly_fee_index', { month: n.period|date('Y-m') }) }}">ver las cuotas del mes</a>
+                        </div>
+                    </form>
+                {% else %}
+                    {# Derrama o cuota de socix: el mismo importe para toda una base, que se
+                     # elige porque hay socixs que pagan sin llevar cesta. #}
+                    <form method="post" action="{{ path('accounting_remittance_flat') }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('prepare-remittance') }}">
+                        <input type="hidden" name="kind" value="{{ kind }}">
+                        <h3>{{ kindLabels[kind] }}</h3>
+                        <p>El mismo importe para todas las personas que elijas.</p>
+                        <div class="row2">
+                            <label>Mes <input type="month" name="period" value="{{ n.period|date('Y-m') }}"></label>
+                            <label>A quién
+                                <select name="base" class="csa-select">
+                                    {% for base in bases %}
+                                        <option value="{{ base.value }}">{{ base.label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                        </div>
+                        <div class="row2">
+                            <label>€ cada uno <input type="text" name="amount" inputmode="decimal" placeholder="0,00" required></label>
+                            <label>Concepto <input type="text" name="label" placeholder="opcional"></label>
+                        </div>
+                        <div class="actions">
+                            <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-users"></i> Preparar para todxs</button>
+                            {% if n.from %}
+                                <button type="submit" class="prl-btn" formaction="{{ path('accounting_remittance_prepare') }}" formnovalidate>Copiar «{{ n.from.label }}»</button>
+                            {% endif %}
+                        </div>
+                    </form>
+                {% endif %}
+            {% endfor %}
+        </div>
+    {% endif %}
 
 </div>
 {% endblock %}

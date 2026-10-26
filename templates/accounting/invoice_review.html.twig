@@ -156,7 +156,7 @@
                                     {{ csa.field(e.concept, 'Concepto', { full: true }) }}
                                     {{ csa.field(e.category, 'Partida', { full: true, widget_class: 'csa-select' }) }}
                                     {{ csa.field(e.direction, '¿Entra o sale?', { widget_class: 'csa-select' }) }}
-                                    {{ csa.field(e.magnitude, 'Importe', { hint: 'lo que se pagó: total con IVA y menos la retención' }) }}
+                                    {{ csa.field(e.magnitude, 'Importe', { hint: 'total con IVA, menos retención' }) }}
                                 </div>
                             {% endblock %}
                         {% endembed %}

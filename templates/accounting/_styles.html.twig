@@ -9,18 +9,105 @@
  # ============================================================ #}
 <style>
     .acc-num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-    .acc-neg { color: #b3261e; }
-    .acc-pos { color: #1e6b3a; }
+    /* Con .prl-table delante: «.prl-table tbody td» fija el color de la celda y, sin
+       esto, los importes negativos de las tablas salían en negro. */
+    .acc-neg, .prl-table td.acc-neg { color: #b3261e; }
+    .acc-pos, .prl-table td.acc-pos { color: #1e6b3a; }
     .acc-muted { color: var(--csa-ink-soft, #6b6b6b); }
-    .acc-subhead { font-size: 15px; font-weight: 600; margin: 0 0 var(--csa-sp-3, 12px); color: var(--csa-ink); }
+    /* ---------- Tablas ----------
+       La cabecera de una columna de cifras va a la derecha, como sus cifras. Hace falta
+       la especificidad de .prl-table: «.prl-table thead th» la ponía a la izquierda y
+       el rótulo quedaba a un lado y los euros al otro. */
+    .prl-table th.acc-num, .prl-table td.acc-num { text-align: right; }
+    /* El listado común reparte el ancho a partes iguales (table-layout: fixed). En
+       contabilidad una fila es fecha + texto largo + cifras: con columnas iguales el
+       concepto iba en tres líneas y la columna del importe, medio vacía. Aquí cada
+       columna mide lo que su contenido; fechas, cifras y botones se encogen a lo justo
+       y el texto se queda con el resto. */
+    table.prl-table { table-layout: auto; }
+    table.prl-table th.tight, table.prl-table td.tight,
+    table.prl-table th.acc-num, table.prl-table td.acc-num { width: 1%; white-space: nowrap; }
+    /* Enlaces dentro de una tabla: en tinta, no en azul. Con cada concepto, partida y
+       cuenta en azul la tabla era un mar de enlaces y no se distinguía nada. */
+    .prl-table td a:not(.prl-btn) { color: var(--prl-ink, #1d1c17); text-decoration: none; }
+    .prl-table td a:not(.prl-btn):hover { color: var(--prl-sage-d, #2f4426); text-decoration: underline; text-underline-offset: 2px; }
+    .prl-table td a.acc-strong { font-weight: 500; }
+    /* Fila fina con un enlace para añadir algo al grupo de filas de encima. */
+    .prl-table tbody tr.acc-joined td { border-bottom: 1px dashed var(--prl-line, #ebe7dd); }
+    .prl-table tbody tr.acc-addrow td { padding-top: 6px; padding-bottom: 10px; font-size: 12px; }
+    .prl-table tbody tr.acc-addrow:hover td { background: transparent; }
+    .prl-table a.acc-addlink { color: var(--prl-sage-d, #2f4426); font-weight: 500; }
+    .prl-table a.acc-addlink .fa { font-size: 10px; margin-right: 3px; }
+    .prl-table tfoot td { padding: 11px 14px; font-size: 12.5px; font-weight: 600; background: var(--prl-bg, #fbfaf6); border-top: 1px solid var(--prl-line, #ebe7dd); }
+
+    /* Una cifra de la tira que lleva a su detalle. */
+    a.prl-stat { color: inherit; text-decoration: none; transition: border-color .12s ease, box-shadow .12s ease; }
+    a.prl-stat:hover { border-color: var(--prl-sage, #5b7a4c); box-shadow: 0 1px 0 var(--prl-sage-l, #eaf0e2); }
+
+    /* Subir ficheros: el botón nativo («Elegir archivos / Ningún archivo
+       seleccionado») con el aspecto de los botones del listado. */
+    .inv-upload { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+    .inv-upload input[type="file"] { font-size: 12.5px; color: var(--prl-ink-soft, #5a564a); }
+    .inv-upload input[type="file"]::-webkit-file-upload-button {
+        margin-right: 10px; padding: 8px 14px; border-radius: 6px; border: 1px dashed var(--prl-line-2, #d8d2c2);
+        background: var(--prl-surface, #fff); color: var(--prl-ink, #1d1c17); font: inherit; font-weight: 500; cursor: pointer;
+    }
+    .inv-upload input[type="file"]::file-selector-button {
+        margin-right: 10px; padding: 8px 14px; border-radius: 6px; border: 1px dashed var(--prl-line-2, #d8d2c2);
+        background: var(--prl-surface, #fff); color: var(--prl-ink, #1d1c17); font: inherit; font-weight: 500; cursor: pointer;
+    }
+
+    /* ---------- Secciones de una pantalla ----------
+       Un único rótulo de sección para todas las pantallas (antes había cuatro: el h2
+       del tema en serif grande, uno en versalitas, uno en gris y otros con estilo
+       en línea). Con su aire por encima: dos tablas seguidas ya no van pegadas. */
+    .csa-app .acc-subhead {
+        font-family: var(--csa-serif); font-size: var(--csa-fs-xl, 22px); font-weight: 400; letter-spacing: -0.015em;
+        line-height: 1.25; margin: var(--csa-sp-8, 32px) 0 var(--csa-sp-2, 8px); color: var(--csa-ink);
+    }
+    .acc-subhead:first-child { margin-top: 0; }
+    .acc-subhead a { color: inherit; text-decoration: none; border-bottom: 1px solid var(--csa-rule, #e6e0d0); }
+    .acc-subhead a:hover { color: var(--prl-sage-d, #2f4426); border-bottom-color: currentColor; }
+    .acc-subhead .count { font-family: var(--csa-sans); font-size: 12px; font-weight: 500; color: var(--csa-ink-muted, #8a8b85); margin-left: 6px; }
+    .acc-lead { margin: 0 0 var(--csa-sp-3, 12px); font-size: 13px; line-height: 1.5; color: var(--csa-ink-soft, #5a5b56); max-width: 72ch; }
+    /* Cabecera de sección con acciones a la derecha. */
+    .acc-section-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 16px; min-height: 36px; margin: var(--csa-sp-8, 32px) 0 var(--csa-sp-3, 12px); }
+    .acc-section-head .acc-subhead, .acc-section-head .acc-lead { margin: 0; }
+    .acc-section-head > div:first-child { flex: 1 1 320px; min-width: 0; }
+    .acc-section-head > div:first-child .acc-subhead + .acc-lead { margin-top: 4px; }
+    /* Dos columnas (la de la izquierda algo más estrecha); en pantalla mediana, una. */
+    .acc-split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: var(--csa-sp-6, 24px); align-items: start; margin-top: var(--csa-sp-6, 24px); }
+    .acc-split > section > .acc-section-head:first-child { margin-top: 0; }
+    @media (max-width: 1100px) { .acc-split { grid-template-columns: minmax(0, 1fr); } }
+    /* Bloques seguidos (tabla, aviso, tabla) con aire entre ellos. */
+    .prl-table-wrap + .prl-table-wrap, .prl-table-wrap + .csa-callout, .csa-callout + .prl-table-wrap { margin-top: var(--csa-sp-4, 16px); }
     .acc-small { font-size: 11px; }
     .acc-group-row > td { font-weight: 600; background: rgba(0, 0, 0, 0.05); }
     .acc-cat-row > td:first-child { padding-left: 24px; }
-    .acc-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0; }
-    /* .csa-input es de ancho completo (formularios); en una barra de filtros cada
-       control ocupaba su propia línea. Aquí miden lo que su contenido. */
-    .acc-filters .csa-input { width: auto; flex: 0 1 auto; min-width: 120px; }
-    .acc-filters .acc-filter-date { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--csa-ink-soft, #6b6b6b); }
+    /* Barra de filtros: una sola fila con controles de la misma altura (34px, la del
+       buscador del listado). Antes cada control traía su altura (los selects y las
+       fechas del formulario, 40px; los botones, 34px) y la barra se partía en dos
+       líneas con «Hasta» descolgado. */
+    .acc-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0; width: 100%; }
+    .acc-filters .prl-search { flex: 1 1 180px; min-width: 160px; max-width: none; }
+    .acc-filters .csa-input, .acc-filters .prl-search input {
+        height: 34px; padding-top: 0; padding-bottom: 0; font-size: 13px;
+        border: 1px solid var(--prl-line, #ebe7dd); border-radius: 6px; background-color: var(--prl-surface, #fff);
+    }
+    .acc-filters select.csa-input { width: auto; flex: 0 1 180px; min-width: 120px; max-width: 220px; padding-left: 10px; }
+    .acc-filters .prl-btn { height: 34px; }
+    /* Desde–hasta: un solo control, como un rango. */
+    .acc-filters .acc-filter-range {
+        display: inline-flex; align-items: center; gap: 2px; height: 34px; padding: 0 4px 0 10px;
+        border: 1px solid var(--prl-line, #ebe7dd); border-radius: 6px; background: var(--prl-surface, #fff);
+        font-size: 12px; color: var(--prl-ink-faint, #8d8773);
+    }
+    .acc-filters .acc-filter-range input {
+        border: 0; background: transparent; height: 32px; width: 122px; padding: 0 2px;
+        font: inherit; font-size: 13px; color: var(--prl-ink, #1d1c17);
+    }
+    .acc-filters .acc-filter-range input:focus { outline: none; }
+    .acc-filters .acc-filter-range:focus-within { border-color: var(--prl-sage, #5b7a4c); box-shadow: 0 0 0 3px var(--prl-sage-l, #eaf0e2); }
     /* Los conceptos del banco son tiras sin espacios (bel-liq.rem.devol2026…): sin
        esto se salían de su celda y se montaban sobre la partida. */
     .acc-wrap td { overflow-wrap: anywhere; }
@@ -33,6 +120,12 @@
        en cuatro líneas, grupos pisando enero). Se le da su ancho y el resto de
        columnas, cifras cortas, se reparten lo que queda. */
     .acc-grid th:first-child { width: 190px; }
+    .acc-grid th:first-child, .acc-grid td:first-child { min-width: 150px; }
+    /* Al deslizar la rejilla en horizontal, el nombre de la partida se queda a la vista
+       (fondo opaco: si no, las cifras pasarían por debajo del nombre). */
+    .acc-grid-wrap .acc-grid th:first-child, .acc-grid-wrap .acc-grid td:first-child { position: sticky; left: 0; z-index: 1; background: var(--prl-surface, #fff); }
+    .acc-grid-wrap .acc-grid thead th:first-child { background: var(--prl-bg, #fbfaf6); }
+    .acc-grid-wrap .acc-grid .acc-group-row > td:first-child { background: #f2f2f0; }
     /* La rejilla que se ESCRIBE (presupuesto) lleva casillas de 74px que no caben
        en un reparto a partes iguales: ahí cada columna mide lo que necesita y la
        rejilla se desliza en horizontal. */
@@ -46,13 +139,26 @@
     /* En móvil, el listado normal convierte cada fila en una tarjeta. Para una
        rejilla eso da una tarjeta con doce líneas «Ene 0,00» que no dice nada: estas
        tablas se quedan como tabla y se deslizan en horizontal. */
+    /* Lo mismo para las tablas cortas de pocas columnas (saldos, mes a mes): caben
+       en el móvil como tabla y se leen mejor así (.acc-keep). */
     @media (max-width: 768px) {
         .prl-table-wrap { overflow-x: auto; }
-        .acc-grid.prl-table { table-layout: auto; }
-        .acc-grid.prl-table thead { display: table-header-group; }
-        .acc-grid.prl-table tbody tr { display: table-row; padding: 0; }
-        .acc-grid.prl-table tbody td { display: table-cell; padding: 6px 8px; border-bottom: 0; }
-        .acc-grid.prl-table tbody td::before { content: none; }
+        .acc-grid.prl-table, .acc-keep.prl-table { table-layout: auto; }
+        .acc-grid.prl-table thead, .acc-keep.prl-table thead { display: table-header-group; }
+        .acc-grid.prl-table tbody tr, .acc-keep.prl-table tbody tr { display: table-row; padding: 0; }
+        .acc-grid.prl-table tbody td, .acc-keep.prl-table tbody td { display: table-cell; padding: 8px 10px; }
+        .acc-grid.prl-table tbody td { padding: 6px 8px; border-bottom: 0; }
+        .acc-grid.prl-table tbody td::before, .acc-keep.prl-table tbody td::before { content: none; }
+        .acc-keep.prl-table thead th { padding: 8px 10px; }
+        /* En tarjeta, el «1 %» que encoge fechas y cifras en la tabla las dejaba en
+           una tira estrecha; la cifra va en negrita para encontrarla. */
+        table.prl-table:not(.acc-grid):not(.acc-keep) td.tight, table.prl-table:not(.acc-grid):not(.acc-keep) td.acc-num { width: auto; }
+        table.prl-table:not(.acc-grid):not(.acc-keep) td.acc-num { font-weight: 600; }
+        /* Filtros en móvil: el buscador y las fechas a lo ancho, los dos desplegables
+           a medias. */
+        .acc-filters .prl-search, .acc-filters .acc-filter-range { flex: 1 1 100%; }
+        .acc-filters select.csa-input { flex: 1 1 40%; max-width: none; }
+        .acc-filters .acc-filter-range input { flex: 1 1 0; width: auto; min-width: 0; }
     }
     /* Tira de doce meses (caja de la portada, saldo de una cuenta), en cuatro
        columnas: una fila por trimestre. Doce en fila no caben en una tarjeta de la
@@ -62,17 +168,51 @@
     .acc-months .m.proj { border: 1px dashed rgba(0, 0, 0, 0.18); background: transparent; }
     .acc-months .m .v { display: block; font-weight: 600; font-size: 12px; }
     .acc-months .m.low { background: rgba(179, 38, 30, 0.1); }
+    /* En una ficha a todo el ancho caben los doce en fila, como un extracto. */
+    .acc-months--year { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+    .acc-months--year .m { padding: 10px 2px; background: var(--prl-surface, #fff); border: 1px solid var(--prl-line, #ebe7dd); color: var(--prl-ink-faint, #8d8773); }
+    .acc-months--year .m .v { font-size: 12.5px; color: var(--prl-ink, #1d1c17); margin-bottom: 2px; }
+    @media (max-width: 1100px) { .acc-months--year { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+    @media (max-width: 600px) { .acc-months--year { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
     /* Ficha con su documento al lado (apunte, factura): documento a la izquierda, datos a la derecha. */
     .ent-show { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--csa-sp-6, 32px); align-items: start; }
     .ent-show--solo { grid-template-columns: minmax(0, 720px); }
     .ent-doc { position: sticky; top: var(--csa-sp-4, 16px); border: 1px solid var(--csa-rule, #ddd); border-radius: 6px; overflow: hidden; background: #fafafa; }
     .ent-doc img { display: block; width: 100%; height: auto; }
-    .ent-doc iframe { display: block; width: 100%; height: 80vh; border: 0; }
+    .ent-doc iframe { display: block; width: 100%; height: 78vh; border: 0; }
     .ent-doc__bar { display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; font-size: 12px; border-bottom: 1px solid var(--csa-rule, #ddd); background: #fff; }
-    .ent-facts { display: grid; grid-template-columns: max-content 1fr; gap: 8px 24px; margin: 0 0 var(--csa-sp-5, 24px); font-size: 14px; }
-    .ent-facts dt { color: var(--csa-ink-soft, #6b6b6b); }
-    .ent-facts dd { margin: 0; }
-    .ent-h { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--csa-ink-soft, #6b6b6b); margin: var(--csa-sp-5, 24px) 0 var(--csa-sp-3, 12px); }
+    /* Lista de datos de una ficha: rótulo a la izquierda, dato a la derecha, una raya
+       fina entre filas para que el ojo no salte de un rótulo al dato de otra. */
+    .ent-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); margin: 0 0 var(--csa-sp-5, 20px); font-size: 13.5px; line-height: 1.45; }
+    .ent-facts dt, .ent-facts dd { padding: 8px 0; border-top: 1px solid var(--prl-line, #ebe7dd); }
+    .ent-facts dt { padding-right: 24px; color: var(--csa-ink-soft, #5a5b56); font-size: 12.5px; font-weight: 400; }
+    .ent-facts dd { margin: 0; overflow-wrap: anywhere; }
+    .ent-facts dt:empty { border-top-color: transparent; }
+    .ent-facts dt:empty + dd { border-top-color: transparent; padding-top: 0; }
+    .ent-facts a { color: inherit; text-decoration: underline; text-decoration-color: var(--csa-rule, #e6e0d0); text-underline-offset: 3px; }
+    .ent-facts a:hover { color: var(--prl-sage-d, #2f4426); text-decoration-color: currentColor; }
+    /* Los datos de una ficha de cuenta, proveedor o cliente: la misma lista en una
+       tarjeta, con el ancho de lo que se lee (no de la pantalla entera). */
+    .acc-facts {
+        display: grid; grid-template-columns: max-content minmax(0, 1fr); max-width: 760px;
+        margin: 0 0 var(--csa-sp-6, 24px); padding: 4px 20px; font-size: 13.5px; line-height: 1.45;
+        background: var(--prl-surface, #fff); border: 1px solid var(--prl-line, #ebe7dd); border-radius: 8px;
+    }
+    .acc-facts dt, .acc-facts dd { padding: 9px 0; border-top: 1px solid var(--prl-line, #ebe7dd); }
+    .acc-facts dt { padding-right: 28px; color: var(--csa-ink-soft, #5a5b56); font-size: 12.5px; font-weight: 400; }
+    .acc-facts dd { margin: 0; overflow-wrap: anywhere; white-space: pre-line; }
+    .acc-facts dt:first-of-type, .acc-facts dt:first-of-type + dd { border-top: 0; }
+
+    /* La ficha en una tarjeta: arriba la cifra, debajo sus datos, al pie lo que se hace. */
+    .ent-panel { background: var(--prl-surface, #fff); border: 1px solid var(--prl-line, #ebe7dd); border-radius: 8px; padding: 20px 22px; }
+    .ent-panel .ent-facts { margin-bottom: 0; }
+    .ent-show--solo .ent-doc { position: static; }
+    .ent-amount { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+    .ent-amount .v { font-family: var(--csa-serif); font-size: 34px; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: lining-nums tabular-nums; color: var(--csa-ink); }
+    .ent-amount .v.acc-neg { color: #b3261e; }
+    .ent-amount .l { font-size: 12.5px; color: var(--csa-ink-soft, #5a5b56); }
+    .ent-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: var(--csa-sp-5, 20px); padding-top: var(--csa-sp-4, 16px); border-top: 1px solid var(--prl-line, #ebe7dd); }
+    .ent-panel > .acc-lead { margin-top: var(--csa-sp-3, 12px); }
     @media (max-width: 900px) {
         .ent-show { grid-template-columns: 1fr; }
         .ent-doc { position: static; }

@@ -110,17 +110,17 @@
                         <tr>
                             <td class="tight">
                                 {% if invoice.status == 'read' %}
-                                    {{ csa.badge('Para revisar', 'green') }}
+                                    <span class="prl-chip prl-chip--activo"><span class="dot"></span>Para revisar</span>
                                 {% elseif invoice.status == 'unreadable' %}
-                                    {{ csa.badge('A mano', 'terracotta') }}
+                                    <span class="prl-chip prl-chip--baja"><span class="dot"></span>A mano</span>
                                 {% elseif invoice.lastError %}
-                                    {{ csa.badge('En espera', 'ochre') }}
+                                    <span class="prl-chip prl-chip--pausado"><span class="dot"></span>En espera</span>
                                 {% else %}
-                                    {{ csa.badge('Leyendo', 'sky') }}
+                                    <span class="prl-chip"><span class="dot"></span>Leyendo</span>
                                 {% endif %}
                             </td>
                             <td>
-                                {{ invoice.providerName ?? invoice.originalName }}
+                                <a href="{{ path('accounting_invoice_review', { id: invoice.id }) }}" class="acc-strong">{{ invoice.providerName ?? invoice.originalName }}</a>
                                 <br><span class="acc-muted acc-small">
                                     {% if invoice.invoiceNumber %}fra. {{ invoice.invoiceNumber }} · {% endif %}
                                     {% if invoice.status == 'unreadable' %}{{ invoice.lastError }}{% else %}{{ invoice.concept ?? invoice.originalName }}{% endif %}
@@ -150,20 +150,41 @@
 
     {# ============ ÚLTIMAS ANOTADAS ============ #}
     {% if recent is not empty %}
-        <h3 class="acc-muted" style="margin-top: var(--csa-sp-6, 32px); font-size: 14px;">Últimas resueltas</h3>
+        <div class="acc-section-head">
+            <div>
+                <h2 class="acc-subhead">Últimas resueltas</h2>
+                <p class="acc-lead">Las que ya se anotaron en el libro o se descartaron.</p>
+            </div>
+        </div>
         <div class="prl-table-wrap">
             <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th>Proveedor</th>
+                        <th class="tight">Cómo quedó</th>
+                        <th class="tight">Fecha del apunte</th>
+                        <th class="acc-num">Importe</th>
+                        <th class="tight"></th>
+                    </tr>
+                </thead>
                 <tbody>
                     {% for invoice in recent %}
                         {% set entry = invoice.accountEntry %}
                         <tr>
                             <td>
                                 {# Como en la ficha: el proveedor dado de alta manda sobre el nombre leído. #}
-                                <a href="{{ path('accounting_invoice_review', { id: invoice.id }) }}">{{ invoice.provider ? invoice.provider.name : (invoice.providerName ?? invoice.originalName) }}</a>
-                                {% if invoice.status == 'discarded' %}{{ csa.badge('Descartada', 'neutral') }}{% endif %}
+                                <a href="{{ path('accounting_invoice_review', { id: invoice.id }) }}" class="acc-strong">{{ invoice.provider ? invoice.provider.name : (invoice.providerName ?? invoice.originalName) }}</a>
+                                {% if invoice.invoiceNumber %}<br><span class="acc-muted acc-small">fra. {{ invoice.invoiceNumber }}</span>{% endif %}
+                            </td>
+                            <td class="tight">
+                                {% if invoice.status == 'discarded' %}
+                                    <span class="prl-chip prl-chip--neutral"><span class="dot"></span>Descartada</span>
+                                {% else %}
+                                    <span class="prl-chip prl-chip--activo"><span class="dot"></span>Anotada</span>
+                                {% endif %}
                             </td>
                             <td class="tight">{{ entry ? entry.date|date('d/m/Y') : '—' }}</td>
-                            <td class="acc-num">{{ entry ? entry.amount|number_format(2, ',', '.') ~ ' €' : '—' }}</td>
+                            <td class="acc-num {{ entry and entry.amount < 0 ? 'acc-neg' : '' }}">{{ entry ? entry.amount|number_format(2, ',', '.') ~ ' €' : '—' }}</td>
                             <td class="tight">
                                 {% if entry %}
                                     <a href="{{ path('accounting_entry_show', { id: entry.id }) }}" class="prl-btn" title="Ver el apunte"><i class="fa fa-list"></i></a>
