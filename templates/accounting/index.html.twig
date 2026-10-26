@@ -128,6 +128,11 @@
                                     <span class="acc-small {{ row.stale ? 'acc-neg' : 'acc-muted' }}">
                                         {{ row.lastDate ? 'último apunte ' ~ row.lastDate|date('d/m/Y') : 'sin apuntes' }}
                                     </span>
+                                    {% if row.account.card and row.balance != 0 %}
+                                        <br><span class="acc-small {{ row.balance > 0 ? 'acc-neg' : 'acc-muted' }}">
+                                            {{ row.balance < 0 ? 'compras pendientes de liquidar' : 'liquidación sin sus compras' }}
+                                        </span>
+                                    {% endif %}
                                 </td>
                                 <td class="acc-num">{{ row.balance|number_format(2, ',', '.') }} €</td>
                             </tr>

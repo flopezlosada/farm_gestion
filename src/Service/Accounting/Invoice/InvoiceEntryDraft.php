@@ -51,13 +51,25 @@ class InvoiceEntryDraft
     }
 
     /**
-     * La cuenta con que se pagó: la de otras veces a este proveedor y, si es nuevo,
-     * la que corresponde a la forma de pago impresa (efectivo a una caja, lo demás
-     * al banco). Es una propuesta: se cambia en el formulario.
+     * La cuenta con que se pagó. Pagada con tarjeta, la tarjeta si hay una: las
+     * compras con tarjeta anteriores a tener la cuenta están en el banco, y la de otras
+     * veces la llevaría allí. Si no, la de otras veces a este proveedor y, si es nuevo,
+     * la que corresponde a la forma de pago impresa (efectivo a una caja, lo demás al
+     * banco). Es una propuesta: se cambia en el formulario.
      */
     private function accountFor(ReceivedInvoice $invoice): ?FinancialAccount
     {
         $active = $this->accounts->findActive();
+        $ofKind = static fn (int $kind): ?FinancialAccount => array_values(array_filter(
+            $active,
+            static fn (FinancialAccount $account): bool => $account->getKind() === $kind,
+        ))[0] ?? null;
+
+        $method = $invoice->getPaymentMethod();
+        $card = $method === ReceivedInvoice::PAYMENT_CARD ? $ofKind(FinancialAccount::KIND_CARD) : null;
+        if ($card !== null) {
+            return $card;
+        }
 
         $usual = $this->invoices->usualAccountIdFor($invoice->getProviderTaxId());
         foreach ($active as $account) {
@@ -66,16 +78,7 @@ class InvoiceEntryDraft
             }
         }
 
-        $wanted = $invoice->getPaymentMethod() === ReceivedInvoice::PAYMENT_CASH
-            ? FinancialAccount::KIND_CASH
-            : FinancialAccount::KIND_BANK;
-        foreach ($active as $account) {
-            if ($account->getKind() === $wanted) {
-                return $account;
-            }
-        }
-
-        return null;
+        return $ofKind($method === ReceivedInvoice::PAYMENT_CASH ? FinancialAccount::KIND_CASH : FinancialAccount::KIND_BANK);
     }
 
     /** «Proveedor · lo comprado», o el nombre del fichero si no se leyó nada. */

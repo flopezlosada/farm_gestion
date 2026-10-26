@@ -195,6 +195,32 @@ class AccountingAgendaTest extends TestCase
         )->items(new \DateTimeImmutable('2026-10-18')));
     }
 
+    /**
+     * Una tarjeta en positivo es una liquidación sin las compras que paga: hay que
+     * anotarlas. En negativo, lo comprado sin liquidar, es lo normal; y un banco en
+     * positivo, claro, tampoco es tarea. Una tarjeta sin apuntes recientes no es un
+     * libro atrasado: las compras llegan de golpe con la liquidación.
+     */
+    public function testLaTarjetaPagadaSinSusCompras(): void
+    {
+        $card = $this->account('Tarjeta Fiare', FinancialAccount::KIND_CARD);
+        $fiare = $this->account('Fiare', FinancialAccount::KIND_BANK);
+        $agenda = fn (string $balance): AccountingAgenda => $this->agenda(
+            accounts: [$fiare, $card],
+            lastDates: [$card->getId() => new \DateTimeImmutable('2026-06-05')],
+            balances: [$card->getId() => $balance, $fiare->getId() => '10838.85'],
+        );
+        $today = new \DateTimeImmutable('2026-10-18');
+
+        $item = $this->only($agenda('246.90')->items($today));
+        $this->assertSame('Anotar las compras de Tarjeta Fiare: 246,90 € pagados sin explicar', $item->title);
+        $this->assertSame('accounting_ledger', $item->route);
+        $this->assertSame(['account' => $card->getId()], $item->routeParams);
+
+        $this->assertSame([], $agenda('-75.20')->items($today), 'en negativo es lo pendiente de liquidar');
+        $this->assertSame([], $agenda('0.00')->items($today), 'liquidada y explicada');
+    }
+
     /** Varios bancos atrasados: una sola tarea, con lo de cada uno, que lleva a todos los movimientos. */
     public function testElLibroDeVariosBancosSinMeter(): void
     {
@@ -315,6 +341,7 @@ class AccountingAgendaTest extends TestCase
      * @param list<AccountEntry>                  $withoutInvoice gastos sin factura del trimestre
      * @param list<AccountantDelivery>|null       $deliveries la última entrega de cada trimestre; por omisión,
      *                                                        el 3T2026 entregado, para que la gestoría no salga
+     * @param array<int, string>                  $balances  saldo por cuenta; por omisión, 0
      */
     private function agenda(
         array $received = [],
@@ -327,6 +354,7 @@ class AccountingAgendaTest extends TestCase
         ?Remittance $monthRemittance = null,
         array $withoutInvoice = [],
         ?array $deliveries = null,
+        array $balances = [],
     ): AccountingAgenda {
         $receivedRepo = $this->createStub(ReceivedInvoiceRepository::class);
         $receivedRepo->method('findOpen')->willReturn($open);
@@ -339,6 +367,7 @@ class AccountingAgendaTest extends TestCase
         $entries->method('lastDateByAccount')->willReturn($lastDates);
         $entries->method('findUnpairedTransfers')->willReturn($unpaired);
         $entries->method('findExpensesWithoutInvoice')->willReturn($withoutInvoice);
+        $entries->method('balanceFor')->willReturnCallback(static fn (FinancialAccount $a): string => $balances[$a->getId()] ?? '0.00');
         $latest = [];
         foreach ($deliveries ?? [$this->delivery(2026, 3)] as $delivery) {
             $latest[$delivery->getQuarter()->label()] = $delivery;
