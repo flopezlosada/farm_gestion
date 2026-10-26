@@ -160,7 +160,7 @@ class RemittanceReturnController extends AbstractController
             // paga ya otra devolución, aunque el POST traiga otro.
             $offered = array_map(static fn (AccountEntry $e): int => (int) $e->getId(), $entries->findIncomeOf($line->getAmount(), $line->getRemittance()->getPeriod()));
             try {
-                $entry !== null && \in_array($entry->getId(), $offered, true) ? $return->paidWith($entry, $this->actor()) : throw new \InvalidArgumentException('Elige uno de los pagos de la lista.');
+                $entry !== null && \in_array($entry->getId(), $offered, true) ? $return->payApart($entry, $this->actor()) : throw new \InvalidArgumentException('Elige uno de los pagos de la lista.');
             } catch (\InvalidArgumentException|\LogicException $e) {
                 $this->addFlash('warning', $e->getMessage());
 

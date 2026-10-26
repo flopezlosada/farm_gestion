@@ -159,7 +159,7 @@ class RemittanceReturn
      *
      * @throws \InvalidArgumentException Si el apunte no es un ingreso por ese importe.
      */
-    public function paidWith(AccountEntry $entry, ?User $by): void
+    public function payApart(AccountEntry $entry, ?User $by): void
     {
         if (IssuedInvoice::toCents($entry->getAmount()) !== IssuedInvoice::toCents($this->line->getAmount())) {
             throw new \InvalidArgumentException('El pago tiene que ser un ingreso por el importe del recibo.');

@@ -101,7 +101,7 @@ class RemittanceReturnTest extends TestCase
         $draft->addLine($retry = RemittanceLine::retryOf($return->getLine()));
         $return->rechargeIn($retry);
 
-        foreach ([$return->reopen(...), fn () => $return->notOwed(null), fn () => $return->paidWith($this->entry('55.00'), null)] as $change) {
+        foreach ([$return->reopen(...), fn () => $return->notOwed(null), fn () => $return->payApart($this->entry('55.00'), null)] as $change) {
             try {
                 $change();
                 $this->fail('Había un recibo nuevo cobrándolo.');
@@ -117,13 +117,13 @@ class RemittanceReturnTest extends TestCase
         $return = new RemittanceReturn($this->sentLine('55.00'), null, null);
 
         try {
-            $return->paidWith($this->entry('36.00'), null);
+            $return->payApart($this->entry('36.00'), null);
             $this->fail('Un ingreso de 36 no paga un recibo de 55.');
         } catch (\InvalidArgumentException) {
             $this->assertSame(ReturnStatus::Pending, $return->getStatus());
         }
 
-        $return->paidWith($payment = $this->entry('55.00'), null);
+        $return->payApart($payment = $this->entry('55.00'), null);
         $this->assertSame(ReturnStatus::Closed, $return->getStatus());
         $this->assertSame($payment, $return->getPaidWith());
         $this->assertNotNull($return->getResolvedAt());
@@ -132,7 +132,7 @@ class RemittanceReturnTest extends TestCase
     public function testDeshacerLaVuelveAAbrir(): void
     {
         $return = new RemittanceReturn($this->sentLine('55.00'), null, null);
-        $return->paidWith($this->entry('55.00'), null);
+        $return->payApart($this->entry('55.00'), null);
         $return->reopen();
 
         $this->assertSame(ReturnStatus::Pending, $return->getStatus());
@@ -148,7 +148,7 @@ class RemittanceReturnTest extends TestCase
     public function testOtraSalidaSueltaElPago(): void
     {
         $return = new RemittanceReturn($this->sentLine('55.00'), null, null);
-        $return->paidWith($this->entry('55.00'), null);
+        $return->payApart($this->entry('55.00'), null);
         $return->notOwed(null);
 
         $this->assertNull($return->getPaidWith());
