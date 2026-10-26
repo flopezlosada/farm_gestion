@@ -197,22 +197,46 @@ class AccountEntryRepository extends ServiceEntityRepository
      * que mueve el banco: también los apuntes aún sin partida, y sin que los traspasos
      * cuenten (una mitad sale de una cuenta y la otra entra en otra).
      *
-     * Una cuenta suma desde su fecha de apertura, con su saldo de apertura; antes, no
-     * existe. Null si ninguna cuenta estaba abierta en el año: entonces no hay saldo
-     * real del que partir.
-     *
-     * Dos consultas para todas las cuentas y meses, en vez de un saldo por cuenta y mes.
+     * Es la suma de {@see balancesByMonthEnd}: el total y el saldo de cada cuenta no
+     * pueden contar distinto. Null si ninguna cuenta estaba abierta en el año: entonces
+     * no hay saldo real del que partir.
      *
      * @return array<int, float>|null
      */
     public function cashByMonthEnd(int $year): ?array
     {
-        $accounts = $this->getEntityManager()->getRepository(FinancialAccount::class)->findAll();
+        $rows = $this->balancesByMonthEnd($year);
+        if ($rows === []) {
+            return null;
+        }
+
+        return array_map(
+            static fn (int $m): float => round(array_sum(array_map(static fn (array $row): float => $row['balances'][$m] ?? 0.0, $rows)), 2),
+            range(0, 12),
+        );
+    }
+
+    /**
+     * El saldo de cada cuenta al cerrar cada mes de un año, y al empezarlo (índice 0,
+     * el saldo de partida que viene del año anterior), en el orden de las cuentas:
+     * `[['account' => cuenta, 'balances' => [0..12 => saldo]]]`.
+     *
+     * Una cuenta suma desde su fecha de apertura, con su saldo de apertura, como en
+     * {@see balanceFor}; antes no existe y sus meses van a null. Las que abren después
+     * del año no salen.
+     *
+     * Dos consultas para todas las cuentas y meses, en vez de un saldo por cuenta y mes.
+     *
+     * @return list<array{account: FinancialAccount, balances: array<int, float|null>}>
+     */
+    public function balancesByMonthEnd(int $year): array
+    {
+        $accounts = $this->getEntityManager()->getRepository(FinancialAccount::class)->findBy([], ['sortOrder' => 'ASC', 'name' => 'ASC']);
         $yearStart = new \DateTimeImmutable($year.'-01-01');
         $yearEnd = new \DateTimeImmutable($year.'-12-31');
-        $opened = array_filter($accounts, static fn (FinancialAccount $a) => $a->getOpeningDate() <= $yearEnd);
+        $opened = array_values(array_filter($accounts, static fn (FinancialAccount $a) => $a->getOpeningDate() <= $yearEnd));
         if ($opened === []) {
-            return null;
+            return [];
         }
 
         // Lo movido antes del año y dentro de él, mes a mes; siempre desde la apertura
@@ -242,46 +266,19 @@ class AccountEntryRepository extends ServiceEntityRepository
             $monthly[(int) $row['accountId']][(int) $row['m']] = (float) $row['total'];
         }
 
-        $cash = array_fill(0, 13, 0.0);
-        foreach ($opened as $account) {
+        return array_map(static function (FinancialAccount $account) use ($beforeByAccount, $monthly, $yearStart): array {
             $id = (int) $account->getId();
             $running = (float) $account->getOpeningBalance() + (float) ($beforeByAccount[$id] ?? 0);
             // Abierta el 1 de enero o antes, su saldo de apertura ya estaba al empezar el año.
             $openingMonth = $account->getOpeningDate() <= $yearStart ? 0 : (int) $account->getOpeningDate()->format('n');
+            $balances = [];
             for ($m = 0; $m <= 12; ++$m) {
                 $running += $monthly[$id][$m] ?? 0.0;
-                if ($m >= $openingMonth) {
-                    $cash[$m] += $running;
-                }
+                $balances[$m] = $m >= $openingMonth ? round($running, 2) : null;
             }
-        }
 
-        return array_map(static fn (float $v): float => round($v, 2), $cash);
-    }
-
-    /**
-     * Lo movido en cada cuenta y mes de un año: `[accountId][month] => importe`. Con
-     * el saldo de apertura de cada cuenta reconstruye el saldo a final de cada mes.
-     *
-     * @return array<int, array<int, string>>
-     */
-    public function totalsByAccountAndMonth(int $year): array
-    {
-        $rows = $this->createQueryBuilder('e')
-            ->select('IDENTITY(e.account) AS accountId', 'MONTH(e.date) AS m', 'SUM(e.amount) AS total')
-            ->andWhere('e.date BETWEEN :from AND :to')
-            ->setParameter('from', $year.'-01-01')
-            ->setParameter('to', $year.'-12-31')
-            ->groupBy('e.account', 'm')
-            ->getQuery()
-            ->getScalarResult();
-
-        $out = [];
-        foreach ($rows as $row) {
-            $out[(int) $row['accountId']][(int) $row['m']] = (string) $row['total'];
-        }
-
-        return $out;
+            return ['account' => $account, 'balances' => $balances];
+        }, $opened);
     }
 
     /**

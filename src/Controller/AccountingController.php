@@ -292,7 +292,8 @@ class AccountingController extends AbstractController
 
     /**
      * El año entero en una rejilla de partida por mes. Es la hoja «Resumen» del
-     * Excel, calculada en vez de copiada.
+     * Excel, calculada en vez de copiada, con el saldo de cada caja y banco al cerrar
+     * cada mes y el de partida que viene del año anterior.
      */
     #[Route('/year/{year}', name: 'accounting_year', requirements: ['year' => '\d{4}'], methods: ['GET'])]
     public function year(
@@ -303,11 +304,24 @@ class AccountingController extends AbstractController
     ): Response {
         // Sin presupuesto: la rejilla sólo enseña lo real, y una partida que sólo está
         // presupuestada saldría como una fila entera de «·» con total 0.
+        $tracked = $tracker->track($year, null, 12);
+        $balances = $entries->balancesByMonthEnd($year);
+        // Los meses que aún no han llegado no tienen saldo; el que está en curso
+        // enseña el de hoy.
+        $balancesThrough = match ($year <=> (int) date('Y')) {
+            -1 => 12,
+            0 => (int) date('n'),
+            1 => 0,
+        };
+
         return $this->render('accounting/year.html.twig', [
             'year' => $year,
             'years' => $this->yearsWithData($budgets, $entries),
-            'tracked' => $tracker->track($year, null, 12),
+            'tracked' => $tracked,
             'months' => MonthNames::SHORT,
+            'balances' => $balances,
+            'balancesThrough' => $balancesThrough,
+            'unexplained' => $this->unexplainedByMonth($balances, $tracked['result']['actual'], $balancesThrough),
         ]);
     }
 
@@ -678,6 +692,37 @@ class AccountingController extends AbstractController
         }
 
         return $budgets->findApprovedForYear($year);
+    }
+
+    /**
+     * Los meses en que el dinero de las cuentas no cambió lo que dice el resultado:
+     * `[mes => diferencia]`, sólo los que descuadran. Lo normal es un traspaso con una
+     * sola mitad, o con las dos de importe distinto: mueve un saldo y no cuenta en el
+     * resultado. Una cuenta que abre ese mes no descuadra: su saldo de apertura no es
+     * movimiento.
+     *
+     * @param list<array{account: FinancialAccount, balances: array<int, float|null>}> $balances
+     * @param array<int, float> $result Resultado de cada mes, de BudgetTracker::track().
+     *
+     * @return array<int, float>
+     */
+    private function unexplainedByMonth(array $balances, array $result, int $through): array
+    {
+        $out = [];
+        for ($m = 1; $m <= $through; ++$m) {
+            $moved = array_sum(array_map(
+                static fn (array $row): float => $row['balances'][$m] === null
+                    ? 0.0
+                    : $row['balances'][$m] - ($row['balances'][$m - 1] ?? (float) $row['account']->getOpeningBalance()),
+                $balances,
+            ));
+            $diff = round($moved - $result[$m], 2);
+            if ($diff != 0.0) {
+                $out[$m] = $diff;
+            }
+        }
+
+        return $out;
     }
 
     /**

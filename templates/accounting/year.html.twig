@@ -6,12 +6,15 @@
  # resumen y el libro no coinciden en dos de los ocho meses cerrados). Aquí es la
  # misma suma de siempre, sólo que presentada de otra forma.
  #
- # El controller pasa: year, years, tracked (con throughMonth = 12, sin presupuesto)
- # y months (en tres letras).
+ # El controller pasa: year, years, tracked (con throughMonth = 12, sin presupuesto),
+ # months (en tres letras), balances (por cuenta: account y balances[0..12], 0 = el
+ # saldo de partida, null antes de abrir), balancesThrough (hasta qué mes hay saldo)
+ # y unexplained ([mes => diferencia], sólo los meses en que las cuentas descuadran).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
 
 {% block title %}Contabilidad · Resumen {{ year }}{% endblock %}
 
@@ -133,6 +136,68 @@
         Importes redondeados a euros para que quepa la rejilla. El detalle está en el libro
         y en la pantalla de cada mes.
     </p>
+
+    {% if balances is not empty %}
+    <h3 class="acc-muted" style="margin-top: var(--csa-sp-6, 32px); font-size: 14px;">Saldo de cada caja y banco</h3>
+    <div class="prl-table-wrap">
+        <table class="prl-table acc-grid">
+            <thead>
+                <tr>
+                    <th>Cuenta</th>
+                    <th class="acc-num acc-total-col" title="Saldo de partida: lo que venía del año anterior">1 ene</th>
+                    {% for n, name in months %}
+                        <th class="acc-num">{{ name }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in balances %}
+                    <tr>
+                        <td><a href="{{ path('accounting_ledger', { account: row.account.id }) }}">{{ row.account.name }}</a></td>
+                        {% for n in 0..12 %}
+                            {% set v = n <= balancesThrough ? row.balances[n] : null %}
+                            <td class="acc-num {{ n == 0 ? 'acc-total-col' : '' }} {{ v is not null and v < 0 ? 'acc-neg' : '' }} {{ v is null ? 'zero' : '' }}">
+                                {{ v is null ? '·' : v|number_format(2, ',', '.') }}
+                            </td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="acc-result-row">
+                    <td><b>Todas</b></td>
+                    {% for n in 0..12 %}
+                        {% set opened = balances|filter(r => r.balances[n] is not null) %}
+                        {% set v = n <= balancesThrough and opened is not empty ? opened|reduce((sum, r) => sum + r.balances[n], 0) : null %}
+                        <td class="acc-num {{ n == 0 ? 'acc-total-col' : '' }} {{ v is not null and v < 0 ? 'acc-neg' : '' }} {{ v is null ? 'zero' : '' }}">
+                            <b>{{ v is null ? '·' : v|number_format(2, ',', '.') }}</b>
+                        </td>
+                    {% endfor %}
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <p class="acc-muted" style="margin: 10px 2px; font-size: 12px;">
+        El 1 de enero es el saldo de partida, lo que venía del año anterior; cada mes, lo que
+        había al cerrarlo{{ balancesThrough >= 1 and balancesThrough < 12 ? ' (el mes en curso, lo de hoy)' : '' }}.
+        Una cuenta abierta durante el año empieza con su saldo de apertura. De un mes al
+        siguiente «Todas» cambia lo que dice el resultado de arriba: los traspasos entre
+        cuentas se anulan.
+    </p>
+
+    {% if unexplained is not empty %}
+    <p class="acc-small" style="margin: 10px 2px;">
+        Hay dinero sin explicar:
+        {% for n, diff in unexplained %}
+            {% set first = date(year ~ '-' ~ n ~ '-01') %}
+            en <a href="{{ path('accounting_ledger', { from: first|date('Y-m-d'), to: first|date('Y-m-t') }) }}">{{ months[n]|lower }}</a>,
+            «Todas» cambió <b>{{ fmt.money(diff, true) }}</b> más de lo que dice el resultado{{ loop.last ? '.' : ';' }}
+        {% endfor %}
+        Suele ser un traspaso entre cuentas con una sola mitad o con las dos de importe distinto.
+    </p>
+    {% endif %}
+    {% endif %}
 
 </div>
 {% endblock %}
