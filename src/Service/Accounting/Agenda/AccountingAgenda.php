@@ -52,8 +52,8 @@ class AccountingAgenda
 
     /**
      * Las tareas pendientes a una fecha, las que aprietan primero y, a igual urgencia,
-     * en el orden del ritmo de trabajo: libro, gestoría, facturas, cobros, remesa,
-     * traspasos.
+     * en el orden del ritmo de trabajo: libro, tarjetas, gestoría, facturas, cobros,
+     * remesa, traspasos.
      *
      * @param \DateTimeImmutable $today Hoy.
      *
@@ -63,6 +63,7 @@ class AccountingAgenda
     {
         $items = array_values(array_filter([
             $this->staleBankBooks($today),
+            ...$this->unexplainedCardPayments(),
             ...$this->accountantDeliveries($today),
             $this->openReceivedInvoices(),
             ...$this->uncollectedIssuedInvoices($today),
@@ -245,6 +246,33 @@ class AccountingAgenda
         }
 
         return $rows;
+    }
+
+    /**
+     * Tarjetas en positivo: la liquidación está anotada y faltan las compras que paga.
+     * En negativo es lo normal, lo comprado que el banco aún no ha liquidado. Un saldo
+     * por tarjeta: hay una o dos.
+     *
+     * @return list<AgendaItem>
+     */
+    private function unexplainedCardPayments(): array
+    {
+        $items = [];
+        foreach ($this->accounts->findActive() as $account) {
+            /** @var FinancialAccount $account */
+            $balance = $account->isCard() ? (float) $this->entries->balanceFor($account) : 0.0;
+            if ($balance > 0) {
+                $items[] = new AgendaItem(
+                    AgendaUrgency::Normal,
+                    sprintf('Anotar las compras de %s: %s € pagados sin explicar', $account->getName(), number_format($balance, 2, ',', '.')),
+                    ['La liquidación ya está anotada y faltan las compras que paga. Salen en los movimientos de la tarjeta o en la hoja de gastos.'],
+                    'accounting_ledger',
+                    ['account' => $account->getId()],
+                );
+            }
+        }
+
+        return $items;
     }
 
     /** Lo que espera en la bandeja de facturas recibidas. */

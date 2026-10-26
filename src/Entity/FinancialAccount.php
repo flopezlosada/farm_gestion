@@ -27,10 +27,18 @@ class FinancialAccount
     /** Caja de efectivo: los apuntes se anotan a mano. */
     public const KIND_CASH = 2;
 
+    /**
+     * Tarjeta: las compras restan y la liquidación del banco (un traspaso) suma. En
+     * negativo es lo comprado pendiente de liquidar; en positivo, una liquidación sin
+     * las compras que la explican.
+     */
+    public const KIND_CARD = 3;
+
     /** Etiquetas de los tipos, para formularios y listados. */
     public const KIND_LABELS = [
         self::KIND_BANK => 'Cuenta bancaria',
         self::KIND_CASH => 'Caja de efectivo',
+        self::KIND_CARD => 'Tarjeta',
     ];
 
     /**
@@ -133,6 +141,12 @@ class FinancialAccount
     public function isBank(): bool
     {
         return $this->kind === self::KIND_BANK;
+    }
+
+    /** Si es una tarjeta, que el banco liquida de golpe con un traspaso. */
+    public function isCard(): bool
+    {
+        return $this->kind === self::KIND_CARD;
     }
 
     public function getIban(): ?string
