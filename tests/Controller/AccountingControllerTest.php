@@ -129,6 +129,22 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
         $this->assertSelectorTextContains('body', 'saldo de '.$this->account->getName());
     }
 
+    /**
+     * Filtrar con «Todas las cuentas» y «Todas las partidas» manda los parámetros
+     * vacíos (`account=&category=`): es el formulario tal cual, no un caso raro.
+     * Daba 400 porque `getInt()` no acepta la cadena vacía.
+     */
+    public function testMovimientosConLosFiltrosEnTodasNoDaError(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+
+        $client->request('GET', '/gestion/accounting/ledger?account=&category=&from=&to=&q=');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorTextContains('h1', 'Movimientos');
+    }
+
     private function enableModule(): void
     {
         static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);

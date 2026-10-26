@@ -17,6 +17,7 @@ use App\Form\PartnerBasketShareType;
 use App\Form\PartnerType;
 use App\Entity\Basket;
 use App\Entity\BasketComponent;
+use App\Http\QueryId;
 use App\Repository\BasketRepository;
 use App\Repository\FeeAdjustmentRepository;
 use App\Service\Partner\Fee\MonthlyFeeCalculator;
@@ -77,16 +78,13 @@ class PartnerController extends AbstractController
         $rawStatus = $request->query->get('status', Partner::STATUS_ACTIVO);
         $statusFilter = $needsReview ? null : (in_array($rawStatus, Partner::STATUSES, true) ? $rawStatus : null);
 
-        // Cast manual de node/wbg porque $request->query->getInt() lanza
-        // BadRequestException si el valor es "" (string vacío), cosa que el
-        // form GET envía siempre que el radio "Cualquier X" está marcado.
         $filters = [
             'status'     => $statusFilter,
             'modalities' => array_values(array_filter(array_map('intval', (array) $request->query->all('modality')))),
             'cesta'      => in_array($request->query->get('cesta'), ['yes', 'no'], true) ? $request->query->get('cesta') : null,
             'eggs'       => in_array($request->query->get('eggs'), ['yes', 'no'], true) ? $request->query->get('eggs') : null,
-            'node'       => ((int) $request->query->get('node', '')) ?: null,
-            'wbg'        => ((int) $request->query->get('wbg', '')) ?: null,
+            'node'       => QueryId::from($request->query, 'node'),
+            'wbg'        => QueryId::from($request->query, 'wbg'),
             'q'          => trim((string) $request->query->get('q', '')) ?: null,
             'needs_review' => $needsReview ?: null,
         ];

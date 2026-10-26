@@ -8,6 +8,7 @@ use App\Entity\IssuedInvoice;
 use App\Entity\IssuedInvoiceLine;
 use App\Entity\User;
 use App\Form\IssuedInvoiceType;
+use App\Http\QueryId;
 use App\Repository\AccountEntryRepository;
 use App\Repository\IssuedInvoiceRepository;
 use App\Service\Accounting\IssuedInvoice\InvoiceIssuer;
@@ -60,7 +61,7 @@ class IssuedInvoiceController extends AbstractController
         $invoice = new IssuedInvoice(IssuedInvoice::SERIES_ORDINARY, IssuedInvoice::SOURCE_WEB, $this->actor());
         $invoice->setIssueDate(new \DateTimeImmutable('today'));
         // Desde la ficha de un cliente, ya elegido.
-        if (($customerId = $request->query->getInt('customer')) > 0) {
+        if (($customerId = QueryId::from($request->query, 'customer')) !== null) {
             $invoice->setCustomer($em->find(Customer::class, $customerId));
         }
         if (!$request->isMethod('POST')) {

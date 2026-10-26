@@ -9,6 +9,7 @@ use App\Entity\VolunteerCoordinationLog;
 use App\Entity\VolunteerEvent;
 use App\Entity\VolunteerShift;
 use App\Entity\VolunteerSignup;
+use App\Http\QueryId;
 use App\Repository\VolunteerCategoryRepository;
 use App\Repository\VolunteerCoordinationLogRepository;
 use App\Repository\VolunteerShiftRepository;
@@ -380,7 +381,7 @@ class PanelVolunteeringController extends AbstractController
         $month = MonthGrid::monthFrom($request->query->getString('mes'), $now);
         $weeks = MonthGrid::weeks((int) $month->format('Y'), (int) $month->format('n'));
 
-        $categoryId = $request->query->getInt('tipo') ?: null;
+        $categoryId = QueryId::from($request->query, 'tipo');
         $category = null !== $categoryId ? $categories->find($categoryId) : null;
 
         // Las áreas que ha marcado: lo suyo se resalta y el resto se apaga, y

@@ -8,6 +8,7 @@ use App\Entity\FinancialAccount;
 use App\Entity\User;
 use App\Form\AccountEntryType;
 use App\Form\AccountTransferType;
+use App\Http\QueryId;
 use App\Repository\AccountEntryRepository;
 use App\Repository\BudgetCategoryRepository;
 use App\Repository\BudgetRepository;
@@ -189,13 +190,13 @@ class AccountingController extends AbstractController
         PaginatorInterface $paginator,
         ReceivedInvoiceRepository $invoices,
     ): Response {
-        $accountId = $request->query->getInt('account');
-        $account = $accountId > 0 ? $accounts->find($accountId) : null;
+        $accountId = QueryId::from($request->query, 'account');
+        $account = $accountId !== null ? $accounts->find($accountId) : null;
 
         $filters = [
             'account' => $account,
-            'category' => $request->query->getInt('category') ?: null,
-            'group' => $request->query->getInt('group') ?: null,
+            'category' => QueryId::from($request->query, 'category'),
+            'group' => QueryId::from($request->query, 'group'),
             'from' => $this->parseDate($request->query->get('from')),
             'to' => $this->parseDate($request->query->get('to')),
             'text' => trim((string) $request->query->get('q')) ?: null,
@@ -378,8 +379,8 @@ class AccountingController extends AbstractController
     ): Response {
         $entry = new AccountEntry();
         $entry->setDate($this->parseDate($request->query->get('date')) ?? new \DateTimeImmutable('today'));
-        $accountId = $request->query->getInt('account');
-        if ($accountId > 0) {
+        $accountId = QueryId::from($request->query, 'account');
+        if ($accountId !== null) {
             $entry->setAccount($accounts->find($accountId));
         }
 
@@ -669,8 +670,8 @@ class AccountingController extends AbstractController
      */
     private function resolveBudget(Request $request, BudgetRepository $budgets, int $year): ?object
     {
-        $budgetId = $request->query->getInt('budget');
-        if ($budgetId > 0) {
+        $budgetId = QueryId::from($request->query, 'budget');
+        if ($budgetId !== null) {
             $budget = $budgets->find($budgetId);
             if ($budget !== null && $budget->getYear() === $year) {
                 return $budget;

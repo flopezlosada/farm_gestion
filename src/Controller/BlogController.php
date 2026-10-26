@@ -6,6 +6,7 @@ use App\Entity\Blog;
 use App\Form\BlogEditType;
 use App\Form\BlogSecondType;
 use App\Form\BlogType;
+use App\Http\QueryId;
 use Doctrine\ORM\EntityManagerInterface;
 use Knp\Component\Pager\PaginatorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -37,7 +38,7 @@ class BlogController extends AbstractController
     public function index(Request $request, EntityManagerInterface $em)
     {
         // Filtro opcional por categoría desde los tabs.
-        $categoryId = $request->query->getInt('category') ?: null;
+        $categoryId = QueryId::from($request->query, 'category');
         $criteria = $categoryId ? ['category' => $categoryId] : [];
         $entities = $em->getRepository(\App\Entity\Blog::class)->findBy($criteria, ['created' => 'DESC']);
 
