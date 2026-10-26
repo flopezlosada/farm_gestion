@@ -77,6 +77,36 @@ class AccountEntryCashByMonthTest extends KernelTestCase
         $this->assertSame(1140.0, $delta[12]);
     }
 
+    /**
+     * El saldo de cada cuenta por separado ({@see AccountEntryRepository::balancesByMonthEnd}):
+     * el 1 de enero es lo que venía del año anterior, una cuenta que aún no existe no
+     * tiene saldo (null, no 0) y un traspaso baja una y sube la otra.
+     */
+    public function testElSaldoDeCadaCuentaMesAMes(): void
+    {
+        $bank = $this->account('Banco', '1000.00', '2098-06-01');
+        $box = $this->account('Caja', '200.00', '2099-03-15');
+        $this->entry($bank, '2098-11-10', '-50.00');  // el año anterior: va al saldo de partida
+        $this->entry($bank, '2099-01-10', '-100.00');
+        $this->entry($bank, '2099-04-02', '-300.00'); // traspaso del banco…
+        $this->entry($box, '2099-04-02', '300.00');   // …a la caja
+        $this->em->flush();
+
+        $rows = array_column(array_map(
+            static fn (array $row): array => [$row['account']->getId(), $row['balances']],
+            $this->repo->balancesByMonthEnd(self::YEAR),
+        ), 1, 0);
+
+        $this->assertSame(950.0, $rows[$bank->getId()][0], 'El saldo de partida es la apertura más lo movido el año anterior.');
+        $this->assertSame(850.0, $rows[$bank->getId()][1]);
+        $this->assertSame(550.0, $rows[$bank->getId()][4], 'El traspaso sale del banco…');
+        $this->assertNull($rows[$box->getId()][0], 'La caja aún no existía el 1 de enero.');
+        $this->assertNull($rows[$box->getId()][2]);
+        $this->assertSame(200.0, $rows[$box->getId()][3], 'Abre en marzo con su saldo de apertura.');
+        $this->assertSame(500.0, $rows[$box->getId()][4], '…y entra en la caja.');
+        $this->assertSame(500.0, $rows[$box->getId()][12]);
+    }
+
     /** Un año en que ninguna cuenta estaba abierta no tiene saldo real del que partir. */
     public function testAntesDeAbrirLasCuentasNoHaySaldo(): void
     {
