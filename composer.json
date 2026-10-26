@@ -8,6 +8,7 @@
         "a2lix/translation-form-bundle": "^3.0@dev",
         "beberlei/doctrineextensions": "^1.2",
         "composer/package-versions-deprecated": "1.11.99.1",
+        "directorytree/imapengine": "1.25.6",
         "doctrine/annotations": "^1.0",
         "doctrine/common": "^3.4",
         "doctrine/doctrine-bundle": "^2.0@dev",
