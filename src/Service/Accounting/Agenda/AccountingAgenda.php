@@ -11,6 +11,7 @@ use App\Entity\ReturnStatus;
 use App\Repository\AccountEntryRepository;
 use App\Repository\FinancialAccountRepository;
 use App\Repository\IssuedInvoiceRepository;
+use App\Repository\PendingTransferRepository;
 use App\Repository\ReceivedInvoiceRepository;
 use App\Repository\RemittanceRepository;
 use App\Repository\RemittanceReturnRepository;
@@ -26,8 +27,8 @@ use App\Service\Accounting\Remittance\BankReturns;
  * Lo que queda por hacer en la contabilidad, para la portada: el libro de los bancos
  * sin meter, la entrega del trimestre a la gestoría (o volver a mandarlo, si se
  * reabrió), la bandeja de facturas, lo
- * emitido sin cobrar, la remesa del mes, los recibos devueltos y los traspasos a
- * medias. Si no devuelve
+ * emitido sin cobrar, la remesa del mes, los recibos devueltos, los traspasos a
+ * medias y los que se han contado por el bot. Si no devuelve
  * nada, todo está al día.
  *
  * El módulo existe para que el libro esté al día y el paquete de la gestoría llegue
@@ -53,6 +54,7 @@ class AccountingAgenda
         private readonly IssuedInvoiceBook $issuedBook,
         private readonly ClosedPeriods $closed,
         private readonly RemittanceReturnRepository $returns,
+        private readonly PendingTransferRepository $pendingTransfers,
     ) {
     }
 
@@ -77,6 +79,7 @@ class AccountingAgenda
             $this->unidentifiedReturns(),
             $this->openReturns(),
             $this->unpairedTransfers(),
+            $this->botTransfers(),
         ]));
 
         // usort es estable: a igual urgencia se respeta el orden de arriba.
@@ -435,6 +438,22 @@ class AccountingAgenda
             'accounting_index',
             [],
             'traspasos',
+        );
+    }
+
+    /** Traspasos contados por el bot que esperan a que alguien los revise. */
+    private function botTransfers(): ?AgendaItem
+    {
+        $count = \count($this->pendingTransfers->findUnconfirmed());
+        if ($count === 0) {
+            return null;
+        }
+
+        return new AgendaItem(
+            AgendaUrgency::Normal,
+            $count === 1 ? 'Confirmar 1 traspaso contado por el bot' : sprintf('Confirmar %d traspasos contados por el bot', $count),
+            ['No entran en el libro hasta que alguien los revisa: lo entendido de una nota de voz puede estar mal.'],
+            'accounting_transfer_pending',
         );
     }
 }

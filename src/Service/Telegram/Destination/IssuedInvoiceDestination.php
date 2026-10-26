@@ -7,10 +7,8 @@ use App\Entity\IssuedInvoice;
 use App\Entity\User;
 use App\Service\Accounting\IssuedInvoice\DictatedInvoice;
 use App\Service\Accounting\IssuedInvoice\DictatedInvoiceReader;
-use App\Service\Ai\GeminiClient;
 use App\Service\Ai\GeminiException;
 use App\Service\AppSettings;
-use App\Service\Telegram\TelegramApiException;
 use App\Service\Telegram\TelegramInput;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
@@ -28,9 +26,6 @@ use Psr\Log\LoggerInterface;
  */
 class IssuedInvoiceDestination implements TelegramDestination
 {
-    /** Lo que graba Telegram en las notas de voz, si no dice otra cosa. */
-    private const VOICE_MIME_TYPE = 'audio/ogg';
-
     /**
      * @param DictatedInvoiceReader  $reader   Quien entiende el encargo.
      * @param EntityManagerInterface $em       Para guardar.
@@ -67,11 +62,7 @@ class IssuedInvoiceDestination implements TelegramDestination
 
     public function accepts(TelegramInput $input, User $user): bool
     {
-        // Un comando («/ayuda») no es un encargo.
-        $dictated = $input->kind === TelegramInput::VOICE
-            || ($input->kind === TelegramInput::TEXT && !str_starts_with(ltrim($input->text), '/'));
-
-        return $dictated
+        return Dictation::isDictated($input)
             && $this->settings->getBool(AppSettings::FEATURE_CONTABILIDAD)
             && $this->reader->isAvailable();
     }
@@ -87,22 +78,9 @@ class IssuedInvoiceDestination implements TelegramDestination
 
     public function commit(TelegramInput $input, User $user): TelegramOutcome
     {
-        $parts = [];
-        if ($input->kind === TelegramInput::VOICE) {
-            try {
-                $parts[] = GeminiClient::filePart((string) file_get_contents($input->localPath()), $input->mimeType ?? self::VOICE_MIME_TYPE);
-            } catch (TelegramApiException $e) {
-                $this->logger->warning('Telegram: no se pudo descargar una nota de voz', ['error' => $e->getMessage()]);
-                throw new TelegramRejected($e->getMessage());
-            }
-        }
-        if (trim($input->text) !== '') {
-            $parts[] = ['text' => 'Lo que ha escrito: «' . $input->text . '»'];
-        }
-
         try {
             $dictated = $this->reader->read(
-                $parts,
+                Dictation::parts($input, $this->logger),
                 $this->em->getRepository(Customer::class)->findBy([], ['name' => 'ASC']),
                 new \DateTimeImmutable('today'),
                 $user,

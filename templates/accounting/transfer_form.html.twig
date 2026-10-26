@@ -5,7 +5,8 @@
  # convierte en los dos apuntes enlazados. Un traspaso no es ingreso ni gasto: no
  # cuenta en el seguimiento del presupuesto, sólo cambia dónde está el dinero.
  #
- # El controller pasa: form.
+ # El controller pasa: form y, si viene del bot, pending (el PendingTransfer que se
+ # confirma: el formulario llega relleno con lo que se entendió).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -31,6 +32,9 @@
     ) }}
 
     <div class="csa-form-narrow">
+        {% if pending is defined %}
+            {{ csa.callout('Lo contó ' ~ pending.sentBy.displayName ~ ' por el bot el ' ~ pending.createdAt|date('d/m/Y') ~ '. Revisa lo que entendí y corrige lo que haga falta: hasta que no lo anotes no entra en el libro.', 'warning') }}
+        {% endif %}
         {{ csa.callout('Se anotan los dos apuntes a la vez, con el mismo importe. No suman ni restan en el presupuesto.', 'info') }}
     </div>
 
@@ -56,7 +60,7 @@
             <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
                 <div></div>
                 <div class="csa-row">
-                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('accounting_ledger') }) }}
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: pending is defined ? path('accounting_transfer_pending') : path('accounting_ledger') }) }}
                     {{ form_widget(form.submit, { attr: { class: 'csa-btn csa-btn--primary' } }) }}
                 </div>
             </div>
