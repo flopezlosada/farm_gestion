@@ -602,12 +602,34 @@ class PartnerBasketShareRepository extends ServiceEntityRepository
      */
     public function sumActiveMonthlyFees(): float
     {
-        $dql = 'SELECT COALESCE(SUM(pbs.month_price + pbs.egg_month_price + COALESCE(pbs.transport_price, 0)), 0)
+        $fees = $this->activeMonthlyFees();
+
+        return $fees['baskets'] + $fees['eggs'] + $fees['transport'];
+    }
+
+    /**
+     * Las cuotas de los contratos activos por concepto, al mes: lo que pagan las cestas,
+     * los huevos y el transporte, y cuántos contratos llevan huevos. Son las cifras con
+     * que se hace la cuenta de las cuotas en un escenario (cestas × precio + huevos ×
+     * precio + transporte), como en la hoja del presupuesto.
+     *
+     * @return array{baskets: float, eggs: float, eggShares: int, transport: float}
+     */
+    public function activeMonthlyFees(): array
+    {
+        $dql = 'SELECT COALESCE(SUM(pbs.month_price), 0) AS baskets,
+                       COALESCE(SUM(pbs.egg_month_price), 0) AS eggs,
+                       COALESCE(SUM(CASE WHEN pbs.egg_month_price > 0 THEN 1 ELSE 0 END), 0) AS eggShares,
+                       COALESCE(SUM(pbs.transport_price), 0) AS transport
                 FROM App\Entity\PartnerBasketShare pbs
                 WHERE pbs.is_active = 1';
+        $row = $this->getEntityManager()->createQuery($dql)->getSingleResult();
 
-        return (float) $this->getEntityManager()->createQuery($dql)->getSingleScalarResult();
+        return [
+            'baskets' => (float) $row['baskets'],
+            'eggs' => (float) $row['eggs'],
+            'eggShares' => (int) $row['eggShares'],
+            'transport' => (float) $row['transport'],
+        ];
     }
 }
-
-

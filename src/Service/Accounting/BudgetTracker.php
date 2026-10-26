@@ -147,7 +147,10 @@ class BudgetTracker
      * al rehacer el presupuesto a mitad de año, y no pretende adivinar nada más.
      *
      * Si en el año no había ninguna cuenta abierta (un año anterior a llevar las
-     * cuentas en la aplicación), no hay saldo real: se parte del del presupuesto.
+     * cuentas en la aplicación), no hay saldo real: se parte del del presupuesto. Lo
+     * mismo en un año que aún no ha empezado: el saldo de las cuentas el 1 de enero
+     * sería el de HOY, sin los meses que faltan, y el presupuesto del año que viene
+     * arranca de la tesorería que se espera tener, que es la que se teclea en él.
      *
      * @return array{
      *     months: array<int, array{month: int, net: float, cumulative: float, projected: bool}>,
@@ -171,7 +174,7 @@ class BudgetTracker
             }
         }
 
-        $real = $this->entries->cashByMonthEnd($year);
+        $real = $year > (int) date('Y') ? null : $this->entries->cashByMonthEnd($year);
         $opening = $real !== null ? $real[0] : ($budget !== null ? (float) $budget->getOpeningCash() : 0.0);
         $cumulative = $opening;
         $months = [];

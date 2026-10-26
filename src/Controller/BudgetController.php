@@ -13,6 +13,8 @@ use App\Repository\PartnerBasketShareRepository;
 use App\Service\Accounting\Amount;
 use App\Service\Accounting\BudgetTracker;
 use App\Service\Accounting\MonthNames;
+use App\Service\Accounting\Scenario\ScenarioLeverReader;
+use App\Service\Accounting\Scenario\ScenarioSimulator;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -256,6 +258,34 @@ class BudgetController extends AbstractController
         }
 
         return $this->redirectToRoute('accounting_budget_lines', ['id' => $budget->getId()]);
+    }
+
+    /**
+     * ¿Y si…? La calculadora de escenarios: cómo acabaría el año partiendo de este
+     * presupuesto si cambian las cestas, los sueldos o llega un gasto puntual.
+     *
+     * Es un GET a propósito: no guarda nada, el escenario es su enlace. Los sueldos
+     * sólo entran para ROLE_ADMIN, como en la pantalla de trabajadores.
+     */
+    #[Route('/{id}/scenario', name: 'accounting_budget_scenario', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function scenario(
+        Request $request,
+        Budget $budget,
+        ScenarioLeverReader $reader,
+        ScenarioSimulator $simulator,
+    ): Response {
+        $canSeeSalaries = $this->isGranted('ROLE_ADMIN');
+        $form = $reader->read($request->query->all(), (int) $budget->getYear(), $canSeeSalaries);
+
+        return $this->render('accounting/budget_scenario.html.twig', $form + [
+            'budget' => $budget,
+            'result' => $simulator->simulate($budget, $form['levers']),
+            'canSeeSalaries' => $canSeeSalaries,
+            'query' => $request->query->all(),
+            'months' => MonthNames::SHORT,
+            'oneOffRows' => ScenarioLeverReader::ONE_OFF_ROWS,
+            'extraRows' => ScenarioLeverReader::EXTRA_ROWS,
+        ]);
     }
 
     /**

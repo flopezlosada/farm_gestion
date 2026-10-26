@@ -1,0 +1,289 @@
+{# ============================================================
+ # ¿Y si…? La calculadora de escenarios de un presupuesto.
+ #
+ # Arriba las palancas, en un formulario GET: el escenario no se guarda, es su enlace.
+ # Una casilla vacía es «lo que haya» (lo presupuestado, o en las cuotas lo que pagan
+ # hoy los contratos), y por eso las pistas van de placeholder y no de valor.
+ #
+ # Abajo la tesorería a fin de mes de la base y del escenario. Los meses ya anotados
+ # salen en gris: son lo real del libro y ningún escenario los cambia.
+ #
+ # El controller pasa: budget, result (ScenarioSimulator::simulate), levers, hints,
+ # staffRows, categories (por tipo), warnings, canSeeSalaries, query, months,
+ # oneOffRows, extraRows.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
+
+{% block title %}{{ budget.year }} · ¿Y si…? · Presupuesto{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_budgets') }}">Presupuestos</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ budget.year }} · ¿Y si…?</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+    <style>
+        .acc-levers { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+        .acc-lever label { display: block; font-size: 12px; margin: 8px 0 2px; }
+        .acc-lever .csa-input, .acc-lever .csa-select { width: 100%; }
+        .acc-lever-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .acc-lever-table { width: 100%; font-size: 12px; }
+        .acc-lever-table th { text-align: left; font-weight: 600; padding: 4px 4px 2px; }
+        .acc-lever-table td { padding: 2px 4px; }
+        .acc-lever-table .csa-input, .acc-lever-table .csa-select { width: 100%; min-width: 70px; }
+        .acc-scenario-grid .acc-past { color: var(--csa-ink-soft, #6b6b6b); background: rgba(0, 0, 0, 0.03); }
+        .acc-scenario-grid .acc-cash td { font-weight: 600; }
+        .acc-headline { display: flex; flex-wrap: wrap; gap: 24px; font-size: 14px; }
+        .acc-headline b { font-size: 18px; }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+{% set parts = {
+    fees: 'Cuotas de socixs',
+    maintenance: 'Cuota de mantenimiento',
+    staff: 'Sueldos',
+    oneOffs: 'Puntuales',
+} %}
+{% set through = result.throughMonth %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Presupuesto ' ~ budget.year,
+        '¿Y si…?',
+        through > 0
+            ? 'La base es lo real del libro hasta ' ~ (months[through]|lower) ~ ' y «' ~ budget.name ~ '» el resto. El escenario sólo cambia los meses que faltan.'
+            : 'La base es «' ~ budget.name ~ '» entero. El escenario cambia lo que toques; el resto sigue siendo lo presupuestado.'
+    ) }}
+
+    {% for warning in warnings %}
+        <div class="csa-alert csa-alert--warning" role="status" style="margin-bottom: var(--csa-sp-3);">
+            <i class="csa-alert__icon fa fa-exclamation-triangle" aria-hidden="true"></i>
+            <div class="csa-alert__body">{{ warning }}</div>
+        </div>
+    {% endfor %}
+
+    {% if through >= 12 %}
+        <div class="prl-empty">{{ budget.year }} ya está anotado entero: no quedan meses que simular.</div>
+    {% else %}
+
+    <form method="get" action="{{ path('accounting_budget_scenario', { id: budget.id }) }}">
+        <div class="acc-levers">
+
+            {# ============ CUOTAS ============ #}
+            {% embed '_components/csa_card.html.twig' with { title: 'Cuotas de socixs', subtitle: 'Cestas × precio + huevos × precio + transporte, cada mes', accent: 'green' } %}
+                {% block body %}
+                    <div class="acc-lever">
+                        <div class="acc-lever-row">
+                            <div><label for="fees-baskets">Cestas</label>
+                                <input id="fees-baskets" class="csa-input" name="fees[baskets]" value="{{ query.fees.baskets ?? '' }}" placeholder="{{ hints.baskets|number_format(2, ',', '.') }}" inputmode="decimal"></div>
+                            <div><label for="fees-basket-price">Precio de la cesta (€/mes)</label>
+                                <input id="fees-basket-price" class="csa-input" name="fees[basket_price]" value="{{ query.fees.basket_price ?? '' }}" placeholder="{{ hints.basketPrice|number_format(2, ',', '.') }}" inputmode="decimal"></div>
+                            <div><label for="fees-eggs">Contratos con huevos</label>
+                                <input id="fees-eggs" class="csa-input" name="fees[eggs]" value="{{ query.fees.eggs ?? '' }}" placeholder="{{ hints.eggShares|number_format(0, ',', '.') }}" inputmode="decimal"></div>
+                            <div><label for="fees-egg-price">Precio de los huevos (€/mes)</label>
+                                <input id="fees-egg-price" class="csa-input" name="fees[egg_price]" value="{{ query.fees.egg_price ?? '' }}" placeholder="{{ hints.eggPrice|number_format(2, ',', '.') }}" inputmode="decimal"></div>
+                            <div><label for="fees-transport">Transporte (€/mes, todo)</label>
+                                <input id="fees-transport" class="csa-input" name="fees[transport]" value="{{ query.fees.transport ?? '' }}" placeholder="{{ hints.transport|number_format(2, ',', '.') }}" inputmode="decimal"></div>
+                        </div>
+                        <p class="acc-muted acc-small" style="margin: 8px 0 0;">
+                            En gris, lo que pagan hoy los contratos activos (los precios son la media).
+                            Todo vacío = lo presupuestado. Si tocas una casilla, las vacías valen lo de hoy.
+                        </p>
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {# ============ MANTENIMIENTO ============ #}
+            {% embed '_components/csa_card.html.twig' with { title: 'Cuota de mantenimiento', subtitle: 'Familias × cuota, en los meses en que el presupuesto la cobra', accent: 'green' } %}
+                {% block body %}
+                    <div class="acc-lever">
+                        <div class="acc-lever-row">
+                            <div><label for="maintenance-families">Familias</label>
+                                <input id="maintenance-families" class="csa-input" name="maintenance[families]" value="{{ query.maintenance.families ?? '' }}" inputmode="decimal"></div>
+                            <div><label for="maintenance-fee">Cuota por cobro (€)</label>
+                                <input id="maintenance-fee" class="csa-input" name="maintenance[fee]" value="{{ query.maintenance.fee ?? '' }}" inputmode="decimal"></div>
+                        </div>
+                        <p class="acc-muted acc-small" style="margin: 8px 0 0;">Las dos vacías = lo presupuestado.</p>
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            {# ============ PUNTUALES ============ #}
+            {% embed '_components/csa_card.html.twig' with { title: 'Ingresos y gastos puntuales', subtitle: 'Se suman al mes que elijas; el signo lo pone la partida', accent: 'green' } %}
+                {% block body %}
+                    <table class="acc-lever-table">
+                        <thead><tr><th>Partida</th><th>Mes</th><th>Importe (€)</th></tr></thead>
+                        <tbody>
+                        {% for i in 0..(oneOffRows - 1) %}
+                            {% set row = query.oneoff[i] ?? {} %}
+                            <tr>
+                                <td>
+                                    <select class="csa-select" name="oneoff[{{ i }}][category]" aria-label="Partida del puntual {{ i + 1 }}">
+                                        <option value=""></option>
+                                        {% for kind, list in categories %}
+                                            <optgroup label="{{ kind }}">
+                                                {% for category in list %}
+                                                    <option value="{{ category.id }}" {{ (row.category ?? '') == category.id ? 'selected' }}>{{ category.group.name|capitalize }} · {{ category.name }}</option>
+                                                {% endfor %}
+                                            </optgroup>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td>
+                                    <select class="csa-select" name="oneoff[{{ i }}][month]" aria-label="Mes del puntual {{ i + 1 }}">
+                                        <option value=""></option>
+                                        {% for m, name in months %}
+                                            {% if m > through %}
+                                                <option value="{{ m }}" {{ (row.month ?? '') == m ? 'selected' }}>{{ name }}</option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td><input class="csa-input" name="oneoff[{{ i }}][amount]" value="{{ row.amount ?? '' }}" inputmode="decimal" aria-label="Importe del puntual {{ i + 1 }}"></td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                {% endblock %}
+            {% endembed %}
+        </div>
+
+        {# ============ SUELDOS (sólo admin) ============ #}
+        {% if canSeeSalaries %}
+        <div style="margin-top: 14px;">
+            {% embed '_components/csa_card.html.twig' with { title: 'Sueldos', subtitle: 'Con las fichas de trabajadores en vez de lo presupuestado', accent: 'green' } %}
+                {% block body %}
+                    <label style="font-size: 13px;">
+                        <input type="checkbox" name="recalc" value="1" {{ (query.recalc ?? '') == '1' ? 'checked' }}>
+                        Recalcular los sueldos de los meses que faltan con las fichas y los trabajadores de abajo
+                    </label>
+                    <p class="acc-muted acc-small" style="margin: 4px 0 10px;">
+                        Sin marcar, los sueldos son los del presupuesto. Marcada, sustituyen al grupo entero de sueldos
+                        (nóminas, Seguridad Social e IRPF). Lo que cambies aquí no toca las fichas.
+                    </p>
+                    <div style="overflow-x: auto;">
+                    <table class="acc-lever-table">
+                        <thead><tr><th>Trabajador</th><th>Desde</th><th>Bruto anual (€)</th><th>Pagas</th><th>% SS empresa</th><th>Hasta</th></tr></thead>
+                        <tbody>
+                        {% for row in staffRows %}
+                            {% set salary = row.salary %}
+                            <tr>
+                                <td>{{ salary.worker.name }}</td>
+                                <td class="acc-muted">{{ salary.validFrom|date('d/m/Y') }}</td>
+                                <td><input class="csa-input" name="staff[{{ salary.id }}][gross]" value="{{ row.gross }}" inputmode="decimal" aria-label="Bruto anual de {{ salary.worker.name }}"></td>
+                                <td class="acc-muted">{{ salary.payments.value }}</td>
+                                <td class="acc-muted">{{ salary.employerSsRate|number_format(2, ',', '.') }}</td>
+                                <td><input type="date" class="csa-input" name="staff[{{ salary.id }}][to]" value="{{ row.to }}" aria-label="Último día de {{ salary.worker.name }}"></td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="6" class="acc-muted">Nadie tiene sueldo en {{ budget.year }}. Se meten en <a href="{{ path('accounting_workers') }}">Trabajadores</a>.</td></tr>
+                        {% endfor %}
+                        {% for i in 0..(extraRows - 1) %}
+                            {% set row = query.extra[i] ?? {} %}
+                            <tr>
+                                <td class="acc-muted">Imaginario {{ i + 1 }}</td>
+                                <td><input type="date" class="csa-input" name="extra[{{ i }}][from]" value="{{ row.from ?? '' }}" aria-label="Primer día del imaginario {{ i + 1 }}"></td>
+                                <td><input class="csa-input" name="extra[{{ i }}][gross]" value="{{ row.gross ?? '' }}" inputmode="decimal" aria-label="Bruto anual del imaginario {{ i + 1 }}"></td>
+                                <td>
+                                    <select class="csa-select" name="extra[{{ i }}][payments]" aria-label="Pagas del imaginario {{ i + 1 }}">
+                                        {% for p in [14, 12] %}
+                                            <option value="{{ p }}" {{ (row.payments ?? '14') == p ? 'selected' }}>{{ p }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td><input class="csa-input" name="extra[{{ i }}][ss]" value="{{ row.ss ?? '' }}" inputmode="decimal" placeholder="{{ staffRows is empty ? '' : (staffRows|last).salary.employerSsRate|number_format(2, ',', '.') }}" aria-label="% SS del imaginario {{ i + 1 }}"></td>
+                                <td><input type="date" class="csa-input" name="extra[{{ i }}][to]" value="{{ row.to ?? '' }}" aria-label="Último día del imaginario {{ i + 1 }}"></td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                    </div>
+                    <p class="acc-muted acc-small" style="margin: 6px 0 0;">
+                        Un imaginario sin «desde» empieza el 1 de enero; sin «hasta», sigue. Sin % de Seguridad Social, el de la última ficha.
+                    </p>
+                {% endblock %}
+            {% endembed %}
+        </div>
+        {% endif %}
+
+        <div class="prl-toolbar" style="margin-top: 14px;">
+            <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-calculator"></i> Calcular</button>
+            <a href="{{ path('accounting_budget_scenario', { id: budget.id }) }}" class="prl-btn">Empezar de cero</a>
+            <div class="spacer"></div>
+            <a href="{{ path('accounting_budget_lines', { id: budget.id }) }}" class="prl-btn"><i class="fa fa-table"></i> Las cifras del presupuesto</a>
+        </div>
+    </form>
+
+    {# ============ RESULTADO ============ #}
+    <div style="margin-top: 18px;">
+    {% embed '_components/csa_card.html.twig' with { title: 'Cómo acabaría ' ~ budget.year, subtitle: levers.empty ? 'Sin palancas, el escenario es la base' : 'Base frente a escenario', accent: 'green' } %}
+        {% block body %}
+            {% import 'accounting/_money.html.twig' as fmt %}
+            <div class="acc-headline">
+                <div>A fin de año, la base: <b>{{ fmt.money(result.base.end) }}</b></div>
+                <div>El escenario: <b>{{ fmt.money(result.scenario.end) }}</b>
+                    <span class="acc-small">({{ fmt.money(result.scenario.end - result.base.end, true) }})</span></div>
+                <div>Peor mes del escenario: <b>{{ months[result.scenario.lowest.month] }}</b>, con {{ fmt.money(result.scenario.lowest.cumulative) }}</div>
+            </div>
+        {% endblock %}
+    {% endembed %}
+    </div>
+
+    <div class="prl-table-wrap" style="margin-top: 14px; overflow-x: auto;">
+        <table class="prl-table acc-grid acc-scenario-grid">
+            <thead>
+                <tr>
+                    <th></th>
+                    {% for m, name in months %}<th class="acc-num {{ m <= through ? 'acc-past' }}">{{ name }}</th>{% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for key, label in parts %}
+                    {% if result.months[1].parts[key] is defined %}
+                        <tr>
+                            <td>{{ label }}</td>
+                            {% for m in 1..12 %}
+                                {% set v = result.months[m].parts[key] %}
+                                <td class="acc-num {{ m <= through ? 'acc-past' }}">{{ v == 0 ? '—' : fmt.money(v, true) }}</td>
+                            {% endfor %}
+                        </tr>
+                    {% endif %}
+                {% endfor %}
+                <tr class="acc-result-row">
+                    <td>Cambio del mes</td>
+                    {% for m in 1..12 %}
+                        {% set v = result.months[m].delta %}
+                        <td class="acc-num {{ m <= through ? 'acc-past' }}">{{ v == 0 ? '—' : fmt.money(v, true) }}</td>
+                    {% endfor %}
+                </tr>
+                <tr class="acc-cash">
+                    <td>Tesorería · base</td>
+                    {% for m in 1..12 %}<td class="acc-num {{ m <= through ? 'acc-past' }}">{{ fmt.money(result.months[m].base) }}</td>{% endfor %}
+                </tr>
+                <tr class="acc-cash">
+                    <td>Tesorería · escenario</td>
+                    {% for m in 1..12 %}<td class="acc-num {{ m <= through ? 'acc-past' }}">{{ fmt.money(result.months[m].scenario) }}</td>{% endfor %}
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <p class="acc-muted acc-small" style="margin-top: 6px;">
+        Tesorería de partida: {{ fmt.money(result.opening) }} ({{ result.fromAccounts ? 'saldo de las cuentas el 1 de enero' : 'la del presupuesto' }}).
+        Si el escenario convence, copia el presupuesto y teclea las cifras nuevas.
+    </p>
+
+    {% endif %}
+</div>
+{% endblock %}
