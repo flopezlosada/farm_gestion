@@ -78,14 +78,15 @@ class AccountingSetupControllerTest extends AbstractAuthenticatedTest
         $crawler = $this->browser->request('GET', '/gestion/accounting/setup/categories/'.$this->category->getId().'?year='.self::YEAR);
 
         $this->assertResponseIsSuccessful();
-        $this->assertSelectorTextContains('.prl-toolbar .counters', 'previsto hasta marzo');
-        $this->assertSelectorTextContains('.prl-toolbar .counters', '-240,00 €');
-        $this->assertSelectorTextContains('.prl-toolbar .counters', '-960,00 € en el año');
+        $this->assertSelectorTextContains('.prl-stats', 'previsto hasta marzo');
+        $this->assertSelectorTextContains('.prl-stats', '-240,00 €');
+        $this->assertSelectorTextContains('.prl-stats', '-960,00 €');
+        $this->assertSelectorTextContains('.prl-stats', 'previsto en todo '.self::YEAR);
 
         $months = $crawler->filter('table.prl-table')->first()->filter('tbody tr');
         $this->assertCount(12, $months);
         $this->assertSame('-20,00 €', trim($months->eq(0)->filter('td')->eq(3)->text()), 'enero: gastó 20 € más de lo previsto');
-        $this->assertSame('80,00 €', trim($months->eq(1)->filter('td')->eq(3)->text()), 'febrero anotado sin gasto: cero de verdad');
+        $this->assertSame('+80,00 €', trim($months->eq(1)->filter('td')->eq(3)->text()), 'febrero anotado sin gasto: cero de verdad');
         $this->assertSame('—', trim($months->eq(3)->filter('td')->eq(2)->text()), 'abril aún no tiene real');
         $this->assertSame('—', trim($months->eq(3)->filter('td')->eq(3)->text()), 'ni diferencia');
 
