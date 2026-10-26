@@ -562,8 +562,8 @@ class AccountEntryRepository extends ServiceEntityRepository
 
     /**
      * Ingresos de un importe desde una fecha, que pueden ser el pago aparte de un
-     * recibo devuelto: una transferencia o lo que se dejó en caja. Los más antiguos
-     * primero, que el pago suele llegar poco después de la devolución.
+     * recibo devuelto: una transferencia o lo que se dejó en caja, que no pague ya otra
+     * devolución. Los más antiguos primero, que el pago suele llegar poco después de la devolución.
      *
      * @param string $amount Importe positivo, «55.00».
      *
@@ -576,6 +576,8 @@ class AccountEntryRepository extends ServiceEntityRepository
             ->andWhere('e.amount = :amount')->setParameter('amount', $amount)
             ->andWhere('e.date >= :from')->setParameter('from', $from)
             ->andWhere('e.transferPeer IS NULL')
+            ->leftJoin(RemittanceReturn::class, 'x', 'WITH', 'x.paidWith = e')
+            ->andWhere('x.id IS NULL')
             ->orderBy('e.date', 'ASC')
             ->addOrderBy('e.id', 'ASC')
             ->setMaxResults($limit)

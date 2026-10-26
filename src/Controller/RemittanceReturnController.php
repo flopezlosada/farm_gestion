@@ -73,8 +73,14 @@ class RemittanceReturnController extends AbstractController
 
         $entryId = $request->request->getInt('entry');
         $entry = $entryId > 0 ? $em->find(AccountEntry::class, $entryId) : null;
-        if ($entryId > 0 && ($entry === null || $returns->findOneBy(['entry' => $entry]) !== null)) {
-            $this->addFlash('warning', 'Esa devolución del banco ya está ligada a otro recibo.');
+        $error = match (true) {
+            $entryId === 0 => null,
+            $entry === null || BankReturns::reference($entry->getConcept(), BankReturns::RETURN_PREFIX) === null => 'Ese apunte no es una devolución de remesa del banco.',
+            $returns->findOneBy(['entry' => $entry]) !== null => 'Esa devolución del banco ya está ligada a otro recibo.',
+            default => null,
+        };
+        if ($error !== null) {
+            $this->addFlash('warning', $error);
 
             return $back;
         }
@@ -150,8 +156,11 @@ class RemittanceReturnController extends AbstractController
                 return $this->redirectToRoute('accounting_return_paid', ['id' => $return->getId()]);
             }
             $entry = $em->find(AccountEntry::class, $request->request->getInt('entry'));
+            // Los mismos que ofrece la pantalla: un ingreso que no es un traspaso y no
+            // paga ya otra devolución, aunque el POST traiga otro.
+            $offered = array_map(static fn (AccountEntry $e): int => (int) $e->getId(), $entries->findIncomeOf($line->getAmount(), $line->getRemittance()->getPeriod()));
             try {
-                $entry !== null ? $return->paidWith($entry, $this->actor()) : throw new \InvalidArgumentException('Elige el pago.');
+                $entry !== null && \in_array($entry->getId(), $offered, true) ? $return->paidWith($entry, $this->actor()) : throw new \InvalidArgumentException('Elige uno de los pagos de la lista.');
             } catch (\InvalidArgumentException|\LogicException $e) {
                 $this->addFlash('warning', $e->getMessage());
 

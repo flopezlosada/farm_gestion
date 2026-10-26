@@ -97,7 +97,7 @@ class RemittanceReturnRepository extends ServiceEntityRepository
 
     /**
      * Con todo lo que pinta una devolución cargado de una vez: su recibo, la remesa, el
-     * socix, los apuntes y el recibo nuevo con su remesa.
+     * socix, los apuntes, el recibo nuevo con su remesa y quién la resolvió.
      */
     private function withLines(): QueryBuilder
     {
@@ -108,6 +108,7 @@ class RemittanceReturnRepository extends ServiceEntityRepository
             ->leftJoin('x.entry', 'e')->addSelect('e')
             ->leftJoin('x.paidWith', 'pw')->addSelect('pw')
             ->leftJoin('x.rechargedIn', 'nl')->addSelect('nl')
-            ->leftJoin('nl.remittance', 'nr')->addSelect('nr');
+            ->leftJoin('nl.remittance', 'nr')->addSelect('nr')
+            ->leftJoin('x.resolvedBy', 'u')->addSelect('u');
     }
 }

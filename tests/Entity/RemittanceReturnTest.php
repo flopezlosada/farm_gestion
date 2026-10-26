@@ -166,6 +166,20 @@ class RemittanceReturnTest extends TestCase
         $this->assertStringEndsWith(' DEV', $long->getDebitReference());
     }
 
+    /** El recibo que vuelve a cobrar uno devuelto no pasa al mes siguiente: sería cobrarlo dos veces. */
+    public function testElBorradorSiguienteNoCopiaElReciboDev(): void
+    {
+        $september = new Remittance(Remittance::KIND_OTHER, new \DateTimeImmutable('2095-09-01'), 'Septiembre', Remittance::SOURCE_APP, null);
+        $september->addLine($this->line('55.00', 'SEPTIEMBRE 2095 901'));
+        $september->addLine($retry = RemittanceLine::retryOf($this->line('55.00', 'AGOSTO 2095 901')));
+        $this->assertTrue($retry->isRetry());
+        $this->assertSame('AGOSTO 2095 901 DEV', RemittanceLine::retryOf($retry)->getDebitReference(), 'Devuelto otra vez, no repite «DEV».');
+
+        $october = Remittance::nextFrom($september, new \DateTimeImmutable('2095-10-01'), null);
+
+        $this->assertSame(['OCTUBRE 2095 901'], $october->getLines()->map(static fn (RemittanceLine $l): string => $l->getDebitReference())->getValues());
+    }
+
     /**
      * Si la ficha tiene el mismo mandato, la cuenta sale de la ficha (lo normal es que
      * se haya corregido allí); con otro mandato la ficha puede ser de otra persona.
