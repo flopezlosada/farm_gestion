@@ -89,6 +89,7 @@
             </div>
             <div class="spacer"></div>
             <a href="{{ path('accounting_budgets') }}" class="prl-btn">Volver</a>
+            <a href="{{ path('accounting_budget_scenario', { id: budget.id }) }}" class="prl-btn"><i class="fa fa-calculator"></i> ¿Y si…?</a>
             <a href="{{ path('accounting_budget_edit', { id: budget.id }) }}" class="prl-btn"><i class="fa fa-pencil"></i> Nombre y notas</a>
             {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
                 <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-save"></i> Guardar</button>

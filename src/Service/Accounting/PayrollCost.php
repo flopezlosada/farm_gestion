@@ -49,17 +49,19 @@ class PayrollCost
             $byWorker[(int) $salary->getWorker()?->getId()][] = $salary;
         }
 
-        return array_map(fn (array $workerSalaries) => $this->workerYear($workerSalaries, $year), $byWorker);
+        return array_map(fn (array $workerSalaries) => $this->forWorker($workerSalaries, $year), $byWorker);
     }
 
     /**
-     * El año de un solo trabajador.
+     * El año de un solo trabajador. Los tramos no tienen por qué estar guardados ni
+     * tener ficha: así se calcula también alguien que todavía no existe (¿y si
+     * contratamos a otra persona?), con su trabajador a null.
      *
-     * @param list<WorkerSalary> $salaries sus tramos
+     * @param non-empty-list<WorkerSalary> $salaries sus tramos
      *
-     * @return array{worker: Worker, gross: array<int, float>, ss: array<int, float>}
+     * @return array{worker: ?Worker, gross: array<int, float>, ss: array<int, float>}
      */
-    private function workerYear(array $salaries, int $year): array
+    public function forWorker(array $salaries, int $year): array
     {
         usort($salaries, static fn (WorkerSalary $a, WorkerSalary $b) => $a->getValidFrom() <=> $b->getValidFrom());
 
