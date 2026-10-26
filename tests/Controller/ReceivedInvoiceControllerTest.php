@@ -357,6 +357,56 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $this->assertSame('2232', $invoice->getAccountEntry()->getInvoiceNumber(), 'Lo que le faltaba lo completa la factura.');
     }
 
+    /**
+     * Un proveedor que cobra de una vez dos facturas deja un solo pago, por la suma: se
+     * ofrece junto con la otra, al elegirlo se enganchan las dos, la ficha del apunte
+     * las nombra y al borrarlo vuelven las dos a la bandeja.
+     */
+    public function testUnPagoDeVariasFacturasLasEnganchaTodas(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $invoice = $this->uploadOne($client);
+        $this->createCatalogue();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $invoice = $em->find(ReceivedInvoice::class, $invoice->getId());
+        $invoice->markRead(ExtractedInvoice::fromArray([
+            'fecha' => '2091-03-05', 'total' => 100, 'cif_proveedor' => self::TAX_ID, 'numero_factura' => 'F-1',
+        ]), 'test', $this->category, new \DateTimeImmutable());
+        $other = new ReceivedInvoice('siguiente.pdf', 'siguiente.pdf', 'application/pdf', ReceivedInvoice::SOURCE_WEB, null);
+        $other->markRead(ExtractedInvoice::fromArray([
+            'fecha' => '2091-03-20', 'total' => 30, 'cif_proveedor' => self::TAX_ID, 'numero_factura' => 'F-2',
+        ]), 'test', $this->category, new \DateTimeImmutable());
+        $em->persist($other);
+        $bank = (new AccountEntry())->setAccount($this->account)->setCategory($this->category)
+            ->setDate(new \DateTimeImmutable('2091-04-02'))->setConcept('trf. ferreteria marzo')->setAmount('-130.00');
+        $em->persist($bank);
+        $em->flush();
+        $this->extraEntries[] = $bank->getId();
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
+        $this->assertResponseIsSuccessful();
+        $this->assertSame((string) $bank->getId(), $crawler->filter('input[name="received_invoice_confirm[match]"][checked]')->attr('value'), 'El pago por la suma llega elegido.');
+        $this->assertStringContainsString('junto con la factura F-2 (30,00 €)', $crawler->filter('form[name="received_invoice_confirm"]')->text());
+
+        $client->submit($crawler->filter('form[name="received_invoice_confirm"]')->form());
+        $this->assertResponseRedirects();
+        foreach (['factura-prueba.pdf', 'siguiente.pdf'] as $name) {
+            $paid = $this->findInvoice($name);
+            $this->assertSame(ReceivedInvoice::STATUS_CONFIRMED, $paid->getStatus(), $name);
+            $this->assertSame($bank->getId(), $paid->getAccountEntry()?->getId(), $name . ' va al mismo pago.');
+        }
+        $this->assertSame('F-2', $this->findInvoice('siguiente.pdf')->getInvoiceNumber(), 'La otra conserva su número: no toma el del apunte.');
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/entry/%d', $bank->getId()));
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorTextContains('body', 'Este pago explica también F-2');
+        $client->submit($crawler->filter(sprintf('form[action$="/entry/%d/delete"]', $bank->getId()))->form());
+        foreach (['factura-prueba.pdf', 'siguiente.pdf'] as $name) {
+            $this->assertTrue($this->findInvoice($name)->isOpen(), $name . ' vuelve a la bandeja al borrar el pago.');
+        }
+    }
+
     /** Si quien revisa dice que es otro pago, se anota uno nuevo como siempre. */
     public function testOtroPagoCreaSuApunte(): void
     {

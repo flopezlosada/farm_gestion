@@ -5,6 +5,7 @@ namespace App\Form;
 use App\Entity\AccountEntry;
 use App\Entity\Provider;
 use App\Entity\ReceivedInvoice;
+use App\Service\Accounting\Invoice\GroupedPayment;
 use Doctrine\ORM\EntityRepository;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
@@ -32,6 +33,8 @@ use Symfony\Component\Validator\Constraints as Assert;
  * esos apuntes, el primero elegido: la factura se engancha a él en vez de crear otro
  * y contar el gasto dos veces. Entonces el apunte nuevo no se usa y su bloque se
  * oculta; para que no falle por algo que no se ve, sus datos se toman del elegido.
+ * También ofrece (`grouped`) el pago de esta factura junto con otras del mismo
+ * proveedor que siguen en la bandeja: al elegirlo, se enganchan todas.
  *
  * Reutiliza {@see AccountEntryType} entero en vez de copiar sus campos: así el
  * signo, las partidas que se ofrecen y la validación son exactamente los mismos
@@ -87,7 +90,14 @@ class ReceivedInvoiceConfirmType extends AbstractType
             ->add('withholding', NumberType::class, array_replace($money, ['attr' => ['step' => '0.01', 'min' => '0', 'data-inv-withholding' => '1']]))
             ->add('withholdingRate', NumberType::class, $money);
 
-        if ($options['candidates'] === []) {
+        // Los pagos agrupados van detrás de los de importe exacto, y su etiqueta dice
+        // con qué otras facturas de la bandeja va.
+        $withOthers = [];
+        foreach ($options['grouped'] as $group) {
+            $withOthers[(string) $group->payment->getId()] = $group->others;
+        }
+        $candidates = [...$options['candidates'], ...array_map(static fn (GroupedPayment $g): AccountEntry => $g->payment, $options['grouped'])];
+        if ($candidates === []) {
             return;
         }
 
@@ -95,7 +105,7 @@ class ReceivedInvoiceConfirmType extends AbstractType
             'mapped' => false,
             'required' => false,
             'expanded' => true,
-            'choices' => $options['candidates'],
+            'choices' => $candidates,
             'choice_value' => static fn (?AccountEntry $e) => $e?->getId(),
             'choice_label' => static fn (AccountEntry $e) => sprintf(
                 '%s · %s · %s · %s €',
@@ -103,16 +113,16 @@ class ReceivedInvoiceConfirmType extends AbstractType
                 $e->getAccount()?->getName(),
                 $e->getConcept(),
                 number_format((float) $e->getAmount(), 2, ',', '.'),
-            ),
+            ).(isset($withOthers[(string) $e->getId()]) ? ' · junto con '.self::listOf($withOthers[(string) $e->getId()]) : ''),
             'placeholder' => 'Es otro pago: anotar un apunte nuevo',
-            'data' => $options['candidates'][0],
+            'data' => $candidates[0],
         ]);
 
         // Enganchada a un apunte que ya existe, lo que diga el bloque oculto del
         // apunte nuevo no cuenta: se rellena con el elegido para que valide siempre.
         // Proveedor, nº de factura y notas sí son de quien revisa y no se tocan.
         $byId = [];
-        foreach ($options['candidates'] as $candidate) {
+        foreach ($candidates as $candidate) {
             $byId[(string) $candidate->getId()] = $candidate;
         }
         $builder->addEventListener(FormEvents::PRE_SUBMIT, static function (FormEvent $event) use ($byId): void {
@@ -138,10 +148,29 @@ class ReceivedInvoiceConfirmType extends AbstractType
 
     public function configureOptions(OptionsResolver $resolver): void
     {
-        $resolver->setDefaults(['data_class' => ReceivedInvoice::class, 'provider' => null, 'candidates' => []]);
+        $resolver->setDefaults(['data_class' => ReceivedInvoice::class, 'provider' => null, 'candidates' => [], 'grouped' => []]);
         $resolver->setRequired('entry');
         $resolver->setAllowedTypes('entry', AccountEntry::class);
         $resolver->setAllowedTypes('provider', [Provider::class, 'null']);
         $resolver->setAllowedTypes('candidates', AccountEntry::class.'[]');
+        $resolver->setAllowedTypes('grouped', GroupedPayment::class.'[]');
+    }
+
+    /**
+     * «la factura 23 (12,00 €)», o «las facturas 23 (12,00 €) y 24 (30,00 €)». Sin
+     * número, la fecha.
+     *
+     * @param list<ReceivedInvoice> $invoices
+     */
+    private static function listOf(array $invoices): string
+    {
+        $names = array_map(static fn (ReceivedInvoice $i): string => sprintf(
+            '%s (%s €)',
+            $i->getInvoiceNumber() ?? 'del '.$i->getInvoiceDate()?->format('d/m/Y'),
+            number_format((float) $i->getTotal(), 2, ',', '.'),
+        ), $invoices);
+        $last = array_pop($names);
+
+        return ($names === [] ? 'la factura ' : 'las facturas '.implode(', ', $names).' y ').$last;
     }
 }

@@ -76,6 +76,37 @@ class QuarterCashBookTest extends KernelTestCase
         $this->assertEquals(120, $sheet->getCell('H5')->getValue(), 'Saldo al cerrar: sin lo de abril, que es del trimestre siguiente.');
     }
 
+    /**
+     * Un pago agrupado nombra los ficheros de todas sus facturas: si sólo dijera uno,
+     * las demás del ZIP quedarían sin pago que las justifique.
+     */
+    public function testUnPagoAgrupadoNombraTodosSusFicheros(): void
+    {
+        $name = 'Caja agrupada '.bin2hex(random_bytes(3));
+        $account = $this->persist((new FinancialAccount())->setName($name)->setKind(FinancialAccount::KIND_CASH)
+            ->setOpeningBalance('0.00')->setOpeningDate(new \DateTimeImmutable('2093-01-01'))->setActive(true)->setSortOrder(99));
+        $group = $this->persist((new BudgetCategoryGroup())->setName('GASTOS AGRUPADO '.bin2hex(random_bytes(3)))
+            ->setKind(BudgetCategoryGroup::KIND_EXPENSE)->setSortOrder(99));
+        $category = $this->persist((new BudgetCategory())->setGroup($group)->setName('Varios')->setSortOrder(1));
+        $paid = $this->entry($account, $category, '2093-03-02', '-42.00', 'Pienso enero y febrero');
+        $this->em->flush();
+        $january = new ReceivedInvoice('enero.pdf', 'enero.pdf', 'application/pdf', ReceivedInvoice::SOURCE_WEB, null);
+        $february = new ReceivedInvoice('febrero.pdf', 'febrero.pdf', 'application/pdf', ReceivedInvoice::SOURCE_WEB, null);
+        $january->confirm($paid, null);
+        $february->confirm($paid, null);
+        $this->persist($january);
+        $this->persist($february);
+        $this->em->flush();
+
+        $book = (new QuarterCashBook(
+            $this->em->getRepository(AccountEntry::class),
+            $this->em->getRepository(FinancialAccount::class),
+            $this->em->getRepository(ReceivedInvoice::class),
+        ))->build(InvoiceQuarter::of(2093, 1), [$january->getId() => 'Pienso Fact 1.pdf', $february->getId() => 'Pienso Fact 2.pdf']);
+
+        $this->assertSame('Pienso Fact 1.pdf, Pienso Fact 2.pdf', $book->getSheetByName($name)->getCell('I3')->getValue());
+    }
+
     private function entry(FinancialAccount $account, BudgetCategory $category, string $date, string $amount, string $concept): AccountEntry
     {
         return $this->persist((new AccountEntry())->setAccount($account)->setCategory($category)

@@ -389,30 +389,64 @@ class AccountEntryRepository extends ServiceEntityRepository
     {
         $day = \DateTimeImmutable::createFromInterface($date);
 
+        return $this->unexplainedPayments($day->modify(sprintf('-%d days', self::PAYMENT_DAYS_BEFORE)), $day->modify(sprintf('+%d days', $daysAfter)))
+            ->addSelect('ABS(DATE_DIFF(e.date, :day)) AS HIDDEN distance')
+            ->andWhere('e.amount = :amount')
+            ->setParameter('amount', $amount)
+            ->setParameter('day', $day->format('Y-m-d'))
+            ->orderBy('distance', 'ASC')
+            ->addOrderBy('e.id', 'ASC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Apuntes que pueden ser el pago de varias facturas a la vez: uno de esos importes,
+     * entre dos fechas, y que aún no explica ninguna factura. Los más antiguos primero.
+     *
+     * @param list<string> $amounts Importes con signo, como en el apunte.
+     *
+     * @return list<AccountEntry>
+     */
+    public function findPaymentsAmong(array $amounts, \DateTimeInterface $from, \DateTimeInterface $to, int $limit = 3): array
+    {
+        if ($amounts === []) {
+            return [];
+        }
+
+        return $this->unexplainedPayments($from, $to)
+            ->andWhere('e.amount IN (:amounts)')
+            ->setParameter('amounts', $amounts)
+            ->orderBy('e.date', 'ASC')
+            ->addOrderBy('e.id', 'ASC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Lo común a buscar el pago de una factura: entre dos fechas, sin ninguna factura
+     * (recibida ni emitida) que ya lo explique, que no sea un traspaso, y en una
+     * cuenta y una partida que se pueden elegir.
+     */
+    private function unexplainedPayments(\DateTimeInterface $from, \DateTimeInterface $to): QueryBuilder
+    {
         return $this->createQueryBuilder('e')
             ->innerJoin('e.account', 'a')->addSelect('a')
             ->innerJoin('e.category', 'c')->addSelect('c')
             ->innerJoin('c.group', 'g')
             ->leftJoin(ReceivedInvoice::class, 'ri', 'WITH', 'ri.accountEntry = e')
             ->leftJoin(IssuedInvoice::class, 'ii', 'WITH', 'ii.accountEntry = e')
-            ->addSelect('ABS(DATE_DIFF(e.date, :day)) AS HIDDEN distance')
-            ->andWhere('e.amount = :amount')
             ->andWhere('e.date BETWEEN :from AND :to')
             ->andWhere('ri.id IS NULL')
             ->andWhere('ii.id IS NULL')
             ->andWhere('g.kind != :transfer')
             ->andWhere('a.active = true')
             ->andWhere('c.active = true')
-            ->setParameter('amount', $amount)
-            ->setParameter('day', $day->format('Y-m-d'))
-            ->setParameter('from', $day->modify(sprintf('-%d days', self::PAYMENT_DAYS_BEFORE))->format('Y-m-d'))
-            ->setParameter('to', $day->modify(sprintf('+%d days', $daysAfter))->format('Y-m-d'))
-            ->setParameter('transfer', BudgetCategoryGroup::KIND_TRANSFER)
-            ->orderBy('distance', 'ASC')
-            ->addOrderBy('e.id', 'ASC')
-            ->setMaxResults($limit)
-            ->getQuery()
-            ->getResult();
+            ->setParameter('from', $from->format('Y-m-d'))
+            ->setParameter('to', $to->format('Y-m-d'))
+            ->setParameter('transfer', BudgetCategoryGroup::KIND_TRANSFER);
     }
 
     /**

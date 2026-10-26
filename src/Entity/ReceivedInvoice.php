@@ -270,11 +270,13 @@ class ReceivedInvoice
     private ?string $confidence = null;
 
     /**
-     * El apunte en que se convirtió. SET NULL: si el apunte se borra, la factura
-     * vuelve a quedar sin anotar en vez de desaparecer con él.
+     * El apunte en que se convirtió, o el pago que la explica. Varias facturas pueden
+     * ir a un mismo pago: un proveedor cobra de una vez lo de varias. SET NULL: si el
+     * apunte se borra, la factura vuelve a quedar sin anotar en vez de desaparecer
+     * con él.
      *
-     * @ORM\OneToOne(targetEntity="AccountEntry")
-     * @ORM\JoinColumn(name="account_entry_id", nullable=true, unique=true, onDelete="SET NULL")
+     * @ORM\ManyToOne(targetEntity="AccountEntry")
+     * @ORM\JoinColumn(name="account_entry_id", nullable=true, onDelete="SET NULL")
      */
     private ?AccountEntry $accountEntry = null;
 
@@ -380,10 +382,20 @@ class ReceivedInvoice
      */
     public function confirm(AccountEntry $entry, ?Provider $provider): void
     {
-        $this->accountEntry = $entry;
-        $this->provider = $provider;
         $this->providerName = $entry->getProviderName() ?? $this->providerName;
         $this->invoiceNumber = $entry->getInvoiceNumber() ?? $this->invoiceNumber;
+        $this->confirmAlongside($entry, $provider);
+    }
+
+    /**
+     * Va en el pago de otra factura del mismo proveedor, que se cobró junto con ella.
+     * A diferencia de {@see confirm()}, no toma nada del apunte: lo completó la otra, y
+     * su número de factura pisaría el de ésta en el libro de facturas recibidas.
+     */
+    public function confirmAlongside(AccountEntry $payment, ?Provider $provider): void
+    {
+        $this->accountEntry = $payment;
+        $this->provider = $provider;
         $this->status = self::STATUS_CONFIRMED;
     }
 

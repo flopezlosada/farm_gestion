@@ -114,6 +114,37 @@ class ReceivedInvoiceRepository extends ServiceEntityRepository
     }
 
     /**
+     * Las otras facturas leídas y aún sin anotar de un proveedor, por CIF, con total:
+     * las que pueden ir con ésta en un mismo pago. Las de fecha más cercana primero, y
+     * como mucho `$limit`, porque se prueban sus combinaciones.
+     *
+     * @return list<ReceivedInvoice>
+     */
+    public function findOpenFromProvider(ReceivedInvoice $invoice, int $limit): array
+    {
+        if ($invoice->getProviderTaxId() === null || $invoice->getProviderTaxId() === '' || $invoice->getInvoiceDate() === null) {
+            return [];
+        }
+
+        return $this->createQueryBuilder('i')
+            ->addSelect('ABS(DATE_DIFF(i.invoiceDate, :day)) AS HIDDEN distance')
+            ->andWhere('i.status = :read')
+            ->andWhere('i.providerTaxId = :taxId')
+            ->andWhere('i.total IS NOT NULL')
+            ->andWhere('i.invoiceDate IS NOT NULL')
+            ->andWhere('i != :invoice')
+            ->setParameter('read', ReceivedInvoice::STATUS_READ)
+            ->setParameter('taxId', $invoice->getProviderTaxId())
+            ->setParameter('invoice', $invoice)
+            ->setParameter('day', $invoice->getInvoiceDate()->format('Y-m-d'))
+            ->orderBy('distance', 'ASC')
+            ->addOrderBy('i.id', 'ASC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Las últimas que salieron de la bandeja, anotadas o descartadas, para comprobar
      * lo último que se hizo y poder volver a una descartada por error.
      *
@@ -140,7 +171,8 @@ class ReceivedInvoiceRepository extends ServiceEntityRepository
      *
      * @param list<int> $entryIds Apuntes de la página.
      *
-     * @return array<int, int> id del apunte => id de la factura.
+     * @return array<int, list<int>> id del apunte => ids de sus facturas (varias si es
+     *                               un pago agrupado), de la más antigua a la más nueva.
      */
     public function invoiceIdsByEntry(array $entryIds): array
     {
@@ -152,10 +184,16 @@ class ReceivedInvoiceRepository extends ServiceEntityRepository
             ->select('IDENTITY(i.accountEntry) AS entry', 'i.id AS invoice')
             ->andWhere('i.accountEntry IN (:ids)')
             ->setParameter('ids', $entryIds)
+            ->orderBy('i.id', 'ASC')
             ->getQuery()
             ->getArrayResult();
 
-        return array_column($rows, 'invoice', 'entry');
+        $byEntry = [];
+        foreach ($rows as $row) {
+            $byEntry[(int) $row['entry']][] = (int) $row['invoice'];
+        }
+
+        return $byEntry;
     }
 
     /**
