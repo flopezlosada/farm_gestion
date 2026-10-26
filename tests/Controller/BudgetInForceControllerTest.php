@@ -90,7 +90,7 @@ class BudgetInForceControllerTest extends AbstractAuthenticatedTest
         $this->browser->request('POST', sprintf('/gestion/accounting/budgets/%d/delete', $this->revised->getId()), [
             '_token' => $token,
         ]);
-        $this->assertResponseRedirects('/gestion/accounting/budgets');
+        $this->assertResponseRedirects('/gestion/accounting/budgets/');
         $this->assertNotNull($this->reload($this->revised), 'no se ha borrado');
     }
 
@@ -99,7 +99,7 @@ class BudgetInForceControllerTest extends AbstractAuthenticatedTest
         $crawler = $this->browser->request('GET', '/gestion/accounting/budgets/');
         $form = $crawler->filter(sprintf('form[action$="/%d/in-force"]', $budget->getId()));
         $this->browser->request('POST', $form->attr('action'), ['_token' => $form->filter('input[name="_token"]')->attr('value')]);
-        $this->assertResponseRedirects('/gestion/accounting/budgets');
+        $this->assertResponseRedirects('/gestion/accounting/budgets/');
     }
 
     private function reload(Budget $budget): ?Budget
