@@ -29,7 +29,7 @@
         .rem-prepare { display: flex; flex-wrap: wrap; gap: var(--csa-sp-3, 12px); margin-bottom: var(--csa-sp-6, 24px); }
         .rem-prepare form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--csa-rule); border-radius: 8px; background: var(--csa-surface, #fff); }
         .rem-prepare b { font-weight: 600; }
-        .rem-prepare input[type=month] { height: 32px; padding: 0 8px; border: 1px solid var(--csa-rule); border-radius: 6px; }
+        .rem-prepare input[type=month], .rem-prepare input[type=text], .rem-prepare select { height: 32px; padding: 0 8px; border: 1px solid var(--csa-rule); border-radius: 6px; }
     </style>
 {% endblock %}
 
@@ -51,14 +51,25 @@
                         <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-calculator"></i> Preparar desde las cuotas</button>
                         <a class="acc-muted" href="{{ path('monthly_fee_index', { month: n.period|date('Y-m') }) }}">ver las cuotas del mes</a>
                     </form>
-                {% elseif n.from %}
-                    <form method="post" action="{{ path('accounting_remittance_prepare') }}">
+                {% else %}
+                    {# Derrama o cuota de socix: el mismo importe para toda una base, que se
+                     # elige porque hay socixs que pagan sin llevar cesta. #}
+                    <form method="post" action="{{ path('accounting_remittance_flat') }}">
                         <input type="hidden" name="_token" value="{{ csrf_token('prepare-remittance') }}">
                         <input type="hidden" name="kind" value="{{ kind }}">
-                        <b>{{ n.from.kindLabel }}</b>
+                        <b>{{ kindLabels[kind] }}</b>
                         <input type="month" name="period" value="{{ n.period|date('Y-m') }}" aria-label="Mes">
-                        <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Preparar</button>
-                        <span class="acc-muted">copia de «{{ n.from.label }}»</span>
+                        <select name="base" class="csa-select" aria-label="A quién">
+                            {% for base in bases %}
+                                <option value="{{ base.value }}">{{ base.label }}</option>
+                            {% endfor %}
+                        </select>
+                        <input type="text" name="amount" inputmode="decimal" size="7" placeholder="€ cada uno" aria-label="Importe de cada recibo" required>
+                        <input type="text" name="label" size="22" placeholder="Concepto (opcional)" aria-label="Concepto">
+                        <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-users"></i> Preparar para todxs</button>
+                        {% if n.from %}
+                            <button type="submit" class="prl-btn" formaction="{{ path('accounting_remittance_prepare') }}" formnovalidate>Copiar «{{ n.from.label }}»</button>
+                        {% endif %}
                     </form>
                 {% endif %}
             {% endfor %}
