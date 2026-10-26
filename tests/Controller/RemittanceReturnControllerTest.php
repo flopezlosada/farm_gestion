@@ -33,7 +33,22 @@ class RemittanceReturnControllerTest extends AbstractAuthenticatedTest
 
     protected function tearDown(): void
     {
+        try {
+            $this->cleanUp();
+        } finally {
+            // Aunque la limpieza falle, el kernel se apaga: si no, el test siguiente
+            // no puede crear su cliente.
+            parent::tearDown();
+        }
+    }
+
+    private function cleanUp(): void
+    {
         $em = $this->em();
+        $em->clear();
+        $em->createQuery(sprintf('DELETE FROM %s x WHERE x.line IN (SELECT l.id FROM %s l JOIN l.remittance r WHERE r.period >= :from)', RemittanceReturn::class, RemittanceLine::class))
+            ->setParameter('from', new \DateTimeImmutable('2095-01-01'))
+            ->execute();
         foreach ($em->getRepository(Remittance::class)->findAll() as $remittance) {
             if ($remittance->getPeriod()->format('Y') === '2095') {
                 $em->remove($remittance);
@@ -54,8 +69,6 @@ class RemittanceReturnControllerTest extends AbstractAuthenticatedTest
             $em->remove($setting);
         }
         $em->flush();
-
-        parent::tearDown();
     }
 
     /**
@@ -110,6 +123,7 @@ class RemittanceReturnControllerTest extends AbstractAuthenticatedTest
         $this->assertSame('AGOSTO 2095 901 DEV', $retry->getDebitReference());
         $this->assertSame(ReturnStatus::Recharging, $this->returnOf($luis)->getStatus());
 
+        $draft = $this->em()->find(Remittance::class, $draft->getId());
         $draft->markSent(null);
         $this->em()->flush();
         $this->assertSame(ReturnStatus::Closed, $this->returnOf($luis)->getStatus());
