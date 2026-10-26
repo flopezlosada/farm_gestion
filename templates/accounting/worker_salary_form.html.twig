@@ -46,8 +46,8 @@
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
-                        {{ csa.field(form.annualGross, 'Bruto anual (€)', { hint: 'el del año entero, con las pagas extra' }) }}
-                        {{ csa.field(form.employerSsRate, 'Seguridad Social de la empresa (%)', { hint: '«aportación empresa» de la nómina entre el bruto; ronda el 31 %' }) }}
+                        {{ csa.field(form.annualGross, 'Bruto anual (€)', { hint: 'el del año entero, con las pagas extra y SIN la retribución en especie: ésa no sale de caja' }) }}
+                        {{ csa.field(form.employerSsRate, 'Seguridad Social de la empresa (%)', { hint: '«Total aportación empresarial» de una nómina normal entre (bruto anual ÷ 12); ronda el 33 %' }) }}
                         {{ csa.field(form.payments, 'Pagas', { full: true }) }}
                     </div>
                 {% endblock %}

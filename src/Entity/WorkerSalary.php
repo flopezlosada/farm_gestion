@@ -61,7 +61,8 @@ class WorkerSalary
     private ?\DateTimeImmutable $validTo = null;
 
     /**
-     * Sueldo bruto del año entero, con las pagas extra: lo que dice el contrato.
+     * Sueldo bruto del año entero, con las pagas extra: lo que dice el contrato. Sin la
+     * retribución en especie, que la nómina suma y vuelve a restar: no sale de caja.
      *
      * @ORM\Column(name="annual_gross", type="decimal", precision=10, scale=2)
      */
@@ -75,9 +76,11 @@ class WorkerSalary
     private PaySchedule $payments = PaySchedule::Fourteen;
 
     /**
-     * Lo que paga la asociación a la Seguridad Social, en % del bruto. Sale de la nómina
-     * de la gestoría («aportación empresa»): ronda el 30-32 %, pero el exacto depende
-     * del tipo de contrato y de la mutua.
+     * Lo que paga la asociación a la Seguridad Social, en % del bruto mensual
+     * prorrateado (bruto anual ÷ 12). Sale de una nómina normal de la gestoría:
+     * «Total aportación empresarial» entre ese bruto. Ronda el 33 %; el exacto depende
+     * del contrato (el desempleo cotiza más en los temporales) y lleva dentro lo que
+     * cotice la especie.
      *
      * @ORM\Column(name="employer_ss_rate", type="decimal", precision=5, scale=2)
      */
