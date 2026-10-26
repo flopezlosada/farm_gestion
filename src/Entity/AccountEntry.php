@@ -316,6 +316,46 @@ class AccountEntry
         $this->notes = $blank($this->notes) ? $other->notes : $this->notes;
     }
 
+    /**
+     * Separa parte de este apunte en otro de la misma cuenta, fecha y sentido, con su
+     * propia partida y concepto; éste baja en lo separado. El saldo no cambia: es el
+     * mismo movimiento del banco contado en dos partidas. Caso que lo pide: el cargo
+     * mensual del Ayuntamiento, que junta el alquiler (con factura) y los suministros
+     * (sin ella). Lo que ya explicaba este apunte —factura, cobro— se queda en él.
+     *
+     * Las reglas viven aquí y no en el formulario: un traspaso no se parte (su pareja
+     * dejaría de casar) y la parte no puede ser cero ni llevarse el apunte entero.
+     *
+     * @param string         $part     Lo que se separa, en positivo: «50.00».
+     * @param BudgetCategory $category Partida del apunte nuevo.
+     * @param string         $concept  Concepto del apunte nuevo.
+     *
+     * @return AccountEntry El apunte nuevo, sin guardar, para validarlo antes.
+     *
+     * @throws \InvalidArgumentException si es un traspaso o la parte no cabe
+     */
+    public function splitOff(string $part, BudgetCategory $category, string $concept): AccountEntry
+    {
+        if ($this->isTransfer() || $category->isTransfer()) {
+            throw new \InvalidArgumentException('Un traspaso no se parte: la otra mitad dejaría de casar.');
+        }
+        $total = IssuedInvoice::toCents($this->amount);
+        $cents = IssuedInvoice::toCents($part);
+        if ($cents <= 0 || $cents >= abs($total)) {
+            throw new \InvalidArgumentException(sprintf('La parte tiene que ser más de cero y menos de %s €.', number_format(abs($total) / 100, 2, ',', '.')));
+        }
+        $signed = $total < 0 ? -$cents : $cents;
+        $this->amount = IssuedInvoice::fromCents($total - $signed);
+
+        return (new self())
+            ->setAccount($this->account)
+            ->setDate($this->date)
+            ->setCategory($category)
+            ->setConcept($concept)
+            ->setProviderName($this->providerName)
+            ->setAmount(IssuedInvoice::fromCents($signed));
+    }
+
     public function getNotes(): ?string
     {
         return $this->notes;

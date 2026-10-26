@@ -11,7 +11,7 @@
 # entrega a la gestoría que cierra su trimestre, o null), y para un
  # traspaso sin pareja nearbyLoose (mitades sueltas de otras cuentas cerca de su
  # fecha), pairable (los id de ésas que casan) y peerAccounts (cuentas donde anotar
- # la que falta).
+ # la que falta). splitCategories: partidas para partir el apunte (vacío en un traspaso).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -139,6 +139,9 @@
                         <button type="submit" class="csa-btn csa-btn--ghost"><i class="fa fa-trash"></i> <span>{{ entry.pairedTransfer ? 'Borrar el traspaso' : 'Borrar' }}</span></button>
                     </form>
                 </div>
+                {% if splitCategories is not empty %}
+                    {{ here.split_form(entry, splitCategories, invoice or issuedInvoice) }}
+                {% endif %}
             {% endif %}
         </div>
     </div>
@@ -148,6 +151,40 @@
     {% endif %}
 </div>
 {% endblock %}
+
+{# Partir el apunte: un cargo del banco que junta dos cosas (el del Ayuntamiento:
+ # alquiler con factura + suministros sin ella) se cuenta en dos partidas. Plegado,
+ # porque es raro y la ficha no tiene que gritarlo. #}
+{% macro split_form(entry, categories, explained) %}
+    <details class="ent-split">
+        <summary><i class="fa fa-scissors"></i> Partir el apunte</summary>
+        <p class="acc-lead">
+            Separa parte del importe en otro apunte de {{ entry.account.name }}, el mismo día, con su partida y su concepto.
+            Éste baja en lo que separes; el saldo de la cuenta no cambia.
+            {% if explained %}La factura se queda en este apunte.{% endif %}
+        </p>
+        <form method="post" action="{{ path('accounting_entry_split', { id: entry.id }) }}" class="ent-split__form">
+            <input type="hidden" name="_token" value="{{ csrf_token('accounting_entry_split_' ~ entry.id) }}">
+            <label>Importe que se separa (€)
+                <input type="text" name="amount" class="csa-input" inputmode="decimal" required placeholder="50,00">
+            </label>
+            <label>Partida
+                <select name="category" class="csa-input" required>
+                    <option value="">Elige la partida</option>
+                    {% for c in categories %}
+                        <option value="{{ c.id }}">{{ c.group.name|capitalize }} · {{ c.name }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label class="ent-split__concept">Concepto
+                <input type="text" name="concept" class="csa-input" required maxlength="255">
+            </label>
+            <div>
+                <button type="submit" class="csa-btn csa-btn--secondary"><i class="fa fa-scissors"></i> <span>Partir</span></button>
+            </div>
+        </form>
+    </details>
+{% endmacro %}
 
 {# Un traspaso al que le falta la otra mitad: la portada manda aquí. Se arregla
  # emparejándolo con la mitad ya anotada en la otra cuenta o anotando la que falta. #}

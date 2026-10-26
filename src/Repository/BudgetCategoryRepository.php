@@ -3,7 +3,9 @@
 namespace App\Repository;
 
 use App\Entity\BudgetCategory;
+use App\Entity\BudgetCategoryGroup;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
@@ -33,6 +35,32 @@ class BudgetCategoryRepository extends ServiceEntityRepository
             ->addOrderBy('c.name', 'ASC')
             ->getQuery()
             ->getResult();
+    }
+
+    /**
+     * Las partidas a las que se puede imputar un apunte a mano: las vigentes, sin la
+     * de traspasos. Ésa crearía media mitad de un traspaso sin la otra y el saldo de
+     * una cuenta quedaría mal; mover dinero entre cuentas propias tiene su acción.
+     */
+    public function forEntriesQueryBuilder(): QueryBuilder
+    {
+        return $this->createQueryBuilder('c')
+            ->innerJoin('c.group', 'g')->addSelect('g')
+            ->andWhere('c.active = true')
+            ->andWhere('g.kind != :transfer')
+            ->setParameter('transfer', BudgetCategoryGroup::KIND_TRANSFER)
+            ->orderBy('g.sortOrder', 'ASC')
+            ->addOrderBy('c.sortOrder', 'ASC');
+    }
+
+    /**
+     * Las de {@see forEntriesQueryBuilder}, ya cargadas.
+     *
+     * @return BudgetCategory[]
+     */
+    public function findForEntries(): array
+    {
+        return $this->forEntriesQueryBuilder()->getQuery()->getResult();
     }
 
     /**
