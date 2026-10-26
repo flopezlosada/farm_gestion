@@ -8,13 +8,16 @@ use App\Entity\Customer;
 use App\Entity\FinancialAccount;
 use App\Entity\IssuedInvoice;
 use App\Entity\IssuedInvoiceLine;
+use App\Entity\PendingTransfer;
 use App\Entity\ReceivedInvoice;
 use App\Entity\Remittance;
 use App\Entity\RemittanceLine;
 use App\Entity\RemittanceReturn;
+use App\Entity\User;
 use App\Repository\AccountEntryRepository;
 use App\Repository\FinancialAccountRepository;
 use App\Repository\IssuedInvoiceRepository;
+use App\Repository\PendingTransferRepository;
 use App\Repository\ReceivedInvoiceRepository;
 use App\Repository\RemittanceRepository;
 use App\Repository\RemittanceReturnRepository;
@@ -365,6 +368,17 @@ class AccountingAgendaTest extends TestCase
         $this->assertSame([], array_filter($none, static fn (AgendaItem $i): bool => str_contains($i->title, 'devuelto')), 'Sin remesas aquí, las devoluciones no tienen recibo con el que ligarse.');
     }
 
+    /** Lo contado por el bot sale hasta que se confirma o se descarta. */
+    public function testLosTraspasosDelBotPorConfirmar(): void
+    {
+        $sent = new PendingTransfer(new User(), new \DateTimeImmutable('2026-10-26'));
+        $items = $this->agenda(botTransfers: [$sent, $sent])->items(new \DateTimeImmutable('2026-10-27'));
+
+        $bot = array_values(array_filter($items, static fn (AgendaItem $i): bool => $i->route === 'accounting_transfer_pending'));
+        $this->assertCount(1, $bot);
+        $this->assertSame('Confirmar 2 traspasos contados por el bot', $bot[0]->title);
+    }
+
     /**
      * @param list<ReceivedInvoice>               $received  del trimestre, para la gestoría
      * @param list<ReceivedInvoice>               $open      en la bandeja
@@ -378,6 +392,7 @@ class AccountingAgendaTest extends TestCase
      * @param array<int, string>                  $balances  saldo por cuenta; por omisión, 0
      * @param list<RemittanceReturn>              $openReturns recibos devueltos por resolver
      * @param list<AccountEntry>                  $unlinkedReturns devoluciones del banco sin recibo
+     * @param list<PendingTransfer>               $botTransfers traspasos del bot sin confirmar
      */
     private function agenda(
         array $received = [],
@@ -393,6 +408,7 @@ class AccountingAgendaTest extends TestCase
         array $balances = [],
         array $openReturns = [],
         array $unlinkedReturns = [],
+        array $botTransfers = [],
     ): AccountingAgenda {
         $receivedRepo = $this->createStub(ReceivedInvoiceRepository::class);
         $receivedRepo->method('findOpen')->willReturn($open);
@@ -423,6 +439,8 @@ class AccountingAgendaTest extends TestCase
         $book->method('invoicesOf')->willReturn([]);
         $returns = $this->createStub(RemittanceReturnRepository::class);
         $returns->method('findOpen')->willReturn($openReturns);
+        $pendingTransfers = $this->createStub(PendingTransferRepository::class);
+        $pendingTransfers->method('findUnconfirmed')->willReturn($botTransfers);
 
         return new AccountingAgenda(
             $receivedRepo,
@@ -435,6 +453,7 @@ class AccountingAgendaTest extends TestCase
             $book,
             $closed,
             $returns,
+            $pendingTransfers,
         );
     }
 
