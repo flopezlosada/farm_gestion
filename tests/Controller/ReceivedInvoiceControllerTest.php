@@ -396,6 +396,7 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
             $this->assertSame(ReceivedInvoice::STATUS_CONFIRMED, $paid->getStatus(), $name);
             $this->assertSame($bank->getId(), $paid->getAccountEntry()?->getId(), $name . ' va al mismo pago.');
         }
+        $this->assertSame('F-2', $this->findInvoice('siguiente.pdf')->getInvoiceNumber(), 'La otra conserva su número: no toma el del apunte.');
 
         $crawler = $client->request('GET', sprintf('/gestion/accounting/entry/%d', $bank->getId()));
         $this->assertResponseIsSuccessful();

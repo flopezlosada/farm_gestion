@@ -190,7 +190,7 @@ class ReceivedInvoiceController extends AbstractController
                     $match->completeFrom($entry);
                     $invoice->confirm($match, $provider);
                     foreach ($others as $other) {
-                        $other->confirm($match, $provider);
+                        $other->confirmAlongside($match, $provider);
                     }
 
                     return;

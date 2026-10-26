@@ -112,7 +112,7 @@
                 {{ invm.facts(invoice) }}
                 {% if otherInvoices is not empty %}
                     <p class="acc-muted">Este pago explica también
-                        {% for other in otherInvoices %}<a href="{{ path('accounting_invoice_review', { id: other.id }) }}">{{ other.invoiceNumber ?? 'la del ' ~ other.invoiceDate|date('d/m/Y') }}</a> ({{ fmt.money(other.total) }}){{ loop.last ? '.' : (loop.revindex == 2 ? ' y ' : ', ') }}{% endfor %}
+                        {% for other in otherInvoices %}<a href="{{ path('accounting_invoice_review', { id: other.id }) }}">{{ other.invoiceNumber ?? ('la del ' ~ other.invoiceDate|date('d/m/Y')) }}</a> ({{ fmt.money(other.total) }}){{ loop.last ? '.' : (loop.revindex == 2 ? ' y ' : ', ') }}{% endfor %}
                     </p>
                 {% endif %}
             {% endif %}

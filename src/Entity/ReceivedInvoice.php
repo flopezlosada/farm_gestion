@@ -382,10 +382,20 @@ class ReceivedInvoice
      */
     public function confirm(AccountEntry $entry, ?Provider $provider): void
     {
-        $this->accountEntry = $entry;
-        $this->provider = $provider;
         $this->providerName = $entry->getProviderName() ?? $this->providerName;
         $this->invoiceNumber = $entry->getInvoiceNumber() ?? $this->invoiceNumber;
+        $this->confirmAlongside($entry, $provider);
+    }
+
+    /**
+     * Va en el pago de otra factura del mismo proveedor, que se cobró junto con ella.
+     * A diferencia de {@see confirm()}, no toma nada del apunte: lo completó la otra, y
+     * su número de factura pisaría el de ésta en el libro de facturas recibidas.
+     */
+    public function confirmAlongside(AccountEntry $payment, ?Provider $provider): void
+    {
+        $this->accountEntry = $payment;
+        $this->provider = $provider;
         $this->status = self::STATUS_CONFIRMED;
     }
 
