@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\AccountEntry;
+use App\Entity\BudgetCategory;
 use App\Entity\BudgetCategoryGroup;
 use App\Entity\FinancialAccount;
 use App\Entity\ReceivedInvoice;
@@ -17,6 +18,7 @@ use App\Repository\FinancialAccountRepository;
 use App\Repository\IssuedInvoiceRepository;
 use App\Repository\ReceivedInvoiceRepository;
 use App\Service\Accounting\Agenda\AccountingAgenda;
+use App\Service\Accounting\Amount;
 use App\Service\Accounting\BudgetTracker;
 use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
@@ -444,6 +446,7 @@ class AccountingController extends AbstractController
         IssuedInvoiceRepository $issuedInvoices,
         AccountEntryRepository $entries,
         FinancialAccountRepository $accounts,
+        BudgetCategoryRepository $categories,
         InvoiceFileStore $files,
         ClosedPeriods $closed,
     ): Response {
@@ -476,7 +479,69 @@ class AccountingController extends AbstractController
                 $accounts->findActive(),
                 static fn (FinancialAccount $a): bool => $a !== $entry->getAccount(),
             )) : [],
+            // Un traspaso no se parte (AccountEntry::splitOff): ni se ofrece.
+            'splitCategories' => $entry->isTransfer() ? [] : $categories->findForEntries(),
         ]);
+    }
+
+    /**
+     * Partir un apunte: separar parte de su importe en otro de la misma cuenta y
+     * fecha, con su partida y concepto. Es para los cargos que juntan dos cosas, como
+     * el del Ayuntamiento (alquiler con factura + suministros sin ella).
+     */
+    #[Route('/entry/{id}/split', name: 'accounting_entry_split', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function entrySplit(
+        Request $request,
+        AccountEntry $entry,
+        BudgetCategoryRepository $categories,
+        ValidatorInterface $validator,
+        EntityManagerInterface $em,
+        ClosedPeriods $closed,
+    ): Response {
+        $back = $this->redirectToRoute('accounting_entry_show', ['id' => $entry->getId()]);
+        if (!$this->isCsrfTokenValid('accounting_entry_split_'.$entry->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $back;
+        }
+        $closed->assertOpen($entry->getDate());
+
+        $part = Amount::parse($request->request->get('amount'));
+        $categoryId = $request->request->getInt('category');
+        $category = current(array_filter($categories->findForEntries(), static fn (BudgetCategory $c): bool => $c->getId() === $categoryId)) ?: null;
+        if ($part === null || $category === null) {
+            $this->addFlash('warning', 'Pon el importe que se separa y elige su partida.');
+
+            return $back;
+        }
+
+        $whole = $entry->getAmount();
+        try {
+            $sibling = $entry->splitOff($part, $category, trim((string) $request->request->get('concept')));
+        } catch (\InvalidArgumentException $e) {
+            $this->addFlash('warning', $e->getMessage());
+
+            return $back;
+        }
+        $sibling->setCreatedBy($this->currentUser());
+        $violations = $validator->validate($sibling);
+        if (\count($violations) > 0) {
+            // El original ya bajó en memoria: se deja como estaba, por si algo guarda después.
+            $entry->setAmount($whole);
+            $this->addFlash('warning', (string) $violations[0]->getMessage());
+
+            return $back;
+        }
+
+        $em->persist($sibling);
+        $em->flush();
+        $this->addFlash('success', sprintf('Separados %s € a %s. Este apunte queda en %s €.',
+            number_format(abs((float) $sibling->getAmount()), 2, ',', '.'),
+            $category->getName(),
+            number_format(abs((float) $entry->getAmount()), 2, ',', '.'),
+        ));
+
+        return $back;
     }
 
     /**

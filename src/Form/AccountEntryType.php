@@ -4,7 +4,6 @@ namespace App\Form;
 
 use App\Entity\AccountEntry;
 use App\Entity\BudgetCategory;
-use App\Entity\BudgetCategoryGroup;
 use App\Entity\FinancialAccount;
 use App\Repository\BudgetCategoryRepository;
 use App\Repository\FinancialAccountRepository;
@@ -62,17 +61,8 @@ class AccountEntryType extends AbstractType
                 // se llaman igual («Formación» es de ingresos y de gastos), así que
                 // sin el grupo delante no se distinguen.
                 'group_by' => static fn (BudgetCategory $c): string => $c->getGroup()?->getName() ?? '',
-                // Los traspasos NO se ofrecen aquí. Elegirlos desde este formulario
-                // crearía media mitad de un traspaso, sin la otra, y el saldo de una
-                // cuenta quedaría mal: exactamente lo que TransferRecorder existe para
-                // impedir. Mover dinero entre cuentas propias tiene su propia acción.
-                'query_builder' => static fn (BudgetCategoryRepository $r) => $r->createQueryBuilder('c')
-                    ->innerJoin('c.group', 'g')->addSelect('g')
-                    ->andWhere('c.active = true')
-                    ->andWhere('g.kind != :transfer')
-                    ->setParameter('transfer', BudgetCategoryGroup::KIND_TRANSFER)
-                    ->orderBy('g.sortOrder', 'ASC')
-                    ->addOrderBy('c.sortOrder', 'ASC'),
+                // Los traspasos NO se ofrecen aquí: ver forEntriesQueryBuilder.
+                'query_builder' => static fn (BudgetCategoryRepository $r) => $r->forEntriesQueryBuilder(),
                 'placeholder' => 'Elige la partida',
             ])
             ->add('concept', TextType::class, [

@@ -193,6 +193,13 @@
     .ent-facts dt:empty + dd { border-top-color: transparent; padding-top: 0; }
     .ent-facts a { color: inherit; text-decoration: underline; text-decoration-color: var(--csa-rule, #e6e0d0); text-underline-offset: 3px; }
     .ent-facts a:hover { color: var(--prl-sage-d, #2f4426); text-decoration-color: currentColor; }
+    /* Partir el apunte: plegado bajo los botones; abierto, los tres datos en fila. */
+    .ent-split { margin-top: var(--csa-sp-5, 20px); padding-top: var(--csa-sp-4, 16px); border-top: 1px solid var(--prl-line, #ebe7dd); }
+    .ent-split > summary { cursor: pointer; font-size: 13.5px; color: var(--csa-ink-soft, #5a5b56); }
+    .ent-split__form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 10px 16px; align-items: end; }
+    .ent-split__form label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--csa-ink-soft, #5a5b56); }
+    .ent-split__concept { grid-column: 1 / -1; }
+    @media (max-width: 560px) { .ent-split__form { grid-template-columns: minmax(0, 1fr); } }
     /* Los datos de una ficha de cuenta, proveedor o cliente: la misma lista en una
        tarjeta, con el ancho de lo que se lee (no de la pantalla entera). */
     .acc-facts {
