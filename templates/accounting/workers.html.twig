@@ -1,0 +1,167 @@
+{# ============================================================
+ # Lo que cuesta cada trabajador: sus tramos de sueldo y la rejilla del año con el
+ # bruto de las nóminas y la Seguridad Social de la empresa, mes a mes.
+ #
+ # Sólo ROLE_ADMIN: son sueldos.
+ #
+ # El controller pasa: workers (todas las fichas del registro de jornada), salaries
+ # ([workerId => tramos]), costs (PayrollCost::forYear), totals ([1..12 => €]), year,
+ # months.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
+
+{% block title %}Contabilidad · Trabajadores{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_settings') }}">Ajustes</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Trabajadores</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Contabilidad',
+        'Trabajadores',
+        'Lo que cuesta cada persona contratada. Con esto se prevén los sueldos de los meses que faltan.'
+    ) }}
+
+    <div class="prl-toolbar">
+        <div class="counters">Sólo lo ve quien administra la aplicación.</div>
+        <div class="spacer"></div>
+        {% if is_granted('FEATURE_LABORAL') and is_granted('ROLE_GESTION_LABORAL') %}
+            <a href="{{ path('staff_index') }}" class="prl-btn"><i class="fa fa-id-card-o"></i> Fichas del registro de jornada</a>
+        {% endif %}
+    </div>
+
+    <div class="prl-table-wrap">
+        {% if workers is empty %}
+            <div class="prl-empty">
+                No hay trabajadores. Se dan de alta en el registro de jornada; aquí sólo se les pone el sueldo.
+            </div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th>Trabajador</th>
+                        <th class="tight">Desde</th>
+                        <th class="tight">Hasta</th>
+                        <th class="tight acc-num">Bruto anual</th>
+                        <th class="tight">Pagas</th>
+                        <th class="tight acc-num">SS empresa</th>
+                        <th class="tight"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for worker in workers %}
+                        {% set workerSalaries = salaries[worker.id] ?? [] %}
+                        {% for salary in workerSalaries %}
+                            <tr>
+                                <td>
+                                    {% if loop.first %}
+                                        <b>{{ worker.name }}</b>
+                                        {% if not worker.active %}
+                                            <span class="prl-chip prl-chip--pausado"><span class="dot"></span>de baja</span>
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+                                <td class="tight">{{ salary.validFrom|date('d/m/Y') }}</td>
+                                <td class="tight">{{ salary.validTo ? salary.validTo|date('d/m/Y') : 'sigue' }}</td>
+                                <td class="acc-num">{{ fmt.money(salary.annualGross) }}</td>
+                                <td class="tight">{{ salary.payments.value }}</td>
+                                <td class="acc-num">{{ salary.employerSsRate|number_format(2, ',', '.') }} %</td>
+                                <td class="tight">
+                                    <a href="{{ path('accounting_worker_salary_edit', { id: salary.id }) }}" class="prl-btn" title="Corregir"><i class="fa fa-pencil"></i></a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        <tr>
+                            <td>
+                                {% if workerSalaries is empty %}
+                                    <b>{{ worker.name }}</b> <span class="acc-muted">· sin sueldo puesto</span>
+                                {% endif %}
+                            </td>
+                            <td colspan="6" class="tight" style="text-align: right;">
+                                <a href="{{ path('accounting_worker_salary_new', { id: worker.id }) }}" class="prl-btn">
+                                    <i class="fa fa-plus"></i> {{ workerSalaries is empty ? 'Poner sueldo' : 'Cambio de sueldo' }}
+                                </a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+    <div class="prl-toolbar" style="margin-top: var(--csa-sp-6, 32px);">
+        <div class="counters"><b>Coste de {{ year }}</b>, mes a mes</div>
+        <div class="spacer"></div>
+        <a href="{{ path('accounting_workers', { year: year - 1 }) }}" class="prl-btn"><i class="fa fa-chevron-left"></i> {{ year - 1 }}</a>
+        <a href="{{ path('accounting_workers', { year: year + 1 }) }}" class="prl-btn">{{ year + 1 }} <i class="fa fa-chevron-right"></i></a>
+    </div>
+
+    <div class="prl-table-wrap acc-grid-wrap">
+        {% if costs is empty %}
+            <div class="prl-empty">Nadie tiene sueldo puesto en {{ year }}.</div>
+        {% else %}
+            <table class="prl-table acc-grid">
+                <thead>
+                    <tr>
+                        <th></th>
+                        {% for n, name in months %}
+                            <th class="acc-num">{{ name }}</th>
+                        {% endfor %}
+                        <th class="acc-num acc-total-col">Año</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cost in costs %}
+                        <tr class="acc-group-row">
+                            <td colspan="14">{{ cost.worker.name }}</td>
+                        </tr>
+                        {% for key, label in { gross: 'Bruto de las nóminas', ss: 'Seguridad Social empresa' } %}
+                            <tr class="acc-cat-row">
+                                <td title="{{ key == 'gross' ? 'Lo que cobra más lo que se le retiene (IRPF y su parte de Seguridad Social). Con 14 pagas, julio y diciembre llevan la extra.' : 'Lo que paga la asociación encima del bruto.' }}">{{ label }}</td>
+                                {% for n in 1..12 %}
+                                    {% set v = cost[key][n] %}
+                                    <td class="acc-num {{ v == 0 ? 'zero' : '' }}">{{ v == 0 ? '·' : v|number_format(0, ',', '.') }}</td>
+                                {% endfor %}
+                                <td class="acc-num acc-total-col">{{ cost[key]|reduce((a, v) => a + v, 0)|number_format(0, ',', '.') }}</td>
+                            </tr>
+                        {% endfor %}
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="acc-result-row">
+                        <td><b>Coste total</b></td>
+                        {% for n in 1..12 %}
+                            <td class="acc-num"><b>{{ totals[n]|number_format(0, ',', '.') }}</b></td>
+                        {% endfor %}
+                        <td class="acc-num acc-total-col"><b>{{ totals|reduce((a, v) => a + v, 0)|number_format(0, ',', '.') }}</b></td>
+                    </tr>
+                </tfoot>
+            </table>
+        {% endif %}
+    </div>
+
+    <p class="acc-muted acc-small">
+        Cada cosa va en el mes en que se gana. En el banco, la Seguridad Social sale el mes siguiente
+        y el IRPF retenido cada trimestre: el total del año es el mismo.
+    </p>
+
+</div>
+{% endblock %}

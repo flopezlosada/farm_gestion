@@ -11,6 +11,7 @@ use App\Repository\AbsenceRepository;
 use App\Repository\HolidayRepository;
 use App\Repository\TimeEntryRepository;
 use App\Repository\WorkerRepository;
+use App\Repository\WorkerSalaryRepository;
 use App\Repository\WorkScheduleRepository;
 use App\Security\WorkerAccessMailer;
 use App\Security\WorkerUserProvisioner;
@@ -1053,9 +1054,11 @@ class WorkerController extends AbstractController
         Worker $worker,
         EntityManagerInterface $em,
         WorkerUserProvisioner $provisioner,
+        WorkerSalaryRepository $salaryRepository,
     ): Response {
         $entryCount = $worker->getTimeEntries()->count();
         $force = $request->request->getBoolean('force');
+        $salaries = $salaryRepository->findForWorker($worker);
 
         // Destruir un registro de jornada que la ley obliga a conservar no es una
         // acción de gestión laboral corriente: sólo admin, aunque el botón no se
@@ -1067,6 +1070,17 @@ class WorkerController extends AbstractController
 
         if (!$this->isCsrfTokenValid('delete' . $worker->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
+        }
+
+        // Sus sueldos son el histórico de costes de la contabilidad, que gestión laboral
+        // ni ve: sólo se los lleva el borrado forzado de admin (limpieza de pruebas).
+        if ($salaries !== [] && !($force && $this->isGranted('ROLE_ADMIN'))) {
+            $this->addFlash('error', sprintf(
+                'No se puede borrar «%s»: tiene sueldos anotados en contabilidad. Márcalo como inactivo.',
+                $worker->getName(),
+            ));
 
             return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
         }
@@ -1088,6 +1102,10 @@ class WorkerController extends AbstractController
             foreach ($worker->getTimeEntries() as $entry) {
                 $em->remove($entry);
             }
+        }
+
+        foreach ($salaries as $salary) {
+            $em->remove($salary);
         }
 
         // Ausencias: no tienen retención legal, se borran siempre con el trabajador.
