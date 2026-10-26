@@ -115,8 +115,9 @@ class PendingTransferControllerTest extends AbstractAuthenticatedTest
         $destination = static::getContainer()->get(TransferDestination::class);
 
         $loose = $this->pending($box, $field, '20.00');
+        $looseId = $loose->getId(); // Doctrine pone a null el id de lo que borra.
         $this->assertNull($this->undo($destination, $loose));
-        $this->assertNull($this->em()->find(PendingTransfer::class, $loose->getId()));
+        $this->assertNull($this->em()->find(PendingTransfer::class, $looseId));
 
         $confirmed = $this->pending($box, $field, '30.00');
         $recorder = static::getContainer()->get(TransferRecorder::class);
