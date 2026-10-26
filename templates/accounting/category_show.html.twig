@@ -1,8 +1,8 @@
 {# ============================================================
- # La ficha de una partida: lo previsto en el presupuesto aprobado del año frente a
+ # La ficha de una partida: lo previsto en el presupuesto en vigor del año frente a
  # lo real, mes a mes, y sus últimos apuntes.
  #
- # El controller pasa: category, year, budget (aprobado del año, o null),
+ # El controller pasa: category, year, budget (el en vigor del año o, si no, el aprobado; o null),
  # actual y planned (mes => importe con signo), throughMonth (último mes con apuntes
  # en el libro: los siguientes aún no tienen real), count, recent, invoices, months.
  # ============================================================ #}
@@ -56,7 +56,7 @@
     </div>
 
     {% if not budget %}
-        {{ csa.callout('No hay presupuesto aprobado para ' ~ year ~ ': sólo se ve lo real.', 'info', 'info-circle') }}
+        {{ csa.callout('No hay presupuesto para ' ~ year ~ ': sólo se ve lo real.', 'info', 'info-circle') }}
     {% endif %}
 
     <div class="prl-table-wrap">

@@ -40,7 +40,7 @@ class BudgetController extends AbstractController
 {
     /**
      * Todos los presupuestos, del más reciente al más viejo, con lo que suman, y
-     * cuánto tendría que costar la cesta para que cuadre el presupuesto aprobado del
+     * cuánto tendría que costar la cesta para que cuadre el presupuesto en vigor del
      * año: es una cuenta de hacer el presupuesto, por eso vive aquí.
      */
     #[Route('/', name: 'accounting_budgets', methods: ['GET'])]
@@ -66,7 +66,7 @@ class BudgetController extends AbstractController
         return $this->render('accounting/budgets.html.twig', [
             'rows' => $rows,
             'year' => $year,
-            'basketCost' => $tracker->basketCost($year, $budgets->findApprovedForYear($year), $baskets, 100.0),
+            'basketCost' => $tracker->basketCost($year, $budgets->findReferenceForYear($year), $baskets, 100.0),
             'baskets' => $baskets,
             'committedMonthlyFees' => $shares->sumActiveMonthlyFees(),
         ]);
@@ -324,8 +324,35 @@ class BudgetController extends AbstractController
     }
 
     /**
+     * Ponerlo en vigor, o sacarlo si ya lo está. En vigor es contra el que se mide el
+     * día a día del año; sin ninguno, se mide contra el aprobado. La asamblea sigue
+     * comparando con lo que aprobó.
+     */
+    #[Route('/{id}/in-force', name: 'accounting_budget_in_force', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function inForce(Request $request, Budget $budget, BudgetRepository $budgets, EntityManagerInterface $em): Response
+    {
+        if (!$this->isCsrfTokenValid('accounting_budget_in_force_'.$budget->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('accounting_budgets');
+        }
+
+        if ($budget->isInForce()) {
+            $budget->clearInForce();
+            $em->flush();
+            $this->addFlash('success', sprintf('«%s» ya no está en vigor: %d se mide contra el aprobado.', $budget->getName(), $budget->getYear()));
+        } else {
+            $budgets->putInForce($budget);
+            $this->addFlash('success', sprintf('«%s» está en vigor: %d se mide contra él.', $budget->getName(), $budget->getYear()));
+        }
+
+        return $this->redirectToRoute('accounting_budgets');
+    }
+
+    /**
      * Borrar un presupuesto con sus cifras. Sólo tiene sentido con los escenarios de
-     * trabajo; el aprobado es el compromiso con la asamblea y no se borra.
+     * trabajo; el aprobado es el compromiso con la asamblea y no se borra, y el que
+     * está en vigor es contra el que se mide el año.
      */
     #[Route('/{id}/delete', name: 'accounting_budget_delete', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function delete(Request $request, Budget $budget, EntityManagerInterface $em): Response
@@ -338,6 +365,13 @@ class BudgetController extends AbstractController
 
         if ($budget->isApproved()) {
             $this->addFlash('warning', 'Un presupuesto aprobado no se borra. Desmárcalo primero si de verdad quieres quitarlo.');
+
+            return $this->redirectToRoute('accounting_budgets');
+        }
+
+        // Borrarlo cambiaría en silencio contra qué se mide el año entero.
+        if ($budget->isInForce()) {
+            $this->addFlash('warning', 'Este presupuesto está en vigor. Sácalo de vigor primero si de verdad quieres quitarlo.');
 
             return $this->redirectToRoute('accounting_budgets');
         }

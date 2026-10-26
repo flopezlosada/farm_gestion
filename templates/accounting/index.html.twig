@@ -14,7 +14,7 @@
  #                              que tienen alguno (null si ninguna tiene)
  #   staleBook                  si alguna cuenta de banco lleva más de 30 días sin apuntes
  #   resultToDate, budgetToDate resultado real y previsto hasta el último mes anotado
- #   hasBudget                  si hay presupuesto aprobado del año
+ #   hasBudget                  si hay presupuesto del año (el en vigor o, si no, el aprobado)
  #   unpairedTransfers          traspasos a los que les falta la otra mitad
  # ============================================================ #}
 
@@ -85,7 +85,7 @@
         {% else %}
             <div class="prl-stat">
                 <div class="v">{{ resultToDate|number_format(0, ',', '.') }} €</div>
-                <div class="l">resultado de {{ year }}; no hay presupuesto aprobado con que compararlo</div>
+                <div class="l">resultado de {{ year }}; no hay presupuesto con que compararlo</div>
             </div>
         {% endif %}
     </div>

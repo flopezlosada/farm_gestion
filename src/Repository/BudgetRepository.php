@@ -20,9 +20,38 @@ class BudgetRepository extends ServiceEntityRepository
     }
 
     /**
-     * El presupuesto de referencia de un año: el aprobado más reciente. Es contra éste
-     * contra el que se mide la ejecución salvo que se pida otro expresamente, porque
-     * es el compromiso que la asociación votó.
+     * El presupuesto contra el que se mide el día a día de un año: el que esté en vigor
+     * y, si no hay ninguno, el aprobado. Es el de la portada, la ficha de cada partida,
+     * el coste de la cesta y «Cómo vamos» cuando no se elige otro.
+     */
+    public function findReferenceForYear(int $year): ?Budget
+    {
+        return $this->findOneBy(['year' => $year, 'inForce' => true]) ?? $this->findApprovedForYear($year);
+    }
+
+    /**
+     * Poner en vigor un presupuesto, sacando antes al que lo estuviera ese año. La
+     * salida va primero y en una consulta aparte: si los dos cambios fueran en el
+     * mismo flush, el índice único podría ver dos en vigor a la vez. El propio se deja
+     * fuera: la consulta no pasa por el mapa de identidad, y si lo vaciara el flush no
+     * vería cambio que escribir y se quedaría sin vigor.
+     */
+    public function putInForce(Budget $budget): void
+    {
+        $this->getEntityManager()->createQuery(
+            'UPDATE App\Entity\Budget b SET b.inForce = NULL WHERE b.year = :year AND b.inForce = true AND b.id <> :id'
+        )->setParameter('year', $budget->getYear())
+            ->setParameter('id', $budget->getId())
+            ->execute();
+
+        $budget->markInForce();
+        $this->getEntityManager()->flush();
+    }
+
+    /**
+     * El aprobado más reciente de un año: el compromiso que la asociación votó. Es la
+     * referencia de la asamblea, que rinde cuentas de lo aprobado aunque a mitad de año
+     * se haya puesto en vigor una revisión.
      */
     public function findApprovedForYear(int $year): ?Budget
     {

@@ -6,6 +6,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Gedmo\Mapping\Annotation as Gedmo;
+use App\Repository\BudgetRepository;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
 
@@ -19,12 +20,20 @@ use Symfony\Component\Validator\Constraints as Assert;
  * último borraría la referencia contra la que la asociación se comprometió, que es
  * justo la que hay que rendir en la asamblea siguiente.
  *
+ * Aprobado y en vigor son cosas distintas. El aprobado es lo que votó la asamblea y
+ * es contra lo que se rinde cuentas en la siguiente; el que está en vigor es contra el
+ * que se mide el día a día. Cuando a mitad de año se rehace el presupuesto (una
+ * subvención que entró en diciembre, un desfase de ingresos), la revisión pasa a estar
+ * en vigor sin dejar de ser verdad que la asamblea aprobó otra cosa.
+ *
  * @ORM\Table(name="budget", uniqueConstraints={
- *     @ORM\UniqueConstraint(name="uniq_budget_year_name", columns={"budget_year", "name"})
+ *     @ORM\UniqueConstraint(name="uniq_budget_year_name", columns={"budget_year", "name"}),
+ *     @ORM\UniqueConstraint(name="uniq_budget_year_in_force", columns={"budget_year", "in_force"})
  * })
  * @ORM\Entity(repositoryClass="App\Repository\BudgetRepository")
  */
 #[UniqueEntity(fields: ['year', 'name'], message: 'Ese año ya tiene un presupuesto con ese nombre.', errorPath: 'name')]
+#[UniqueEntity(fields: ['year', 'inForce'], message: 'Ese año ya tiene otro presupuesto en vigor. Ponlo en vigor desde la lista de presupuestos.', errorPath: 'year')]
 class Budget
 {
     /**
@@ -62,6 +71,15 @@ class Budget
      * @ORM\Column(name="approved_at", type="date", nullable=true)
      */
     private ?\DateTimeInterface $approvedAt = null;
+
+    /**
+     * Si es el presupuesto contra el que se mide el año. Vale `true` o `null`, nunca
+     * `false`: el índice único (año, en vigor) deja tantos `null` como haga falta y un
+     * solo `true`, y es la base de datos la que impide dos en vigor el mismo año. Si
+     * ninguno lo está, se mide contra el aprobado ({@see BudgetRepository::findReferenceForYear}).
+     * @ORM\Column(name="in_force", type="boolean", nullable=true)
+     */
+    private ?bool $inForce = null;
 
     /**
      * El porqué de este presupuesto: qué supuestos se tomaron, qué cambió respecto al
@@ -147,6 +165,32 @@ class Budget
     public function setApprovedAt(?\DateTimeInterface $approvedAt): self
     {
         $this->approvedAt = $approvedAt;
+
+        return $this;
+    }
+
+    public function isInForce(): bool
+    {
+        return $this->inForce === true;
+    }
+
+    /**
+     * Ponerlo en vigor. Antes hay que sacar de vigor al que lo estuviera ese año
+     * ({@see BudgetRepository::putInForce}); si no, el índice único lo rechaza.
+     */
+    public function markInForce(): self
+    {
+        $this->inForce = true;
+
+        return $this;
+    }
+
+    /**
+     * Sacarlo de vigor: el año vuelve a medirse contra el aprobado.
+     */
+    public function clearInForce(): self
+    {
+        $this->inForce = null;
 
         return $this;
     }

@@ -79,6 +79,9 @@
                                 {% if row.budget.approvedAt %}
                                     <span class="acc-muted acc-small">{{ row.budget.approvedAt|date('d/m/Y') }}</span>
                                 {% endif %}
+                                {% if row.budget.inForce %}
+                                    <span class="prl-chip prl-chip--ok" title="Contra éste se mide el año: portada, partidas, coste de la cesta y «Cómo vamos». La asamblea sigue comparando con el aprobado."><span class="dot"></span>en vigor</span>
+                                {% endif %}
                             </td>
                             <td class="acc-num">{{ fmt.money(row.income) }}</td>
                             <td class="acc-num">{{ fmt.money(row.expense) }}</td>
@@ -94,7 +97,15 @@
                                         <input type="hidden" name="year" value="{{ row.budget.year }}">
                                         <button type="submit" class="prl-btn" title="Copiar con sus cifras"><i class="fa fa-copy"></i></button>
                                     </form>
-                                    {% if not row.budget.approved %}
+                                    <form method="post" action="{{ path('accounting_budget_in_force', { id: row.budget.id }) }}" style="display:inline;">
+                                        <input type="hidden" name="_token" value="{{ csrf_token('accounting_budget_in_force_' ~ row.budget.id) }}">
+                                        {% if row.budget.inForce %}
+                                            <button type="submit" class="prl-btn" title="Sacar de vigor: el año vuelve a medirse contra el aprobado">Sacar de vigor</button>
+                                        {% else %}
+                                            <button type="submit" class="prl-btn" title="Medir el año contra este presupuesto en vez de contra el aprobado">Poner en vigor</button>
+                                        {% endif %}
+                                    </form>
+                                    {% if not row.budget.approved and not row.budget.inForce %}
                                         <form method="post" action="{{ path('accounting_budget_delete', { id: row.budget.id }) }}" style="display:inline;"
                                               onsubmit="return confirm('¿Borrar «{{ row.budget.name }}» de {{ row.budget.year }} con todas sus cifras?');">
                                             <input type="hidden" name="_token" value="{{ csrf_token('accounting_budget_delete_' ~ row.budget.id) }}">
@@ -112,10 +123,10 @@
 
     {# ============ COSTE POR CESTA ============ #}
     <div style="margin-top: 18px; max-width: 640px;">
-    {% embed '_components/csa_card.html.twig' with { title: 'Cuánto tiene que costar la cesta', subtitle: 'Repartiendo el coste de ' ~ year ~ ' según el presupuesto aprobado', accent: 'green' } %}
+    {% embed '_components/csa_card.html.twig' with { title: 'Cuánto tiene que costar la cesta', subtitle: 'Repartiendo el coste de ' ~ year ~ ' según el presupuesto en vigor', accent: 'green' } %}
         {% block body %}
             {% if basketCost.expenses == 0 %}
-                <p style="margin: 0; font-size: 13px;" class="acc-muted">No hay presupuesto aprobado de {{ year }} con el que hacer la cuenta.</p>
+                <p style="margin: 0; font-size: 13px;" class="acc-muted">No hay presupuesto de {{ year }} con el que hacer la cuenta.</p>
             {% else %}
                 <p style="margin: 0 0 10px; font-size: 13px;">
                     Los gastos previstos del año, con inversiones y cuotas de préstamo, suman

@@ -84,7 +84,7 @@ class AccountingController extends AbstractController
             $balances,
         ));
 
-        $budget = $budgets->findApprovedForYear($year);
+        $budget = $budgets->findReferenceForYear($year);
         $totals = $tracker->track($year, $budget)['totals'];
 
         return $this->render('accounting/index.html.twig', [
@@ -692,7 +692,7 @@ class AccountingController extends AbstractController
 
     /**
      * El presupuesto contra el que medir: el que venga en la URL si es de ese año, y
-     * si no el aprobado por la asamblea.
+     * si no el que está en vigor.
      */
     private function resolveBudget(Request $request, BudgetRepository $budgets, int $year): ?object
     {
@@ -704,7 +704,7 @@ class AccountingController extends AbstractController
             }
         }
 
-        return $budgets->findApprovedForYear($year);
+        return $budgets->findReferenceForYear($year);
     }
 
     /**

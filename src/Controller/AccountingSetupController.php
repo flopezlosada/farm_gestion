@@ -203,7 +203,7 @@ class AccountingSetupController extends AbstractController
     }
 
     /**
-     * La ficha de una partida: lo previsto en el presupuesto aprobado del año frente a
+     * La ficha de una partida: lo previsto en el presupuesto en vigor del año frente a
      * lo real, mes a mes, y sus últimos apuntes. Los meses que el libro aún no tiene
      * anotados no son una desviación: se comparan sólo los que sí.
      */
@@ -218,7 +218,7 @@ class AccountingSetupController extends AbstractController
         BudgetTracker $tracker,
     ): Response {
         $year = $request->query->getInt('year') ?: (int) date('Y');
-        $budget = $budgets->findApprovedForYear($year);
+        $budget = $budgets->findReferenceForYear($year);
         $id = (int) $category->getId();
 
         $actual = array_map('floatval', $entries->totalsByCategoryAndMonth($year)[$id] ?? []);
