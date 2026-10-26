@@ -62,6 +62,7 @@
         <div class="counters">
             {% if budget %}
                 Midiendo contra <a href="{{ path('accounting_budget_lines', { id: budget.id }) }}"><b>{{ budget.name }}</b></a>
+                {% if budget.inForce %}<span class="prl-chip prl-chip--ok"><span class="dot"></span>en vigor</span>{% endif %}
                 {% if not budget.approved %}<span class="prl-chip prl-chip--pausado"><span class="dot"></span>no aprobado</span>{% endif %}
             {% else %}
                 <span class="acc-muted">No hay presupuesto para {{ year }}</span>
