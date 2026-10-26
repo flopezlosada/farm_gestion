@@ -2,6 +2,7 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\Budget;
 use App\Entity\FinancialAccount;
 use App\Entity\Setting;
 use App\Service\AppSettings;
@@ -18,6 +19,9 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
     /** Cuenta creada por el test, para quitarla al acabar. */
     private ?FinancialAccount $account = null;
 
+    /** Presupuesto creado por el test, para quitarlo al acabar. */
+    private ?Budget $budget = null;
+
     protected function tearDown(): void
     {
         $em = static::getContainer()->get(EntityManagerInterface::class);
@@ -26,6 +30,9 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
         }
         if ($this->account !== null) {
             $em->remove($em->find(FinancialAccount::class, $this->account->getId()));
+        }
+        if ($this->budget !== null) {
+            $em->remove($em->find(Budget::class, $this->budget->getId()));
         }
         $em->flush();
 
@@ -43,6 +50,27 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
         $this->assertSelectorTextContains('h1', 'Pendiente');
         $this->assertSelectorTextContains('body', 'en las cuentas, según el libro');
         $this->assertSelectorTextContains('body', 'Dónde está el dinero');
+    }
+
+    /**
+     * La rejilla del presupuesto acaba en la tesorería a fin de cada mes, que el
+     * navegador calcula desde la de empezar: es la cifra con que se lee un escenario.
+     */
+    public function testElPresupuestoDiceLaTesoreriaAFinDeMes(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $this->budget = (new Budget())->setYear(2099)->setName('Escenario de prueba')->setOpeningCash('1500.50');
+        $em->persist($this->budget);
+        $em->flush();
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/budgets/%d/lines', $this->budget->getId()));
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSame('1500.50', $crawler->filter('#budget-grid')->attr('data-opening'));
+        $this->assertSelectorTextContains('.acc-cash-row', 'Tesorería a fin de mes');
+        $this->assertCount(12, $crawler->filter('.acc-cash-row .acc-cash-month'));
     }
 
     public function testComoVamosEstaEnInformes(): void

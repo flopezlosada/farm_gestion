@@ -10,6 +10,9 @@
  # mientras se teclea. No se calculan también en Twig a propósito: dos implementaciones
  # de la misma suma acabarían diciendo cosas distintas.
  #
+ # Debajo, la tesorería a fin de cada mes: la de empezar más los resultados acumulados.
+ # Es la cifra que decide un escenario («¿en qué mes nos quedamos sin dinero?»).
+ #
  # El controller pasa: budget, groups (group + categories), grid ([partida][mes]),
  # lastYearTotals ([partida] => real del año anterior) y months (abreviaturas).
  # ============================================================ #}
@@ -75,13 +78,14 @@
         {{ csa.callout('Éste es el presupuesto aprobado en asamblea. Si lo que quieres es rehacer las cuentas a mitad de año, cópialo y trabaja sobre la copia: lo aprobado es contra lo que hay que rendir cuentas.', 'warning', 'gavel') }}
     {% endif %}
 
-    <form method="post" action="{{ path('accounting_budget_lines_save', { id: budget.id }) }}" id="budget-grid">
+    <form method="post" action="{{ path('accounting_budget_lines_save', { id: budget.id }) }}" id="budget-grid" data-opening="{{ budget.openingCash }}">
         <input type="hidden" name="_token" value="{{ csrf_token('accounting_budget_lines_' ~ budget.id) }}">
 
         <div class="prl-toolbar">
             <div class="counters">
                 Resultado previsto: <b class="acc-grand" data-grand>—</b>
                 · tesorería al empezar: <b>{{ budget.openingCash|number_format(2, ',', '.') }} €</b>
+                · al acabar: <b data-cash-end>—</b>
             </div>
             <div class="spacer"></div>
             <a href="{{ path('accounting_budgets') }}" class="prl-btn">Volver</a>
@@ -156,6 +160,15 @@
                             <td class="acc-num acc-month-total" data-month="{{ m }}"></td>
                         {% endfor %}
                         <td class="acc-num acc-total-col" data-grand></td>
+                        {% if showLastYear %}<td></td>{% endif %}
+                        <td></td>
+                    </tr>
+                    <tr class="acc-cash-row">
+                        <td>Tesorería a fin de mes</td>
+                        {% for m in 1..12 %}
+                            <td class="acc-num acc-cash-month" data-month="{{ m }}"></td>
+                        {% endfor %}
+                        <td class="acc-total-col"></td>
                         {% if showLastYear %}<td></td>{% endif %}
                         <td></td>
                     </tr>
@@ -250,6 +263,18 @@
                 form.querySelectorAll('[data-grand]').forEach(function (cell) {
                     paint(cell, grand);
                 });
+
+                // La tesorería no se pinta con «—» al llegar a cero: cero euros en caja
+                // es justo lo que hay que ver.
+                var cash = parseFloat(form.getAttribute('data-opening')) || 0;
+                form.querySelectorAll('.acc-cash-month').forEach(function (cell) {
+                    cash += months[cell.getAttribute('data-month')] || 0;
+                    cell.textContent = format(cash);
+                    cell.classList.toggle('acc-neg', cash < 0);
+                });
+                var end = form.querySelector('[data-cash-end]');
+                end.textContent = format(cash);
+                end.classList.toggle('acc-neg', cash < 0);
             }
 
             form.addEventListener('input', function (event) {
