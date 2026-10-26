@@ -169,6 +169,21 @@ class ReceivedInvoice
     private ?string $providerTaxId = null;
 
     /**
+     * A nombre de quién dice la factura que está, tal como se leyó. Sólo para
+     * avisar si no es la asociación: la factura que va a la gestoría tiene que
+     * llevar sus datos.
+     * @ORM\Column(name="customer_name", type="string", length=150, nullable=true)
+     */
+    private ?string $customerName = null;
+
+    /**
+     * CIF del cliente tal como se leyó; es lo que se compara con el de la
+     * asociación (el nombre puede venir mal escrito y valer igual).
+     * @ORM\Column(name="customer_tax_id", type="string", length=20, nullable=true)
+     */
+    private ?string $customerTaxId = null;
+
+    /**
      * Dirección del proveedor tal como la imprime la factura. Se guarda aquí, y no
      * sólo en su ficha, porque es lo que dice ESTE papel; al confirmar completa los
      * huecos de la ficha.
@@ -328,6 +343,8 @@ class ReceivedInvoice
         $this->invoiceDate = $data->date;
         $this->providerName = $data->providerName;
         $this->providerTaxId = $data->providerTaxId;
+        $this->customerName = $data->customerName;
+        $this->customerTaxId = $data->customerTaxId;
         $this->invoiceNumber = $data->invoiceNumber;
         $this->total = $data->total;
         $this->providerAddress = $data->providerAddress;
@@ -510,6 +527,18 @@ class ReceivedInvoice
     public function getProviderTaxId(): ?string
     {
         return $this->providerTaxId;
+    }
+
+    /** A nombre de quién se leyó la factura. */
+    public function getCustomerName(): ?string
+    {
+        return $this->customerName;
+    }
+
+    /** CIF del cliente que se leyó en la factura. */
+    public function getCustomerTaxId(): ?string
+    {
+        return $this->customerTaxId;
     }
 
     public function setProviderTaxId(?string $providerTaxId): self
