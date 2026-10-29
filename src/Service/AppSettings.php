@@ -167,6 +167,16 @@ class AppSettings
     public const DEADLINE_TIME = 'delivery.deadline_time';
 
     /**
+     * Hora ("HH:MM") a la que salen el listado del reparto y la confirmación a
+     * lxs socixs, el día siguiente al cierre del plazo. Va tarde a propósito:
+     * administración mete por la mañana los cambios que lxs socixs avisan por
+     * otras vías antes del cierre, y lo que sale tiene que llevarlos. Cuando
+     * esos cambios los hagan lxs socixs desde su panel, se puede adelantar sin
+     * desplegar. La leen las dos tareas vía `hour_setting` del manifiesto.
+     */
+    public const DELIVERY_SHEET_SEND_TIME = 'delivery.sheet_send_time';
+
+    /**
      * Umbral de la regla de equilibrio: máxima diferencia de cestas permitida
      * entre dos viernes consecutivos tras aplicar un cambio puntual. La lee
      * {@see \App\Service\Delivery\Rule\BalanceWithinThresholdRule}. Sólo entra
@@ -537,10 +547,12 @@ class AppSettings
             'needs_recipient' => false,
             'confirm' => true,
             'dry' => true,
-            // A las 7:00 y a diario: cada nodo cierra su plazo la noche anterior a
-            // su reparto, así que la tarea mira cada mañana quién cerró y manda
-            // sólo ese listado. Un disparo semanal serviría a un nodo y no al otro.
-            'schedule' => ['freq' => 'daily', 'hour' => 7],
+            // A diario: cada nodo cierra su plazo la noche anterior a su reparto,
+            // así que la tarea mira cada día quién cerró y manda sólo ese listado.
+            // Un disparo semanal serviría a un nodo y no al otro. La hora la pone
+            // el ajuste `hour_setting`; la de `schedule` es sólo su default.
+            'schedule' => ['freq' => 'daily', 'hour' => 12],
+            'hour_setting' => self::DELIVERY_SHEET_SEND_TIME,
             'max_delay_hours' => 36,
             // El canal es UNO (correo con el PDF adjunto), así que sus ajustes sí
             // pueden inhibir la tarea entera sin dejar a nadie a medias. En cuanto
@@ -560,10 +572,13 @@ class AppSettings
             'needs_recipient' => false,
             'confirm' => true,
             'dry' => true,
-            // A las 7:00, como el listado y por lo mismo: cada nodo cierra su
-            // propio día. Va después en el manifiesto para que el listado interno
-            // salga primero si ambos corren en la misma pasada.
-            'schedule' => ['freq' => 'daily', 'hour' => 7],
+            // A la misma hora que el listado y por lo mismo: cada nodo cierra su
+            // propio día, y la socix tiene que recibir lo mismo que lleva el
+            // listado, cambios de administración incluidos. Va después en el
+            // manifiesto para que el listado interno salga primero si ambos
+            // corren en la misma pasada.
+            'schedule' => ['freq' => 'daily', 'hour' => 12],
+            'hour_setting' => self::DELIVERY_SHEET_SEND_TIME,
             'max_delay_hours' => 36,
             // Canal único, así que sus ajustes pueden inhibir la tarea entera. EN
             // CUANTO ESTA CONFIRMACIÓN SALGA TAMBIÉN POR PUSH hay que vaciar esto
@@ -1060,13 +1075,13 @@ class AppSettings
         self::CRON_DELIVERY_SHEET => [
             'group' => 'Tareas programadas',
             'label' => 'Enviar el listado al cerrar el reparto',
-            'help' => 'Cada mañana comprueba qué nodos cerraron su plazo de cambios la noche anterior y manda su listado en PDF (app:send-delivery-sheets). Independiente del email del listado: apagada aquí, la tarea ni se ejecuta.',
+            'help' => 'Cada día, a la «Hora de envío del listado», comprueba qué nodos cerraron su plazo de cambios la noche anterior y manda su listado en PDF (app:send-delivery-sheets). Independiente del email del listado: apagada aquí, la tarea ni se ejecuta.',
             'default' => false,
         ],
         self::CRON_DELIVERY_CONFIRMATION => [
             'group' => 'Tareas programadas',
             'label' => 'Confirmar la cesta a lxs socixs',
-            'help' => 'Cada mañana, para los nodos que cerraron su plazo la noche anterior, escribe a cada socix con lo que le queda registrado (app:send-delivery-confirmations). Independiente del email de la confirmación: apagada aquí, la tarea ni se ejecuta.',
+            'help' => 'Cada día, a la «Hora de envío del listado», para los nodos que cerraron su plazo la noche anterior, escribe a cada socix con lo que le queda registrado (app:send-delivery-confirmations). Independiente del email de la confirmación: apagada aquí, la tarea ni se ejecuta.',
             'default' => false,
         ],
         self::CRON_ADMIN_DELIVERY_SUMMARY => [
@@ -1207,6 +1222,12 @@ class AppSettings
             'label' => 'Hora del cierre',
             'help' => 'A qué hora del día de cierre termina el plazo para pedir un cambio puntual. La administración siempre puede forzar un cambio fuera de plazo.',
             'default' => '23:59',
+        ],
+        self::DELIVERY_SHEET_SEND_TIME => [
+            'group' => 'Cierre de reparto',
+            'label' => 'Hora de envío del listado',
+            'help' => 'A qué hora del día siguiente al cierre salen el listado del reparto a cada punto y la confirmación de su cesta a cada socix. Tiene que ser después de que administración termine de meter los cambios avisados antes del cierre: lo que se haga más tarde ya no sale en el correo.',
+            'default' => '12:00',
         ],
     ];
 
