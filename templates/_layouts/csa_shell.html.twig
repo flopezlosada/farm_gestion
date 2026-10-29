@@ -230,9 +230,13 @@
                 {% block csa_nav %}
                     {%- set route = app.request.attributes.get('_route') -%}
 
-                    {# Día a día — accesos generales, siempre visibles. Colapsable como
-                     # el resto (coherencia), pero abierto por defecto. #}
-                    <div class="csa-navgroup">
+                    {# Para el admin todos los grupos arrancan PLEGADOS salvo Contabilidad, que
+                     # es lo que viene a hacer a diario; el JS expande siempre el grupo de la
+                     # pantalla activa. Para un gestor no-admin arrancan abiertos. #}
+                    {%- set sec_collapsed = is_granted('ROLE_ADMIN') ? ' is-collapsed' : '' -%}
+
+                    {# Día a día — accesos generales (panel, calendario, ayuda). #}
+                    <div class="csa-navgroup{{ sec_collapsed }}">
                         <button type="button" class="csa-navgroup__head">Día a día <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
                         <div class="csa-navgroup__items">
                             {{ _self.nav_link('Panel', path('dashboard'), 'fa-home',
@@ -244,12 +248,34 @@
                         </div>
                     </div>
 
-                    {# Administración va PRIMERO: es el dominio propio del admin. Sólo lo
-                     # ve ROLE_ADMIN, así que para los gestores no-admin el menú no cambia.
-                     # El resto de grupos (que el admin también tiene por jerarquía) quedan
-                     # debajo, secundarios. #}
-                    {% if is_granted('ROLE_ADMIN') %}
+                    {# Contabilidad sube arriba y abierta: es el trabajo diario de quien la
+                     # lleva, admin incluido. 6 entradas por el ritmo de trabajo: el inicio
+                     # (saldos y lo pendiente), lo diario (movimientos, facturas), lo mensual
+                     # (remesas) y lo de vez en cuando (informes, ajustes). #}
+                    {% if is_granted('FEATURE_CONTABILIDAD') and is_granted('ROLE_GESTION_CONTABILIDAD') %}
                         <div class="csa-navgroup">
+                            <button type="button" class="csa-navgroup__head">Contabilidad <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
+                            <div class="csa-navgroup__items">
+                                {{ _self.nav_link('Inicio', path('accounting_index'), 'fa-dashboard',
+                                   route == 'accounting_index') }}
+                                {{ _self.nav_link('Movimientos', path('accounting_ledger'), 'fa-list',
+                                   route starts with 'accounting_ledger' or route starts with 'accounting_month' or route starts with 'accounting_entry' or route starts with 'accounting_transfer') }}
+                                {{ _self.nav_link('Facturas', path('accounting_invoices'), 'fa-file-text-o',
+                                   route starts with 'accounting_invoice' or route starts with 'accounting_issued_invoice') }}
+                                {{ _self.nav_link('Remesas', path('accounting_remittances'), 'fa-exchange',
+                                   route starts with 'accounting_remittance') }}
+                                {{ _self.nav_link('Informes', path('accounting_reports'), 'fa-line-chart',
+                                   route starts with 'accounting_report' or route starts with 'accounting_year' or route starts with 'accounting_budget' or route starts with 'accounting_accountant') }}
+                                {{ _self.nav_link('Ajustes', path('accounting_settings'), 'fa-cog',
+                                   route == 'accounting_settings' or (route starts with 'accounting_account' and not (route starts with 'accounting_accountant')) or route starts with 'accounting_categor' or route starts with 'accounting_provider' or route starts with 'accounting_customer') }}
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    {# Administración: sólo ROLE_ADMIN, así que para los gestores no-admin
+                     # el menú no cambia. #}
+                    {% if is_granted('ROLE_ADMIN') %}
+                        <div class="csa-navgroup{{ sec_collapsed }}">
                             <button type="button" class="csa-navgroup__head">Administración <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
                             <div class="csa-navgroup__items">
                                 {{ _self.nav_link('Usuarias', path('user'), 'fa-users',
@@ -271,12 +297,6 @@
                             </div>
                         </div>
                     {% endif %}
-
-                    {# Grupos de rol: colapsables. Para el admin arrancan PLEGADOS
-                     # (su dominio es Administración, arriba); el JS expande siempre el
-                     # grupo de la pantalla activa. Para un gestor no-admin arrancan
-                     # abiertos. #}
-                    {%- set sec_collapsed = is_granted('ROLE_ADMIN') ? ' is-collapsed' : '' -%}
 
                     {% if is_granted('ROLE_GESTION_GRANJA') %}
                         <div class="csa-navgroup{{ sec_collapsed }}">
@@ -497,28 +517,6 @@
                                    route starts with 'consumer_group_unit') }}
                                 {{ _self.nav_link('Estadísticas', path('consumer_group_stats'), 'fa-bar-chart',
                                    route == 'consumer_group_stats') }}
-                            </div>
-                        </div>
-                    {% endif %}
-
-                    {% if is_granted('FEATURE_CONTABILIDAD') and is_granted('ROLE_GESTION_CONTABILIDAD') %}
-                        <div class="csa-navgroup{{ sec_collapsed }}">
-                            <button type="button" class="csa-navgroup__head">Contabilidad <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
-                            <div class="csa-navgroup__items">
-                                {# 6 entradas por el ritmo de trabajo: el inicio (saldos y lo pendiente), lo diario (movimientos,
-                                 # facturas), lo mensual (remesas) y lo de vez en cuando (informes, ajustes). #}
-                                {{ _self.nav_link('Inicio', path('accounting_index'), 'fa-dashboard',
-                                   route == 'accounting_index') }}
-                                {{ _self.nav_link('Movimientos', path('accounting_ledger'), 'fa-list',
-                                   route starts with 'accounting_ledger' or route starts with 'accounting_month' or route starts with 'accounting_entry' or route starts with 'accounting_transfer') }}
-                                {{ _self.nav_link('Facturas', path('accounting_invoices'), 'fa-file-text-o',
-                                   route starts with 'accounting_invoice' or route starts with 'accounting_issued_invoice') }}
-                                {{ _self.nav_link('Remesas', path('accounting_remittances'), 'fa-exchange',
-                                   route starts with 'accounting_remittance') }}
-                                {{ _self.nav_link('Informes', path('accounting_reports'), 'fa-line-chart',
-                                   route starts with 'accounting_report' or route starts with 'accounting_year' or route starts with 'accounting_budget' or route starts with 'accounting_accountant') }}
-                                {{ _self.nav_link('Ajustes', path('accounting_settings'), 'fa-cog',
-                                   route == 'accounting_settings' or (route starts with 'accounting_account' and not (route starts with 'accounting_accountant')) or route starts with 'accounting_categor' or route starts with 'accounting_provider' or route starts with 'accounting_customer') }}
                             </div>
                         </div>
                     {% endif %}

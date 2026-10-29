@@ -173,6 +173,24 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
         $this->assertSelectorTextContains('h1', 'Movimientos');
     }
 
+    /**
+     * Contabilidad es el trabajo diario del admin: sale justo debajo de «Día a día» y
+     * es el único grupo que el admin recibe desplegado; el resto llega plegado.
+     */
+    public function testElAdminVeContabilidadArribaYDesplegada(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+
+        $crawler = $client->request('GET', '/gestion/dashboard');
+
+        $this->assertResponseIsSuccessful();
+        $heads = $crawler->filter('.csa-navgroup__head')->each(static fn ($n) => trim($n->text()));
+        $this->assertSame(['Día a día', 'Contabilidad', 'Administración'], array_slice($heads, 0, 3));
+        $open = $crawler->filter('.csa-navgroup:not(.is-collapsed) .csa-navgroup__head')->each(static fn ($n) => trim($n->text()));
+        $this->assertSame(['Contabilidad'], $open);
+    }
+
     private function enableModule(): void
     {
         static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
