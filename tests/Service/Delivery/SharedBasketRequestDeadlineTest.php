@@ -28,8 +28,9 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  *
  * Los hogares van sin punto de recogida: sin nodo, la fecha física es la del ciclo, y
  * con fechas de 2099 el plazo por defecto está siempre abierto. Para cerrarlo se guarda
- * una antelación de diez años, que deja cualquier semana fuera de plazo pero lejos de
- * su día anterior —justo el hueco que el editor no veía—.
+ * una antelación de 40000 días (unos 110 años), que pone el cierre de una semana de 2099
+ * antes de hoy pero deja su día anterior lejos —justo el hueco que el editor no veía—.
+ * Diez años, como en PanelBasketActionsTest, no basta aquí: el cierre caería en 2089.
  */
 class SharedBasketRequestDeadlineTest extends KernelTestCase
 {
@@ -154,14 +155,14 @@ class SharedBasketRequestDeadlineTest extends KernelTestCase
     }
 
     /**
-     * Cierra el plazo de autoservicio de todas las semanas a la vista. La fila se escribe
+     * Cierra el plazo de autoservicio de las semanas de 2099 del test. La fila se escribe
      * a mano porque AppSettings::setInt la recortaría a su máximo (7); al leerla no se
      * recorta. Se guarda antes de la primera lectura del mediador, que memoriza los
      * ajustes.
      */
     private function closeEveryDeadline(): void
     {
-        $this->em->persist((new Setting())->setName(AppSettings::DEADLINE_DAYS_BEFORE)->setValue('3650'));
+        $this->em->persist((new Setting())->setName(AppSettings::DEADLINE_DAYS_BEFORE)->setValue('40000'));
         $this->em->flush();
     }
 
@@ -243,7 +244,7 @@ class SharedBasketRequestDeadlineTest extends KernelTestCase
     }
 
     /**
-     * Borra la antelación de diez años: el resto de tests cuentan con el plazo por defecto.
+     * Borra la antelación forzada: el resto de tests cuentan con el plazo por defecto.
      */
     protected function tearDown(): void
     {
