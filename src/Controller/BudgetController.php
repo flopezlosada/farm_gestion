@@ -39,7 +39,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 class BudgetController extends AbstractController
 {
     /**
-     * Todos los presupuestos, del más reciente al más viejo, con lo que suman, y
+     * Todos los presupuestos, del más reciente al más viejo, con lo que suman y cuál
+     * manda en su año (el marcado en vigor o, si no hay, el aprobado), y
      * cuánto tendría que costar la cesta para que cuadre el presupuesto en vigor del
      * año: es una cuenta de hacer el presupuesto, por eso vive aquí.
      */
@@ -60,11 +61,18 @@ class BudgetController extends AbstractController
             ];
         }
 
+        // El que manda en cada año, tenga la marca «en vigor» o lo sea por ser el aprobado.
+        $references = [];
+        foreach (array_unique(array_map(static fn (array $row): int => $row['budget']->getYear(), $rows)) as $budgetYear) {
+            $references[$budgetYear] = $budgets->findReferenceForYear($budgetYear)?->getId();
+        }
+
         $year = (int) date('Y');
         $baskets = $shares->countActiveBasketEquivalents();
 
         return $this->render('accounting/budgets.html.twig', [
             'rows' => $rows,
+            'references' => $references,
             'year' => $year,
             'basketCost' => $tracker->basketCost($year, $budgets->findReferenceForYear($year), $baskets, 100.0),
             'baskets' => $baskets,
