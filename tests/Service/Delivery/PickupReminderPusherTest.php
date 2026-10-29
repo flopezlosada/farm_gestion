@@ -10,11 +10,13 @@ use App\Entity\User;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
 use App\Repository\UserRepository;
+use App\Repository\WeeklyBasketItemRepository;
 use App\Security\PartnerAccessPolicy;
 use App\Service\AppSettings;
 use App\Service\Cron\EffectLedger;
 use App\Service\Delivery\DeliveryDeadline;
 use App\Service\Delivery\NodeDeliveryDate;
+use App\Service\Delivery\PickupContents;
 use App\Service\Delivery\PickupReminderMailer;
 use App\Service\Delivery\PickupReminderPusher;
 use App\Service\Notification\NotificationInbox;
@@ -153,9 +155,22 @@ class PickupReminderPusherTest extends TestCase
         $manana = $hoy->modify('+1 day');
         $pasado = $hoy->modify('+2 days');
 
-        $this->assertSame('Hoy recoges tu cesta', $this->tituloPara($hoy));
-        $this->assertSame('Mañana recoges tu cesta', $this->tituloPara($manana));
+        $this->assertSame('Hoy recoges tu cesta de verduras', $this->tituloPara($hoy));
+        $this->assertSame('Mañana recoges tu cesta de verduras', $this->tituloPara($manana));
         $this->assertStringStartsWith('El ', $this->tituloPara($pasado));
+    }
+
+    /**
+     * El título dice de qué es la cesta, igual que el asunto del correo: es lo
+     * único que se lee en la pantalla bloqueada, y a quien sólo recoge huevos
+     * "recoges tu cesta" le suena a verdura.
+     */
+    public function testTituloDiceDeQueEsLaCesta(): void
+    {
+        $manana = (new \DateTimeImmutable('today'))->modify('+1 day');
+
+        $this->assertSame('Mañana recoges tu cesta de huevos', $this->tituloPara($manana, PickupContents::Eggs));
+        $this->assertSame('Mañana recoges tu cesta de verduras y huevos', $this->tituloPara($manana, PickupContents::VegetablesAndEggs));
     }
 
     /**
@@ -253,11 +268,12 @@ class PickupReminderPusherTest extends TestCase
     /**
      * El título que sale para una fecha dada, mandando un aviso de mentira.
      *
-     * @param \DateTimeImmutable $date la fecha física de recogida
+     * @param \DateTimeImmutable $date     la fecha física de recogida
+     * @param PickupContents     $contents lo que recoge
      *
      * @return string el título del aviso
      */
-    private function tituloPara(\DateTimeImmutable $date): string
+    private function tituloPara(\DateTimeImmutable $date, PickupContents $contents = PickupContents::Vegetables): string
     {
         $wb = $this->weeklyBasket($this->node('Torremocha', (int) $date->format('N')), $date, 1);
 
@@ -271,7 +287,7 @@ class PickupReminderPusherTest extends TestCase
             }
         );
 
-        $this->pusher($push, [1])->send([$wb]);
+        $this->pusher($push, [1], null, null, null, $contents)->send([$wb]);
 
         return $capturado;
     }
@@ -282,6 +298,7 @@ class PickupReminderPusherTest extends TestCase
      * @param PushSender        $push          el enviador
      * @param list<int>         $conCuenta     ids de socix que tienen cuenta de acceso
      * @param EffectLedger|null $ledger        el guardián de idempotencia
+     * @param PickupContents    $contents      lo que recoge cada socix
      */
     private function pusher(
         PushSender $push,
@@ -289,6 +306,7 @@ class PickupReminderPusherTest extends TestCase
         ?EffectLedger $ledger = null,
         ?NotificationInbox $inbox = null,
         ?NotificationPreferences $preferences = null,
+        PickupContents $contents = PickupContents::Vegetables,
     ): PickupReminderPusher {
         $users = [];
         foreach ($conCuenta as $partnerId) {
@@ -309,7 +327,7 @@ class PickupReminderPusherTest extends TestCase
         return new PickupReminderPusher(
             $push,
             $repository,
-            $this->mailer(),
+            $this->mailer($contents),
             $ledger ?? $this->ledger(),
             $inbox ?? $this->createMock(NotificationInbox::class),
             $link,
@@ -336,9 +354,21 @@ class PickupReminderPusherTest extends TestCase
     /**
      * El mailer REAL, sólo para su contextFor(): es la garantía de que push y
      * correo hablan de la misma fecha y el mismo nodo.
+     *
+     * @param PickupContents $contents lo que recoge cada socix
      */
-    private function mailer(): PickupReminderMailer
+    private function mailer(PickupContents $contents): PickupReminderMailer
     {
+        // Sin líneas materializadas: el repositorio responde lo mismo para cada
+        // socix de la lista, con la clave con la que lo leen mailer y pusher.
+        $items = $this->createMock(WeeklyBasketItemRepository::class);
+        $items->method('contentsByPartner')->willReturnCallback(
+            static fn (array $weeklyBaskets): array => array_fill_keys(
+                array_map(static fn (WeeklyBasket $wb): int => (int) $wb->getPartner()?->getId(), $weeklyBaskets),
+                $contents,
+            )
+        );
+
         $settings = $this->createMock(AppSettings::class);
         $settings->method('getBool')->willReturn(false);
         $settings->method('getInt')->willReturn(1);
@@ -364,6 +394,7 @@ class PickupReminderPusherTest extends TestCase
             $deadline,
             $this->ledger(),
             $preferences,
+            $items,
         );
     }
 

@@ -9,10 +9,13 @@ use App\Entity\PartnerDeliveryShift;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
 use App\Repository\PartnerDeliveryShiftRepository;
+use App\Repository\WeeklyBasketItemRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Service\Cron\EffectLedger;
 use App\Service\Delivery\DeliveryConfirmationMailer;
+use App\Service\Delivery\PickupContents;
 use PHPUnit\Framework\TestCase;
+use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Component\Mailer\MailerInterface;
 
 /**
@@ -39,7 +42,7 @@ class DeliveryConfirmationMailerTest extends TestCase
             ->audienceFor($node, $this->createMock(Basket::class), new \DateTimeImmutable(self::PICKUP));
 
         $this->assertCount(1, $audience);
-        $this->assertTrue($audience[0]['picks']);
+        $this->assertSame(PickupContents::Vegetables, $audience[0]['contents']);
         $this->assertSame('Madrid', $audience[0]['node_name']);
         $this->assertSame(self::PICKUP, $audience[0]['pickup_date']->format('Y-m-d'));
         $this->assertFalse($audience[0]['was_shifted']);
@@ -58,7 +61,7 @@ class DeliveryConfirmationMailerTest extends TestCase
             ->audienceFor($node, $this->createMock(Basket::class), new \DateTimeImmutable(self::PICKUP));
 
         $this->assertCount(1, $audience);
-        $this->assertFalse($audience[0]['picks']);
+        $this->assertNull($audience[0]['contents'], 'No recoge: no hay nada que nombrar.');
         $this->assertSame($movido, $audience[0]['partner']);
     }
 
@@ -119,7 +122,7 @@ class DeliveryConfirmationMailerTest extends TestCase
             ->audienceFor($node, $this->createMock(Basket::class), new \DateTimeImmutable(self::PICKUP));
 
         $this->assertCount(1, $audience);
-        $this->assertTrue($audience[0]['picks']);
+        $this->assertNotNull($audience[0]['contents']);
     }
 
     /**
@@ -154,11 +157,77 @@ class DeliveryConfirmationMailerTest extends TestCase
     }
 
     /**
+     * EL CASO QUE MOTIVA EL NOMBRE: a quien sólo recoge huevos, un asunto "Tu
+     * cesta de esta semana" le hace pensar en verdura. El asunto dice de qué es.
+     *
+     * @dataProvider asuntos
+     */
+    public function testElAsuntoDiceDeQueEsLaCesta(?PickupContents $contents, string $asunto): void
+    {
+        $node = $this->node('Madrid', 3);
+        $partner = $this->partner(8, $node);
+        $partner->method('getEmail')->willReturn('socix@test.org');
+
+        $captured = [];
+        $mailer = $this->createMock(MailerInterface::class);
+        $mailer->method('send')->willReturnCallback(static function (TemplatedEmail $email) use (&$captured): void {
+            $captured[] = $email;
+        });
+
+        $ledger = $this->createMock(EffectLedger::class);
+        $ledger->method('once')->willReturnCallback(
+            static function (string $kind, string $reference, \DateTimeInterface $on, callable $effect): bool {
+                $effect();
+
+                return true;
+            }
+        );
+
+        $confirmation = new DeliveryConfirmationMailer(
+            $mailer,
+            $this->createMock(WeeklyBasketRepository::class),
+            $this->createMock(PartnerDeliveryShiftRepository::class),
+            $ledger,
+            $this->createMock(WeeklyBasketItemRepository::class),
+        );
+
+        $confirmation->send([[
+            'partner' => $partner,
+            'contents' => $contents,
+            'pickup_date' => new \DateTimeImmutable(self::PICKUP),
+            'node_name' => 'Madrid',
+            'was_shifted' => false,
+        ]]);
+
+        $this->assertSame($asunto, $captured[0]->getSubject());
+    }
+
+    /** @return iterable<string, array{?PickupContents, string}> */
+    public static function asuntos(): iterable
+    {
+        yield 'sólo huevos' => [PickupContents::Eggs, 'Esta semana recoges tu cesta de huevos · CSA Vega de Jarama'];
+        yield 'verduras' => [PickupContents::Vegetables, 'Esta semana recoges tu cesta de verduras · CSA Vega de Jarama'];
+        yield 'verduras y huevos' => [PickupContents::VegetablesAndEggs, 'Esta semana recoges tu cesta de verduras y huevos · CSA Vega de Jarama'];
+        // Quien movió su entrega no recoge nada, ni verdura ni huevos: "no
+        // recoges cesta" volvía a hablar de cesta a quien sólo tiene huevos.
+        yield 'no recoge' => [null, 'Esta semana no tienes recogida · CSA Vega de Jarama'];
+    }
+
+    /**
      * @param WeeklyBasket[]         $picking Cestas que devuelve el finder del nodo.
      * @param PartnerDeliveryShift[] $shifts  Movimientos salientes del ciclo.
      */
     private function mailer(array $picking, array $shifts): DeliveryConfirmationMailer
     {
+        // Sin líneas materializadas: todo el que recoge, recoge verdura.
+        $items = $this->createMock(WeeklyBasketItemRepository::class);
+        $items->method('contentsByPartner')->willReturnCallback(
+            static fn (array $weeklyBaskets): array => array_fill_keys(
+                array_map(static fn (WeeklyBasket $wb): int => (int) $wb->getPartner()?->getId(), $weeklyBaskets),
+                PickupContents::Vegetables,
+            )
+        );
+
         $weeklyBaskets = $this->createMock(WeeklyBasketRepository::class);
         $weeklyBaskets->method('findForNodeAndBasket')->willReturn($picking);
 
@@ -170,6 +239,7 @@ class DeliveryConfirmationMailerTest extends TestCase
             $weeklyBaskets,
             $shiftRepository,
             $this->createMock(EffectLedger::class),
+            $items,
         );
     }
 

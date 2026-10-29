@@ -102,6 +102,7 @@ class PickupReminderPusher
     public function recordInbox(array $weeklyBaskets, bool $resend = false): array
     {
         $usersByPartner = $this->usersByPartner($weeklyBaskets);
+        $contents = $this->mailer->contentsFor($weeklyBaskets);
 
         $written = 0;
         $already = 0;
@@ -121,7 +122,7 @@ class PickupReminderPusher
                 continue;
             }
 
-            $context = $this->mailer->contextFor($wb);
+            $context = $this->mailer->contextFor($wb, $contents[$partnerId]);
 
             $emitted = $this->ledger->once(
                 self::EFFECT_KIND_INBOX,
@@ -176,6 +177,7 @@ class PickupReminderPusher
         ));
 
         $usersByPartner = $this->usersByPartner($weeklyBaskets);
+        $contents = $this->mailer->contentsFor($weeklyBaskets);
 
         // Agrupado por texto del mensaje: dentro de un grupo el aviso es
         // literalmente el mismo, que es la condición para poder mandarlo en un
@@ -197,7 +199,7 @@ class PickupReminderPusher
                 continue;
             }
 
-            $context = $this->mailer->contextFor($wb);
+            $context = $this->mailer->contextFor($wb, $contents[$partnerId]);
 
             // El efecto sólo apunta a quién hay que avisar; el envío va después,
             // agrupado. Reclamar aquí es lo que impide que dos ticks seguidos
@@ -298,8 +300,9 @@ class PickupReminderPusher
     }
 
     /**
-     * El título: cuándo se recoge, que es lo único que se lee de un vistazo en
-     * la pantalla bloqueada.
+     * El título: cuándo se recoge y qué, que es lo único que se lee de un vistazo
+     * en la pantalla bloqueada. El qué no es adorno: a quien sólo recoge huevos,
+     * "recoges tu cesta" le suena a verdura.
      *
      * @param array<string, mixed> $context Contexto del aviso.
      *
@@ -312,11 +315,13 @@ class PickupReminderPusher
         $today = new \DateTimeImmutable('today');
         $days = (int) $today->diff($date)->format('%r%a');
 
-        return match (true) {
-            0 === $days => 'Hoy recoges tu cesta',
-            1 === $days => 'Mañana recoges tu cesta',
-            default => sprintf('El %s recoges tu cesta', self::WEEKDAYS[(int) $date->format('N')]),
+        $when = match (true) {
+            0 === $days => 'Hoy',
+            1 === $days => 'Mañana',
+            default => sprintf('El %s', self::WEEKDAYS[(int) $date->format('N')]),
         };
+
+        return sprintf('%s recoges tu cesta %s', $when, $context['contents']);
     }
 
     /**

@@ -1,7 +1,7 @@
 Hola {{ partner.name }},
 
 Te recordamos que el {{ pickup_date|format_date('full', locale='es') }}
-te toca recoger tu cesta {{ modality }}{% if node_name %} en {{ node_name }}{% else %} en la CSA Vega de Jarama{% endif %}.
+te toca recoger tu cesta{% if modality %} {{ modality }}{% endif %} {{ contents }}{% if node_name %} en {{ node_name }}{% else %} en la CSA Vega de Jarama{% endif %}.
 {% if was_shifted %}
 ATENCIÓN: el reparto se ha desplazado a esta fecha (no es el día habitual).
 {% endif %}

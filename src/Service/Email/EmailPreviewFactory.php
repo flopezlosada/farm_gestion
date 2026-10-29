@@ -13,6 +13,7 @@ use App\Repository\PartnerEventRepository;
 use App\Repository\PartnerRepository;
 use App\Service\AppSettings;
 use App\Service\Delivery\DeliveryDeadline;
+use App\Service\Delivery\PickupContents;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Http\LoginLink\LoginLinkHandlerInterface;
@@ -113,6 +114,7 @@ class EmailPreviewFactory
         return [
             'partner' => $partner,
             'modality' => 'quincenal',
+            'contents' => PickupContents::VegetablesAndEggs->label(),
             'pickup_date' => $pickupDate,
             // Punto de recogida real del socix de ejemplo (o Torremocha por defecto),
             // para que la preview muestre la forma del email consciente del nodo.
