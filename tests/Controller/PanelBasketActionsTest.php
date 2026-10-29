@@ -4,13 +4,16 @@ namespace App\Tests\Controller;
 
 use App\DataFixtures\PartnerUserFixtures;
 use App\Entity\Basket;
+use App\Entity\BasketComponent;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
 use App\Entity\PartnerNodeOverride;
 use App\Entity\Setting;
 use App\Entity\WeeklyBasket;
+use App\Repository\PartnerDeliveryShiftRepository;
 use App\Service\AppSettings;
+use App\Service\Delivery\AccumulatingMove;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
@@ -107,13 +110,70 @@ class PanelBasketActionsTest extends AbstractPartnerAuthenticatedTest
      */
     private function farthestSocixWeeklyBasket(EntityManagerInterface $em, Partner $partner): ?WeeklyBasket
     {
+        return $this->latestSocixWeeklyBaskets($em, $partner, 1)[0] ?? null;
+    }
+
+    /**
+     * Las $limit entregas del socix más adelantadas en el tiempo, de la más lejana
+     * a la más cercana.
+     *
+     * @return list<WeeklyBasket>
+     */
+    private function latestSocixWeeklyBaskets(EntityManagerInterface $em, Partner $partner, int $limit): array
+    {
         return $em->getRepository(WeeklyBasket::class)->createQueryBuilder('wb')
             ->innerJoin('wb.basket', 'b')
             ->where('wb.partner = :p')
             ->setParameter('p', $partner)
             ->orderBy('b.date', 'DESC')
-            ->setMaxResults(1)
-            ->getQuery()->getOneOrNullResult();
+            ->setMaxResults($limit)
+            ->getQuery()->getResult();
+    }
+
+    /**
+     * Cierra el plazo de autoservicio de TODAS las semanas a la vista, sin depender de
+     * las fechas de las fixtures: una antelación de diez años deja cualquier entrega
+     * futura fuera de plazo pero lejos de su «día anterior» —justo el hueco en el que
+     * las acciones del calendario se saltaban el plazo—. La fila se escribe a mano
+     * porque AppSettings::setInt la recortaría a su máximo (7); al leerla no se recorta.
+     * El tearDown la borra con el resto de ajustes.
+     */
+    private function closeEveryDeadline(KernelBrowser $client): void
+    {
+        $em = $this->em($client);
+        $em->persist((new Setting())
+            ->setName(AppSettings::DEADLINE_DAYS_BEFORE)
+            ->setValue('3650'));
+        $em->flush();
+    }
+
+    /**
+     * Token CSRF de mover (lo comparten mover, recuperar y deshacer el traslado), leído
+     * del calendario del socix como lo lee su JavaScript.
+     */
+    private function moveCsrfToken(KernelBrowser $client, Basket $basket): string
+    {
+        $client->request('GET', sprintf(
+            '/panel/calendar?year=%d&month=%d&sel=%d',
+            (int) $basket->getDate()->format('Y'),
+            (int) $basket->getDate()->format('n'),
+            $basket->getId(),
+        ));
+        $this->assertSame(200, $client->getResponse()->getStatusCode());
+        $this->assertMatchesRegularExpression('/const MOVE_CSRF = "([^"]+)";/', (string) $client->getResponse()->getContent());
+        preg_match('/const MOVE_CSRF = "([^"]+)";/', (string) $client->getResponse()->getContent(), $match);
+
+        return $match[1];
+    }
+
+    /**
+     * Mensajes flash de un tipo que dejó la última petición.
+     *
+     * @return list<string>
+     */
+    private function flashes(KernelBrowser $client, string $type): array
+    {
+        return $client->getRequest()->getSession()->getFlashBag()->peek($type);
     }
 
     /**
@@ -280,5 +340,173 @@ class PanelBasketActionsTest extends AbstractPartnerAuthenticatedTest
         $override = $em->getRepository(PartnerNodeOverride::class)
             ->findOneBy(['partner' => $partner->getId(), 'basket' => $basketId]);
         $this->assertNull($override, 'Sin token CSRF válido no debe crearse ningún traslado de nodo.');
+    }
+
+    /**
+     * Mover la cesta con el plazo de autoservicio cerrado se rechaza aunque falten días
+     * para la recogida: pasado el cierre el listado del reparto ya puede haberse enviado,
+     * y el cambio no llegaría a la hoja impresa. Antes solo se exigía que la recogida no
+     * fuera hoy o ya pasada.
+     */
+    public function testCalendarMoveRespetaElPlazoDeAutoservicio(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $this->resetSocixState($client);
+        $em = $this->em($client);
+        $partner = $this->reloadSocixPartner($em);
+
+        $wb = $this->farthestSocixWeeklyBasket($em, $partner);
+        $this->assertNotNull($wb);
+        $basket = $wb->getBasket();
+        $basketId = $basket->getId();
+        $token = $this->moveCsrfToken($client, $basket);
+        $this->closeEveryDeadline($client);
+
+        $client->request('POST', sprintf('/panel/calendar/move/%d', $basketId), [
+            '_csrf_token' => $token,
+            'to_basket_id' => $basketId,
+        ]);
+        $this->assertResponseRedirects();
+        $errors = $this->flashes($client, 'error');
+
+        $em = $this->em($client);
+        $em->clear();
+        $shift = $em->getRepository(PartnerDeliveryShift::class)
+            ->findOneBy(['partner' => $partner->getId(), 'fromBasket' => $basketId]);
+
+        $this->assertNull($shift, 'Con el plazo cerrado no debe crearse ningún cambio puntual.');
+        $this->assertStringContainsString('el plazo terminó', implode(' ', $errors));
+    }
+
+    /**
+     * Mover sólo los HUEVOS va por el mismo endpoint y respeta el mismo plazo: los huevos
+     * también salen en el listado del reparto.
+     */
+    public function testCalendarMoveHuevosRespetaElPlazoDeAutoservicio(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $this->resetSocixState($client);
+        $em = $this->em($client);
+        $partner = $this->reloadSocixPartner($em);
+
+        $wb = $this->farthestSocixWeeklyBasket($em, $partner);
+        $this->assertNotNull($wb);
+        $basket = $wb->getBasket();
+        $token = $this->moveCsrfToken($client, $basket);
+        $this->closeEveryDeadline($client);
+
+        $client->request('POST', sprintf('/panel/calendar/move/%d', $basket->getId()), [
+            '_csrf_token' => $token,
+            'to_basket_id' => $basket->getId(),
+            'component_id' => BasketComponent::ID_EGGS,
+        ]);
+        $this->assertResponseRedirects();
+
+        $this->assertStringContainsString('el plazo terminó', implode(' ', $this->flashes($client, 'error')));
+    }
+
+    /**
+     * Recuperar una cesta aparcada en un día con el plazo cerrado se rechaza: ese día
+     * ganaría una cesta que ya no saldría en su listado. La cesta sigue aparcada.
+     */
+    public function testCalendarRecoverRespetaElPlazoDeAutoservicio(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $this->resetSocixState($client);
+        $em = $this->em($client);
+        $partner = $this->reloadSocixPartner($em);
+
+        $wb = $this->farthestSocixWeeklyBasket($em, $partner);
+        $this->assertNotNull($wb);
+        $basket = $wb->getBasket();
+        $basketId = $basket->getId();
+        $token = $this->moveCsrfToken($client, $basket);
+        // Tras la petición el contenedor es otro: el EM y las entidades, del nuevo.
+        $em = $this->em($client);
+        $client->getContainer()->get(DeliveryShiftApplier::class)->applySkipIntent(
+            $this->reloadSocixPartner($em),
+            $em->getRepository(Basket::class)->find($basketId),
+            null,
+            'test:setup',
+        );
+        $this->closeEveryDeadline($client);
+
+        $client->request('POST', sprintf('/panel/calendar/recover/%d', $basketId), [
+            '_csrf_token' => $token,
+            'to_basket_id' => $basketId,
+        ]);
+        $this->assertResponseRedirects();
+        $errors = $this->flashes($client, 'error');
+
+        $em = $this->em($client);
+        $em->clear();
+        $partner = $this->reloadSocixPartner($em);
+        $basket = $em->getRepository(Basket::class)->find($basketId);
+        $intent = $em->getRepository(PartnerDeliveryShift::class)
+            ->findOneBy(['partner' => $partner->getId(), 'fromBasket' => $basketId]);
+        $stillParked = $intent !== null && $intent->isParked();
+
+        // db_test no tiene rollback transaccional: restauramos ANTES de las aserciones.
+        if ($intent !== null) {
+            $client->getContainer()->get(DeliveryShiftApplier::class)->cancelSkipIntent($intent, 'test:cleanup');
+        }
+        $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate());
+        if ($share !== null) {
+            $client->getContainer()->get(WeeklyBasketGenerator::class)->materializeShareDelivery($basket, $share);
+            $em->flush();
+        }
+
+        $this->assertTrue($stillParked, 'Con el plazo cerrado la cesta debe seguir aparcada.');
+        $this->assertStringContainsString('cerró el plazo', implode(' ', $errors));
+    }
+
+    /**
+     * Deshacer un traslado sumando con el plazo cerrado se rechaza: cambiaría dos
+     * listados (el día que recibió la cesta y su semana de origen). El traslado sigue.
+     */
+    public function testCalendarUndoAccumulateRespetaElPlazoDeAutoservicio(): void
+    {
+        $client = $this->createPartnerAuthenticatedClient();
+        $this->resetSocixState($client);
+        $em = $this->em($client);
+        $partner = $this->reloadSocixPartner($em);
+
+        $latest = $this->latestSocixWeeklyBaskets($em, $partner, 2);
+        if (count($latest) < 2) {
+            $this->markTestSkipped('El socix de fixtures necesita dos entregas para trasladar una sobre otra.');
+        }
+        $toId = $latest[0]->getBasket()->getId();
+        $fromId = $latest[1]->getBasket()->getId();
+        $token = $this->moveCsrfToken($client, $latest[0]->getBasket());
+
+        $em = $this->em($client);
+        $client->getContainer()->get(AccumulatingMove::class)->move(
+            $this->reloadSocixPartner($em),
+            $em->getRepository(Basket::class)->find($fromId),
+            $em->getRepository(Basket::class)->find($toId),
+            'test:setup',
+        );
+        $this->closeEveryDeadline($client);
+
+        $client->request('POST', sprintf('/panel/calendar/accumulate/%d/undo', $toId), [
+            '_csrf_token' => $token,
+        ]);
+        $this->assertResponseRedirects();
+        $errors = $this->flashes($client, 'error');
+
+        $em = $this->em($client);
+        $em->clear();
+        $partner = $this->reloadSocixPartner($em);
+        $to = $em->getRepository(Basket::class)->find($toId);
+        $stillAccumulated = $client->getContainer()->get(PartnerDeliveryShiftRepository::class)
+            ->findAccumulatedInto($partner, $to) !== [];
+
+        // db_test no tiene rollback transaccional: restauramos ANTES de las aserciones.
+        if ($stillAccumulated) {
+            $client->getContainer()->get(AccumulatingMove::class)->undo($partner, $to, 'test:cleanup');
+        }
+
+        $this->assertTrue($stillAccumulated, 'Con el plazo cerrado el traslado sumando debe seguir en pie.');
+        $this->assertStringContainsString('el plazo terminó', implode(' ', $errors));
     }
 }
