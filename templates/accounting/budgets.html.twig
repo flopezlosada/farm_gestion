@@ -79,7 +79,8 @@
                                 {% if row.budget.approvedAt %}
                                     <span class="acc-muted acc-small">{{ row.budget.approvedAt|date('d/m/Y') }}</span>
                                 {% endif %}
-                                {% if row.budget.inForce %}
+                                {# Sin ninguno marcado, manda el aprobado: también se ve «en vigor». #}
+                                {% if references[row.budget.year] == row.budget.id %}
                                     <span class="prl-chip prl-chip--ok" title="Contra éste se mide el año: portada, partidas, coste de la cesta y «Cómo vamos». La asamblea sigue comparando con el aprobado."><span class="dot"></span>en vigor</span>
                                 {% endif %}
                             </td>
@@ -101,7 +102,7 @@
                                         <input type="hidden" name="_token" value="{{ csrf_token('accounting_budget_in_force_' ~ row.budget.id) }}">
                                         {% if row.budget.inForce %}
                                             <button type="submit" class="prl-btn" title="Sacar de vigor: el año vuelve a medirse contra el aprobado">Sacar de vigor</button>
-                                        {% else %}
+                                        {% elseif references[row.budget.year] != row.budget.id %}
                                             <button type="submit" class="prl-btn" title="Medir el año contra este presupuesto en vez de contra el aprobado">Poner en vigor</button>
                                         {% endif %}
                                     </form>

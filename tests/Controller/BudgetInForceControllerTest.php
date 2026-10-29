@@ -74,6 +74,22 @@ class BudgetInForceControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * Sin ninguno marcado manda el aprobado: la lista lo dice con la etiqueta y no le
+     * ofrece «Poner en vigor», que no cambiaría nada. Al otro del año sí se le ofrece.
+     */
+    public function testSinMarcaElAprobadoSeVeEnVigor(): void
+    {
+        $crawler = $this->browser->request('GET', '/gestion/accounting/budgets/');
+        $approvedRow = $crawler->filter(sprintf('form[action$="/%d/in-force"]', $this->approved->getId()))->closest('tr');
+        $revisedRow = $crawler->filter(sprintf('form[action$="/%d/in-force"]', $this->revised->getId()))->closest('tr');
+
+        $this->assertCount(1, $approvedRow->filter('.prl-chip--ok'));
+        $this->assertStringNotContainsString('Poner en vigor', $approvedRow->text());
+        $this->assertCount(0, $revisedRow->filter('.prl-chip--ok'));
+        $this->assertStringContainsString('Poner en vigor', $revisedRow->text());
+    }
+
+    /**
      * El que está en vigor no se borra aunque no esté aprobado: cambiaría en silencio
      * contra qué se mide el año.
      */
