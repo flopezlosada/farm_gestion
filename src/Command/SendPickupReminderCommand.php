@@ -123,14 +123,16 @@ class SendPickupReminderCommand extends AbstractCronCommand
             return $this->nothingToDo(sprintf('Nadie recoge el %s', $target->format('Y-m-d')));
         }
 
+        $contents = $this->reminderMailer->contentsFor($recipients);
         $io->table(
-            ['Socix', 'Email', 'Modalidad', 'Nodo', 'Recogida', 'Desplazado'],
-            array_map(function ($wb) {
-                $ctx = $this->reminderMailer->contextFor($wb);
+            ['Socix', 'Email', 'Modalidad', 'Recoge', 'Nodo', 'Recogida', 'Desplazado'],
+            array_map(function ($wb) use ($contents) {
+                $ctx = $this->reminderMailer->contextFor($wb, $contents[(int) $wb->getPartner()->getId()]);
                 return [
                     trim($wb->getPartner()->getName() . ' ' . $wb->getPartner()->getSurname()),
                     $wb->getPartner()->getEmail() ?: '(sin email)',
-                    $ctx['modality'],
+                    $ctx['modality'] ?? '—',
+                    $ctx['contents'],
                     $ctx['node_name'] ?? '(sin nodo)',
                     $ctx['pickup_date']->format('Y-m-d'),
                     $ctx['was_shifted'] ? 'sí' : '',

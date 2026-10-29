@@ -2,14 +2,14 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>Recordatorio de cesta · CSA Vega de Jarama</title>
+    <title>Recordatorio: tu cesta {{ contents }} · CSA Vega de Jarama</title>
 </head>
 <body style="font-family: Arial, sans-serif; color: #333; max-width: 580px; margin: 0 auto; padding: 24px;">
 
     <h2 style="color: #5a8f3d; margin-top: 0;">Hola {{ partner.name }},</h2>
 
     <p>Te recordamos que <strong>el {{ pickup_date|format_date('full', locale='es') }}</strong>
-       te toca recoger tu cesta {{ modality }}{% if node_name %} en <strong>{{ node_name }}</strong>{% else %} en la CSA Vega de Jarama{% endif %}.</p>
+       te toca recoger tu cesta{% if modality %} {{ modality }}{% endif %} {{ contents }}{% if node_name %} en <strong>{{ node_name }}</strong>{% else %} en la CSA Vega de Jarama{% endif %}.</p>
 
     {% if was_shifted %}
         <p style="background: #fdf3e0; border-left: 3px solid #d99820; padding: 10px 14px;">

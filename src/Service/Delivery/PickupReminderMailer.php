@@ -5,6 +5,7 @@ namespace App\Service\Delivery;
 use App\Entity\BasketShare;
 use App\Entity\Node;
 use App\Entity\WeeklyBasket;
+use App\Repository\WeeklyBasketItemRepository;
 use App\Security\PartnerAccessPolicy;
 use App\Service\AppSettings;
 use App\Service\Cron\EffectLedger;
@@ -49,6 +50,7 @@ class PickupReminderMailer
         private readonly DeliveryDeadline $deadline,
         private readonly EffectLedger $ledger,
         private readonly NotificationPreferences $preferences,
+        private readonly WeeklyBasketItemRepository $items,
     ) {
     }
 
@@ -77,6 +79,7 @@ class PickupReminderMailer
         // está encendido Y el socix puede entrar (tiene cuenta, o el alta está
         // abierta). Se lee una vez; canUseActionLinks resuelve por socix.
         $linksEnabled = $this->settings->getBool(AppSettings::EMAIL_PICKUP_REMINDER_LINKS);
+        $contents = $this->contentsFor($weeklyBaskets);
 
         $sent = 0;
         $skipped = 0;
@@ -98,6 +101,7 @@ class PickupReminderMailer
                 continue;
             }
 
+            $partnerContents = $contents[(int) $partner->getId()];
             $emitted = $this->ledger->once(
                 self::EFFECT_KIND,
                 sprintf('partner-%d', (int) $partner->getId()),
@@ -105,10 +109,10 @@ class PickupReminderMailer
                 fn () => $this->mailer->send(
                     (new TemplatedEmail())
                         ->to($email)
-                        ->subject('Recordatorio: tu cesta de la CSA Vega de Jarama')
+                        ->subject(sprintf('Recordatorio: tu cesta %s · CSA Vega de Jarama', $partnerContents->label()))
                         ->htmlTemplate('email/pickup_reminder.html.twig')
                         ->textTemplate('email/pickup_reminder.txt.twig')
-                        ->context($this->contextFor($wb, $linksEnabled))
+                        ->context($this->contextFor($wb, $partnerContents, $linksEnabled))
                 ),
                 $email,
                 $resend,
@@ -121,14 +125,30 @@ class PickupReminderMailer
     }
 
     /**
-     * Contexto del email para un WeeklyBasket: fecha física, nodo, modalidad y
-     * si el reparto está desplazado respecto al día habitual del nodo. Público
-     * para que el dry-run del comando y los tests inspeccionen a quién/qué se
-     * avisaría sin enviar nada.
+     * Qué recoge cada socix de la lista, para nombrarlo en el aviso. Una consulta
+     * para toda la lista: quien vaya a pedir {@see contextFor()} para varias
+     * entregas lo resuelve antes, una vez.
      *
+     * @param WeeklyBasket[] $weeklyBaskets Las entregas a avisar.
+     * @return array<int, PickupContents> [partnerId => lo que recoge]
+     */
+    public function contentsFor(array $weeklyBaskets): array
+    {
+        return $this->items->contentsByPartner($weeklyBaskets);
+    }
+
+    /**
+     * Contexto del email para un WeeklyBasket: fecha física, nodo, modalidad, qué
+     * se recoge y si el reparto está desplazado respecto al día habitual del
+     * nodo. Público para que el dry-run del comando y los tests inspeccionen a
+     * quién/qué se avisaría sin enviar nada.
+     *
+     * @param WeeklyBasket   $wb           Entrega a avisar.
+     * @param PickupContents $contents     Lo que recoge su socix, de {@see contentsFor()}.
+     * @param bool           $linksEnabled Si el aviso puede llevar enlaces de acción.
      * @return array<string, mixed>
      */
-    public function contextFor(WeeklyBasket $wb, bool $linksEnabled = false): array
+    public function contextFor(WeeklyBasket $wb, PickupContents $contents, bool $linksEnabled = false): array
     {
         $node = $wb->getWeeklyBasketGroup()?->getNode();
         $pickupDate = $this->pickupDate($wb);
@@ -137,6 +157,7 @@ class PickupReminderMailer
         return [
             'partner' => $partner,
             'modality' => $this->modalityLabel($wb->getBasketShare()?->getId()),
+            'contents' => $contents->label(),
             'pickup_date' => $pickupDate,
             'node_name' => $node?->getName(),
             'was_shifted' => $this->wasShifted($pickupDate, $node),
@@ -159,15 +180,18 @@ class PickupReminderMailer
      * lo que le importa a quien lo lee es cada cuánto va a por su cesta, no el
      * acuerdo por el que la parte con otra familia.
      *
+     * Sin cadencia conocida no se nombra ninguna: el texto ya dice de qué es la
+     * cesta, y "tu cesta de la CSA de huevos" no se lee.
+     *
      * @param int|null $shareId Id de la modalidad, o null si la cesta no la tiene.
-     * @return string Etiqueta para el texto, con un genérico como último recurso.
+     * @return string|null Etiqueta para el texto, o null si no hay cadencia que nombrar.
      */
-    private function modalityLabel(?int $shareId): string
+    private function modalityLabel(?int $shareId): ?string
     {
         return match (true) {
             in_array($shareId, BasketShare::IDS_BIWEEKLY, true) => 'quincenal',
             in_array($shareId, BasketShare::IDS_MONTHLY, true) => 'mensual',
-            default => 'de la CSA',
+            default => null,
         };
     }
 

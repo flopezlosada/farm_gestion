@@ -7,6 +7,7 @@ use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerDeliveryShift;
 use App\Repository\PartnerDeliveryShiftRepository;
+use App\Repository\WeeklyBasketItemRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Service\Cron\EffectLedger;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
@@ -46,6 +47,7 @@ class DeliveryConfirmationMailer
         private readonly WeeklyBasketRepository $weeklyBaskets,
         private readonly PartnerDeliveryShiftRepository $shifts,
         private readonly EffectLedger $ledger,
+        private readonly WeeklyBasketItemRepository $items,
     ) {
     }
 
@@ -58,13 +60,15 @@ class DeliveryConfirmationMailer
      * @param Node               $node         Nodo cuyo plazo acaba de cerrar.
      * @param Basket             $basket       Ciclo del reparto.
      * @param \DateTimeImmutable $physicalDate Fecha física del reparto en ese nodo.
-     * @return list<array{partner: Partner, picks: bool, pickup_date: \DateTimeImmutable, node_name: ?string, was_shifted: bool}>
+     * @return list<array{partner: Partner, contents: ?PickupContents, pickup_date: \DateTimeImmutable, node_name: ?string, was_shifted: bool}>
      */
     public function audienceFor(Node $node, Basket $basket, \DateTimeImmutable $physicalDate): array
     {
         $audience = [];
+        $weeklyBaskets = $this->weeklyBaskets->findForNodeAndBasket($node, $basket);
+        $contents = $this->items->contentsByPartner($weeklyBaskets);
 
-        foreach ($this->weeklyBaskets->findForNodeAndBasket($node, $basket) as $weeklyBasket) {
+        foreach ($weeklyBaskets as $weeklyBasket) {
             $partner = $weeklyBasket->getPartner();
             if ($partner === null) {
                 continue;
@@ -73,7 +77,7 @@ class DeliveryConfirmationMailer
             // Por id y no acumulando: quien tiene una cesta extra puntual el mismo
             // día sale dos veces del finder, y son una sola persona a la que
             // confirmar una sola cosa.
-            $audience[(int) $partner->getId()] = $this->entry($partner, true, $physicalDate, $node);
+            $audience[(int) $partner->getId()] = $this->entry($partner, $contents[(int) $partner->getId()], $physicalDate, $node);
         }
 
         foreach ($this->shifts->findAllOutgoingFromBasket($basket) as $shift) {
@@ -96,7 +100,7 @@ class DeliveryConfirmationMailer
                 continue;
             }
 
-            $audience[(int) $partner->getId()] = $this->entry($partner, false, $physicalDate, $node);
+            $audience[(int) $partner->getId()] = $this->entry($partner, null, $physicalDate, $node);
         }
 
         return array_values($audience);
@@ -109,7 +113,7 @@ class DeliveryConfirmationMailer
      * La clave del apunte es "este socix, este día de reparto", igual que en el
      * recordatorio: repetir la tarea no reenvía nada.
      *
-     * @param list<array{partner: Partner, picks: bool, pickup_date: \DateTimeImmutable, node_name: ?string, was_shifted: bool}> $audience
+     * @param list<array{partner: Partner, contents: ?PickupContents, pickup_date: \DateTimeImmutable, node_name: ?string, was_shifted: bool}> $audience
      * @param bool $resend Orden explícita de repetir avisos ya emitidos.
      * @return array{sent: int, skipped: int, already: int}
      */
@@ -133,9 +137,9 @@ class DeliveryConfirmationMailer
                 fn () => $this->mailer->send(
                     (new TemplatedEmail())
                         ->to($email)
-                        ->subject($entry['picks']
-                            ? 'Tu cesta de esta semana · CSA Vega de Jarama'
-                            : 'Esta semana no recoges cesta · CSA Vega de Jarama')
+                        ->subject($entry['contents']
+                            ? sprintf('Esta semana recoges tu cesta %s · CSA Vega de Jarama', $entry['contents']->label())
+                            : 'Esta semana no tienes recogida · CSA Vega de Jarama')
                         ->htmlTemplate('email/delivery_confirmation.html.twig')
                         ->textTemplate('email/delivery_confirmation.txt.twig')
                         ->context($entry)
@@ -157,17 +161,22 @@ class DeliveryConfirmationMailer
     /**
      * Una entrada de la audiencia.
      *
-     * @param Partner            $partner      Socix a quien se confirma.
-     * @param bool               $picks        Si recoge cesta en este reparto.
-     * @param \DateTimeImmutable $physicalDate Fecha física del reparto.
-     * @param Node               $node         Nodo del reparto.
-     * @return array{partner: Partner, picks: bool, pickup_date: \DateTimeImmutable, node_name: ?string, was_shifted: bool}
+     * Lo que recoge va como un único dato nullable y no como un "recoge sí/no"
+     * aparte: así no puede haber una entrada que diga que recoge sin decir qué,
+     * que es justo lo que el asunto necesita para no hablarle de "cesta" a quien
+     * sólo se lleva huevos.
+     *
+     * @param Partner             $partner      Socix a quien se confirma.
+     * @param PickupContents|null $contents     Lo que recoge en este reparto, o null si no recoge.
+     * @param \DateTimeImmutable  $physicalDate Fecha física del reparto.
+     * @param Node                $node         Nodo del reparto.
+     * @return array{partner: Partner, contents: ?PickupContents, pickup_date: \DateTimeImmutable, node_name: ?string, was_shifted: bool}
      */
-    private function entry(Partner $partner, bool $picks, \DateTimeImmutable $physicalDate, Node $node): array
+    private function entry(Partner $partner, ?PickupContents $contents, \DateTimeImmutable $physicalDate, Node $node): array
     {
         return [
             'partner' => $partner,
-            'picks' => $picks,
+            'contents' => $contents,
             'pickup_date' => $physicalDate,
             'node_name' => $node->getName(),
             // Mismo criterio que el recordatorio: si la fecha física no cae en el

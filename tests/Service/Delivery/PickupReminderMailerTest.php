@@ -7,11 +7,13 @@ use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
+use App\Repository\WeeklyBasketItemRepository;
 use App\Security\PartnerAccessPolicy;
 use App\Service\AppSettings;
 use App\Service\Delivery\DeliveryDeadline;
 use App\Service\Cron\EffectLedger;
 use App\Service\Delivery\NodeDeliveryDate;
+use App\Service\Delivery\PickupContents;
 use App\Service\Delivery\PickupReminderMailer;
 use App\Service\Notification\NotificationPreferences;
 use PHPUnit\Framework\TestCase;
@@ -40,7 +42,7 @@ class PickupReminderMailerTest extends TestCase
             email: 'madrid@test.org',
         );
 
-        $ctx = $this->mailer()->contextFor($wb);
+        $ctx = $this->mailer()->contextFor($wb, PickupContents::Vegetables);
 
         $this->assertSame('Cascorro', $ctx['node_name']);
         $this->assertEquals($pickup, $ctx['pickup_date']);
@@ -67,7 +69,7 @@ class PickupReminderMailerTest extends TestCase
             email: 'socix@test.org',
         );
 
-        $this->assertSame($esperada, $this->mailer()->contextFor($wb)['modality']);
+        $this->assertSame($esperada, $this->mailer()->contextFor($wb, PickupContents::Vegetables)['modality']);
     }
 
     /** @return iterable<string, array{int, string}> */
@@ -91,7 +93,7 @@ class PickupReminderMailerTest extends TestCase
             email: 'sierra@test.org',
         );
 
-        $ctx = $this->mailer()->contextFor($wb);
+        $ctx = $this->mailer()->contextFor($wb, PickupContents::Vegetables);
 
         $this->assertSame('Torremocha', $ctx['node_name']);
         $this->assertEquals($thursday, $ctx['pickup_date']);
@@ -140,6 +142,50 @@ class PickupReminderMailerTest extends TestCase
     }
 
     /**
+     * El asunto dice de qué es la cesta. En la asociación "cesta" a secas se
+     * entiende como verdura, y a quien sólo recoge huevos un "tu cesta" le hace
+     * pensar que le ha caído una que no pidió.
+     *
+     * @dataProvider contenidos
+     */
+    public function testElAsuntoDiceDeQueEsLaCesta(PickupContents $contents, string $asunto): void
+    {
+        $pickup = new \DateTimeImmutable('2099-07-01');
+        $wb = $this->weeklyBasket($this->node('Cascorro', 3), $pickup, BasketShare::ID_MONTHLY, 'ok@test.org');
+
+        $captured = [];
+        $mailerMock = $this->createMock(MailerInterface::class);
+        $mailerMock->method('send')->willReturnCallback(static function (TemplatedEmail $email) use (&$captured): void {
+            $captured[] = $email;
+        });
+
+        $this->mailer($mailerMock, null, $contents)->send([$wb]);
+
+        $this->assertSame($asunto, $captured[0]->getSubject());
+        $this->assertSame($contents->label(), $captured[0]->getContext()['contents']);
+    }
+
+    /** @return iterable<string, array{PickupContents, string}> */
+    public static function contenidos(): iterable
+    {
+        yield 'verduras' => [PickupContents::Vegetables, 'Recordatorio: tu cesta de verduras · CSA Vega de Jarama'];
+        yield 'huevos' => [PickupContents::Eggs, 'Recordatorio: tu cesta de huevos · CSA Vega de Jarama'];
+        yield 'verduras y huevos' => [PickupContents::VegetablesAndEggs, 'Recordatorio: tu cesta de verduras y huevos · CSA Vega de Jarama'];
+    }
+
+    /**
+     * Sin cadencia conocida no se nombra ninguna: el genérico de antes ("de la
+     * CSA") delante del contenido daba "tu cesta de la CSA de huevos".
+     */
+    public function testSinCadenciaNoSeNombraNinguna(): void
+    {
+        $pickup = new \DateTimeImmutable('2099-07-01');
+        $wb = $this->weeklyBasket($this->node('Cascorro', 3), $pickup, BasketShare::ID_ONLY_EGG, 'ok@test.org');
+
+        $this->assertNull($this->mailer()->contextFor($wb, PickupContents::Eggs)['modality']);
+    }
+
+    /**
      * Guardián de idempotencia de doble uso: por defecto deja pasar el efecto (y
      * lo ejecuta, como haría el real la primera vez); con $alreadyEmitted a true
      * simula una clave ya apuntada y NO ejecuta nada.
@@ -164,8 +210,24 @@ class PickupReminderMailerTest extends TestCase
         return $ledger;
     }
 
-    private function mailer(?MailerInterface $mailerMock = null, ?EffectLedger $ledger = null): PickupReminderMailer
+    /**
+     * @param MailerInterface|null $mailerMock Doble del envío, para capturar los correos.
+     * @param EffectLedger|null    $ledger     Guardián de idempotencia.
+     * @param PickupContents       $contents   Lo que recoge cada socix de la lista.
+     */
+    private function mailer(?MailerInterface $mailerMock = null, ?EffectLedger $ledger = null, PickupContents $contents = PickupContents::Vegetables): PickupReminderMailer
     {
+        // Lo que se recoge sale de las líneas materializadas, que aquí no hay:
+        // el repositorio responde lo mismo para cada socix de la lista, con la
+        // misma clave con la que lo lee el mailer.
+        $items = $this->createMock(WeeklyBasketItemRepository::class);
+        $items->method('contentsByPartner')->willReturnCallback(
+            static fn (array $weeklyBaskets): array => array_fill_keys(
+                array_map(static fn (WeeklyBasket $wb): int => (int) $wb->getPartner()?->getId(), $weeklyBaskets),
+                $contents,
+            )
+        );
+
         // Links apagados: canUseActionLinks no se llega a invocar (corto-circuito).
         $settings = $this->createMock(AppSettings::class);
         $settings->method('getBool')->willReturn(false);
@@ -196,6 +258,7 @@ class PickupReminderMailerTest extends TestCase
             $deadline,
             $ledger ?? $this->ledger(),
             $preferences,
+            $items,
         );
     }
 

@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketItem;
+use App\Service\Delivery\PickupContents;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -58,5 +59,17 @@ class WeeklyBasketItemRepository extends ServiceEntityRepository
         }
 
         return $map;
+    }
+
+    /**
+     * Qué recoge cada socix en un conjunto de entregas, para nombrarlo en los
+     * avisos. Una sola query para toda la lista, como {@see componentAmountsFor()}.
+     *
+     * @param WeeklyBasket[] $weeklyBaskets
+     * @return array<int, PickupContents> [partnerId => lo que recoge]
+     */
+    public function contentsByPartner(array $weeklyBaskets): array
+    {
+        return PickupContents::byPartner($weeklyBaskets, $this->componentAmountsFor($weeklyBaskets));
     }
 }

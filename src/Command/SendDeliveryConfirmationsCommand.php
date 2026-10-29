@@ -97,7 +97,7 @@ class SendDeliveryConfirmationsCommand extends AbstractCronCommand
                     $entry['partner']->getEmail() ?: '(sin email)',
                     $entry['node_name'] ?? '(sin nodo)',
                     $entry['pickup_date']->format('Y-m-d'),
-                    $entry['picks'] ? 'recoge' : 'no recoge',
+                    $entry['contents'] ? 'recoge ' . $entry['contents']->label() : 'no recoge',
                 ];
             }
         }

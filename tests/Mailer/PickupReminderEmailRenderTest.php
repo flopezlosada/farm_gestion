@@ -66,6 +66,25 @@ class PickupReminderEmailRenderTest extends KernelTestCase
     }
 
     /**
+     * El cuerpo dice de qué es la cesta, con la cadencia delante; y sin cadencia
+     * conocida no cuela ningún genérico en medio.
+     */
+    public function testElCuerpoDiceDeQueEsLaCesta(): void
+    {
+        $friday = (new \DateTimeImmutable('2099-01-01'))->modify('next friday');
+        $base = ['pickup_date' => $friday, 'node_name' => 'Torremocha', 'was_shifted' => false];
+
+        $this->assertStringContainsString(
+            'tu cesta quincenal de verduras y huevos en Torremocha',
+            $this->render($base + ['contents' => 'de verduras y huevos']),
+        );
+        $this->assertStringContainsString(
+            'tu cesta de huevos en Torremocha',
+            $this->render($base + ['contents' => 'de huevos', 'modality' => null]),
+        );
+    }
+
+    /**
      * @param array<string, mixed> $overrides Contexto específico del caso.
      */
     private function render(array $overrides): string
@@ -77,6 +96,7 @@ class PickupReminderEmailRenderTest extends KernelTestCase
         return $twig->render(self::TEMPLATE, array_merge([
             'partner' => (new Partner())->setName('Nacho'),
             'modality' => 'quincenal',
+            'contents' => 'de verduras',
             'can_act' => false,
             'calendar_url' => 'https://csavegadejarama.org/panel/calendario',
             'deadline' => (new \DateTimeImmutable('2099-01-01'))->modify('next monday'),
