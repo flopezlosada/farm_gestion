@@ -38,9 +38,9 @@ class CronManifestTest extends KernelTestCase
     }
 
     /**
-     * Las claves referenciadas en `requires` y `depends_on` existen: una
-     * referencia rota haría que AppSettings::getBool() reventara en plena
-     * ejecución del cron.
+     * Las claves referenciadas en `requires`, `depends_on` y `hour_setting`
+     * existen: una referencia rota haría que AppSettings::getBool() o getTime()
+     * reventara en plena ejecución del cron.
      */
     public function testLasReferenciasDelManifiestoExisten(): void
     {
@@ -57,6 +57,13 @@ class CronManifestTest extends KernelTestCase
                     $dependency,
                     AppSettings::CRONS,
                     sprintf('La tarea "%s" depende de la tarea inexistente "%s".', $key, $dependency)
+                );
+            }
+            if (isset($meta['hour_setting'])) {
+                $this->assertArrayHasKey(
+                    $meta['hour_setting'],
+                    AppSettings::TIMES,
+                    sprintf('La tarea "%s" toma su hora del ajuste inexistente "%s".', $key, $meta['hour_setting'])
                 );
             }
         }

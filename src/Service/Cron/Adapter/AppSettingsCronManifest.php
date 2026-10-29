@@ -31,10 +31,23 @@ class AppSettingsCronManifest implements CronManifest
 
     /**
      * {@inheritDoc}
+     *
+     * Excepción a las cadencias fijas: una tarea que declara `hour_setting` toma
+     * su hora y minuto de ese ajuste de {@see AppSettings::TIMES}, editable desde
+     * la pantalla de ajustes. Se resuelve aquí, y no en el núcleo, para que la
+     * pantalla y el tick lean la misma hora sin que el planificador sepa de ajustes.
      */
     public function tasks(): array
     {
-        return AppSettings::CRONS;
+        return array_map(function (array $meta): array {
+            if (!isset($meta['hour_setting'])) {
+                return $meta;
+            }
+            [$hour, $minute] = array_map('intval', explode(':', $this->settings->getTime($meta['hour_setting'])));
+            $meta['schedule'] = ['hour' => $hour, 'minute' => $minute] + $meta['schedule'];
+
+            return $meta;
+        }, AppSettings::CRONS);
     }
 
     /**
