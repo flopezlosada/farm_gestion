@@ -73,6 +73,12 @@ class PanelController extends AbstractController
     /** Cuántos turnos de voluntariado se asoman en la home antes de mandar a su pantalla. */
     private const VOLUNTEERING_TEASER = 3;
 
+    /** Aviso al socix cuando la semana que quiere tocar ya cerró su plazo de autoservicio. */
+    private const DEADLINE_CLOSED_MESSAGE = 'Ya no se puede cambiar esa semana — el plazo terminó. Si necesitas avisar, contacta con la administración.';
+
+    /** Lo mismo, cuando lo cerrado es el día al que quiere llevar la cesta. */
+    private const DEADLINE_CLOSED_DESTINATION_MESSAGE = 'Ese día ya cerró el plazo de cambios: elige una fecha posterior.';
+
     #[Route('', name: 'panel', methods: ['GET'])]
     public function index(
         PickupRelocationOptions $relocationOptions,
@@ -899,7 +905,7 @@ class PanelController extends AbstractController
         // Plazo de autoservicio: hasta el jueves 23:59 anterior al reparto. Defensa
         // server-side; el calendario ya lo oculta en el cliente cuando ha pasado.
         if (!$this->isWithinPickupDeadlineForBasket($basket, $partner)) {
-            $this->addFlash('error', 'Ya no se puede cambiar esa semana — el plazo terminó. Si necesitas avisar, contacta con la administración.');
+            $this->addFlash('error', self::DEADLINE_CLOSED_MESSAGE);
 
             return $backToCalendar();
         }
@@ -1026,7 +1032,7 @@ class PanelController extends AbstractController
 
         // Mismo plazo de autoservicio (jueves 23:59) que el "no recoge" de la cesta entera.
         if (!$this->isWithinPickupDeadlineForBasket($basket, $partner)) {
-            $this->addFlash('error', 'Ya no se puede cambiar esa semana — el plazo terminó. Si necesitas avisar, contacta con la administración.');
+            $this->addFlash('error', self::DEADLINE_CLOSED_MESSAGE);
 
             return $backToCalendar();
         }
@@ -1050,10 +1056,11 @@ class PanelController extends AbstractController
 
     /**
      * Mover una entrega a otra fecha desde el calendario del socio (cambio puntual de
-     * viernes). Mismas reglas que el gestor (DeliveryShiftApplier::move) salvo el scope:
-     * el socio solo mueve su propia cesta. Las invariantes físicas (cesta activa, deadline
-     * día-anterior, el nodo reparte el destino, un hueco por día) se comprueban inline;
-     * no hay validador de autoservicio extra. Resuelto desde la sesión.
+     * viernes). Mismas reglas que el gestor (DeliveryShiftApplier::move) salvo el scope
+     * y el plazo: el socio solo mueve su propia cesta, y solo con el plazo de autoservicio
+     * ({@see DeliveryDeadline}) abierto en origen y destino. Las invariantes (cesta activa,
+     * plazo, el nodo reparte el destino, un hueco por día) se comprueban inline; no hay
+     * validador de autoservicio extra. Resuelto desde la sesión.
      *
      * @param int                       $basketId Semana origen (Basket) donde está la cesta.
      * @param Request                   $request
@@ -1113,11 +1120,25 @@ class PanelController extends AbstractController
             return $backToFrom();
         }
 
-        // HUEVOS: misma lógica que el gestor, vía el editor compartido (DRY). Mismo deadline
-        // día-anterior que el resto del move del socio (lo comprueba el handler); no aplica el
-        // plazo del jueves del "no recoge" — igual que el move de la cesta entera del socio.
+        // Plazo de autoservicio, el mismo que "no recoge": pasado el cierre, el listado del
+        // reparto ya puede haberse enviado y el cambio no llegaría a la hoja impresa. Va antes
+        // de la rama de huevos para cubrir los dos gestos.
+        if (!$this->isWithinPickupDeadlineForBasket($from, $partner)) {
+            $this->addFlash('error', self::DEADLINE_CLOSED_MESSAGE);
+
+            return $backToFrom();
+        }
+
+        // HUEVOS: misma lógica que el gestor, vía el editor compartido (DRY). El editor solo
+        // comprueba el día anterior (regla física, compartida con el gestor); el plazo del
+        // socix se aplica aquí, en origen (arriba) y en destino.
         if ($componentId === BasketComponent::ID_EGGS) {
             $to = $basketRepository->find((int) $request->request->get('to_basket_id', 0));
+            if ($to !== null && !$this->isWithinPickupDeadlineForBasket($to, $partner)) {
+                $this->addFlash('error', self::DEADLINE_CLOSED_DESTINATION_MESSAGE);
+
+                return $backToFrom();
+            }
             try {
                 $eggEditor->move($partner, $from, $to, 'partner:' . $partner->getId());
             } catch (EggScheduleException $e) {
@@ -1142,16 +1163,6 @@ class PanelController extends AbstractController
             return $backToFrom();
         }
 
-        $today = new \DateTimeImmutable('today');
-
-        // Deadline: se mueve hasta el día ANTERIOR a la recogida (fecha física).
-        $fromPhysical = $generator->projectShareDelivery($from, $share)['deliveryDate'] ?? $from->getDate();
-        if ($fromPhysical <= $today) {
-            $this->addFlash('warning', 'Esa cesta se recoge hoy o ya pasó: ya no se puede mover.');
-
-            return $backToFrom();
-        }
-
         $to = $basketRepository->find((int) $request->request->get('to_basket_id', 0));
         if ($to === null) {
             $this->addFlash('error', 'Elige una fecha destino válida.');
@@ -1159,16 +1170,15 @@ class PanelController extends AbstractController
             return $backToFrom();
         }
 
-        // El nodo del socio debe repartir el día destino, y debe ser futuro.
-        $toProjection = $generator->projectShareDelivery($to, $share);
-        if ($toProjection === null) {
+        // El nodo del socio debe repartir el día destino, y con el plazo aún abierto: la cesta
+        // se suma a ese listado, que tampoco puede estar ya enviado.
+        if ($generator->projectShareDelivery($to, $share) === null) {
             $this->addFlash('error', 'Tu nodo no reparte ese día: elige otra fecha.');
 
             return $backToFrom();
         }
-        $toPhysical = $toProjection['deliveryDate'] ?? $to->getDate();
-        if ($toPhysical <= $today) {
-            $this->addFlash('error', 'No puedes mover la cesta a hoy ni a una fecha pasada.');
+        if (!$this->isWithinPickupDeadlineForBasket($to, $partner)) {
+            $this->addFlash('error', self::DEADLINE_CLOSED_DESTINATION_MESSAGE);
 
             return $backToFrom();
         }
@@ -1226,8 +1236,8 @@ class PanelController extends AbstractController
 
         // El socio mueve con las MISMAS reglas que el gestor (paridad de comportamiento;
         // lo único que cambia es el scope: el gestor mueve a cualquier socio, el socio
-        // solo a sí mismo). Las invariantes físicas ya están comprobadas arriba (cesta
-        // activa, deadline día-anterior, el nodo reparte el destino, un hueco por día);
+        // solo a sí mismo). Las invariantes ya están comprobadas arriba (cesta activa,
+        // plazo de autoservicio, el nodo reparte el destino, un hueco por día);
         // no hay validador de autoservicio extra. ($isReturn solo cambia el mensaje.)
         try {
             $applier->move($partner, $from, $to, actor: 'partner:' . $partner->getId());
@@ -1356,15 +1366,14 @@ class PanelController extends AbstractController
             return $backToCalendar($origin);
         }
 
-        $today = new \DateTimeImmutable('today');
-        $toProjection = $generator->projectShareDelivery($to, $share);
-        if ($toProjection === null) {
+        if ($generator->projectShareDelivery($to, $share) === null) {
             $this->addFlash('error', 'Tu nodo no reparte ese día: elige otra fecha.');
 
             return $backToCalendar($origin);
         }
-        if (($toProjection['deliveryDate'] ?? $to->getDate()) <= $today) {
-            $this->addFlash('error', 'No puedes recuperar la cesta en hoy ni en una fecha pasada.');
+        // Plazo de autoservicio sobre el día donde reaparece la cesta: es el listado que cambia.
+        if (!$this->isWithinPickupDeadlineForBasket($to, $partner)) {
+            $this->addFlash('error', self::DEADLINE_CLOSED_DESTINATION_MESSAGE);
 
             return $backToCalendar($origin);
         }
@@ -1406,14 +1415,13 @@ class PanelController extends AbstractController
      * A diferencia del gestor, el socix NO puede quitar de aquí una cesta extra GENUINA
      * (añadida a mano por gestión): eso no lo puso él y puede responder a un acuerdo. Si el
      * añadido del día no viene de un traslado suyo, la acción se rechaza y se le remite a
-     * administración. Mismo plazo día-anterior que mover.
+     * administración. Mismo plazo de autoservicio que mover.
      *
      * @param int                            $basketId Semana que recibió las cestas sumadas.
      * @param Request                        $request
      * @param BasketRepository               $basketRepository
      * @param PartnerDeliveryShiftRepository $shiftRepository
      * @param AccumulatingMove               $accumulatingMove
-     * @param WeeklyBasketGenerator          $generator
      * @param EntityManagerInterface         $em
      * @return Response
      */
@@ -1425,7 +1433,6 @@ class PanelController extends AbstractController
         BasketRepository $basketRepository,
         PartnerDeliveryShiftRepository $shiftRepository,
         AccumulatingMove $accumulatingMove,
-        WeeklyBasketGenerator $generator,
         EntityManagerInterface $em,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
@@ -1460,22 +1467,18 @@ class PanelController extends AbstractController
             return $backToCalendar();
         }
 
-        // Plazo: como mover. Se mide sobre la fecha FÍSICA del día que RECIBIÓ las cestas —es
-        // la entrega que se va a tocar— y también sobre cada semana de origen, que vuelve a
-        // recoger: devolver una cesta a una semana que ya pasó no serviría de nada.
-        $today = new \DateTimeImmutable('today');
-        $share = $em->getRepository(PartnerBasketShare::class)->findActiveForPartner($partner, $basket->getDate());
-        $physical = $share !== null
-            ? ($generator->projectShareDelivery($basket, $share)['deliveryDate'] ?? $basket->getDate())
-            : $basket->getDate();
-        if ($physical <= $today) {
-            $this->addFlash('warning', 'Esa entrega se recoge hoy o ya pasó: ya no se puede cambiar.');
+        // Plazo de autoservicio, como mover: sobre el día que RECIBIÓ las cestas —es la entrega
+        // que se va a tocar— y sobre cada semana de origen, que vuelve a recoger. Los dos
+        // listados cambian, y ninguno puede estar ya enviado.
+        if (!$this->isWithinPickupDeadlineForBasket($basket, $partner)) {
+            $this->addFlash('error', self::DEADLINE_CLOSED_MESSAGE);
 
             return $backToCalendar();
         }
         foreach ($shifts as $shift) {
-            if (($shift->getFromBasket()?->getDate() ?? $today) <= $today) {
-                $this->addFlash('warning', 'Una de esas cestas venía de una semana que ya pasó: para deshacerlo, contacta con administración.');
+            $origin = $shift->getFromBasket();
+            if ($origin === null || !$this->isWithinPickupDeadlineForBasket($origin, $partner)) {
+                $this->addFlash('warning', 'Una de esas cestas venía de una semana que ya cerró su plazo: para deshacerlo, contacta con administración.');
 
                 return $backToCalendar();
             }
