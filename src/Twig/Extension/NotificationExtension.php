@@ -46,7 +46,7 @@ class NotificationExtension extends AbstractExtension
      */
     private const KIND_LABELS = [
         'pickup_reminder' => 'Recordatorio de recogida',
-        'delivery_confirmation' => 'Confirmación de cambio de cesta',
+        'delivery_confirmation' => 'Confirmación de la cesta',
         'delivery_sheet' => 'Listado del reparto',
         'admin_delivery_changes_summary' => 'Resumen de cambios para administración',
         'coverage_alert' => 'Aviso de gente sin avisar',

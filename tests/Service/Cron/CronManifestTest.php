@@ -317,7 +317,7 @@ class CronManifestTest extends KernelTestCase
         $registry = self::getContainer()->get(CronTaskRegistry::class);
 
         $this->assertSame('los lunes a las 06:00', $registry->describeSchedule(AppSettings::CRON_GENERATE_WEEKLY_DELIVERY));
-        $this->assertSame('a diario a las 09:00', $registry->describeSchedule(AppSettings::CRON_PICKUP_REMINDER));
+        $this->assertSame('a diario a las 20:00', $registry->describeSchedule(AppSettings::CRON_ADMIN_DELIVERY_SUMMARY));
         $this->assertSame('el día 1 de cada mes a las 04:00', $registry->describeSchedule(AppSettings::CRON_PURGE_USAGE_HITS));
     }
 }

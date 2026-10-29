@@ -12,7 +12,7 @@ use Doctrine\ORM\EntityManagerInterface;
  *
  * NO DECIDE NADA, y menos que nada si avisar. Los envíos de la asociación ya
  * deciden a quién y qué decirle; aquí sólo se guarda la copia que no se pierde.
- * Quienes escriben hoy: el aviso de la cesta ({@see \App\Service\Delivery\PickupReminderPusher}),
+ * Quienes escriben hoy: el aviso de la cesta, recordatorio y confirmación ({@see \App\Service\Delivery\PickupNoticePusher}),
  * la llamada de voluntariado ({@see \App\Service\Volunteering\VolunteerCallNotifier}),
  * el recordatorio de la tarea ({@see \App\Command\SendVolunteerRemindersCommand}),
  * el cambio o la anulación de una tarea ({@see \App\Service\Volunteering\VolunteerOfferChangeNotifier}),

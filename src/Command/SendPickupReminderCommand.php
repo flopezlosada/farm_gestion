@@ -6,6 +6,7 @@ use App\Entity\BasketShare;
 use App\Repository\WeeklyBasketRepository;
 use App\Service\AppSettings;
 use App\Service\Delivery\CancelledDeliveryFilter;
+use App\Service\Delivery\DeliveryDeadline;
 use App\Service\Delivery\PickupNoticeCoverage;
 use App\Service\Delivery\PickupReminderMailer;
 use App\Service\Delivery\PickupReminderPusher;
@@ -39,6 +40,13 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
  * verde. Se puede forzar una fecha física concreta con --date=YYYY-MM-DD (para
  * pruebas y reenvíos manuales).
  *
+ * CON EL PLAZO DE CAMBIOS YA CERRADO NO MANDA NADA: lo que dice es "aún puedes
+ * cambiar", y a esa altura el aviso del reparto es la confirmación de la cesta
+ * ({@see SendDeliveryConfirmationsCommand}). Sí sigue comprobando que nadie se
+ * quedó sin aviso, por eso corre a la hora del listado y detrás de ella. Con la
+ * confirmación apagada vuelve a avisar: callar los dos dejaría a la gente sin
+ * ningún aviso.
+ *
  * --dry-run muestra a quién, en qué nodo y qué día avisaría, sin enviar nada.
  */
 #[AsCommand(name: 'app:send-pickup-reminders', description: 'Recordatorio de recogida a quincenales/mensuales, por nodo y fecha física.')]
@@ -58,6 +66,7 @@ class SendPickupReminderCommand extends AbstractCronCommand
         private readonly AppSettings $settings,
         private readonly PickupReminderMailer $reminderMailer,
         private readonly PickupReminderPusher $reminderPusher,
+        private readonly DeliveryDeadline $deadline,
         private readonly MailerInterface $mailer,
         private readonly UrlGeneratorInterface $urlGenerator,
         private readonly StaffAudience $staff,
@@ -140,9 +149,31 @@ class SendPickupReminderCommand extends AbstractCronCommand
             }, $recipients),
         );
 
+        // CON EL PLAZO CERRADO EL RECORDATORIO CALLA. Lo que dice es "aún puedes
+        // cambiar", y a esa altura el aviso del reparto es la confirmación de la
+        // cesta, que sale después de que administración meta los cambios: mandar
+        // los dos era escribir dos veces lo mismo el mismo día, y el primero con
+        // datos que todavía podían moverse. Lo que no se deja de hacer es mirar
+        // que nadie se haya quedado sin aviso.
+        $closed = $this->confirmationCovers($target);
+        if ($closed) {
+            $io->note(sprintf(
+                'El plazo de cambios del reparto del %s ya cerró: el aviso es la confirmación de la cesta y el recordatorio no manda nada. Sólo comprueba que nadie se quedó sin aviso.',
+                $target->format('Y-m-d'),
+            ));
+        }
+
         if ($input->getOption('dry-run')) {
             $io->success(sprintf('Dry-run: %d destinatarios. No se ha enviado nada.', count($recipients)));
             return Command::SUCCESS;
+        }
+
+        if ($closed) {
+            return $this->nothingToDo(sprintf(
+                'Plazo del %s cerrado: avisa la confirmación%s',
+                $target->format('Y-m-d'),
+                $this->checkCoverage($io, $input, $target),
+            ));
         }
 
         $resend = (bool) $input->getOption('resend');
@@ -191,32 +222,7 @@ class SendPickupReminderCommand extends AbstractCronCommand
             ));
         }
 
-        // LA TAREA SE MIRA A SÍ MISMA AL TERMINAR, y no es adorno: es lo único
-        // que convierte este fallo en visible el mismo día. Cuando el
-        // recordatorio dejó fuera a las cestas compartidas, esta tarea salió en
-        // verde dos meses seguidos porque hacía exactamente lo que le habían
-        // pedido; lo que faltaba era alguien preguntando si lo que le habían
-        // pedido alcanzaba a todo el mundo.
-        //
-        // Se pregunta DESPUÉS de enviar y a quien no comparte su criterio de
-        // selección ({@see PickupNoticeCoverage}), así que un hueco aquí
-        // significa gente que recogía ese día, que tenía por dónde recibir el
-        // aviso, y a la que esta misma ejecución no ha alcanzado.
-        $cobertura = $this->coverage->forDate($target);
-        $huecos = $cobertura['totals']['gap'];
-        $aviso = '';
-        if ($huecos > 0) {
-            $aviso = sprintf(' · ⚠ %d sin avisar', $huecos);
-            $io->warning(sprintf(
-                '%d socix(s) recogen el %s, pueden recibir el aviso y NO se les ha avisado. '
-                . 'Míralo en Registro de avisos → Cobertura: si se repite en varios repartos, '
-                . 'el recordatorio está dejando fuera a alguien de forma sistemática.',
-                $huecos,
-                $target->format('Y-m-d'),
-            ));
-
-            $aviso .= $this->alertarAdministracion($io, $input, $target, $cobertura, $huecos);
-        }
+        $aviso = $this->checkCoverage($io, $input, $target);
 
         // Un push mandado también es trabajo hecho, y una copia en la bandeja
         // también: si sólo se mira el correo, el día en que todos los emails ya
@@ -244,6 +250,67 @@ class SendPickupReminderCommand extends AbstractCronCommand
         return $this->nothingToDo(($result['already'] > 0
             ? sprintf('%d destinatarios el %s, todos avisados ya', $result['already'], $target->format('Y-m-d'))
             : sprintf('%d destinatarios el %s, ninguno con email', $result['skipped'], $target->format('Y-m-d'))) . $aviso);
+    }
+
+    /**
+     * Comprueba, a quien no comparte el criterio de selección del recordatorio,
+     * que todo el que recoge ese día tenga su aviso, y si no, lo dice y avisa a
+     * administración.
+     *
+     * Con el plazo cerrado se sigue llamando aunque el recordatorio no mande
+     * nada: entonces el aviso es la confirmación, y esto es lo que delata que
+     * alguien se quedó sin ella.
+     *
+     * @param SymfonyStyle       $io     Salida del comando.
+     * @param InputInterface     $input  Opciones del comando.
+     * @param \DateTimeImmutable $target Fecha física del reparto.
+     * @return string Coletilla para el resumen de la ejecución ('' si no hay huecos).
+     */
+    private function checkCoverage(SymfonyStyle $io, InputInterface $input, \DateTimeImmutable $target): string
+    {
+        // LA TAREA SE MIRA A SÍ MISMA AL TERMINAR, y no es adorno: es lo único
+        // que convierte este fallo en visible el mismo día. Cuando el
+        // recordatorio dejó fuera a las cestas compartidas, esta tarea salió en
+        // verde dos meses seguidos porque hacía exactamente lo que le habían
+        // pedido; lo que faltaba era alguien preguntando si lo que le habían
+        // pedido alcanzaba a todo el mundo.
+        //
+        // Se pregunta DESPUÉS de enviar y a quien no comparte su criterio de
+        // selección ({@see PickupNoticeCoverage}), así que un hueco aquí
+        // significa gente que recogía ese día, que tenía por dónde recibir el
+        // aviso, y a la que esta misma ejecución no ha alcanzado.
+        $cobertura = $this->coverage->forDate($target);
+        $huecos = $cobertura['totals']['gap'];
+        $aviso = '';
+        if ($huecos > 0) {
+            $aviso = sprintf(' · ⚠ %d sin avisar', $huecos);
+            $io->warning(sprintf(
+                '%d socix(s) recogen el %s, pueden recibir el aviso y NO se les ha avisado. '
+                . 'Míralo en Registro de avisos → Cobertura: si se repite en varios repartos, '
+                . 'el recordatorio está dejando fuera a alguien de forma sistemática.',
+                $huecos,
+                $target->format('Y-m-d'),
+            ));
+
+            $aviso .= $this->alertarAdministracion($io, $input, $target, $cobertura, $huecos);
+        }
+
+        return $aviso;
+    }
+
+    /**
+     * ¿La confirmación de la cesta es ya el aviso de este reparto? Lo es cuando el
+     * plazo de cambios ha cerrado y la tarea de la confirmación está encendida.
+     *
+     * Con la confirmación apagada el recordatorio sigue saliendo aunque el plazo
+     * haya cerrado: callar los dos dejaría a la gente sin ningún aviso.
+     *
+     * @param \DateTimeImmutable $target Fecha física del reparto.
+     */
+    private function confirmationCovers(\DateTimeImmutable $target): bool
+    {
+        return $this->settings->getBool(AppSettings::CRON_DELIVERY_CONFIRMATION)
+            && new \DateTimeImmutable('now') >= $this->deadline->fromPhysicalDate($target);
     }
 
     /**

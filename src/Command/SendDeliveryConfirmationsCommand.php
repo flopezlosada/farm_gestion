@@ -2,8 +2,13 @@
 
 namespace App\Command;
 
+use App\Entity\Partner;
+use App\Service\AppSettings;
 use App\Service\Delivery\DeliveryConfirmationMailer;
 use App\Service\Delivery\DeliverySheetSchedule;
+use App\Service\Delivery\PickupContents;
+use App\Service\Delivery\PickupNotice;
+use App\Service\Delivery\PickupNoticePusher;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -24,6 +29,12 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *
  * A quién se escribe y por qué también a quien NO recoge lo explica
  * {@see DeliveryConfirmationMailer}.
+ *
+ * Avisa por TRES vías —correo, móvil y bandeja— porque es el único aviso del
+ * reparto una vez cerrado el plazo: el recordatorio calla entonces para que nadie
+ * reciba dos veces lo mismo. La bandeja va primero y sin mirar toggles ni
+ * preferencias (es el suelo); el correo, sólo con sus interruptores encendidos;
+ * el móvil, a quien lo tenga activado.
  */
 #[AsCommand(name: 'app:send-delivery-confirmations', description: 'Confirma a cada socix su cesta en cuanto cierra el plazo de su nodo.')]
 class SendDeliveryConfirmationsCommand extends AbstractCronCommand
@@ -31,6 +42,8 @@ class SendDeliveryConfirmationsCommand extends AbstractCronCommand
     public function __construct(
         private readonly DeliverySheetSchedule $schedule,
         private readonly DeliveryConfirmationMailer $confirmationMailer,
+        private readonly PickupNoticePusher $noticePusher,
+        private readonly AppSettings $settings,
     ) {
         parent::__construct();
     }
@@ -118,36 +131,83 @@ class SendDeliveryConfirmationsCommand extends AbstractCronCommand
 
         $resend = (bool) $input->getOption('resend');
 
+        // Los DOS interruptores se miran aquí y no en `requires` del manifiesto:
+        // aquél inhibe la tarea entera, y apagar el correo dejaría sin aviso a
+        // quien lo tiene activado en el móvil. Y no se delega en el KillSwitchMailer
+        // aunque él corte la entrega: el guardián de idempotencia apunta el efecto
+        // ANTES de enviar, así que un correo descartado en silencio quedaría como
+        // emitido y no saldría al reencender. No llamar al mailer es lo único que
+        // evita el apunte.
+        $emailOn = $this->settings->getBool(AppSettings::EMAIL_ENABLED)
+            && $this->settings->getBool(AppSettings::EMAIL_DELIVERY_CONFIRMATION);
+
+        if (!$emailOn) {
+            $io->note('La confirmación por email está desactivada en /gestion/settings: no se envía ningún correo ni se apunta como enviado. El aviso al móvil y la bandeja siguen su curso.');
+        }
+
         $sent = 0;
         $skipped = 0;
         $already = 0;
+        $pushed = 0;
+        $written = 0;
         foreach ($audiences as $audience) {
-            $result = $this->confirmationMailer->send($audience, $resend);
-            $sent += $result['sent'];
-            $skipped += $result['skipped'];
-            $already += $result['already'];
+            $notices = $this->noticesFor($audience);
+
+            $written += $this->noticePusher->recordInbox($notices, DeliveryConfirmationMailer::EFFECT_KIND_INBOX, $resend)['written'];
+
+            if ($emailOn) {
+                $result = $this->confirmationMailer->send($audience, $resend);
+                $sent += $result['sent'];
+                $skipped += $result['skipped'];
+                $already += $result['already'];
+            }
+
+            $pushed += $this->noticePusher->send(
+                $notices,
+                DeliveryConfirmationMailer::EFFECT_KIND_PUSH,
+                DeliveryConfirmationMailer::EFFECT_KIND,
+                $resend,
+            )['sent'];
         }
 
-        $io->success(sprintf(
-            'Enviadas %d confirmación(es). %d socixs sin email. %d ya estaban avisados.',
+        $summary = sprintf(
+            '%d confirmación(es) por email (%d sin email, %d ya avisados) · %d al móvil · %d en la bandeja',
             $sent,
             $skipped,
             $already,
-        ));
+            $pushed,
+            $written,
+        );
 
-        if ($sent === 0) {
-            return $this->nothingToDo(sprintf(
-                '%d destinatarios, todos avisados ya (%d sin email)',
-                $already,
-                $skipped,
-            ));
-        }
+        $io->success($summary);
 
-        return $this->didWork(sprintf(
-            '%d confirmaciones enviadas (%d sin email, %d ya avisados)',
-            $sent,
-            $skipped,
-            $already,
-        ));
+        // Un push o una copia en la bandeja también son trabajo hecho: con el
+        // correo apagado son lo ÚNICO que se hace, y sin contarlos la tarea
+        // saldría siempre en "nada que hacer".
+        return $sent > 0 || $pushed > 0 || $written > 0
+            ? $this->didWork($summary)
+            : $this->nothingToDo($summary);
+    }
+
+    /**
+     * La confirmación de cada destinatarix, en la forma que entienden el móvil y
+     * la bandeja. Quien no recoge va sin contenido, y eso es lo que le dice que
+     * su cambio se aplicó.
+     *
+     * @param list<array{partner: Partner, contents: ?PickupContents, pickup_date: \DateTimeImmutable, node_name: ?string, was_shifted: bool}> $audience
+     * @return list<PickupNotice>
+     */
+    private function noticesFor(array $audience): array
+    {
+        return array_map(
+            static fn (array $entry): PickupNotice => new PickupNotice(
+                $entry['partner'],
+                $entry['contents']?->label(),
+                $entry['pickup_date'],
+                $entry['node_name'],
+                $entry['was_shifted'],
+            ),
+            $audience,
+        );
     }
 }

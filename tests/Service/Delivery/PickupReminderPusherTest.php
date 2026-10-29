@@ -17,6 +17,7 @@ use App\Service\Cron\EffectLedger;
 use App\Service\Delivery\DeliveryDeadline;
 use App\Service\Delivery\NodeDeliveryDate;
 use App\Service\Delivery\PickupContents;
+use App\Service\Delivery\PickupNoticePusher;
 use App\Service\Delivery\PickupReminderMailer;
 use App\Service\Delivery\PickupReminderPusher;
 use App\Service\Notification\NotificationInbox;
@@ -325,13 +326,15 @@ class PickupReminderPusherTest extends TestCase
         $link->method('pathForKind')->willReturn('/panel');
 
         return new PickupReminderPusher(
-            $push,
-            $repository,
             $this->mailer($contents),
-            $ledger ?? $this->ledger(),
-            $inbox ?? $this->createMock(NotificationInbox::class),
-            $link,
-            $preferences ?? $this->preferences(),
+            new PickupNoticePusher(
+                $push,
+                $repository,
+                $ledger ?? $this->ledger(),
+                $inbox ?? $this->createMock(NotificationInbox::class),
+                $link,
+                $preferences ?? $this->preferences(),
+            ),
         );
     }
 

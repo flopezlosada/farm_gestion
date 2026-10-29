@@ -172,7 +172,9 @@ class AppSettings
      * administración mete por la mañana los cambios que lxs socixs avisan por
      * otras vías antes del cierre, y lo que sale tiene que llevarlos. Cuando
      * esos cambios los hagan lxs socixs desde su panel, se puede adelantar sin
-     * desplegar. La leen las dos tareas vía `hour_setting` del manifiesto.
+     * desplegar. La leen vía `hour_setting` del manifiesto el listado, la
+     * confirmación y el recordatorio de recogida (éste, para comprobar la
+     * cobertura detrás de la confirmación).
      */
     public const DELIVERY_SHEET_SEND_TIME = 'delivery.sheet_send_time';
 
@@ -506,33 +508,6 @@ class AppSettings
             'requires' => [],
             'depends_on' => [],
         ],
-        self::CRON_PICKUP_REMINDER => [
-            'command' => 'app:send-pickup-reminders',
-            'channels' => ['email', 'push', 'inbox'],
-            'needs_recipient' => false,
-            'confirm' => true,
-            'dry' => true,
-            'schedule' => ['freq' => 'daily', 'hour' => 9],
-            'max_delay_hours' => 36,
-            // SIN `requires` DE EMAIL, y no es un olvido. Esta tarea avisa por
-            // DOS canales (correo y push), y `requires` inhibe la tarea entera
-            // —ni siquiera --force lo salta—, así que apagar el correo del
-            // recordatorio dejaría también sin aviso a quien lo tiene activado
-            // en el móvil, que no ha pedido nada de eso.
-            //
-            // Lo que cada canal entrega se decide DENTRO, en su canal:
-            //   - el interruptor general (email.enabled) lo corta el
-            //     {@see \App\Mailer\KillSwitchMailer}, a nivel de transporte, así
-            //     que ningún correo sale aunque la tarea se ejecute;
-            //   - el ajuste propio del recordatorio lo comprueba el comando
-            //     antes de llamar al mailer.
-            // El contrato "apagado el envío, no se entrega" se mantiene entero;
-            // lo que deja de arrastrar es el otro canal.
-            'requires' => [],
-            // Sin congelado no hay destinatarios: el recordatorio lee sólo
-            // cestas ya materializadas (WeeklyBasketRepository::findPickedByDeliveryDateAndShares).
-            'depends_on' => [self::CRON_GENERATE_WEEKLY_DELIVERY],
-        ],
         self::CRON_DELIVERY_SHEET => [
             'command' => 'app:send-delivery-sheets',
             'channels' => ['email'],
@@ -567,7 +542,7 @@ class AppSettings
         ],
         self::CRON_DELIVERY_CONFIRMATION => [
             'command' => 'app:send-delivery-confirmations',
-            'channels' => ['email'],
+            'channels' => ['email', 'push', 'inbox'],
             // Cada socix recibe la suya: no hay destinatario que configurar.
             'needs_recipient' => false,
             'confirm' => true,
@@ -580,14 +555,46 @@ class AppSettings
             'schedule' => ['freq' => 'daily', 'hour' => 12],
             'hour_setting' => self::DELIVERY_SHEET_SEND_TIME,
             'max_delay_hours' => 36,
-            // Canal único, así que sus ajustes pueden inhibir la tarea entera. EN
-            // CUANTO ESTA CONFIRMACIÓN SALGA TAMBIÉN POR PUSH hay que vaciar esto
-            // y comprobar el toggle del correo DENTRO del comando: `requires`
-            // inhibe la tarea completa —ni --force lo salta— y apagar el correo
-            // dejaría sin aviso a quien lo tiene activado en el móvil.
-            'requires' => [self::EMAIL_ENABLED, self::EMAIL_DELIVERY_CONFIRMATION],
+            // SIN `requires` DE EMAIL: avisa también al móvil y en la bandeja, y
+            // `requires` inhibe la tarea entera —ni --force lo salta—, así que
+            // apagar el correo dejaría sin aviso a quien lo tiene en el móvil. Los
+            // dos toggles del correo los comprueba el comando antes del mailer.
+            'requires' => [],
             // Confirma lo que hay en el listado congelado; sin congelar, confirmaría
             // un dibujo que todavía puede moverse.
+            'depends_on' => [self::CRON_GENERATE_WEEKLY_DELIVERY],
+        ],
+        self::CRON_PICKUP_REMINDER => [
+            'command' => 'app:send-pickup-reminders',
+            'channels' => ['email', 'push', 'inbox'],
+            'needs_recipient' => false,
+            'confirm' => true,
+            'dry' => true,
+            // A la hora del listado y DETRÁS de la confirmación en el manifiesto,
+            // que es el orden en que corren en una misma pasada. Con el plazo
+            // cerrado el recordatorio no manda nada (lo dice la confirmación),
+            // pero sigue comprobando que nadie se quedó sin aviso, y eso sólo
+            // tiene sentido cuando la confirmación ya ha salido.
+            'schedule' => ['freq' => 'daily', 'hour' => 12],
+            'hour_setting' => self::DELIVERY_SHEET_SEND_TIME,
+            'max_delay_hours' => 36,
+            // SIN `requires` DE EMAIL, y no es un olvido. Esta tarea avisa por
+            // DOS canales (correo y push), y `requires` inhibe la tarea entera
+            // —ni siquiera --force lo salta—, así que apagar el correo del
+            // recordatorio dejaría también sin aviso a quien lo tiene activado
+            // en el móvil, que no ha pedido nada de eso.
+            //
+            // Lo que cada canal entrega se decide DENTRO, en su canal:
+            //   - el interruptor general (email.enabled) lo corta el
+            //     {@see \App\Mailer\KillSwitchMailer}, a nivel de transporte, así
+            //     que ningún correo sale aunque la tarea se ejecute;
+            //   - el ajuste propio del recordatorio lo comprueba el comando
+            //     antes de llamar al mailer.
+            // El contrato "apagado el envío, no se entrega" se mantiene entero;
+            // lo que deja de arrastrar es el otro canal.
+            'requires' => [],
+            // Sin congelado no hay destinatarios: el recordatorio lee sólo
+            // cestas ya materializadas (WeeklyBasketRepository::findPickedByDeliveryDateAndShares).
             'depends_on' => [self::CRON_GENERATE_WEEKLY_DELIVERY],
         ],
         self::CRON_ADMIN_DELIVERY_SUMMARY => [
@@ -895,7 +902,7 @@ class AppSettings
         self::EMAIL_PICKUP_REMINDER => [
             'group' => 'Emails a socixs',
             'label' => 'Recordatorio de recogida',
-            'help' => 'Email a quincenales y mensuales unos días antes de su reparto, con la fecha y el punto de recogida de cada quien (Madrid el miércoles en Cascorro/Midori, la Sierra el viernes en Torremocha).',
+            'help' => 'Email a quincenales y mensuales unos días antes de su reparto, con la fecha y el punto de recogida de cada quien (Madrid el miércoles en Cascorro/Midori, la Sierra el viernes en Torremocha). Sólo sale mientras el plazo de cambios sigue abierto: después, el aviso es la confirmación de la cesta.',
             'default' => false,
         ],
         self::EMAIL_PICKUP_REMINDER_LINKS => [
@@ -955,7 +962,7 @@ class AppSettings
         self::EMAIL_DELIVERY_CONFIRMATION => [
             'group' => 'Emails a socixs',
             'label' => 'Confirmación de la cesta al cerrarse el plazo',
-            'help' => 'Cuando cierra el plazo de cambios de cada nodo, escribe a cada socix diciéndole si esta semana recoge y qué día, o si no recoge porque pidió un cambio. Sirve para que quien creyó haber cambiado algo se entere a tiempo.',
+            'help' => 'Cuando cierra el plazo de cambios de cada nodo, escribe a cada socix diciéndole si esta semana recoge y qué día, o si no recoge porque pidió un cambio. Sirve para que quien creyó haber cambiado algo se entere a tiempo. Apagarlo calla sólo el correo: el aviso al móvil y la bandeja siguen.',
             'default' => false,
         ],
         self::FEATURE_PARTNER_LOGIN => [
@@ -1069,7 +1076,7 @@ class AppSettings
         self::CRON_PICKUP_REMINDER => [
             'group' => 'Tareas programadas',
             'label' => 'Avisar a socixs de su recogida',
-            'help' => 'Avisa a quincenales y mensuales del próximo reparto (app:send-pickup-reminders). Independiente del email del recordatorio: apagada aquí, la tarea ni se ejecuta.',
+            'help' => 'Avisa a quincenales y mensuales del próximo reparto (app:send-pickup-reminders), a la «Hora de envío del listado». Con el plazo de cambios ya cerrado no manda nada —el aviso es la confirmación de la cesta— y sólo comprueba que nadie se quedó sin aviso; si la confirmación está apagada, avisa igualmente. Independiente del email del recordatorio: apagada aquí, la tarea ni se ejecuta.',
             'default' => true,
         ],
         self::CRON_DELIVERY_SHEET => [
@@ -1081,7 +1088,7 @@ class AppSettings
         self::CRON_DELIVERY_CONFIRMATION => [
             'group' => 'Tareas programadas',
             'label' => 'Confirmar la cesta a lxs socixs',
-            'help' => 'Cada día, a la «Hora de envío del listado», para los nodos que cerraron su plazo la noche anterior, escribe a cada socix con lo que le queda registrado (app:send-delivery-confirmations). Independiente del email de la confirmación: apagada aquí, la tarea ni se ejecuta.',
+            'help' => 'Cada día, a la «Hora de envío del listado», para los nodos que cerraron su plazo la noche anterior, escribe a cada socix con lo que le queda registrado (app:send-delivery-confirmations), por correo, al móvil y en su bandeja. Es el único aviso de ese reparto: el recordatorio ya no sale con el plazo cerrado. Independiente del email de la confirmación: apagada aquí, la tarea ni se ejecuta y el recordatorio vuelve a avisar.',
             'default' => false,
         ],
         self::CRON_ADMIN_DELIVERY_SUMMARY => [
@@ -1158,7 +1165,7 @@ class AppSettings
         self::PICKUP_REMINDER_DAYS_BEFORE => [
             'group' => 'Emails a socixs',
             'label' => 'Antelación del recordatorio',
-            'help' => 'Cuántos días antes del reparto se envía el recordatorio. 2 = se manda dos días antes (miércoles para un reparto del viernes). Requiere que el cron corra a diario.',
+            'help' => 'Cuántos días antes del reparto se envía el recordatorio. 2 = se manda dos días antes (miércoles para un reparto del viernes). Si para entonces el plazo de cambios ya cerró, no se manda: avisa la confirmación de la cesta. Requiere que el cron corra a diario.',
             'default' => 2,
             'min' => 0,
             'max' => 14,
@@ -1226,7 +1233,7 @@ class AppSettings
         self::DELIVERY_SHEET_SEND_TIME => [
             'group' => 'Cierre de reparto',
             'label' => 'Hora de envío del listado',
-            'help' => 'A qué hora del día siguiente al cierre salen el listado del reparto a cada punto y la confirmación de su cesta a cada socix. Tiene que ser después de que administración termine de meter los cambios avisados antes del cierre: lo que se haga más tarde ya no sale en el correo.',
+            'help' => 'A qué hora del día siguiente al cierre salen el listado del reparto a cada punto y la confirmación de su cesta a cada socix (el único aviso de ese reparto). Tiene que ser después de que administración termine de meter los cambios avisados antes del cierre: lo que se haga más tarde ya no sale en el correo.',
             'default' => '12:00',
         ],
     ];
