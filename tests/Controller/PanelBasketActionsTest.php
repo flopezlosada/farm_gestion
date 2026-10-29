@@ -13,8 +13,6 @@ use App\Entity\Setting;
 use App\Entity\WeeklyBasket;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Service\AppSettings;
-use App\Service\Delivery\AccumulatingMove;
-use App\Service\Delivery\DeliveryCalendarProjector;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
@@ -118,30 +116,6 @@ class PanelBasketActionsTest extends AbstractPartnerAuthenticatedTest
             ->orderBy('b.date', 'DESC')
             ->setMaxResults(1)
             ->getQuery()->getOneOrNullResult();
-    }
-
-    /**
-     * Semanas en las que el socix recoge algo según la proyección, en los meses de alrededor
-     * de $around (dos antes y dos después), sin repetir y en orden de fecha.
-     *
-     * @return list<Basket>
-     */
-    private function projectedDeliveryBaskets(KernelBrowser $client, Partner $partner, Basket $around): array
-    {
-        $projector = $client->getContainer()->get(DeliveryCalendarProjector::class);
-        $first = \DateTimeImmutable::createFromInterface($around->getDate())->modify('first day of this month');
-
-        $baskets = [];
-        foreach (range(-2, 2) as $offset) {
-            $month = $first->modify(sprintf('%+d month', $offset));
-            foreach ($projector->projectMonth($partner, (int) $month->format('Y'), (int) $month->format('n')) as $slot) {
-                if (!empty($slot['items']) && !$slot['skipped']) {
-                    $baskets[$slot['basket']->getId()] = $slot['basket'];
-                }
-            }
-        }
-
-        return array_values($baskets);
     }
 
     /**
@@ -477,6 +451,11 @@ class PanelBasketActionsTest extends AbstractPartnerAuthenticatedTest
     /**
      * Deshacer un traslado sumando con el plazo cerrado se rechaza: cambiaría dos
      * listados (el día que recibió la cesta y su semana de origen). El traslado sigue.
+     *
+     * Las fixtures dan al socix un único día de recogida, así que el traslado no se hace
+     * con AccumulatingMove (necesita un origen con cesta): se deja directamente el intent
+     * que éste crea, «no recoge en el origen, sumada al destino», que es lo único que el
+     * endpoint mira antes del plazo.
      */
     public function testCalendarUndoAccumulateRespetaElPlazoDeAutoservicio(): void
     {
@@ -485,24 +464,26 @@ class PanelBasketActionsTest extends AbstractPartnerAuthenticatedTest
         $em = $this->em($client);
         $partner = $this->reloadSocixPartner($em);
 
-        // Las fixtures sólo materializan UNA entrega del socix; las demás existen en la
-        // proyección, que es de donde lee AccumulatingMove. Se toman dos días con cesta
-        // de los meses alrededor de esa entrega.
         $wb = $this->farthestSocixWeeklyBasket($em, $partner);
         $this->assertNotNull($wb);
-        $deliveryDays = $this->projectedDeliveryBaskets($client, $partner, $wb->getBasket());
-        $this->assertGreaterThanOrEqual(2, count($deliveryDays), 'El socix de fixtures debería recoger al menos dos días en esos meses.');
-        [$to, $from] = $deliveryDays;
-        $toId = $to->getId();
+        $toId = $wb->getBasket()->getId();
+        $from = $em->getRepository(Basket::class)->createQueryBuilder('b')
+            ->where('b.id <> :to')
+            ->setParameter('to', $toId)
+            ->setMaxResults(1)
+            ->getQuery()->getOneOrNullResult();
+        $this->assertNotNull($from, 'Las fixtures deberían tener más de una semana de reparto.');
         $fromId = $from->getId();
-        $token = $this->moveCsrfToken($client, $to);
+        $token = $this->moveCsrfToken($client, $wb->getBasket());
 
+        // Tras la petición el contenedor es otro: el EM y las entidades, del nuevo.
         $em = $this->em($client);
-        $client->getContainer()->get(AccumulatingMove::class)->move(
+        $client->getContainer()->get(DeliveryShiftApplier::class)->applySkipIntent(
             $this->reloadSocixPartner($em),
             $em->getRepository(Basket::class)->find($fromId),
-            $em->getRepository(Basket::class)->find($toId),
+            null,
             'test:setup',
+            $em->getRepository(Basket::class)->find($toId),
         );
         $this->closeEveryDeadline($client);
 
@@ -515,16 +496,15 @@ class PanelBasketActionsTest extends AbstractPartnerAuthenticatedTest
         $em = $this->em($client);
         $em->clear();
         $partner = $this->reloadSocixPartner($em);
-        $to = $em->getRepository(Basket::class)->find($toId);
-        $stillAccumulated = $client->getContainer()->get(PartnerDeliveryShiftRepository::class)
-            ->findAccumulatedInto($partner, $to) !== [];
+        $shifts = $client->getContainer()->get(PartnerDeliveryShiftRepository::class)
+            ->findAccumulatedInto($partner, $em->getRepository(Basket::class)->find($toId));
 
         // db_test no tiene rollback transaccional: restauramos ANTES de las aserciones.
-        if ($stillAccumulated) {
-            $client->getContainer()->get(AccumulatingMove::class)->undo($partner, $to, 'test:cleanup');
+        foreach ($shifts as $shift) {
+            $client->getContainer()->get(DeliveryShiftApplier::class)->cancelSkipIntent($shift, 'test:cleanup');
         }
 
-        $this->assertTrue($stillAccumulated, 'Con el plazo cerrado el traslado sumando debe seguir en pie.');
+        $this->assertCount(1, $shifts, 'Con el plazo cerrado el traslado sumando debe seguir en pie.');
         $this->assertStringContainsString('el plazo terminó', implode(' ', $errors));
     }
 }
