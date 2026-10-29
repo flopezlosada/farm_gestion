@@ -821,10 +821,13 @@ select.csa-input,
  * que se aplicaría por sibling order y descuadra las columnas. */
 .csa-form-grid > .csa-field + .csa-field { margin-top: 0; }
 
+/* La pista va al lado de la etiqueta si caben las dos; si no, baja a la línea de
+   abajo. Sin el wrap, una pista larga encogía la etiqueta hasta hacerla desaparecer. */
 .csa-field__label-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--csa-sp-2);
+  gap: 2px var(--csa-sp-2);
   margin-bottom: var(--csa-sp-2);
 }
 .csa-field__label {
@@ -840,7 +843,7 @@ select.csa-input,
 }
 .csa-field__required { color: var(--csa-terracotta); margin-left: 3px; }
 .csa-field__hint {
-  flex-shrink: 0;
+  min-width: 0;
   font-size: var(--csa-fs-xs);
   color: var(--csa-ink-muted);
 }
@@ -852,8 +855,8 @@ select.csa-input,
 
 /* Grid de campos en formularios */
 /* minmax(0, 1fr) y no 1fr: con 1fr el mínimo de la columna es el min-content
-   del campo, y un campo con label + hint largo (el hint lleva flex-shrink: 0)
-   arrastraba el formulario fuera del viewport en móvil. */
+   del campo, y un campo con label + hint largo arrastraba el formulario fuera
+   del viewport en móvil. */
 .csa-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -870,9 +873,7 @@ select.csa-input,
 .csa-field--full { grid-column: 1 / -1; }
 @media (max-width: 768px) {
   .csa-form-grid { grid-template-columns: minmax(0, 1fr); }
-  /* El hint no cabe al lado de la etiqueta en un móvil: baja bajo ella.
-     El wrap va en la fila (.csa-field__label-row), que es la que es flex. */
-  .csa-field__label-row { flex-wrap: wrap; gap: 2px var(--csa-sp-2); }
+  /* En un móvil el hint baja siempre bajo la etiqueta. */
   .csa-field__hint { flex-basis: 100%; }
 }
 
