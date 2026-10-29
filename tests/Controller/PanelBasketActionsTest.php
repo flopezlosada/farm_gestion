@@ -14,6 +14,7 @@ use App\Entity\WeeklyBasket;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Service\AppSettings;
 use App\Service\Delivery\AccumulatingMove;
+use App\Service\Delivery\DeliveryCalendarProjector;
 use App\Service\Delivery\DeliveryShiftApplier;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
@@ -110,24 +111,37 @@ class PanelBasketActionsTest extends AbstractPartnerAuthenticatedTest
      */
     private function farthestSocixWeeklyBasket(EntityManagerInterface $em, Partner $partner): ?WeeklyBasket
     {
-        return $this->latestSocixWeeklyBaskets($em, $partner, 1)[0] ?? null;
-    }
-
-    /**
-     * Las $limit entregas del socix más adelantadas en el tiempo, de la más lejana
-     * a la más cercana.
-     *
-     * @return list<WeeklyBasket>
-     */
-    private function latestSocixWeeklyBaskets(EntityManagerInterface $em, Partner $partner, int $limit): array
-    {
         return $em->getRepository(WeeklyBasket::class)->createQueryBuilder('wb')
             ->innerJoin('wb.basket', 'b')
             ->where('wb.partner = :p')
             ->setParameter('p', $partner)
             ->orderBy('b.date', 'DESC')
-            ->setMaxResults($limit)
-            ->getQuery()->getResult();
+            ->setMaxResults(1)
+            ->getQuery()->getOneOrNullResult();
+    }
+
+    /**
+     * Semanas en las que el socix recoge algo según la proyección, en los meses de alrededor
+     * de $around (dos antes y dos después), sin repetir y en orden de fecha.
+     *
+     * @return list<Basket>
+     */
+    private function projectedDeliveryBaskets(KernelBrowser $client, Partner $partner, Basket $around): array
+    {
+        $projector = $client->getContainer()->get(DeliveryCalendarProjector::class);
+        $first = \DateTimeImmutable::createFromInterface($around->getDate())->modify('first day of this month');
+
+        $baskets = [];
+        foreach (range(-2, 2) as $offset) {
+            $month = $first->modify(sprintf('%+d month', $offset));
+            foreach ($projector->projectMonth($partner, (int) $month->format('Y'), (int) $month->format('n')) as $slot) {
+                if (!empty($slot['items']) && !$slot['skipped']) {
+                    $baskets[$slot['basket']->getId()] = $slot['basket'];
+                }
+            }
+        }
+
+        return array_values($baskets);
     }
 
     /**
@@ -471,13 +485,17 @@ class PanelBasketActionsTest extends AbstractPartnerAuthenticatedTest
         $em = $this->em($client);
         $partner = $this->reloadSocixPartner($em);
 
-        $latest = $this->latestSocixWeeklyBaskets($em, $partner, 2);
-        if (count($latest) < 2) {
-            $this->markTestSkipped('El socix de fixtures necesita dos entregas para trasladar una sobre otra.');
-        }
-        $toId = $latest[0]->getBasket()->getId();
-        $fromId = $latest[1]->getBasket()->getId();
-        $token = $this->moveCsrfToken($client, $latest[0]->getBasket());
+        // Las fixtures sólo materializan UNA entrega del socix; las demás existen en la
+        // proyección, que es de donde lee AccumulatingMove. Se toman dos días con cesta
+        // de los meses alrededor de esa entrega.
+        $wb = $this->farthestSocixWeeklyBasket($em, $partner);
+        $this->assertNotNull($wb);
+        $deliveryDays = $this->projectedDeliveryBaskets($client, $partner, $wb->getBasket());
+        $this->assertGreaterThanOrEqual(2, count($deliveryDays), 'El socix de fixtures debería recoger al menos dos días en esos meses.');
+        [$to, $from] = $deliveryDays;
+        $toId = $to->getId();
+        $fromId = $from->getId();
+        $token = $this->moveCsrfToken($client, $to);
 
         $em = $this->em($client);
         $client->getContainer()->get(AccumulatingMove::class)->move(
