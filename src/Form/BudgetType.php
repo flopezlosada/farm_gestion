@@ -7,7 +7,6 @@ use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
-use Symfony\Component\Form\Extension\Core\Type\NumberType;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
@@ -32,11 +31,7 @@ class BudgetType extends AbstractType
             ->add('name', TextType::class, [
                 'required' => true,
             ])
-            ->add('openingCash', NumberType::class, [
-                'scale' => 2,
-                'html5' => true,
-                'attr' => ['step' => '0.01'],
-            ])
+            ->add('openingCash', AmountType::class)
             ->add('approved', CheckboxType::class, [
                 'required' => false,
             ])
