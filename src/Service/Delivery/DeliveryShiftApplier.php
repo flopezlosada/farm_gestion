@@ -17,6 +17,7 @@ use App\Repository\PartnerBasketShareRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Repository\WeeklyBasketStatusRepository;
+use App\Service\Partner\PartnerPauseCalendar;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -45,6 +46,7 @@ final class DeliveryShiftApplier implements ShiftReconciliationActions, PartnerD
         private readonly WeeklyBasketComposer $composer,
         private readonly ExtraBasketRemover $extraRemover,
         private readonly ExtraBasketAdder $extraAdder,
+        private readonly PartnerPauseCalendar $pauseCalendar,
     ) {
     }
 
@@ -848,6 +850,9 @@ final class DeliveryShiftApplier implements ShiftReconciliationActions, PartnerD
     /**
      * Revierte los efectos sobre WeeklyBasket al cancelar el shift:
      *   - WB(from, partner) → vuelve a "recoge" (si estaba en "no recoge").
+     *     Si NO existe pero la semana origen ya está generada, se crea
+     *     ({@see restoreOrigin}): la cesta vuelve a un listado que se generó
+     *     sin ella.
      *   - WB(to, partner)   → se borra (asume que se creó por el shift).
      *
      * Si WB(from) estuviera en otro status (p. ej. status 3 "atrasada"), se
@@ -861,12 +866,16 @@ final class DeliveryShiftApplier implements ShiftReconciliationActions, PartnerD
         /** @var WeeklyBasketStatusRepository $statusRepo */
         $statusRepo = $this->em->getRepository(WeeklyBasketStatus::class);
 
+        $existingTo = $wbRepo->findOneBy(['basket' => $to, 'partner' => $partner]);
+
         $existingFrom = $wbRepo->findOneBy(['basket' => $from, 'partner' => $partner]);
-        if ($existingFrom !== null && $existingFrom->getWeeklyBasketStatus()?->getId() === self::STATUS_SKIPPED) {
+        if ($existingFrom === null) {
+            // Se copia ANTES de borrar el destino: es la composición que trae la cesta de vuelta.
+            $this->restoreOrigin($partner, $from, $existingTo !== null ? $this->composer->copyLines($existingTo) : null);
+        } elseif ($existingFrom->getWeeklyBasketStatus()?->getId() === self::STATUS_SKIPPED) {
             $existingFrom->setWeeklyBasketStatus($statusRepo->find(self::STATUS_PICKED));
         }
 
-        $existingTo = $wbRepo->findOneBy(['basket' => $to, 'partner' => $partner]);
         if ($existingTo !== null) {
             // Borrar primero sus líneas: WeeklyBasketItem->weeklyBasket no tiene
             // cascade, así que dejarlas colgando de un WB borrado rompe el siguiente
@@ -875,6 +884,51 @@ final class DeliveryShiftApplier implements ShiftReconciliationActions, PartnerD
             $this->removeItemsOf($existingTo);
             $this->em->remove($existingTo);
         }
+    }
+
+    /**
+     * Crea la entrega ORIGEN de un cambio que se cancela cuando su semana ya está
+     * generada SIN ella. Pasa cuando el listado del origen se genera (o congela)
+     * con el cambio vigente —el socix no sale, correcto— y el cambio se deshace
+     * DESPUÉS: el generador ya no vuelve a pasar por esa semana, así que si no se
+     * crea aquí la cesta vuelve al calendario pero no al listado impreso.
+     *
+     * Mismas condiciones que el generador para que haya entrega: suscripción en
+     * vigor ese día, nodo que reparte esa semana y socix sin pausa. Si la semana
+     * aún no está generada no se crea nada: el generador la sacará del patrón.
+     *
+     * @param array<int, array{component: \App\Entity\BasketComponent, amount: string}>|null $carryItems
+     *        Composición que trae la cesta de vuelta (la del destino materializado), o
+     *        null si el destino solo estaba previsto → se deriva del patrón del origen.
+     */
+    private function restoreOrigin(Partner $partner, Basket $from, ?array $carryItems): void
+    {
+        /** @var WeeklyBasketRepository $wbRepo */
+        $wbRepo = $this->em->getRepository(WeeklyBasket::class);
+        if ($wbRepo->findOneBy(['basket' => $from]) === null) {
+            return;
+        }
+
+        /** @var PartnerBasketShareRepository $shareRepo */
+        $shareRepo = $this->em->getRepository(PartnerBasketShare::class);
+        $share = $shareRepo->findActiveForPartner($partner, $from->getDate());
+        if ($share === null) {
+            return;
+        }
+
+        $node = $partner->getWeeklyBasketGroup()?->getNode();
+        $physical = $node !== null ? $this->nodeDeliveryDate->physicalDateFor($from, $node) : $from->getDate();
+        if ($physical === null || $this->pauseCalendar->isPausedOn($partner, $physical)) {
+            return;
+        }
+
+        $wb = $this->createWeeklyBasketForShiftDestination($partner, $from);
+        if ($carryItems !== null) {
+            $this->composer->stamp($wb, $carryItems);
+
+            return;
+        }
+        $this->composer->compose($wb, $share, $from);
     }
 
     /**
