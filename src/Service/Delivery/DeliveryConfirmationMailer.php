@@ -29,9 +29,11 @@ use Symfony\Component\Mailer\MailerInterface;
  * PIDIERON algo ({@see PartnerDeliveryShift} saliente de ese ciclo) y por eso no
  * están en la lista; a ésos el correo les confirma que su cambio se aplicó.
  *
- * Va DESPUÉS del cierre, y por eso no se pisa con el recordatorio de recogida
- * ({@see PickupReminderMailer}), que sale antes: aquél dice "aún puedes cambiar",
- * éste dice "esto es lo que hay". Con los valores por defecto son días distintos.
+ * Va DESPUÉS del cierre y es EL aviso de ese reparto: el recordatorio de recogida
+ * ({@see PickupReminderMailer}) sólo sale mientras el plazo sigue abierto, porque
+ * lo que dice es "aún puedes cambiar". Con el plazo cerrado, dos avisos de la
+ * misma cesta el mismo día son uno de más, y el bueno es éste: sale después de
+ * que administración meta los cambios y llega a todo el que recoge.
  */
 class DeliveryConfirmationMailer
 {
@@ -41,6 +43,14 @@ class DeliveryConfirmationMailer
      * dos avisos distintos y uno no puede dar el otro por enviado.
      */
     public const EFFECT_KIND = 'delivery_confirmation';
+
+    /**
+     * Clases de efecto de la misma confirmación al móvil y en la bandeja
+     * ({@see PickupNoticePusher}). Una por canal, como en el recordatorio: con
+     * una sola, mandar el correo daría el push por enviado para siempre.
+     */
+    public const EFFECT_KIND_PUSH = 'delivery_confirmation_push';
+    public const EFFECT_KIND_INBOX = 'delivery_confirmation_inbox';
 
     public function __construct(
         private readonly MailerInterface $mailer,

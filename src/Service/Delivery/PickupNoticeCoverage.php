@@ -35,14 +35,20 @@ use App\Service\Notification\NotificationTopic;
 class PickupNoticeCoverage
 {
     /**
-     * Clases de efecto que cuentan como "avisadx". Las tres, porque las tres
-     * son el mismo aviso por caminos distintos: quien recibió la copia en su
-     * bandeja está avisadx aunque el correo esté apagado.
+     * Clases de efecto que cuentan como "avisadx": las tres vías del
+     * recordatorio y las tres de la confirmación. Las de cada aviso, porque son
+     * el mismo aviso por caminos distintos: quien recibió la copia en su bandeja
+     * está avisadx aunque el correo esté apagado. Y las de la confirmación,
+     * porque con el plazo cerrado el recordatorio calla y el aviso del reparto
+     * es ella: sin contarla, todo el que la recibió saldría como hueco.
      */
     private const NOTICE_KINDS = [
-        'pickup_reminder',
-        'pickup_reminder_push',
-        'pickup_reminder_inbox',
+        PickupReminderMailer::EFFECT_KIND,
+        PickupReminderPusher::EFFECT_KIND,
+        PickupReminderPusher::EFFECT_KIND_INBOX,
+        DeliveryConfirmationMailer::EFFECT_KIND,
+        DeliveryConfirmationMailer::EFFECT_KIND_PUSH,
+        DeliveryConfirmationMailer::EFFECT_KIND_INBOX,
     ];
 
     /**

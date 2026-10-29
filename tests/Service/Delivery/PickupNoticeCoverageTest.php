@@ -9,6 +9,7 @@ use App\Entity\Partner;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketStatus;
 use App\Repository\EmittedEffectRepository;
+use App\Service\Delivery\DeliveryConfirmationMailer;
 use App\Service\Delivery\PickupNoticeCoverage;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -87,6 +88,31 @@ class PickupNoticeCoverageTest extends KernelTestCase
         $this->assertSame(1, $cobertura['totals']['notified']);
         $this->assertCount(1, $cobertura['missing']);
         $this->assertSame('OlvidadaSocix', $cobertura['missing'][0]->getName());
+    }
+
+    /**
+     * Con el plazo cerrado el recordatorio calla y el aviso del reparto es la
+     * confirmación de la cesta. Quien la recibió, por cualquiera de sus vías, está
+     * avisadx: si no contara, el día que el recordatorio deja de salir toda la
+     * asociación aparecería como hueco y administración recibiría la alarma.
+     */
+    public function testLaConfirmacionDeLaCestaCuentaComoAviso(): void
+    {
+        self::bootKernel();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+
+        $porCorreo = $this->sembrarCesta($em, BasketShare::ID_BIWEEKLY, 'ConfirmadaSocix', 'confirmada@test.org');
+        $porBandeja = $this->sembrarCesta($em, BasketShare::ID_MONTHLY, 'BandejaSocix', 'bandeja@test.org');
+        $em->flush();
+
+        $this->sembrarAviso($em, $porCorreo->getPartner(), DeliveryConfirmationMailer::EFFECT_KIND);
+        $this->sembrarAviso($em, $porBandeja->getPartner(), DeliveryConfirmationMailer::EFFECT_KIND_INBOX);
+        $em->flush();
+
+        $cobertura = self::getContainer()->get(PickupNoticeCoverage::class)->forDate(new \DateTimeImmutable(self::DATE));
+
+        $this->assertSame(0, $cobertura['totals']['gap'], 'Quien recibió la confirmación no es un hueco.');
+        $this->assertSame(2, $cobertura['totals']['notified']);
     }
 
     /**
@@ -244,10 +270,10 @@ class PickupNoticeCoverageTest extends KernelTestCase
     }
 
     /** Deja constancia de que a esa persona se le avisó de este reparto. */
-    private function sembrarAviso(EntityManagerInterface $em, Partner $partner): void
+    private function sembrarAviso(EntityManagerInterface $em, Partner $partner, string $kind = 'pickup_reminder'): void
     {
         $efecto = (new EmittedEffect())
-            ->setKind('pickup_reminder')
+            ->setKind($kind)
             ->setReference(sprintf('partner-%d', $partner->getId()))
             ->setOccurredOn(new \DateTimeImmutable(self::DATE))
             ->setTarget((string) $partner->getEmail());

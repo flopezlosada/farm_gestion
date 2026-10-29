@@ -464,6 +464,98 @@ class SendPickupReminderCommandTest extends KernelTestCase
     }
 
     /**
+     * Con el plazo de cambios cerrado, el aviso del reparto es la confirmación de
+     * la cesta y el recordatorio no manda nada: recibir los dos el mismo día era
+     * recibir dos veces lo mismo. Pero sigue mirando la cobertura, y aquí nadie
+     * ha recibido la confirmación, así que tiene que delatar el hueco.
+     *
+     * Y la red: con la tarea de la confirmación apagada, el recordatorio vuelve a
+     * salir aunque el plazo haya cerrado. Callar los dos dejaría a la gente sin
+     * ningún aviso.
+     */
+    public function testConElPlazoCerradoAvisaLaConfirmacionYNoElRecordatorio(): void
+    {
+        self::bootKernel();
+        /** @var EntityManagerInterface $em */
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $settings = static::getContainer()->get(AppSettings::class);
+
+        // Un viernes PASADO y exclusivo de este test: su plazo cerró hace años.
+        $fecha = '2001-03-02';
+        $sufijo = uniqid();
+        $picks = $em->getRepository(WeeklyBasketStatus::class)->find(1);
+        $biweekly = $em->getRepository(BasketShare::class)->find(BasketShare::ID_BIWEEKLY);
+
+        $basket = (new Basket())->setDate(new \DateTime($fecha))->setWeek(9)->setAmount(1);
+        $em->persist($basket);
+        $node = (new Node())->setName('Torremocha TEST ' . $sufijo)->setDeliveryWeekday(5);
+        $grupo = (new WeeklyBasketGroup())->setName('Bustarviejo')->setColor('#5a8fbf')->setNode($node);
+        $em->persist($node);
+        $em->persist($grupo);
+
+        $wb = $this->makeWeeklyBasket($em, $basket, $biweekly, $picks, $grupo, $fecha, 'PlazoCerradoSocix ' . $sufijo);
+
+        // Un apunte anterior, para que la cobertura tenga desde dónde juzgar.
+        $frontera = (new EmittedEffect())
+            ->setKind(PickupReminderMailer::EFFECT_KIND)
+            ->setReference('partner-0')
+            ->setOccurredOn(new \DateTimeImmutable('2001-02-01'))
+            ->setTarget('frontera@test.org');
+        $em->persist($frontera);
+        $em->flush();
+
+        $settings->setBool(AppSettings::EMAIL_ENABLED, true);
+        $settings->setBool(AppSettings::EMAIL_PICKUP_REMINDER, true);
+        $settings->setBool(AppSettings::CRON_DELIVERY_CONFIRMATION, true);
+
+        $reference = sprintf('partner-%d', $wb->getPartner()->getId());
+        $avisos = static fn (): int => \count($em->getRepository(EmittedEffect::class)->findBy([
+            'kind' => PickupReminderMailer::EFFECT_KIND,
+            'reference' => $reference,
+        ]));
+
+        try {
+            $tester = $this->commandTester();
+
+            $tester->execute(['--date' => $fecha]);
+            $plano = preg_replace('/\s+/', ' ', $tester->getDisplay());
+
+            $this->assertStringContainsString('ya cerró', $plano);
+            $this->assertSame(0, $avisos(), 'Con el plazo cerrado el recordatorio no manda correo.');
+            $this->assertStringContainsString('NO se les ha avisado', $plano, 'La cobertura se sigue mirando.');
+
+            $settings->setBool(AppSettings::CRON_DELIVERY_CONFIRMATION, false);
+
+            $tester->execute(['--date' => $fecha]);
+
+            $this->assertStringContainsString('Enviados 1 email(s)', $tester->getDisplay());
+            $this->assertSame(1, $avisos(), 'Sin confirmación, el recordatorio es el único aviso y sale.');
+        } finally {
+            $partner = $wb->getPartner();
+            $em->remove($wb);
+            $em->remove($frontera);
+            $em->flush();
+            $em->remove($partner);
+            $em->remove($grupo);
+            $em->remove($node);
+            $em->remove($basket);
+            foreach ($em->getRepository(EmittedEffect::class)->findBy(['reference' => $reference]) as $effect) {
+                $em->remove($effect);
+            }
+            foreach ($em->getRepository(EmittedEffect::class)->findBy(['kind' => 'coverage_alert']) as $effect) {
+                $em->remove($effect);
+            }
+            foreach ([AppSettings::EMAIL_ENABLED, AppSettings::EMAIL_PICKUP_REMINDER, AppSettings::CRON_DELIVERY_CONFIRMATION] as $key) {
+                $setting = $em->getRepository(Setting::class)->findOneBy(['name' => $key]);
+                if ($setting !== null) {
+                    $em->remove($setting);
+                }
+            }
+            $em->flush();
+        }
+    }
+
+    /**
      * Una fecha imposible en --date (2026-02-30, que new \DateTimeImmutable()
      * aceptaría rodando a marzo) se rechaza con error, en vez de avisar de un día
      * equivocado en silencio. Se usa --dry-run para saltar el gate de email y

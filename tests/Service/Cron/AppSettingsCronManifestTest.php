@@ -28,7 +28,23 @@ class AppSettingsCronManifestTest extends TestCase
         return [
             'listado al equipo' => [AppSettings::CRON_DELIVERY_SHEET],
             'confirmación al socix' => [AppSettings::CRON_DELIVERY_CONFIRMATION],
+            'recordatorio de recogida' => [AppSettings::CRON_PICKUP_REMINDER],
         ];
+    }
+
+    /**
+     * El recordatorio corre DETRÁS de la confirmación, y la confirmación detrás
+     * del listado. En una misma pasada las tareas corren en el orden del
+     * manifiesto: con el plazo cerrado el recordatorio ya no avisa, sólo comprueba
+     * que nadie se quedó sin aviso, y si corriera antes que la confirmación
+     * acusaría de hueco a todo el que todavía no la ha recibido.
+     */
+    public function testElRecordatorioCorreDetrasDeLaConfirmacion(): void
+    {
+        $order = array_flip(array_keys(AppSettings::CRONS));
+
+        $this->assertLessThan($order[AppSettings::CRON_DELIVERY_CONFIRMATION], $order[AppSettings::CRON_DELIVERY_SHEET]);
+        $this->assertLessThan($order[AppSettings::CRON_PICKUP_REMINDER], $order[AppSettings::CRON_DELIVERY_CONFIRMATION]);
     }
 
     /**
