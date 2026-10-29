@@ -71,7 +71,7 @@ final class DeliveryCalendarProjector implements PartnerMonthProjection
      * @param Partner $partner Socio cuyo calendario se proyecta.
      * @param int     $year    Año (p. ej. 2026).
      * @param int     $month   Mes 1-12.
-     * @return list<array{date: \DateTimeInterface, basket: Basket, source: 'materialized'|'projected', weeklyBasket: WeeklyBasket, items: array<int, array{component: BasketComponent, amount: string}>, skipped: bool, listed: bool, available: list<BasketComponent>}>
+     * @return list<array{date: \DateTimeInterface, basket: Basket, source: 'materialized'|'projected', weeklyBasket: WeeklyBasket, items: array<int, array{component: BasketComponent, amount: string}>, skipped: bool, closed?: bool, listed: bool, available: list<BasketComponent>}>
      */
     public function projectMonth(Partner $partner, int $year, int $month): array
     {
