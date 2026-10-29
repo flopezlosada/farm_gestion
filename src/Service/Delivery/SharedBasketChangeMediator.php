@@ -21,6 +21,13 @@ use Doctrine\ORM\EntityManagerInterface;
  * contestar pasan días, y en ese rato el plazo puede haber cerrado o el día destino
  * haberse ocupado. Validar sólo al pedir es cómo se acepta un cambio que ya no cabe.
  *
+ * EL PLAZO ES EL DEL AUTOSERVICIO ({@see DeliveryDeadline}), no sólo el «día anterior»
+ * que comprueba el editor: esa regla física la comparte con el gestor, y el plazo del
+ * socix es de quien atiende al socix, que aquí es este servicio. Pasado el cierre el
+ * listado del reparto ya puede haber salido, y un cambio aceptado entonces no llega a
+ * la hoja impresa. Se exige a los DOS hogares y en todas las semanas cuyo listado
+ * cambia: la de la cesta y, si se mueve, la de destino.
+ *
  * UNA PETICIÓN VIVA CADA VEZ entre los dos hogares. Dos acuerdos esperando sobre la
  * misma cesta son dos futuros distintos, y el segundo en aceptarse se encontraría el
  * reparto ya movido por el primero.
@@ -39,6 +46,7 @@ final class SharedBasketChangeMediator
         private readonly SharedBasketChangeNotifier $notifier,
         private readonly UserRepository $users,
         private readonly PartnerBasketShareRepository $shares,
+        private readonly DeliveryDeadline $deadline,
     ) {
     }
 
@@ -58,6 +66,7 @@ final class SharedBasketChangeMediator
     {
         // Se valida ANTES de molestar a nadie: pedir que alguien decida sobre un
         // cambio que ya se sabe imposible le hace perder el tiempo dos veces.
+        $this->assertSelfServiceOpen([$requester, $this->editor->counterpart($requester)], [$from, $to]);
         $other = $this->editor->assertMoveAllowed($requester, $from, $to);
         $this->assertCanAnswer($other);
         $this->assertNothingPending($requester, $other);
@@ -83,6 +92,7 @@ final class SharedBasketChangeMediator
     public function requestRelocate(Partner $requester, Basket $basket, WeeklyBasketGroup $toGroup, ?string $note = null): SharedBasketChangeRequest
     {
         $other = $this->editor->counterpart($requester);
+        $this->assertSelfServiceOpen([$requester, $other], [$basket]);
         $this->assertCanAnswer($other);
         $this->assertNothingPending($requester, $other);
 
@@ -147,6 +157,7 @@ final class SharedBasketChangeMediator
                 if (null === $from || null === $to) {
                     throw new SharedPairException('Esa petición está incompleta: avisa a administración.');
                 }
+                $this->assertSelfServiceOpen([$requester, $decider], [$from, $to]);
 
                 // Revalida y aplica. Si el plazo cerró o el día destino se ocupó desde
                 // que se pidió, salta aquí con su motivo y la petición sigue pendiente
@@ -173,6 +184,7 @@ final class SharedBasketChangeMediator
                 if (null === $basket || null === $group) {
                     throw new SharedPairException('Esa petición está incompleta: avisa a administración.');
                 }
+                $this->assertSelfServiceOpen([$requester, $decider], [$basket]);
 
                 // Misma unidad que el cambio, por lo mismo que en el caso de arriba.
                 $this->em->wrapInTransaction(function () use ($requester, $basket, $group, $actor, $request): void {
@@ -273,6 +285,27 @@ final class SharedBasketChangeMediator
         }
         if (!$request->isActionable()) {
             throw new SharedPairException('Ese reparto ya pasó: la petición se quedó sin efecto.');
+        }
+    }
+
+    /**
+     * Que el plazo de autoservicio siga abierto para cada hogar en cada semana tocada.
+     *
+     * @param Partner[]          $households Los dos hogares de la pareja.
+     * @param array<Basket|null> $baskets    Semanas cuyo listado cambia; un null (destino
+     *                                       sin elegir) se ignora: lo rechaza el editor
+     *                                       con su propio motivo.
+     *
+     * @throws SharedPairException Si alguna ya cerró su plazo.
+     */
+    private function assertSelfServiceOpen(array $households, array $baskets): void
+    {
+        foreach (array_filter($baskets) as $basket) {
+            foreach ($households as $household) {
+                if (!$this->deadline->isOpen($household, $basket)) {
+                    throw new SharedPairException('Ese reparto ya cerró el plazo de cambios. Si necesitáis avisar, contactad con la administración.');
+                }
+            }
         }
     }
 
