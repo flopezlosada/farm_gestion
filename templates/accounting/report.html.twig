@@ -56,7 +56,7 @@
 
     {{ csa.page_header(
         'Contabilidad · ' ~ year,
-        'Cómo vamos',
+        'Cómo vamos' ~ (tracked.throughMonth > 0 ? ' hasta ' ~ months[tracked.throughMonth]|lower : ''),
         'Lo presupuestado frente a lo que de verdad ha pasado, con la proyección de cómo acabará el año.'
     ) }}
 
@@ -101,6 +101,8 @@
     {# Las mismas cifras que la portada, cortadas en el último mes completo del libro
        de los bancos (tracked.throughMonth). Debajo, el desglose que las suma. #}
     {% set through = tracked.throughMonth %}
+    {# Cabecera de las columnas que se cortan en ese mes: «a la fecha» no decía cuál. #}
+    {% set upTo = through > 0 ? ' hasta ' ~ months[through]|lower : '' %}
     <div class="prl-stats">
         <div class="prl-stat {{ totalCash < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}">
             <div class="v">{{ totalCash|number_format(0, ',', '.') }} €</div>
@@ -135,8 +137,8 @@
                 <thead>
                     <tr>
                         <th></th>
-                        <th class="tight acc-num">Previsto</th>
-                        <th class="tight acc-num">Real</th>
+                        <th class="tight acc-num">Previsto{{ upTo }}</th>
+                        <th class="tight acc-num">Real{{ upTo }}</th>
                         <th class="tight acc-num">Diferencia</th>
                     </tr>
                 </thead>
@@ -174,8 +176,8 @@
             <thead>
                 <tr>
                     <th>Partida</th>
-                    <th class="tight acc-num">Previsto a la fecha</th>
-                    <th class="tight acc-num">Real</th>
+                    <th class="tight acc-num">Previsto{{ upTo }}</th>
+                    <th class="tight acc-num">Real{{ upTo }}</th>
                     <th class="tight acc-num">Diferencia</th>
                     <th class="tight">Ejecutado</th>
                     <th class="tight acc-num">Previsto al año</th>
@@ -216,8 +218,8 @@
     </div>
 
     <p class="acc-muted" style="margin: 10px 2px 24px; font-size: 12px;">
-        «Previsto a la fecha» es la parte del presupuesto que correspondía a los meses
-        completos del libro (hasta {{ months[tracked.throughMonth]|default('ninguno todavía')|lower }}), no el año entero: comparar unos meses de gasto
+        Se compara sólo hasta el último mes completo del libro de los bancos
+        ({{ months[tracked.throughMonth]|default('ninguno todavía')|lower }}), no el año entero: comparar unos meses de gasto
         contra los doce del presupuesto siempre daría la falsa impresión de que sobra dinero.
         Una diferencia positiva es buena para la caja, tanto si es por ingresar de más como
         por gastar de menos.
