@@ -10,6 +10,9 @@
  #   budget, budgets          presupuesto contra el que se mide y los del año
  #   tracked                  rejilla de BudgetTracker::track
  #   cash                     flujo de caja de BudgetTracker::cashFlow
+ #                            (los dos, cortados en el último mes completo del
+ #                            libro de los bancos: BudgetTracker::lastCompleteMonth)
+ #   bookedMonth              último mes con algún apunte
  #   balances, totalCash      saldo de cada cuenta y el total
  #   months, shortMonths      nombre del mes, completo y en tres letras
  #
@@ -95,8 +98,9 @@
     </div>
 
     {# ============ STAT STRIP ============ #}
-    {% set incomeTotal = tracked.totals[1]|default(null) %}
-    {% set expenseTotal = tracked.totals[2]|default(null) %}
+    {# Las mismas cifras que la portada, cortadas en el último mes completo del libro
+       de los bancos (tracked.throughMonth). Debajo, el desglose que las suma. #}
+    {% set through = tracked.throughMonth %}
     <div class="prl-stats">
         <div class="prl-stat {{ totalCash < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}">
             <div class="v">{{ totalCash|number_format(0, ',', '.') }} €</div>
@@ -104,21 +108,59 @@
         </div>
         <div class="prl-stat {{ cash.endOfYear < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}">
             <div class="v">{{ cash.endOfYear|number_format(0, ',', '.') }} €</div>
-            <div class="l">quedaría a fin de año</div>
+            <div class="l">{{ through >= 12 ? 'en caja al cerrar el año' : 'a fin de año, si desde ' ~ months[through + 1]|lower ~ ' se cumple el presupuesto' }}</div>
         </div>
-        {% if incomeTotal %}
-            <div class="prl-stat {{ incomeTotal.deviation < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}">
-                <div class="v">{{ incomeTotal.deviation > 0 ? '+' : '' }}{{ incomeTotal.deviation|number_format(0, ',', '.') }} €</div>
-                <div class="l">de ingresos frente a lo previsto</div>
-            </div>
-        {% endif %}
-        {% if expenseTotal %}
-            <div class="prl-stat {{ expenseTotal.deviation < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}">
-                <div class="v">{{ expenseTotal.deviation > 0 ? '+' : '' }}{{ expenseTotal.deviation|number_format(0, ',', '.') }} €</div>
-                <div class="l">de gastos frente a lo previsto</div>
+        {% if budget and through > 0 %}
+            <div class="prl-stat {{ tracked.result.deviation < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}">
+                <div class="v">{{ tracked.result.deviation > 0 ? '+' : '' }}{{ tracked.result.deviation|number_format(0, ',', '.') }} €</div>
+                <div class="l">{{ tracked.result.deviation < 0 ? 'peor' : 'mejor' }} que el presupuesto hasta {{ months[through]|lower }}</div>
             </div>
         {% endif %}
     </div>
+
+    {% if bookedMonth > through %}
+        <p class="acc-muted" style="margin: -6px 2px 18px; font-size: 12px;">
+            Hay apuntes hasta {{ months[bookedMonth]|lower }}, pero el libro de los bancos sólo está
+            completo hasta {{ through > 0 ? months[through]|lower : 'ningún mes' }}. Se compara hasta ahí: un mes a medias tiene las
+            cuotas, que se cobran a primeros, y no las nóminas, que salen a final de mes.
+        </p>
+    {% endif %}
+
+    {# ============ DESGLOSE DEL RESULTADO ============ #}
+    {% if budget and through > 0 %}
+        <h2 class="acc-subhead" id="desglose">De dónde sale la diferencia</h2>
+        <p class="acc-lead">Hasta {{ months[through]|lower }}. Las cuatro piezas suman el resultado.</p>
+        <div class="prl-table-wrap" style="margin-bottom: 24px;">
+            <table class="prl-table acc-keep">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th class="tight acc-num">Previsto</th>
+                        <th class="tight acc-num">Real</th>
+                        <th class="tight acc-num">Diferencia</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for total in tracked.totals %}
+                        <tr>
+                            <td>{{ total.name }}</td>
+                            <td class="acc-num acc-muted">{{ fmt.money(total.budgetToDate, false) }}</td>
+                            <td class="acc-num">{{ fmt.money(total.actualToDate, false) }}</td>
+                            <td class="acc-num">{{ fmt.money(total.deviation, true) }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td>Resultado</td>
+                        <td class="acc-num">{{ fmt.money(tracked.result.budgetToDate, false) }}</td>
+                        <td class="acc-num">{{ fmt.money(tracked.result.actualToDate, false) }}</td>
+                        <td class="acc-num">{{ fmt.money(tracked.result.deviation, true) }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    {% endif %}
 
     {% if not budget %}
         <div class="prl-empty">
@@ -174,8 +216,8 @@
     </div>
 
     <p class="acc-muted" style="margin: 10px 2px 24px; font-size: 12px;">
-        «Previsto a la fecha» es la parte del presupuesto que correspondía a los meses ya
-        anotados (hasta {{ months[tracked.throughMonth]|default('ninguno todavía')|lower }}), no el año entero: comparar unos meses de gasto
+        «Previsto a la fecha» es la parte del presupuesto que correspondía a los meses
+        completos del libro (hasta {{ months[tracked.throughMonth]|default('ninguno todavía')|lower }}), no el año entero: comparar unos meses de gasto
         contra los doce del presupuesto siempre daría la falsa impresión de que sobra dinero.
         Una diferencia positiva es buena para la caja, tanto si es por ingresar de más como
         por gastar de menos.
@@ -184,6 +226,7 @@
     <div class="acc-cards">
 
         {# ============ CAJA MES A MES ============ #}
+        <div id="caja"></div>
         {% set cashSubtitle = tracked.throughMonth >= 12
             ? 'Todo el año es real'
             : 'Desde ' ~ months[tracked.throughMonth + 1]|lower ~ ' es previsión' %}
