@@ -48,6 +48,60 @@ class BudgetTrackerCashFlowTest extends TestCase
         $this->assertSame(33460.05, $cash['opening']);
     }
 
+    /**
+     * La tesorería con que arranca la rejilla del presupuesto en el año en curso es la
+     * del banco, aunque la tecleada diga otra cosa: en 2026 la revisión del
+     * presupuesto partía de 41.496 € y las cuentas de 39.064 €, y las dos pantallas
+     * daban un fin de año distinto.
+     */
+    public function testOpeningCashOfTheCurrentYearIsTheBanks(): void
+    {
+        $entries = $this->createMock(AccountEntryRepository::class);
+        $entries->method('cashByMonthEnd')->willReturn([39064.47] + array_fill(1, 12, 0.0));
+
+        $opening = $this->tracker($entries)->openingCash((int) date('Y'), (new Budget())->setOpeningCash('41496.30'));
+
+        $this->assertSame(['amount' => 39064.47, 'fromAccounts' => true], $opening);
+    }
+
+    /**
+     * Un año que aún no ha empezado no tiene saldo real: vale la tesorería tecleada.
+     */
+    public function testOpeningCashOfAFutureYearIsTheTypedOne(): void
+    {
+        $entries = $this->createMock(AccountEntryRepository::class);
+        $entries->expects($this->never())->method('cashByMonthEnd');
+
+        $opening = $this->tracker($entries)->openingCash((int) date('Y') + 1, (new Budget())->setOpeningCash('8500.00'));
+
+        $this->assertSame(['amount' => 8500.0, 'fromAccounts' => false], $opening);
+    }
+
+    /**
+     * Un año anterior a llevar las cuentas en la aplicación (sin ninguna cuenta
+     * abierta) tampoco: vale la tecleada.
+     */
+    public function testOpeningCashWithoutAccountsIsTheTypedOne(): void
+    {
+        $entries = $this->createMock(AccountEntryRepository::class);
+        $entries->method('cashByMonthEnd')->willReturn(null);
+
+        $opening = $this->tracker($entries)->openingCash(2020, (new Budget())->setOpeningCash('12225.00'));
+
+        $this->assertSame(['amount' => 12225.0, 'fromAccounts' => false], $opening);
+    }
+
+    /**
+     * Sin presupuesto ni cuentas se arranca de cero, no de un error.
+     */
+    public function testOpeningCashWithNothingIsZero(): void
+    {
+        $entries = $this->createMock(AccountEntryRepository::class);
+        $entries->method('cashByMonthEnd')->willReturn(null);
+
+        $this->assertSame(['amount' => 0.0, 'fromAccounts' => false], $this->tracker($entries)->openingCash(2020, null));
+    }
+
     private function tracker(AccountEntryRepository $entries): BudgetTracker
     {
         $lines = $this->createMock(BudgetLineRepository::class);

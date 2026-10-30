@@ -79,7 +79,9 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
         $crawler = $client->request('GET', sprintf('/gestion/accounting/budgets/%d/lines', $this->budget->getId()));
 
         $this->assertResponseIsSuccessful();
-        $this->assertSame('1500.50', $crawler->filter('#budget-grid')->attr('data-opening'));
+        // 2099 aún no ha empezado: no hay saldo real y vale la tesorería tecleada.
+        $this->assertSame('1500.5', $crawler->filter('#budget-grid')->attr('data-opening'));
+        $this->assertSelectorTextContains('#budget-grid .counters', '(prevista)');
         $this->assertSelectorTextContains('.acc-cash-row', 'Tesorería a fin de mes');
         $this->assertCount(12, $crawler->filter('.acc-cash-row .acc-cash-month'));
     }
