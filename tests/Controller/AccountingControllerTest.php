@@ -3,6 +3,9 @@
 namespace App\Tests\Controller;
 
 use App\Entity\Budget;
+use App\Entity\BudgetCategory;
+use App\Entity\BudgetCategoryGroup;
+use App\Entity\BudgetLine;
 use App\Entity\FinancialAccount;
 use App\Entity\Setting;
 use App\Service\AppSettings;
@@ -22,6 +25,10 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
     /** Presupuesto creado por el test, para quitarlo al acabar. */
     private ?Budget $budget = null;
 
+    /** Grupo y partida creados por el test, para quitarlos al acabar (tras el presupuesto). */
+    private ?BudgetCategoryGroup $group = null;
+    private ?BudgetCategory $category = null;
+
     protected function tearDown(): void
     {
         $em = static::getContainer()->get(EntityManagerInterface::class);
@@ -31,10 +38,14 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
         if ($this->account !== null) {
             $em->remove($em->find(FinancialAccount::class, $this->account->getId()));
         }
-        if ($this->budget !== null) {
-            $em->remove($em->find(Budget::class, $this->budget->getId()));
-        }
         $em->flush();
+        // De uno en uno: la partida no se puede borrar mientras haya líneas que la usen.
+        foreach ([$this->budget, $this->category, $this->group] as $entity) {
+            if ($entity !== null) {
+                $em->remove($em->find($entity::class, $entity->getId()));
+                $em->flush();
+            }
+        }
 
         parent::tearDown();
     }
@@ -83,6 +94,43 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
         $this->assertResponseIsSuccessful();
         $this->assertSelectorTextContains('h1', 'Cómo vamos');
         $this->assertSelectorTextContains('body', 'No hay ningún presupuesto cargado para 2099');
+    }
+
+    /**
+     * La tabla por partidas llega plegada: se ve cada grupo con su botón y sus partidas
+     * ocultas, y la fila final suma las columnas. La tabla aparte «De dónde sale la
+     * diferencia» ya no está: esa fila final es la misma cuenta.
+     */
+    public function testComoVamosPliegaLasPartidasYSumaAlFinal(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $suffix = bin2hex(random_bytes(3));
+        $this->group = (new BudgetCategoryGroup())->setName('Finca '.$suffix)->setKind(BudgetCategoryGroup::KIND_EXPENSE);
+        $this->category = (new BudgetCategory())->setName('Alquiler de la finca '.$suffix)->setGroup($this->group);
+        $this->budget = (new Budget())->setYear(2099)->setName('Presupuesto 2099')->setApproved(true);
+        $this->budget->addLine((new BudgetLine())->setCategory($this->category)->setMonth(1)->setAmount('-1200.00'));
+        $em->persist($this->group);
+        $em->persist($this->category);
+        $em->persist($this->budget);
+        $em->flush();
+
+        $crawler = $client->request('GET', '/gestion/accounting/report?year=2099');
+
+        $this->assertResponseIsSuccessful();
+        $fold = $crawler->filter('#partidas tbody[data-fold]')->reduce(
+            static fn ($tbody) => str_contains($tbody->text(), 'Finca '.$suffix)
+        );
+        $this->assertCount(1, $fold);
+        $this->assertSame('false', $fold->filter('[data-fold-toggle]')->attr('aria-expanded'));
+        $row = $fold->filter('.acc-cat-row');
+        $this->assertStringContainsString('Alquiler de la finca '.$suffix, $row->text());
+        $this->assertNotNull($row->attr('hidden'), 'Las partidas llegan plegadas.');
+        $total = $crawler->filter('#partidas tfoot td');
+        $this->assertSame('Resultado', trim($total->eq(0)->text()));
+        $this->assertSame('-1.200,00 €', trim($total->eq(5)->text()));
+        $this->assertStringNotContainsString('De dónde sale la diferencia', $crawler->filter('body')->text());
     }
 
     /**
