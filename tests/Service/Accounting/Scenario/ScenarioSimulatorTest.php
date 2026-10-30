@@ -202,7 +202,6 @@ class ScenarioSimulatorTest extends TestCase
         $category = (new BudgetCategory())->setName($name)->setGroup($group);
         $id = $this->nextId++;
         (new \ReflectionProperty(BudgetCategory::class, 'id'))->setValue($category, $id);
-        $group->getCategories()->add($category);
         if ($months !== []) {
             $this->lines[$id] = $months;
         }
