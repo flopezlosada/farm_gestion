@@ -2,7 +2,7 @@
  # Inicio de contabilidad.
  #
  # Responde de un vistazo a «¿cómo están las cuentas?» y «¿qué tengo que hacer?».
- # Arriba, tres cifras; debajo, a dos columnas, el saldo de cada cuenta y las tareas
+ # Arriba, cuatro cifras; debajo, a dos columnas, el saldo de cada cuenta y las tareas
  # de AccountingAgenda, cada una con su enlace. «Cómo vamos» está en Informes.
  #
  # El controller pasa:
@@ -13,7 +13,11 @@
  #   bookUpTo                   el último apunte más antiguo de las cuentas de banco
  #                              que tienen alguno (null si ninguna tiene)
  #   staleBook                  si alguna cuenta de banco lleva más de 30 días sin apuntes
- #   resultToDate, budgetToDate resultado real y previsto hasta el último mes anotado
+ #   complete                   el año cortado en el último mes completo del libro de
+ #                              los bancos: throughMonth, actual y budget (resultado
+ #                              real y previsto hasta ahí) y endOfYear (caja a 31-dic)
+ #   booked                     lo mismo cortado en el último mes con apuntes
+ #   months                     nombre de cada mes
  #   hasBudget                  si hay presupuesto del año (el en vigor o, si no, el aprobado)
  #   unpairedTransfers          traspasos a los que les falta la otra mitad
  # ============================================================ #}
@@ -68,7 +72,7 @@
         {{ csa.help('contabilidad', 'ritmo', 'Ayuda: cómo se lleva la contabilidad') }}
     </div>
 
-    {# ============ TRES CIFRAS ============ #}
+    {# ============ CUATRO CIFRAS ============ #}
     <div class="prl-stats">
         <div class="prl-stat {{ totalCash < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}">
             <div class="v">{{ totalCash|number_format(0, ',', '.') }} €</div>
@@ -79,14 +83,37 @@
             <div class="l">{{ bookUpTo ? 'libro de los bancos al día hasta' : 'ningún banco tiene apuntes' }}</div>
         </div>
         {% if hasBudget %}
-            {% set deviation = resultToDate - budgetToDate %}
-            <a class="prl-stat {{ deviation < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}" href="{{ path('accounting_report') }}" title="Cómo vamos frente al presupuesto">
-                <div class="v">{{ resultToDate|number_format(0, ',', '.') }} €</div>
-                <div class="l">resultado de {{ year }} · previsto a la fecha {{ budgetToDate|number_format(0, ',', '.') }} €</div>
+            {# Las dos cifras se cortan en el último mes completo del libro de los bancos:
+               un mes a medias tiene las cuotas (se cobran a primeros) y no las nóminas
+               (salen a final de mes), y sale mucho mejor de lo que es. Debajo, en
+               pequeño, la misma cifra con todo lo anotado, para que se vea la diferencia. #}
+            {% set through = complete.throughMonth %}
+            {% set halfMonth = booked.throughMonth != through %}
+            <a class="prl-stat {{ complete.endOfYear < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}" href="{{ path('accounting_report') }}#caja" title="La caja mes a mes hasta fin de año">
+                <div class="v">{{ complete.endOfYear|number_format(0, ',', '.') }} €</div>
+                <div class="l">{{ through >= 12 ? 'en caja al cerrar el año' : 'a fin de año, si desde ' ~ months[through + 1]|lower ~ ' se cumple el presupuesto' }}</div>
+                {% if halfMonth %}
+                    <div class="s">Con todo lo anotado (hasta {{ months[booked.throughMonth]|lower }}): {{ booked.endOfYear|number_format(0, ',', '.') }} €</div>
+                {% endif %}
+            </a>
+            {% set deviation = complete.actual - complete.budget %}
+            {% set bookedDeviation = booked.actual - booked.budget %}
+            <a class="prl-stat {{ deviation < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}" href="{{ path('accounting_report') }}#desglose" title="De dónde sale la diferencia">
+                {% if through > 0 %}
+                    <div class="v">{{ deviation > 0 ? '+' : '' }}{{ deviation|number_format(0, ',', '.') }} €</div>
+                    <div class="l">{{ deviation < 0 ? 'peor' : 'mejor' }} que el presupuesto hasta {{ months[through]|lower }}</div>
+                    <div class="s">Resultado {{ complete.actual|number_format(0, ',', '.') }} €; previsto {{ complete.budget|number_format(0, ',', '.') }} €</div>
+                {% else %}
+                    <div class="v">—</div>
+                    <div class="l">frente al presupuesto: aún no hay ningún mes completo</div>
+                {% endif %}
+                {% if halfMonth %}
+                    <div class="s">Con todo lo anotado (hasta {{ months[booked.throughMonth]|lower }}): {{ bookedDeviation > 0 ? '+' : '' }}{{ bookedDeviation|number_format(0, ',', '.') }} €</div>
+                {% endif %}
             </a>
         {% else %}
             <div class="prl-stat">
-                <div class="v">{{ resultToDate|number_format(0, ',', '.') }} €</div>
+                <div class="v">{{ booked.actual|number_format(0, ',', '.') }} €</div>
                 <div class="l">resultado de {{ year }}; no hay presupuesto con que compararlo</div>
             </div>
         {% endif %}

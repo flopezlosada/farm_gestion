@@ -283,6 +283,38 @@ class BudgetTracker
     }
 
     /**
+     * Último mes COMPLETO del libro de los bancos: el corte con el que comparar contra
+     * el presupuesto sin engañarse.
+     *
+     * Cortar en el último mes con apuntes ({@see lastMonthWithData}) cuenta un mes a
+     * medio anotar como si estuviera entero: las cuotas se cobran a primeros y las
+     * nóminas salen a final de mes, así que un mes a medias sale mucho mejor de lo que
+     * es. Si el libro de los bancos llega a mitad de mes, el mes bueno es el anterior;
+     * si llega a su último día, ese mismo.
+     *
+     * Sin apuntes de banco (sólo cajas) no hay con qué medir: vale el último mes con
+     * apuntes.
+     *
+     * @param ?\DateTimeImmutable $bankBookUpTo {@see AccountEntryRepository::bankBookUpTo}
+     */
+    public function lastCompleteMonth(int $year, ?\DateTimeImmutable $bankBookUpTo): int
+    {
+        if ($bankBookUpTo === null) {
+            return $this->lastMonthWithData($year);
+        }
+
+        $bookYear = (int) $bankBookUpTo->format('Y');
+        if ($bookYear !== $year) {
+            return $bookYear > $year ? 12 : 0;
+        }
+
+        $month = (int) $bankBookUpTo->format('n');
+        $isMonthEnd = $bankBookUpTo->format('j') === $bankBookUpTo->format('t');
+
+        return $isMonthEnd ? $month : $month - 1;
+    }
+
+    /**
      * Una fila de la rejilla, con sus sumas del año y hasta el mes de corte.
      *
      * @param array<int, float> $budget

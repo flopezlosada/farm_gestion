@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\AccountEntry;
+use App\Entity\Budget;
 use App\Entity\BudgetCategory;
 use App\Entity\BudgetCategoryGroup;
 use App\Entity\FinancialAccount;
@@ -80,27 +81,43 @@ class AccountingController extends AbstractController
                 'stale' => $account->isBank() && $last !== null && AccountingAgenda::isStaleBook($last, $today),
             ];
         }
-        // Una cuenta sin ningún apunte no está atrasada: no se usa. No cuenta.
-        $bankDates = array_filter(array_map(
-            static fn (array $row): ?\DateTimeImmutable => $row['account']->isBank() ? $row['lastDate'] : null,
-            $balances,
-        ));
-
+        $bookUpTo = $entries->bankBookUpTo();
         $budget = $budgets->findReferenceForYear($year);
-        $totals = $tracker->track($year, $budget)['totals'];
+        $complete = $tracker->track($year, $budget, $tracker->lastCompleteMonth($year, $bookUpTo));
+        $booked = $tracker->track($year, $budget);
 
         return $this->render('accounting/index.html.twig', [
             'year' => $year,
             'items' => $agenda->items($today),
             'balances' => $balances,
             'totalCash' => array_sum(array_map(static fn (array $row): float => (float) $row['balance'], $balances)),
-            'bookUpTo' => $bankDates !== [] ? min($bankDates) : null,
+            'bookUpTo' => $bookUpTo,
             'staleBook' => array_filter($balances, static fn (array $row): bool => $row['stale']) !== [],
-            'resultToDate' => array_sum(array_column($totals, 'actualToDate')),
-            'budgetToDate' => array_sum(array_column($totals, 'budgetToDate')),
+            'complete' => self::summary($tracker, $complete, $budget),
+            'booked' => self::summary($tracker, $booked, $budget),
             'hasBudget' => $budget !== null,
+            'months' => MonthNames::LONG,
             'unpairedTransfers' => $entries->findUnpairedTransfers(),
         ]);
+    }
+
+    /**
+     * Lo que enseña la portada de un corte del libro: hasta qué mes llega, el resultado
+     * real y el previsto hasta ahí, y con cuánto dinero acabaría el año si desde ese
+     * mes se cumple el presupuesto.
+     *
+     * @param array<string, mixed> $tracked {@see BudgetTracker::track}
+     *
+     * @return array{throughMonth: int, actual: float, budget: float, endOfYear: float}
+     */
+    private static function summary(BudgetTracker $tracker, array $tracked, ?Budget $budget): array
+    {
+        return [
+            'throughMonth' => $tracked['throughMonth'],
+            'actual' => $tracked['result']['actualToDate'],
+            'budget' => $tracked['result']['budgetToDate'],
+            'endOfYear' => $tracker->cashFlow($tracked['year'], $budget, $tracked['throughMonth'])['endOfYear'],
+        ];
     }
 
     /**
@@ -127,13 +144,16 @@ class AccountingController extends AbstractController
             $totalCash += (float) $balance;
         }
 
+        $throughMonth = $tracker->lastCompleteMonth($year, $entries->bankBookUpTo());
+
         return $this->render('accounting/report.html.twig', [
             'year' => $year,
             'years' => $this->yearsWithData($budgets, $entries),
             'budget' => $budget,
             'budgets' => $budgets->findForYear($year),
-            'tracked' => $tracker->track($year, $budget),
-            'cash' => $tracker->cashFlow($year, $budget),
+            'tracked' => $tracker->track($year, $budget, $throughMonth),
+            'cash' => $tracker->cashFlow($year, $budget, $throughMonth),
+            'bookedMonth' => $tracker->lastMonthWithData($year),
             'balances' => $balances,
             'totalCash' => $totalCash,
             'months' => MonthNames::LONG,

@@ -145,6 +145,27 @@ class AccountEntryRepository extends ServiceEntityRepository
     }
 
     /**
+     * Hasta dónde está al día el libro de los bancos: el último apunte de la cuenta
+     * bancaria abierta que va más atrasada. Las cajas de efectivo no cuentan (se
+     * apuntan a su ritmo) ni las cuentas sin ningún apunte (no se usan). Null si
+     * ningún banco tiene apuntes.
+     */
+    public function bankBookUpTo(): ?\DateTimeImmutable
+    {
+        $rows = $this->createQueryBuilder('e')
+            ->select('MAX(e.date) AS lastDate')
+            ->join('e.account', 'a')
+            ->andWhere('a.kind = :bank')
+            ->andWhere('a.active = true')
+            ->setParameter('bank', FinancialAccount::KIND_BANK)
+            ->groupBy('a.id')
+            ->getQuery()
+            ->getSingleColumnResult();
+
+        return $rows === [] ? null : new \DateTimeImmutable(min($rows));
+    }
+
+    /**
      * Cuántos apuntes hay en cada partida: `[categoryId => nº]`. Igual que el de
      * cuentas, dice qué partidas están en uso y cuáles se pueden retirar sin ruido.
      *
