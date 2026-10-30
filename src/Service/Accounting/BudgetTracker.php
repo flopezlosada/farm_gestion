@@ -46,6 +46,7 @@ class BudgetTracker
      *    sentido medir a mitad de año (comparar seis meses de gasto real contra el
      *    presupuesto de doce siempre da la falsa impresión de que sobra dinero)
      *  - `deviation`: real menos previsto hasta la fecha
+     *  - `id`: el de la partida, o el del grupo en la fila del grupo
      *
      * `totals` es lo mismo por tipo (ingresos, gastos…) y `result` la suma de todos los
      * tipos: lo que la asociación ganó o perdió cada mes, sin contar traspasos.
@@ -102,6 +103,7 @@ class BudgetTracker
             }
 
             $row = $this->row($group->getName(), $groupBudget, $groupActual, $throughMonth);
+            $row['id'] = (int) $group->getId();
             $row['kind'] = $group->getKind();
             $row['kindLabel'] = $group->getKindLabel();
             $row['categories'] = $categories;

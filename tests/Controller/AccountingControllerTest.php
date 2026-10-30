@@ -124,6 +124,8 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
         );
         $this->assertCount(1, $fold);
         $this->assertSame('false', $fold->filter('[data-fold-toggle]')->attr('aria-expanded'));
+        // Al volver atrás desde una partida, #grupo-N reabre su grupo.
+        $this->assertSame('grupo-'.$this->group->getId(), $fold->attr('id'));
         $row = $fold->filter('.acc-cat-row');
         $this->assertStringContainsString('Alquiler de la finca '.$suffix, $row->text());
         $this->assertNotNull($row->attr('hidden'), 'Las partidas llegan plegadas.');

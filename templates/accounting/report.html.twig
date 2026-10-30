@@ -155,7 +155,7 @@
             </thead>
             {% for group in tracked.groups %}
                 {% set pct = group.budgetTotal != 0 ? (group.actualTotal / group.budgetTotal * 100)|abs|round : null %}
-                <tbody class="acc-fold" data-fold>
+                <tbody class="acc-fold" id="grupo-{{ group.id }}" data-fold>
                     <tr class="acc-group-row">
                         <td>
                             <button type="button" class="acc-fold__toggle" aria-expanded="false" data-fold-toggle>
@@ -221,7 +221,6 @@
     <div class="acc-cards">
 
         {# ============ CAJA MES A MES ============ #}
-        <div id="caja"></div>
         {% set cashSubtitle = tracked.throughMonth >= 12
             ? 'Todo el año es real'
             : 'Desde ' ~ months[tracked.throughMonth + 1]|lower ~ ' es previsión' %}
@@ -281,15 +280,33 @@
 {% block more_js %}
     {{ parent() }}
     <script>
-        /** Despliega o pliega las partidas del grupo cuya fila se pulsa. */
-        document.querySelectorAll('[data-fold-toggle]').forEach(function (toggle) {
-            toggle.addEventListener('click', function () {
-                var open = toggle.getAttribute('aria-expanded') !== 'true';
-                toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-                toggle.closest('[data-fold]').querySelectorAll('.acc-cat-row').forEach(function (row) {
+        (function () {
+            /** Despliega o pliega las partidas de un grupo. */
+            function setOpen(fold, open) {
+                fold.querySelector('[data-fold-toggle]').setAttribute('aria-expanded', open ? 'true' : 'false');
+                fold.querySelectorAll('.acc-cat-row').forEach(function (row) {
                     row.hidden = !open;
                 });
+            }
+
+            document.querySelectorAll('[data-fold]').forEach(function (fold) {
+                var toggle = fold.querySelector('[data-fold-toggle]');
+                toggle.addEventListener('click', function () {
+                    setOpen(fold, toggle.getAttribute('aria-expanded') !== 'true');
+                });
+                // Al entrar en una partida se apunta su grupo en la dirección: al volver
+                // atrás se llega a esta misma página con #grupo-N y el grupo sale abierto.
+                fold.querySelectorAll('.acc-cat-row a').forEach(function (link) {
+                    link.addEventListener('click', function () {
+                        history.replaceState(null, '', '#' + fold.id);
+                    });
+                });
             });
-        });
+
+            var back = location.hash && document.getElementById(location.hash.slice(1));
+            if (back && back.hasAttribute('data-fold')) {
+                setOpen(back, true);
+            }
+        })();
     </script>
 {% endblock %}

@@ -12,6 +12,8 @@
     /* Con .prl-table delante: «.prl-table tbody td» fija el color de la celda y, sin
        esto, los importes negativos de las tablas salían en negro. */
     .acc-neg, .prl-table td.acc-neg { color: #b3261e; }
+    /* La cifra grande lleva su propio color (.prl-stat .v), que le ganaba al rojo. */
+    .prl-stat .v.acc-neg { color: #b3261e; }
     .acc-pos, .prl-table td.acc-pos { color: #1e6b3a; }
     .acc-muted { color: var(--csa-ink-soft, #6b6b6b); }
     /* ---------- Tablas ----------
