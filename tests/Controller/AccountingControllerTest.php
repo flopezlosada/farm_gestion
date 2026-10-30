@@ -138,6 +138,28 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * Las dos cifras de arriba de «Cómo vamos» bajan a su detalle en la misma página:
+     * la caja a fin de año a la caja mes a mes, la diferencia a la tabla por partidas.
+     */
+    public function testLasCifrasDeComoVamosBajanASuDetalle(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $this->budget = (new Budget())->setYear(2099)->setName('Presupuesto 2099')->setApproved(true);
+        $em->persist($this->budget);
+        $em->flush();
+
+        $crawler = $client->request('GET', '/gestion/accounting/report?year=2099');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertCount(1, $crawler->filter('a.prl-stat[href="#caja"]'));
+        $this->assertCount(1, $crawler->filter('a.prl-stat[href="#partidas"]'));
+        $this->assertCount(1, $crawler->filter('#caja .acc-months'));
+        $this->assertCount(1, $crawler->filter('#partidas'));
+    }
+
+    /**
      * La caja mes a mes nombra cada mes y da euros, como la ficha de una cuenta: «1, 2,
      * 3…» y «0,4k» no se leen. Un año futuro es todo previsión, desde enero.
      */

@@ -8,25 +8,25 @@
  #              throughMonth, actual, budget, endOfYear (AccountingController::summary)
  #   booked     lo mismo cortado en el último mes con apuntes
  #   months     nombre de cada mes
- #   linked     si cada cifra enlaza a su detalle en «Cómo vamos» (en la portada)
+ #   detail     la página de «Cómo vamos»: path('accounting_report') desde la portada,
+ #              '' desde la propia página. Cada cifra enlaza a su detalle en ella.
  # ============================================================ #}
-{% set tag = linked ? 'a' : 'div' %}
 {# Las dos cifras se cortan en el último mes completo del libro de los bancos:
    un mes a medias tiene las cuotas (se cobran a primeros) y no las nóminas
    (salen a final de mes), y sale mucho mejor de lo que es. Debajo, en
    pequeño, la misma cifra con todo lo anotado, para que se vea la diferencia. #}
 {% set through = complete.throughMonth %}
 {% set halfMonth = booked.throughMonth != through %}
-<{{ tag }} class="prl-stat {{ complete.endOfYear < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}"{% if linked %} href="{{ path('accounting_report') }}" title="La caja mes a mes hasta fin de año"{% endif %}>
+<a class="prl-stat {{ complete.endOfYear < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}" href="{{ detail }}#caja" title="La caja mes a mes hasta fin de año">
     <div class="v">{{ complete.endOfYear|number_format(0, ',', '.') }} €</div>
     <div class="l">{{ through >= 12 ? 'en caja al cerrar el año' : 'a fin de año, si desde ' ~ months[through + 1]|lower ~ ' se cumple el presupuesto' }}</div>
     {% if halfMonth %}
         <div class="s">Con todo lo anotado (hasta {{ months[booked.throughMonth]|lower }}): {{ booked.endOfYear|number_format(0, ',', '.') }} €</div>
     {% endif %}
-</{{ tag }}>
+</a>
 {% set deviation = complete.actual - complete.budget %}
 {% set bookedDeviation = booked.actual - booked.budget %}
-<{{ tag }} class="prl-stat {{ deviation < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}"{% if linked %} href="{{ path('accounting_report') }}" title="La diferencia partida a partida"{% endif %}>
+<a class="prl-stat {{ deviation < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}" href="{{ detail }}#partidas" title="La diferencia partida a partida">
     {% if through > 0 %}
         <div class="v">{{ deviation > 0 ? '+' : '' }}{{ deviation|number_format(0, ',', '.') }} €</div>
         <div class="l">{{ deviation < 0 ? 'peor' : 'mejor' }} que el presupuesto hasta {{ months[through]|lower }}</div>
@@ -38,4 +38,4 @@
     {% if halfMonth %}
         <div class="s">Con todo lo anotado (hasta {{ months[booked.throughMonth]|lower }}): {{ bookedDeviation > 0 ? '+' : '' }}{{ bookedDeviation|number_format(0, ',', '.') }} €</div>
     {% endif %}
-</{{ tag }}>
+</a>

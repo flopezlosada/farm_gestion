@@ -125,7 +125,7 @@
             <div class="l">en las cuentas, según el libro</div>
         </div>
         {% if budget %}
-            {% include 'accounting/_outlook_stats.html.twig' with { linked: false } %}
+            {% include 'accounting/_outlook_stats.html.twig' with { detail: '' } %}
         {% endif %}
     </div>
 
@@ -224,7 +224,7 @@
         {% set cashSubtitle = tracked.throughMonth >= 12
             ? 'Todo el año es real'
             : 'Desde ' ~ months[tracked.throughMonth + 1]|lower ~ ' es previsión' %}
-        {% embed '_components/csa_card.html.twig' with { title: 'La caja mes a mes', subtitle: cashSubtitle, accent: 'sky' } %}
+        {% embed '_components/csa_card.html.twig' with { title: 'La caja mes a mes', subtitle: cashSubtitle, accent: 'sky', id: 'caja' } %}
             {% block body %}
                 <div class="acc-months">
                     {% for m in cash.months %}
