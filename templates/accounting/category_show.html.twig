@@ -47,18 +47,19 @@
 
     <div class="prl-stats">
         <div class="prl-stat">
-            <div class="v">{{ actualTotal|number_format(2, ',', '.') }} €</div>
+            <div class="v {{ actualTotal < 0 ? 'acc-neg' }}">{{ actualTotal|number_format(2, ',', '.') }} €</div>
             <div class="l">real en {{ year }}</div>
         </div>
         {% if budget %}
             {% set partial = throughMonth > 0 and throughMonth < 12 %}
             <div class="prl-stat">
-                <div class="v">{{ (partial ? plannedToDate : plannedTotal)|number_format(2, ',', '.') }} €</div>
+                {% set plannedShown = partial ? plannedToDate : plannedTotal %}
+                <div class="v {{ plannedShown < 0 ? 'acc-neg' }}">{{ plannedShown|number_format(2, ',', '.') }} €</div>
                 <div class="l">{{ partial ? 'previsto hasta ' ~ months[throughMonth]|lower : 'previsto en el año' }}</div>
             </div>
             {% if partial %}
                 <div class="prl-stat">
-                    <div class="v">{{ plannedTotal|number_format(2, ',', '.') }} €</div>
+                    <div class="v {{ plannedTotal < 0 ? 'acc-neg' }}">{{ plannedTotal|number_format(2, ',', '.') }} €</div>
                     <div class="l">previsto en todo {{ year }}</div>
                 </div>
             {% endif %}
