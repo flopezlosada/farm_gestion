@@ -26,7 +26,7 @@
 </{{ tag }}>
 {% set deviation = complete.actual - complete.budget %}
 {% set bookedDeviation = booked.actual - booked.budget %}
-<{{ tag }} class="prl-stat {{ deviation < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}"{% if linked %} href="{{ path('accounting_report') }}#desglose" title="De dónde sale la diferencia"{% endif %}>
+<{{ tag }} class="prl-stat {{ deviation < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}"{% if linked %} href="{{ path('accounting_report') }}#partidas" title="La diferencia partida a partida"{% endif %}>
     {% if through > 0 %}
         <div class="v">{{ deviation > 0 ? '+' : '' }}{{ deviation|number_format(0, ',', '.') }} €</div>
         <div class="l">{{ deviation < 0 ? 'peor' : 'mejor' }} que el presupuesto hasta {{ months[through]|lower }}</div>

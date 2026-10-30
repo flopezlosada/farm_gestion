@@ -90,8 +90,21 @@ class BudgetCategory
         return $this->group;
     }
 
+    /**
+     * Cambia el grupo y mantiene al día la lista de partidas de los dos grupos. Doctrine
+     * sólo persiste este lado, pero el grupo ya cargado en memoria no se entera solo: una
+     * consulta posterior que lo traiga con sus partidas (fetch-join) reusa su colección
+     * tal cual estaba, y la partida nueva no saldría hasta la siguiente petición.
+     */
     public function setGroup(?BudgetCategoryGroup $group): self
     {
+        if ($this->group === $group) {
+            return $this;
+        }
+        $this->group?->getCategories()->removeElement($this);
+        if ($group !== null && !$group->getCategories()->contains($this)) {
+            $group->getCategories()->add($this);
+        }
         $this->group = $group;
 
         return $this;

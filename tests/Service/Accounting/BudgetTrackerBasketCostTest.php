@@ -124,7 +124,6 @@ class BudgetTrackerBasketCostTest extends TestCase
         $category = (new BudgetCategory())->setName($name)->setGroup($group);
         $id = $this->nextId++;
         (new \ReflectionProperty(BudgetCategory::class, 'id'))->setValue($category, $id);
-        $group->getCategories()->add($category);
 
         if ($amount !== null) {
             $this->lines[$id] = [1 => $amount];

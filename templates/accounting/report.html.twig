@@ -53,6 +53,13 @@
         .acc-against a.name:hover { color: var(--prl-sage-d, #2f4426); text-decoration: underline; }
         .acc-against .pick { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; }
         .acc-against .pick label { display: flex; flex-direction: column; gap: 3px; margin: 0; font-size: 11px; font-weight: 500; color: var(--prl-ink-faint, #8d8773); }
+        .acc-fold__toggle { display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; text-align: left; }
+        .acc-fold__toggle:hover { color: var(--prl-sage-d, #2f4426); }
+        .acc-fold__chev { width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform 0.15s; flex: none; }
+        .acc-fold__toggle[aria-expanded="true"] .acc-fold__chev { transform: rotate(45deg); }
+        /* El móvil fuerza display: table-row en las filas (acc-keep), que le gana al [hidden]. */
+        .prl-table tbody tr.acc-cat-row[hidden] { display: none; }
+        .acc-fold__count { font-size: 11px; font-weight: 500; color: var(--prl-ink-faint, #8d8773); }
         .acc-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 18px 0; }
     </style>
 {% endblock %}
@@ -107,7 +114,8 @@
 
     {# ============ STAT STRIP ============ #}
     {# Las mismas cifras que la portada, cortadas en el último mes completo del libro
-       de los bancos (tracked.throughMonth). Debajo, el desglose que las suma. #}
+       de los bancos (tracked.throughMonth). Debajo, la tabla por partidas, cuya
+       fila final es el resultado que las da. #}
     {% set through = tracked.throughMonth %}
     {# Cabecera de las columnas que se cortan en ese mes: «a la fecha» no decía cuál. #}
     {% set upTo = through > 0 ? ' hasta ' ~ months[through]|lower : '' %}
@@ -121,48 +129,6 @@
         {% endif %}
     </div>
 
-    {# ============ DESGLOSE DEL RESULTADO ============ #}
-    {% if budget and through > 0 %}
-        <h2 class="acc-subhead" id="desglose">De dónde sale la diferencia</h2>
-        <p class="acc-lead">
-            Hasta {{ months[through]|lower }}, el último mes completo del libro de los bancos. Las cuatro piezas suman el resultado.
-            {% if booked.throughMonth > through %}
-                Hay apuntes hasta {{ months[booked.throughMonth]|lower }}, pero un mes a medias tiene las cuotas, que se cobran a
-                primeros, y no las nóminas, que salen a final de mes: compararlo saldría mejor de lo que es.
-            {% endif %}
-        </p>
-        <div class="prl-table-wrap" style="margin-bottom: 24px;">
-            <table class="prl-table acc-keep">
-                <thead>
-                    <tr>
-                        <th></th>
-                        <th class="tight acc-num">Previsto{{ upTo }}</th>
-                        <th class="tight acc-num">Real{{ upTo }}</th>
-                        <th class="tight acc-num">Diferencia</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for total in tracked.totals %}
-                        <tr>
-                            <td>{{ total.name }}</td>
-                            <td class="acc-num acc-muted">{{ fmt.money(total.budgetToDate, false) }}</td>
-                            <td class="acc-num">{{ fmt.money(total.actualToDate, false) }}</td>
-                            <td class="acc-num">{{ fmt.money(total.deviation, true) }}</td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td>Resultado</td>
-                        <td class="acc-num">{{ fmt.money(tracked.result.budgetToDate, false) }}</td>
-                        <td class="acc-num">{{ fmt.money(tracked.result.actualToDate, false) }}</td>
-                        <td class="acc-num">{{ fmt.money(tracked.result.deviation, true) }}</td>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-    {% endif %}
-
     {% if not budget %}
         <div class="prl-empty">
             No hay ningún presupuesto cargado para {{ year }}, así que sólo se ve lo real.
@@ -170,8 +136,13 @@
     {% endif %}
 
     {# ============ SEGUIMIENTO POR GRUPO ============ #}
-    <div class="prl-table-wrap">
-        <table class="prl-table">
+    {# Plegada por grupos: lo que se busca al llegar es qué grupo se desvía, y las
+       partidas de todos a la vez eran una lista de cincuenta filas. Un tbody por
+       grupo, porque una tabla no admite <details>: el botón de la fila del grupo
+       muestra u oculta sus partidas. La fila final suma las columnas y es el
+       resultado de las cifras de arriba. #}
+    <div class="prl-table-wrap" id="partidas">
+        <table class="prl-table acc-keep">
             <thead>
                 <tr>
                     <th>Partida</th>
@@ -182,11 +153,16 @@
                     <th class="tight acc-num">Previsto al año</th>
                 </tr>
             </thead>
-            <tbody>
-                {% for group in tracked.groups %}
-                    {% set pct = group.budgetTotal != 0 ? (group.actualTotal / group.budgetTotal * 100)|abs|round : null %}
+            {% for group in tracked.groups %}
+                {% set pct = group.budgetTotal != 0 ? (group.actualTotal / group.budgetTotal * 100)|abs|round : null %}
+                <tbody class="acc-fold" data-fold>
                     <tr class="acc-group-row">
-                        <td>{{ group.name }}</td>
+                        <td>
+                            <button type="button" class="acc-fold__toggle" aria-expanded="false" data-fold-toggle>
+                                <span class="acc-fold__chev" aria-hidden="true"></span>{{ group.name }}
+                                <span class="acc-fold__count">{{ group.categories|length }}</span>
+                            </button>
+                        </td>
                         <td class="acc-num">{{ fmt.money(group.budgetToDate, false) }}</td>
                         <td class="acc-num">{{ fmt.money(group.actualToDate, false) }}</td>
                         <td class="acc-num">{{ fmt.money(group.deviation, true) }}</td>
@@ -200,7 +176,7 @@
                         <td class="acc-num acc-muted">{{ fmt.money(group.budgetTotal, false) }}</td>
                     </tr>
                     {% for cat in group.categories %}
-                        <tr class="acc-cat-row">
+                        <tr class="acc-cat-row" hidden>
                             <td class="acc-muted"><a href="{{ path('accounting_category_show', { id: cat.id, year: year }) }}">{{ cat.name }}</a></td>
                             <td class="acc-num acc-muted">{{ fmt.money(cat.budgetToDate, false) }}</td>
                             <td class="acc-num">{{ fmt.money(cat.actualToDate, false) }}</td>
@@ -209,10 +185,24 @@
                             <td class="acc-num acc-muted">{{ fmt.money(cat.budgetTotal, false) }}</td>
                         </tr>
                     {% endfor %}
-                {% else %}
+                </tbody>
+            {% else %}
+                <tbody>
                     <tr><td colspan="6"><div class="prl-empty">Todavía no hay ningún apunte de {{ year }}.</div></td></tr>
-                {% endfor %}
-            </tbody>
+                </tbody>
+            {% endfor %}
+            {% if tracked.groups is not empty %}
+                <tfoot>
+                    <tr>
+                        <td>Resultado</td>
+                        <td class="acc-num">{{ fmt.money(tracked.result.budgetToDate, false) }}</td>
+                        <td class="acc-num">{{ fmt.money(tracked.result.actualToDate, false) }}</td>
+                        <td class="acc-num">{{ fmt.money(tracked.result.deviation, true) }}</td>
+                        <td></td>
+                        <td class="acc-num">{{ fmt.money(tracked.result.budgetTotal, false) }}</td>
+                    </tr>
+                </tfoot>
+            {% endif %}
         </table>
     </div>
 
@@ -220,6 +210,10 @@
         Se compara sólo hasta el último mes completo del libro de los bancos
         ({{ months[tracked.throughMonth]|default('ninguno todavía')|lower }}), no el año entero: comparar unos meses de gasto
         contra los doce del presupuesto siempre daría la falsa impresión de que sobra dinero.
+        {% if booked.throughMonth > through %}
+            Hay apuntes hasta {{ months[booked.throughMonth]|lower }}, pero un mes a medias tiene las cuotas, que se cobran a
+            primeros, y no las nóminas, que salen a final de mes: compararlo saldría mejor de lo que es.
+        {% endif %}
         Una diferencia positiva es buena para la caja, tanto si es por ingresar de más como
         por gastar de menos.
     </p>
@@ -282,4 +276,20 @@
     </div>
 
 </div>
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    <script>
+        /** Despliega o pliega las partidas del grupo cuya fila se pulsa. */
+        document.querySelectorAll('[data-fold-toggle]').forEach(function (toggle) {
+            toggle.addEventListener('click', function () {
+                var open = toggle.getAttribute('aria-expanded') !== 'true';
+                toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+                toggle.closest('[data-fold]').querySelectorAll('.acc-cat-row').forEach(function (row) {
+                    row.hidden = !open;
+                });
+            });
+        });
+    </script>
 {% endblock %}
