@@ -83,7 +83,7 @@
             <div class="l">{{ bookUpTo ? 'libro de los bancos al día hasta' : 'ningún banco tiene apuntes' }}</div>
         </div>
         {% if hasBudget %}
-            {% include 'accounting/_outlook_stats.html.twig' with { linked: true } %}
+            {% include 'accounting/_outlook_stats.html.twig' with { detail: path('accounting_report') } %}
         {% else %}
             <div class="prl-stat">
                 <div class="v">{{ booked.actual|number_format(0, ',', '.') }} €</div>
