@@ -3,11 +3,13 @@
 namespace App\Controller;
 
 use App\Entity\BudgetCategory;
+use App\Entity\BudgetCategoryGroup;
 use App\Entity\FinancialAccount;
 use App\Form\BudgetCategoryType;
 use App\Form\FinancialAccountType;
 use App\Repository\AccountEntryRepository;
 use App\Repository\BudgetCategoryGroupRepository;
+use App\Repository\BudgetCategoryRepository;
 use App\Repository\BudgetLineRepository;
 use App\Repository\BudgetRepository;
 use App\Repository\FinancialAccountRepository;
@@ -177,16 +179,52 @@ class AccountingSetupController extends AbstractController
     }
 
     /**
+     * Ordena las partidas de un grupo como quedaron al arrastrarlas en el catálogo.
+     *
+     * Tienen que llegar todas las del grupo y sólo ésas. Una lista distinta (una
+     * pestaña abierta antes de crear o mover una partida) dejaría huecos o repetidos,
+     * así que se rechaza y la pantalla se recarga con el orden que de verdad hay.
+     */
+    #[Route('/groups/{id}/order', name: 'accounting_category_order', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function categoryOrder(Request $request, BudgetCategoryGroup $group, EntityManagerInterface $em): Response
+    {
+        if (!$this->isCsrfTokenValid('category-order-'.$group->getId(), (string) $request->request->get('_token'))) {
+            return new Response('', Response::HTTP_FORBIDDEN);
+        }
+
+        $byId = [];
+        foreach ($group->getCategories() as $category) {
+            $byId[(int) $category->getId()] = $category;
+        }
+        $ids = array_map('intval', $request->request->all('ids'));
+        $sent = $ids;
+        sort($sent);
+        $known = array_keys($byId);
+        sort($known);
+        if ($sent !== $known) {
+            return new Response('', Response::HTTP_CONFLICT);
+        }
+
+        foreach (array_values($ids) as $position => $id) {
+            $byId[$id]->setSortOrder(($position + 1) * 10);
+        }
+        $em->flush();
+
+        return new Response('', Response::HTTP_NO_CONTENT);
+    }
+
+    /**
      * Crear una partida.
      */
     #[Route('/categories/new', name: 'accounting_category_new', methods: ['GET', 'POST'])]
-    public function categoryNew(Request $request, EntityManagerInterface $em): Response
+    public function categoryNew(Request $request, EntityManagerInterface $em, BudgetCategoryRepository $categories): Response
     {
         $category = new BudgetCategory();
         $form = $this->createForm(BudgetCategoryType::class, $category);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
+            $category->setSortOrder($categories->nextSortOrder($category->getGroup()));
             $em->persist($category);
             $em->flush();
             $this->addFlash('success', sprintf('Partida «%s» creada.', $category->getName()));
@@ -242,7 +280,8 @@ class AccountingSetupController extends AbstractController
 
     /**
      * Cambiar una partida. Mover de grupo una partida con apuntes cambia dónde suman
-     * todos ellos, en todos los años: la pantalla avisa de cuántos son.
+     * todos ellos, en todos los años: la pantalla avisa de cuántos son. La que cambia
+     * de grupo va la última del nuevo: su orden en el viejo no dice nada allí.
      */
     #[Route('/categories/{id}/edit', name: 'accounting_category_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     public function categoryEdit(
@@ -250,6 +289,7 @@ class AccountingSetupController extends AbstractController
         BudgetCategory $category,
         EntityManagerInterface $em,
         AccountEntryRepository $entries,
+        BudgetCategoryRepository $categories,
     ): Response {
         if ($category->isTransfer()) {
             $this->addFlash('warning', 'La partida de traspasos la gestiona la aplicación; no se toca a mano.');
@@ -257,10 +297,14 @@ class AccountingSetupController extends AbstractController
             return $this->redirectToRoute('accounting_categories');
         }
 
+        $previousGroup = $category->getGroup();
         $form = $this->createForm(BudgetCategoryType::class, $category);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
+            if ($category->getGroup() !== $previousGroup) {
+                $category->setSortOrder($categories->nextSortOrder($category->getGroup()));
+            }
             $em->flush();
             $this->addFlash('success', 'Partida actualizada.');
 

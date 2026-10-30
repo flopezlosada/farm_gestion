@@ -120,6 +120,78 @@ class AccountingSetupControllerTest extends AbstractAuthenticatedTest
         $this->assertContains('Partida', $recentHeaders);
     }
 
+    /**
+     * Arrastrar en el catálogo manda el grupo entero en su orden nuevo, y cada partida
+     * se queda con su puesto de 10 en 10.
+     */
+    public function testElCatalogoOrdenaLasPartidasDeUnGrupo(): void
+    {
+        $second = (new BudgetCategory())->setGroup($this->category->getGroup())->setName('Gasolina')->setSortOrder(2);
+        $this->persist($second);
+
+        $this->browser->request('POST', $this->orderUrl(), [
+            '_token' => $this->orderToken(),
+            'ids' => [$second->getId(), $this->category->getId()],
+        ]);
+
+        $this->assertResponseStatusCodeSame(204);
+        $this->em->clear();
+        $this->assertSame(10, $this->em->find(BudgetCategory::class, $second->getId())->getSortOrder());
+        $this->assertSame(20, $this->em->find(BudgetCategory::class, $this->category->getId())->getSortOrder());
+    }
+
+    /**
+     * Una lista que no es exactamente la del grupo (una pestaña vieja, sin la partida
+     * que se creó después) no se aplica: dejaría la nueva sin puesto.
+     */
+    public function testElCatalogoRechazaUnOrdenQueNoTraeTodoElGrupo(): void
+    {
+        $second = (new BudgetCategory())->setGroup($this->category->getGroup())->setName('Gasolina')->setSortOrder(2);
+        $this->persist($second);
+
+        $this->browser->request('POST', $this->orderUrl(), [
+            '_token' => $this->orderToken(),
+            'ids' => [$second->getId()],
+        ]);
+
+        $this->assertResponseStatusCodeSame(409);
+        $this->em->clear();
+        $this->assertSame(1, $this->em->find(BudgetCategory::class, $this->category->getId())->getSortOrder());
+        $this->assertSame(2, $this->em->find(BudgetCategory::class, $second->getId())->getSortOrder());
+    }
+
+    /** El orden ya no se teclea: la partida nueva va la última de su grupo. */
+    public function testUnaPartidaNuevaVaLaUltimaDeSuGrupo(): void
+    {
+        $crawler = $this->browser->request('GET', '/gestion/accounting/setup/categories/new');
+        $form = $crawler->selectButton('Guardar')->form();
+        $this->assertFalse($form->has($form->getName().'[sortOrder]'), 'el orden se decide arrastrando en el catálogo');
+        $form[$form->getName().'[group]'] = (string) $this->category->getGroup()->getId();
+        $form[$form->getName().'[name]'] = 'Abono '.bin2hex(random_bytes(3));
+        $this->browser->submit($form);
+
+        $this->assertResponseRedirects('/gestion/accounting/setup/categories');
+        $this->em->clear();
+        $created = $this->em->getRepository(BudgetCategory::class)->findOneBy(['name' => $form[$form->getName().'[name]']->getValue()]);
+        $this->created[] = $created;
+        $this->assertSame(11, $created->getSortOrder(), 'detrás de la que había, con orden 1');
+    }
+
+    private function orderUrl(): string
+    {
+        return '/gestion/accounting/setup/groups/'.$this->category->getGroup()->getId().'/order';
+    }
+
+    /** El token CSRF tal como lo pinta el catálogo para el grupo. */
+    private function orderToken(): string
+    {
+        $crawler = $this->browser->request('GET', '/gestion/accounting/setup/categories');
+        $tbody = $crawler->filter(sprintf('tbody[data-sort-url="%s"]', $this->orderUrl()));
+        $this->assertCount(1, $tbody, 'el grupo se puede ordenar arrastrando');
+
+        return (string) $tbody->attr('data-sort-token');
+    }
+
     private function entry(string $date, string $amount): AccountEntry
     {
         return (new AccountEntry())->setAccount($this->account)->setCategory($this->category)

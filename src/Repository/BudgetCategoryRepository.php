@@ -64,6 +64,22 @@ class BudgetCategoryRepository extends ServiceEntityRepository
     }
 
     /**
+     * El orden que pone una partida la última de su grupo: el orden se decide
+     * arrastrando en el catálogo, y lo que llega nuevo a un grupo va al final.
+     */
+    public function nextSortOrder(BudgetCategoryGroup $group): int
+    {
+        $max = $this->createQueryBuilder('c')
+            ->select('MAX(c.sortOrder)')
+            ->andWhere('c.group = :group')
+            ->setParameter('group', $group)
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return (int) $max + 10;
+    }
+
+    /**
      * Busca una partida por grupo y nombre. La usa la importación desde el Excel para
      * casar cada etiqueta del libro con su partida ya normalizada.
      */
