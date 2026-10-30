@@ -38,7 +38,7 @@
                     <div class="csa-form-grid">
                         {{ csa.field(form.year, 'Año') }}
                         {{ csa.field(form.name, 'Nombre', { hint: 'p. ej. «Aprobado en asamblea»' }) }}
-                        {{ csa.field(form.openingCash, 'Tesorería al empezar el año', { hint: 'lo que había en las cuentas el 1 de enero; sale en la fila «Tesorería a fin de mes» de las cifras' }) }}
+                        {{ csa.field(form.openingCash, 'Tesorería al empezar el año', { hint: 'la que se espera tener el 1 de enero; sólo cuenta mientras el año no ha empezado, luego manda el saldo de las cuentas' }) }}
                     </div>
                 {% endblock %}
             {% endembed %}

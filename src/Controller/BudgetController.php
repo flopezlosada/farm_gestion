@@ -141,12 +141,17 @@ class BudgetController extends AbstractController
      *
      * Como referencia para no presupuestar a ciegas, cada fila lleva al lado lo que esa
      * partida movió de verdad el año anterior.
+     *
+     * La tesorería a fin de mes arranca del saldo real de las cuentas el 1 de enero,
+     * como en «Cómo vamos»; la que teclea el presupuesto sólo vale para un año que aún
+     * no ha empezado.
      */
     #[Route('/{id}/lines', name: 'accounting_budget_lines', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function lines(
         Budget $budget,
         BudgetCategoryRepository $categories,
         AccountEntryRepository $entries,
+        BudgetTracker $tracker,
     ): Response {
         $grid = [];
         foreach ($budget->getLines() as $line) {
@@ -164,6 +169,7 @@ class BudgetController extends AbstractController
             'groups' => $this->gridGroups($budget, $categories),
             'grid' => $grid,
             'lastYearTotals' => $lastYearTotals,
+            'opening' => $tracker->openingCash((int) $budget->getYear(), $budget),
             'months' => MonthNames::SHORT,
         ]);
     }

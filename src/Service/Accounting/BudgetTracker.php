@@ -176,8 +176,8 @@ class BudgetTracker
             }
         }
 
-        $real = $year > (int) date('Y') ? null : $this->entries->cashByMonthEnd($year);
-        $opening = $real !== null ? $real[0] : ($budget !== null ? (float) $budget->getOpeningCash() : 0.0);
+        $real = $this->realCash($year);
+        $opening = $this->openingFrom($real, $budget);
         $cumulative = $opening;
         $months = [];
         $lowest = ['month' => 1, 'cumulative' => \PHP_FLOAT_MAX];
@@ -208,6 +208,39 @@ class BudgetTracker
             'endOfYear' => round($cumulative, 2),
             'lowest' => $lowest,
         ];
+    }
+
+    /**
+     * El dinero con que arranca el año, con la misma regla que {@see cashFlow}: el
+     * saldo real de las cuentas el 1 de enero siempre que lo haya, y la tesorería que
+     * teclea el presupuesto sólo cuando no (un año que aún no ha empezado, o uno
+     * anterior a llevar las cuentas en la aplicación). La fuente de verdad es el
+     * banco: una cifra tecleada que no cuadra con él no debe mover ninguna pantalla.
+     *
+     * @return array{amount: float, fromAccounts: bool}
+     */
+    public function openingCash(int $year, ?Budget $budget): array
+    {
+        $real = $this->realCash($year);
+
+        return ['amount' => round($this->openingFrom($real, $budget), 2), 'fromAccounts' => $real !== null];
+    }
+
+    /**
+     * El saldo real de las cuentas al empezar y al cerrar cada mes, o null si no hay
+     * saldo real que valga: en un año futuro el «1 de enero» de las cuentas sería hoy.
+     *
+     * @return ?array<int, float>
+     */
+    private function realCash(int $year): ?array
+    {
+        return $year > (int) date('Y') ? null : $this->entries->cashByMonthEnd($year);
+    }
+
+    /** @param ?array<int, float> $real {@see realCash} */
+    private function openingFrom(?array $real, ?Budget $budget): float
+    {
+        return $real !== null ? $real[0] : (float) ($budget?->getOpeningCash() ?? 0);
     }
 
     /**
