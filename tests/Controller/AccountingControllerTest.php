@@ -125,7 +125,8 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
 
         $crawler = $client->request('GET', '/gestion/accounting/reports');
         $this->assertResponseIsSuccessful();
-        $this->assertCount(1, $crawler->filter('.acc-hub a[href="/gestion/accounting/report"]'));
+        $this->assertCount(1, $crawler->filter(sprintf('.acc-hub a[href="/gestion/accounting/year/%d"]', (int) date('Y'))));
+        $this->assertCount(0, $crawler->filter('.acc-hub a[href="/gestion/accounting/report"]'), 'Cómo vamos va en el menú, no en Informes.');
         $this->assertCount(1, $crawler->filter(sprintf('.acc-hub a[href="/gestion/accounting/year/%d/assembly"]', (int) date('Y'))));
         $this->assertCount(1, $crawler->filter('.acc-hub a[href="/gestion/accounting/invoices/accountant"]'));
 
@@ -133,6 +134,24 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
         $this->assertResponseIsSuccessful();
         $this->assertCount(1, $crawler->filter('.acc-hub a[href="/gestion/accounting/setup/accounts"]'));
         $this->assertCount(1, $crawler->filter('.acc-hub a[href="/gestion/accounting/customers"]'));
+    }
+
+    /**
+     * Cómo vamos y Presupuestos se miran a menudo: van en el menú de Contabilidad, no
+     * escondidos dentro de Informes. «Cómo vamos» deja arriba sólo con qué se compara.
+     */
+    public function testComoVamosYPresupuestosEstanEnElMenu(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+
+        $crawler = $client->request('GET', '/gestion/accounting/report');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertCount(1, $crawler->filter('.csa-navgroup a[href="/gestion/accounting/report"]'));
+        $this->assertCount(1, $crawler->filter('.csa-navgroup a[href="/gestion/accounting/budgets"]'));
+        $this->assertSelectorTextContains('.acc-against', 'Comparado con');
+        $this->assertCount(0, $crawler->filter('.prl a[href="/gestion/accounting/entry/new"]'), 'Anotar se hace desde Inicio y Movimientos.');
     }
 
     /**

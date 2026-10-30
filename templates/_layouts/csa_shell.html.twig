@@ -249,9 +249,10 @@
                     </div>
 
                     {# Contabilidad sube arriba y abierta: es el trabajo diario de quien la
-                     # lleva, admin incluido. 6 entradas por el ritmo de trabajo: el inicio
+                     # lleva, admin incluido. Entradas por el ritmo de trabajo: el inicio
                      # (saldos y lo pendiente), lo diario (movimientos, facturas), lo mensual
-                     # (remesas) y lo de vez en cuando (informes, ajustes). #}
+                     # (remesas), cómo va el año frente al presupuesto, y lo de vez en
+                     # cuando (informes, ajustes). #}
                     {% if is_granted('FEATURE_CONTABILIDAD') and is_granted('ROLE_GESTION_CONTABILIDAD') %}
                         <div class="csa-navgroup">
                             <button type="button" class="csa-navgroup__head">Contabilidad <i class="csa-navgroup__chev fa fa-chevron-down" aria-hidden="true"></i></button>
@@ -264,8 +265,12 @@
                                    route starts with 'accounting_invoice' or route starts with 'accounting_issued_invoice') }}
                                 {{ _self.nav_link('Remesas', path('accounting_remittances'), 'fa-exchange',
                                    route starts with 'accounting_remittance') }}
-                                {{ _self.nav_link('Informes', path('accounting_reports'), 'fa-line-chart',
-                                   route starts with 'accounting_report' or route starts with 'accounting_year' or route starts with 'accounting_budget' or route starts with 'accounting_accountant') }}
+                                {{ _self.nav_link('Cómo vamos', path('accounting_report'), 'fa-line-chart',
+                                   route == 'accounting_report') }}
+                                {{ _self.nav_link('Presupuestos', path('accounting_budgets'), 'fa-calculator',
+                                   route starts with 'accounting_budget') }}
+                                {{ _self.nav_link('Informes', path('accounting_reports'), 'fa-folder-open-o',
+                                   route == 'accounting_reports' or route starts with 'accounting_year' or route starts with 'accounting_accountant') }}
                                 {{ _self.nav_link('Ajustes', path('accounting_settings'), 'fa-cog',
                                    route == 'accounting_settings' or (route starts with 'accounting_account' and not (route starts with 'accounting_accountant')) or route starts with 'accounting_categor' or route starts with 'accounting_provider' or route starts with 'accounting_customer') }}
                             </div>
