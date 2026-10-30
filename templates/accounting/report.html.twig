@@ -12,7 +12,9 @@
  #   cash                     flujo de caja de BudgetTracker::cashFlow
  #                            (los dos, cortados en el último mes completo del
  #                            libro de los bancos: BudgetTracker::lastCompleteMonth)
- #   bookedMonth              último mes con algún apunte
+ #   complete, booked         las dos cifras de cómo va el año, cortadas en el
+ #                            último mes completo y en el último con apuntes
+ #                            (las mismas que la portada: _outlook_stats)
  #   balances, totalCash      saldo de cada cuenta y el total
  #   months, shortMonths      nombre del mes, completo y en tres letras
  #
@@ -33,8 +35,6 @@
     <span class="csa-topbar__crumbs-sep">/</span>
     <a href="{{ path('accounting_index') }}">Contabilidad</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <a href="{{ path('accounting_reports') }}">Informes</a>
-    <span class="csa-topbar__crumbs-sep">/</span>
     <span class="csa-topbar__crumb-active">Cómo vamos</span>
 {% endblock %}
 
@@ -46,6 +46,13 @@
         .acc-bar { display: block; height: 6px; border-radius: 3px; background: rgba(0, 0, 0, 0.08); overflow: hidden; min-width: 60px; }
         .acc-bar > i { display: block; height: 100%; background: var(--csa-sage, #6a8f6b); }
         .acc-bar > i.over { background: #b3261e; }
+        .acc-against { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; margin: 4px 0 18px; padding: 14px 18px; background: var(--prl-surface, #fff); border: 1px solid var(--prl-line, #ebe7dd); border-left: 4px solid var(--prl-sage, #5b7a4c); border-radius: 8px; }
+        .acc-against .who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; min-width: 0; }
+        .acc-against .k { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--prl-ink-faint, #8d8773); font-weight: 500; }
+        .acc-against .name { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 600; line-height: 1.2; color: var(--prl-ink, #1d1c17); text-decoration: none; }
+        .acc-against a.name:hover { color: var(--prl-sage-d, #2f4426); text-decoration: underline; }
+        .acc-against .pick { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; }
+        .acc-against .pick label { display: flex; flex-direction: column; gap: 3px; margin: 0; font-size: 11px; font-weight: 500; color: var(--prl-ink-faint, #8d8773); }
         .acc-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 18px 0; }
     </style>
 {% endblock %}
@@ -60,41 +67,42 @@
         'Lo presupuestado frente a lo que de verdad ha pasado, con la proyección de cómo acabará el año.'
     ) }}
 
-    {# ============ SELECTOR DE AÑO Y PRESUPUESTO ============ #}
-    <div class="prl-toolbar">
-        <div class="counters">
+    {# ============ CONTRA QUÉ SE MIDE ============ #}
+    {# El presupuesto con que se compara es lo primero que hay que saber al leer la
+       pantalla: va grande, con el año y el selector al lado. Nada más: los enlaces a
+       otras pantallas están en el menú. #}
+    <div class="acc-against">
+        <div class="who">
+            <span class="k">Comparado con</span>
             {% if budget %}
-                Midiendo contra <a href="{{ path('accounting_budget_lines', { id: budget.id }) }}"><b>{{ budget.name }}</b></a>
+                <a class="name" href="{{ path('accounting_budget_lines', { id: budget.id }) }}">{{ budget.name }}</a>
                 {% if budget.inForce %}<span class="prl-chip prl-chip--ok"><span class="dot"></span>en vigor</span>{% endif %}
                 {% if not budget.approved %}<span class="prl-chip prl-chip--pausado"><span class="dot"></span>no aprobado</span>{% endif %}
             {% else %}
-                <span class="acc-muted">No hay presupuesto para {{ year }}</span>
+                <span class="name acc-muted">ningún presupuesto de {{ year }}</span>
                 {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
-                    · <a href="{{ path('accounting_budget_new') }}">hacer uno</a>
+                    <a href="{{ path('accounting_budget_new') }}">hacer uno</a>
                 {% endif %}
             {% endif %}
         </div>
-        <div class="spacer"></div>
-        <form method="get" style="display: flex; gap: 8px; align-items: center; margin: 0;">
-            <select name="year" class="csa-input" onchange="this.form.submit()">
-                {% for y in years %}
-                    <option value="{{ y }}" {{ y == year ? 'selected' : '' }}>{{ y }}</option>
-                {% endfor %}
-            </select>
-            {% if budgets|length > 1 %}
-                <select name="budget" class="csa-input" onchange="this.form.submit()">
-                    {% for b in budgets %}
-                        <option value="{{ b.id }}" {{ budget and b.id == budget.id ? 'selected' : '' }}>{{ b.name }}</option>
+        <form method="get" class="pick">
+            <label>Año
+                <select name="year" class="csa-input" onchange="this.form.submit()">
+                    {% for y in years %}
+                        <option value="{{ y }}" {{ y == year ? 'selected' : '' }}>{{ y }}</option>
                     {% endfor %}
                 </select>
+            </label>
+            {% if budgets|length > 1 %}
+                <label>Cambiar presupuesto
+                    <select name="budget" class="csa-input" onchange="this.form.submit()">
+                        {% for b in budgets %}
+                            <option value="{{ b.id }}" {{ budget and b.id == budget.id ? 'selected' : '' }}>{{ b.name }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
             {% endif %}
         </form>
-        <a href="{{ path('accounting_ledger') }}" class="prl-btn"><i class="fa fa-list"></i> Movimientos</a>
-        <a href="{{ path('accounting_year', { year: year }) }}" class="prl-btn"><i class="fa fa-table"></i> Resumen del año</a>
-        <a href="{{ path('accounting_budgets') }}" class="prl-btn"><i class="fa fa-calculator"></i> Presupuestos</a>
-        {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
-            <a href="{{ path('accounting_entry_new') }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Anotar apunte</a>
-        {% endif %}
     </div>
 
     {# ============ STAT STRIP ============ #}
@@ -108,30 +116,21 @@
             <div class="v">{{ totalCash|number_format(0, ',', '.') }} €</div>
             <div class="l">en las cuentas, según el libro</div>
         </div>
-        <div class="prl-stat {{ cash.endOfYear < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}">
-            <div class="v">{{ cash.endOfYear|number_format(0, ',', '.') }} €</div>
-            <div class="l">{{ through >= 12 ? 'en caja al cerrar el año' : 'a fin de año, si desde ' ~ months[through + 1]|lower ~ ' se cumple el presupuesto' }}</div>
-        </div>
-        {% if budget and through > 0 %}
-            <div class="prl-stat {{ tracked.result.deviation < 0 ? 'prl-stat--leave' : 'prl-stat--active' }}">
-                <div class="v">{{ tracked.result.deviation > 0 ? '+' : '' }}{{ tracked.result.deviation|number_format(0, ',', '.') }} €</div>
-                <div class="l">{{ tracked.result.deviation < 0 ? 'peor' : 'mejor' }} que el presupuesto hasta {{ months[through]|lower }}</div>
-            </div>
+        {% if budget %}
+            {% include 'accounting/_outlook_stats.html.twig' with { linked: false } %}
         {% endif %}
     </div>
-
-    {% if bookedMonth > through %}
-        <p class="acc-muted" style="margin: -6px 2px 18px; font-size: 12px;">
-            Hay apuntes hasta {{ months[bookedMonth]|lower }}, pero el libro de los bancos sólo está
-            completo hasta {{ through > 0 ? months[through]|lower : 'ningún mes' }}. Se compara hasta ahí: un mes a medias tiene las
-            cuotas, que se cobran a primeros, y no las nóminas, que salen a final de mes.
-        </p>
-    {% endif %}
 
     {# ============ DESGLOSE DEL RESULTADO ============ #}
     {% if budget and through > 0 %}
         <h2 class="acc-subhead" id="desglose">De dónde sale la diferencia</h2>
-        <p class="acc-lead">Hasta {{ months[through]|lower }}. Las cuatro piezas suman el resultado.</p>
+        <p class="acc-lead">
+            Hasta {{ months[through]|lower }}, el último mes completo del libro de los bancos. Las cuatro piezas suman el resultado.
+            {% if booked.throughMonth > through %}
+                Hay apuntes hasta {{ months[booked.throughMonth]|lower }}, pero un mes a medias tiene las cuotas, que se cobran a
+                primeros, y no las nóminas, que salen a final de mes: compararlo saldría mejor de lo que es.
+            {% endif %}
+        </p>
         <div class="prl-table-wrap" style="margin-bottom: 24px;">
             <table class="prl-table acc-keep">
                 <thead>

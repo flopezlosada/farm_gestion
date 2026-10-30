@@ -145,15 +145,17 @@ class AccountingController extends AbstractController
         }
 
         $throughMonth = $tracker->lastCompleteMonth($year, $entries->bankBookUpTo());
+        $tracked = $tracker->track($year, $budget, $throughMonth);
 
         return $this->render('accounting/report.html.twig', [
             'year' => $year,
             'years' => $this->yearsWithData($budgets, $entries),
             'budget' => $budget,
             'budgets' => $budgets->findForYear($year),
-            'tracked' => $tracker->track($year, $budget, $throughMonth),
+            'tracked' => $tracked,
             'cash' => $tracker->cashFlow($year, $budget, $throughMonth),
-            'bookedMonth' => $tracker->lastMonthWithData($year),
+            'complete' => self::summary($tracker, $tracked, $budget),
+            'booked' => self::summary($tracker, $tracker->track($year, $budget), $budget),
             'balances' => $balances,
             'totalCash' => $totalCash,
             'months' => MonthNames::LONG,
@@ -163,19 +165,18 @@ class AccountingController extends AbstractController
     }
 
     /**
-     * Índice de los informes: lo que se mira de vez en cuando, no a diario.
+     * Índice de los informes: lo que se mira de vez en cuando, no a diario. «Cómo
+     * vamos» y «Presupuestos» no están aquí: se miran a menudo y van en el menú.
      */
     #[Route('/reports', name: 'accounting_reports', methods: ['GET'])]
     public function reports(): Response
     {
         return $this->render('accounting/hub.html.twig', [
             'title' => 'Informes',
-            'intro' => 'Lo que se mira de vez en cuando: cómo va el año, el resumen por meses, la hoja de la asamblea, los presupuestos y la entrega a la gestoría.',
+            'intro' => 'Lo que se mira de vez en cuando: el resumen por meses, la hoja de la asamblea y la entrega a la gestoría. Cómo va el año y los presupuestos tienen su propia entrada en el menú.',
             'links' => [
-                ['route' => 'accounting_report', 'params' => [], 'icon' => 'fa-line-chart', 'title' => 'Cómo vamos', 'text' => 'Lo presupuestado frente a lo real, y la caja mes a mes hasta fin de año.'],
                 ['route' => 'accounting_year', 'params' => ['year' => (int) date('Y')], 'icon' => 'fa-table', 'title' => 'Resumen del año', 'text' => 'Cada partida mes a mes.'],
                 ['route' => 'accounting_year_assembly', 'params' => ['year' => (int) date('Y')], 'icon' => 'fa-print', 'title' => 'Para la asamblea', 'text' => 'La hoja del año para imprimir y repartir.'],
-                ['route' => 'accounting_budgets', 'params' => [], 'icon' => 'fa-calculator', 'title' => 'Presupuestos', 'text' => 'Los de cada año y cuánto tiene que costar la cesta.'],
                 ['route' => 'accounting_accountant_export', 'params' => [], 'icon' => 'fa-briefcase', 'title' => 'Para la gestoría', 'text' => 'El paquete del trimestre: facturas, libros y documentos en un ZIP.'],
             ],
         ]);
