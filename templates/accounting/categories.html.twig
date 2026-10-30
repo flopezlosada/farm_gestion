@@ -24,6 +24,11 @@
     {{ parent() }}
     {% include 'partner/_listing_styles.html.twig' %}
     {% include 'accounting/_styles.html.twig' %}
+    <style>
+        .acc-grip { display: inline-block; margin-right: 8px; color: var(--prl-ink-faint, #8d8773); cursor: grab; }
+        [data-sort-id] { cursor: grab; }
+        [data-sort-id].is-dragging { opacity: 0.4; }
+    </style>
 {% endblock %}
 
 {% block csa_main %}
@@ -68,8 +73,11 @@
                     <th class="tight"></th>
                 </tr>
             </thead>
-            <tbody>
-                {% for group in groups %}
+            {% set canSort = is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+            {% for group in groups %}
+                {# Un tbody por grupo: se arrastra dentro de él, y una partida no cambia de
+                   grupo arrastrándola (eso mueve todos sus apuntes; va en «Cambiar»). #}
+                <tbody{% if canSort %} data-sort data-sort-url="{{ path('accounting_category_order', { id: group.id }) }}" data-sort-token="{{ csrf_token('category-order-' ~ group.id) }}"{% endif %}>
                     <tr class="acc-group-row">
                         <td>{{ group.name }}</td>
                         <td class="acc-muted acc-small">{{ group.kindLabel }}</td>
@@ -77,8 +85,9 @@
                         <td></td>
                     </tr>
                     {% for category in group.categories %}
-                        <tr class="acc-cat-row">
+                        <tr class="acc-cat-row"{% if canSort %} draggable="true" data-sort-id="{{ category.id }}"{% endif %}>
                             <td>
+                                {% if canSort %}<span class="acc-grip" title="Arrastra para ordenar" aria-hidden="true"><i class="fa fa-bars"></i></span>{% endif %}
                                 <a href="{{ path('accounting_category_show', { id: category.id }) }}">{{ category.name }}</a>
                                 {% if not category.active %}
                                     <span class="prl-chip prl-chip--pausado"><span class="dot"></span>retirada</span>
@@ -97,10 +106,72 @@
                             <td colspan="4" class="acc-muted">Este grupo no tiene ninguna partida todavía.</td>
                         </tr>
                     {% endfor %}
-                {% endfor %}
-            </tbody>
+                </tbody>
+            {% endfor %}
         </table>
     </div>
 
 </div>
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    <script>
+        /*
+         * Ordenar las partidas arrastrándolas dentro de su grupo. La fila se mueve
+         * mientras se arrastra; al soltar se manda el orden nuevo del grupo entero. Si
+         * el servidor no lo acepta (otra pestaña cambió el catálogo), se recarga para
+         * enseñar el orden que de verdad hay.
+         */
+        (function () {
+            var dragging = null;
+            var before = null;
+
+            /** Los ids de las partidas del grupo, en el orden en que están ahora. */
+            function order(tbody) {
+                return Array.prototype.map.call(tbody.querySelectorAll('[data-sort-id]'), function (row) {
+                    return row.dataset.sortId;
+                });
+            }
+
+            document.querySelectorAll('[data-sort]').forEach(function (tbody) {
+                tbody.addEventListener('dragstart', function (e) {
+                    dragging = e.target.closest('[data-sort-id]');
+                    if (!dragging) return;
+                    before = order(tbody).join(',');
+                    dragging.classList.add('is-dragging');
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', dragging.dataset.sortId);
+                });
+
+                tbody.addEventListener('dragover', function (e) {
+                    if (!dragging || dragging.parentNode !== tbody) return;
+                    var over = e.target.closest('[data-sort-id]');
+                    e.preventDefault();
+                    if (!over || over === dragging) return;
+                    var box = over.getBoundingClientRect();
+                    tbody.insertBefore(dragging, e.clientY < box.top + box.height / 2 ? over : over.nextSibling);
+                });
+
+                tbody.addEventListener('drop', function (e) {
+                    e.preventDefault();
+                });
+
+                tbody.addEventListener('dragend', function () {
+                    if (!dragging) return;
+                    dragging.classList.remove('is-dragging');
+                    dragging = null;
+                    var ids = order(tbody);
+                    if (ids.join(',') === before) return;
+
+                    var body = new FormData();
+                    body.append('_token', tbody.dataset.sortToken);
+                    ids.forEach(function (id) { body.append('ids[]', id); });
+                    fetch(tbody.dataset.sortUrl, { method: 'POST', body: body, credentials: 'same-origin' })
+                        .then(function (response) { if (!response.ok) location.reload(); })
+                        .catch(function () { location.reload(); });
+                });
+            });
+        })();
+    </script>
 {% endblock %}
