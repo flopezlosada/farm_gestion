@@ -92,7 +92,10 @@
                             {% set a = actual[m] ?? 0 %}
                             {% if p != 0 or a != 0 %}
                                 <tr>
-                                    <td><a href="{{ path('accounting_month', { year: year, month: m }) }}">{{ months[m] }}</a></td>
+                                    {# Los movimientos de ESTA partida en ese mes: se viene de ella, y el
+                                       mes entero mezclaba los de todas. #}
+                                    {% set monthStart = '%d-%02d-01'|format(year, m) %}
+                                    <td><a href="{{ path('accounting_ledger', { category: category.id, from: monthStart, to: monthStart|date('Y-m-t') }) }}">{{ months[m] }}</a></td>
                                     {% if budget %}<td class="acc-num">{{ fmt.money(p) }}</td>{% endif %}
                                     {% if m <= throughMonth %}
                                         <td class="acc-num">{{ fmt.money(a) }}</td>
