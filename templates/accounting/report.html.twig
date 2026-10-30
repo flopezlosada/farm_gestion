@@ -56,7 +56,7 @@
 
     {{ csa.page_header(
         'Contabilidad · ' ~ year,
-        'Cómo vamos',
+        'Cómo vamos' ~ (tracked.throughMonth > 0 ? ' hasta ' ~ months[tracked.throughMonth]|lower : ''),
         'Lo presupuestado frente a lo que de verdad ha pasado, con la proyección de cómo acabará el año.'
     ) }}
 
