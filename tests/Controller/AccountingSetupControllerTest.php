@@ -89,6 +89,11 @@ class AccountingSetupControllerTest extends AbstractAuthenticatedTest
         $this->assertSame('+80,00 €', trim($months->eq(1)->filter('td')->eq(3)->text()), 'febrero anotado sin gasto: cero de verdad');
         $this->assertSame('—', trim($months->eq(3)->filter('td')->eq(2)->text()), 'abril aún no tiene real');
         $this->assertSame('—', trim($months->eq(3)->filter('td')->eq(3)->text()), 'ni diferencia');
+        $this->assertSame(
+            sprintf('/gestion/accounting/ledger?category=%d&from=%d-02-01&to=%d-02-%s', $this->category->getId(), self::YEAR, self::YEAR, date('t', mktime(0, 0, 0, 2, 1, self::YEAR))),
+            $months->eq(1)->filter('td a')->attr('href'),
+            'el mes abre los movimientos de esta partida en ese mes, no el mes de todas'
+        );
 
         $recentHeaders = $crawler->filter('table.prl-table')->last()->filter('thead th')->each(fn ($th) => trim($th->text()));
         $this->assertNotContains('Partida', $recentHeaders, 'en la ficha de la partida, la partida sería la misma en todas las filas');
