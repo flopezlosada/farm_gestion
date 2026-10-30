@@ -149,7 +149,7 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
 
         $this->assertResponseIsSuccessful();
         $this->assertCount(1, $crawler->filter('.csa-navgroup a[href="/gestion/accounting/report"]'));
-        $this->assertCount(1, $crawler->filter('.csa-navgroup a[href="/gestion/accounting/budgets"]'));
+        $this->assertCount(1, $crawler->filter('.csa-navgroup a[href="/gestion/accounting/budgets/"]'));
         $this->assertSelectorTextContains('.acc-against', 'Comparado con');
         $this->assertCount(0, $crawler->filter('.prl a[href="/gestion/accounting/entry/new"]'), 'Anotar se hace desde Inicio y Movimientos.');
     }
