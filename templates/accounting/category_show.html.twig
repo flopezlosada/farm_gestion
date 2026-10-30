@@ -53,8 +53,8 @@
         {% if budget %}
             {% set partial = throughMonth > 0 and throughMonth < 12 %}
             <div class="prl-stat">
-                {% set planned = partial ? plannedToDate : plannedTotal %}
-                <div class="v {{ planned < 0 ? 'acc-neg' }}">{{ planned|number_format(2, ',', '.') }} €</div>
+                {% set plannedShown = partial ? plannedToDate : plannedTotal %}
+                <div class="v {{ plannedShown < 0 ? 'acc-neg' }}">{{ plannedShown|number_format(2, ',', '.') }} €</div>
                 <div class="l">{{ partial ? 'previsto hasta ' ~ months[throughMonth]|lower : 'previsto en el año' }}</div>
             </div>
             {% if partial %}
