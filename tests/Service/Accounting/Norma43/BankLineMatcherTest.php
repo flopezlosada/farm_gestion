@@ -163,6 +163,33 @@ class BankLineMatcherTest extends TestCase
         $this->assertSame($entry, $lines[4]->getEntry());
     }
 
+    /**
+     * Para la portada se propone el candidato único aunque esté a más días de los que
+     * se ligan solos (a 5), y no se propone nada donde haya duda: dos apuntes para un
+     * movimiento, o un apunte que podrían ser dos movimientos. No liga nada.
+     */
+    public function testLasPropuestasSonLosCandidatosUnicosSinDuda(): void
+    {
+        $bank = $this->account();
+        $clear = $this->line($bank, '2026-10-10', -4550);
+        $clearEntry = $this->entry($bank, '2026-10-15', '-45.50');
+        $twoEntries = $this->line($bank, '2026-10-10', 2000);
+        $first = $this->line($bank, '2026-10-20', -1500);
+        $second = $this->line($bank, '2026-10-21', -1500);
+        $repo = $this->createStub(AccountEntryRepository::class);
+        $repo->method('findWithoutBankLine')->willReturn([
+            $clearEntry,
+            $this->entry($bank, '2026-10-12', '20.00'),
+            $this->entry($bank, '2026-10-09', '20.00'),
+            $this->entry($bank, '2026-10-22', '-15.00'),
+        ]);
+
+        $proposals = (new BankLineMatcher($repo))->proposalsFor([$clear, $twoEntries, $first, $second]);
+
+        $this->assertSame([[$clear, $clearEntry]], $proposals);
+        $this->assertNull($clear->getEntry());
+    }
+
     /** Lo que se comprueba al confirmar a mano: misma cuenta, importe, ventana y sin ligar. */
     public function testEsCandidato(): void
     {

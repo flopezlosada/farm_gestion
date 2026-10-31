@@ -77,15 +77,41 @@ class BankStatementLineRepository extends ServiceEntityRepository
     /** Cuántos movimientos sin apunte hay en las cuentas activas: lo que avisa la portada. */
     public function countUnlinked(): int
     {
-        return (int) $this->createQueryBuilder('l')
+        return (int) $this->unlinked()
             ->select('COUNT(l.id)')
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /**
+     * Los movimientos sin apunte de las cuentas activas, los más recientes primero: los
+     * mismos que cuenta {@see countUnlinked}, para proponer en la portada su apunte cuando
+     * no hay duda. Recientes primero porque es con lo que se está trabajando.
+     *
+     * @return list<BankStatementLine>
+     */
+    public function findUnlinked(): array
+    {
+        return $this->unlinked()
+            ->addSelect('a')
+            ->orderBy('l.operationDate', 'DESC')
+            ->addOrderBy('l.id', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Los movimientos de las cuentas activas, desde su apertura, que no tienen apunte.
+     * Los de importe cero no cuentan: no hay nada que anotar.
+     */
+    private function unlinked(): QueryBuilder
+    {
+        return $this->createQueryBuilder('l')
             ->innerJoin('l.account', 'a')
             ->andWhere('l.entry IS NULL')
             ->andWhere('l.amount != 0')
             ->andWhere('l.operationDate >= a.openingDate')
-            ->andWhere('a.active = true')
-            ->getQuery()
-            ->getSingleScalarResult();
+            ->andWhere('a.active = true');
     }
 
     /** Si el apunte ya explica algún movimiento del banco. */

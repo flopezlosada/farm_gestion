@@ -129,6 +129,37 @@ class BankLineMatcher
         }
         $rest = static fn (object $o): bool => !isset($paired[spl_object_id($o)]);
         $found = self::candidates(array_values(array_filter($lines, $rest)), array_values(array_filter($entries, $rest)));
+
+        return [...$sameDay, ...array_values(array_filter(
+            self::uniquePairs($found),
+            static fn (array $pair): bool => self::days($pair[0], $pair[1]) <= self::AUTO_DAYS,
+        ))];
+    }
+
+    /**
+     * Las propuestas que se pueden confirmar con un solo «sí»: movimientos sin apunte
+     * con un único candidato que no es candidato de ningún otro. Lo que no cumple eso
+     * necesita mirar el extracto, no un botón. Carga los apuntes en UNA consulta.
+     *
+     * @param list<BankStatementLine> $lines Movimientos sin apunte.
+     *
+     * @return list<array{0: BankStatementLine, 1: AccountEntry}> En el orden de $lines.
+     */
+    public function proposalsFor(array $lines): array
+    {
+        return self::uniquePairs($this->candidatesFor($lines));
+    }
+
+    /**
+     * De unos candidatos ya calculados, los movimientos con uno solo que sólo reclama
+     * ese movimiento, a cualquier distancia dentro de {@see SUGGEST_DAYS}.
+     *
+     * @param list<array{line: BankStatementLine, candidates: list<AccountEntry>}> $found
+     *
+     * @return list<array{0: BankStatementLine, 1: AccountEntry}>
+     */
+    private static function uniquePairs(array $found): array
+    {
         $claims = [];
         foreach ($found as $row) {
             foreach ($row['candidates'] as $entry) {
@@ -136,12 +167,11 @@ class BankLineMatcher
             }
         }
 
-        return [...$sameDay, ...array_values(array_map(
+        return array_values(array_map(
             static fn (array $row): array => [$row['line'], $row['candidates'][0]],
             array_filter($found, static fn (array $row): bool => \count($row['candidates']) === 1
-                && self::days($row['line'], $row['candidates'][0]) <= self::AUTO_DAYS
                 && $claims[spl_object_id($row['candidates'][0])] === 1),
-        ))];
+        ));
     }
 
     /**

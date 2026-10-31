@@ -111,6 +111,39 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         $this->assertSame('-25.00', $line->getEntry()->getAmount());
     }
 
+    /**
+     * Un movimiento cuyo único apunte posible se anotó a 5 días (no se liga solo) sale
+     * en la portada como pregunta; «Sí, es ése» los liga y vuelve a la portada.
+     */
+    public function testLigarDesdeLaPortada(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
+        $number = sprintf('%010d', random_int(0, 9_999_999_999));
+        $this->account = $this->bankAccount($number);
+        $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
+        $form = $crawler->filter('form.inv-upload')->form();
+        $form['file']->upload($this->tempFile(N43::file(N43::account('9999', '0001', $number, '910401', '910430', 50000, [
+            ['910403', -2500, ['COMPRA SEMILLAS']],
+        ]))));
+        $client->submit($form);
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $entry = (new AccountEntry())->setAccount($em->find(FinancialAccount::class, $this->account->getId()))
+            ->setCategory($em->find(BudgetCategory::class, $this->category()->getId()))
+            ->setDate(new \DateTimeImmutable('2091-04-08'))->setAmount('-25.00')->setConcept('Semillas de otoño');
+        $em->persist($entry);
+        $em->flush();
+        $line = $em->getRepository(BankStatementLine::class)->findOneBy(['account' => $this->account->getId()]);
+
+        $crawler = $client->request('GET', '/gestion/accounting/');
+        $this->assertSelectorTextContains('.acc-todo', '«Semillas de otoño» del 08/04/2091');
+        $client->submit($crawler->filter(sprintf('.acc-todo form[action="/gestion/accounting/bank-statements/lines/%d/link"]', $line->getId()))->form());
+
+        $this->assertResponseRedirects('/gestion/accounting/');
+        $em->clear();
+        $this->assertSame($entry->getId(), $em->find(BankStatementLine::class, $line->getId())->getEntry()?->getId());
+    }
+
     /** Un fichero roto no guarda nada y dice por qué. */
     public function testUnFicheroRotoNoGuardaNada(): void
     {

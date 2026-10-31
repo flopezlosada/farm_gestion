@@ -4,6 +4,7 @@ namespace App\Tests\Service\Accounting\Agenda;
 
 use App\Entity\AccountantDelivery;
 use App\Entity\AccountEntry;
+use App\Entity\BankStatementLine;
 use App\Entity\CashCount;
 use App\Entity\Customer;
 use App\Entity\FinancialAccount;
@@ -27,6 +28,7 @@ use App\Repository\ReceivedInvoiceRepository;
 use App\Repository\RemittanceRepository;
 use App\Repository\RemittanceReturnRepository;
 use App\Service\Accounting\Agenda\AccountingAgenda;
+use App\Service\Accounting\Agenda\AgendaAction;
 use App\Service\Accounting\Agenda\AgendaItem;
 use App\Service\Accounting\Agenda\AgendaUrgency;
 use App\Service\Accounting\CashCount\DayBalances;
@@ -35,6 +37,8 @@ use App\Service\Accounting\Invoice\AccountantPackage;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\Invoice\InvoiceQuarter;
 use App\Service\Accounting\IssuedInvoice\IssuedInvoiceBook;
+use App\Service\Accounting\Norma43\BankLineMatcher;
+use App\Service\Accounting\Norma43\Norma43Movement;
 use App\Service\Accounting\Remittance\RemittanceChargeWatch;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
@@ -411,15 +415,69 @@ class AccountingAgendaTest extends TestCase
         $this->assertSame(['id' => $remittance->getId()], $item->routeParams);
     }
 
-    /** Lo contado por el bot sale hasta que se confirma o se descarta. */
+    /**
+     * Lo contado por el bot sale hasta que se confirma o se descarta, uno por uno: con
+     * lo que se entendió (o «¿?» donde no se entendió), un enlace al formulario relleno
+     * y el botón de descartar, que no es la acción principal.
+     */
     public function testLosTraspasosDelBotPorConfirmar(): void
     {
-        $sent = new PendingTransfer(new User(), new \DateTimeImmutable('2026-10-26'));
-        $items = $this->agenda(botTransfers: [$sent, $sent])->items(new \DateTimeImmutable('2026-10-27'));
+        $caja = $this->account('Caja Cerrada', FinancialAccount::KIND_CASH);
+        $fiare = $this->account('Fiare', FinancialAccount::KIND_BANK);
+        $understood = (new PendingTransfer((new User())->setUsername('tesorera'), new \DateTimeImmutable('2026-10-26')))
+            ->setAccounts($caja, $fiare)->setAmount('150.00');
+        $this->setId($understood);
+        $garbled = new PendingTransfer((new User())->setUsername('tesorera'), new \DateTimeImmutable('2026-10-27'));
+        $this->setId($garbled);
 
-        $bot = array_values(array_filter($items, static fn (AgendaItem $i): bool => $i->route === 'accounting_transfer_pending'));
-        $this->assertCount(1, $bot);
-        $this->assertSame('Confirmar 2 traspasos contados por el bot', $bot[0]->title);
+        $items = $this->agenda(botTransfers: [$understood, $garbled])->items(new \DateTimeImmutable('2026-10-27'));
+
+        $this->assertSame([
+            'Confirmar el traspaso de 150,00 € de Caja Cerrada a Fiare que contó tesorera por el bot',
+            'Confirmar el traspaso de ¿? € de ¿? a ¿? que contó tesorera por el bot',
+        ], array_map(static fn (AgendaItem $i): string => $i->title, $items));
+        $this->assertSame(['Con fecha del 26/10/2026. No entra en el libro hasta que alguien lo revisa.'], $items[0]->details);
+        [$review, $discard] = $items[0]->actions;
+        $this->assertFalse($review->isPost());
+        $this->assertSame(['accounting_transfer_pending_confirm', ['id' => $understood->getId()]], [$review->route, $review->routeParams]);
+        $this->assertTrue($discard->isPost());
+        $this->assertFalse($discard->primary);
+        $this->assertSame('accounting_transfer_pending_discard', $discard->route);
+        $this->assertSame('accounting_transfer_pending_discard_'.$understood->getId(), $discard->csrfId);
+    }
+
+    /**
+     * El movimiento del banco con un único apunte posible sale como pregunta, con el
+     * botón que los liga mandando el apunte. Como mucho diez: la portada no es la ficha
+     * del extracto.
+     */
+    public function testLasPropuestasDeLigarMovimientos(): void
+    {
+        $fiare = $this->account('Fiare', FinancialAccount::KIND_BANK);
+        $pairs = array_map(function (int $day) use ($fiare): array {
+            $date = new \DateTimeImmutable(sprintf('2026-10-%02d', $day));
+            $line = new BankStatementLine($fiare, new Norma43Movement($date, $date, '02', '000', -6050, '', '', '', ['RECIBO LUZ OCTUBRE']), 1);
+            $this->setId($line);
+            $entry = (new AccountEntry())->setAccount($fiare)->setDate($date->modify('+5 days'))->setAmount('-60.50')->setConcept('Luz de la nave');
+            $this->setId($entry);
+
+            return [$line, $entry];
+        }, range(1, 12));
+
+        $items = $this->agenda(bankProposals: $pairs)->items(new \DateTimeImmutable('2026-10-31'));
+
+        $this->assertCount(AccountingAgenda::MAX_BANK_PROPOSALS, $items);
+        [$line, $entry] = $pairs[0];
+        $this->assertSame('¿El movimiento de Fiare del 01/10/2026 (-60,50 €) es el apunte «Luz de la nave» del 06/10/2026?', $items[0]->title);
+        $this->assertSame('En el banco pone «RECIBO LUZ OCTUBRE».', $items[0]->details[0]);
+        $this->assertEquals([AgendaAction::post(
+            'Sí, es ése',
+            'Se ligan: el movimiento queda anotado por ese apunte. El apunte no cambia.',
+            'accounting_bank_line_link',
+            ['id' => $line->getId()],
+            'bank_line_link_'.$line->getId(),
+            ['entry' => $entry->getId()],
+        )], $items[0]->actions);
     }
 
     /**
@@ -474,6 +532,8 @@ class AccountingAgendaTest extends TestCase
     {
         $dehu = new OfficialNotice(str_repeat('a', 64), 'DEHú', 'noreply.dehu@correo.gob.es', new \DateTimeImmutable('2026-10-14 09:12'));
         $aeat = new OfficialNotice(str_repeat('b', 64), 'Agencia Tributaria', 'agenciatributaria@correo.aeat.es', new \DateTimeImmutable('2026-10-15 17:40'));
+        $this->setId($dehu);
+        $this->setId($aeat);
 
         $items = $this->agenda(deliveries: [], officialNotices: [$dehu, $aeat])->items(new \DateTimeImmutable('2026-10-16'));
 
@@ -488,6 +548,10 @@ class AccountingAgendaTest extends TestCase
             'El aviso llegó el 14/10/2026. Escribe tú dehu.redsara.es (o la sede del organismo) y entra con certificado; no uses el enlace del correo.',
             'Si nadie la abre en 10 días naturales desde que se puso a disposición, cuenta como notificada y corren los plazos.',
         ], $items[0]->details);
+        $this->assertCount(1, $items[0]->actions);
+        $this->assertSame('accounting_official_notice_reviewed', $items[0]->actions[0]->route);
+        $this->assertSame(['id' => $dehu->getId()], $items[0]->actions[0]->routeParams);
+        $this->assertSame('accounting_official_notice_reviewed_'.$dehu->getId(), $items[0]->actions[0]->csrfId);
     }
 
     /**
@@ -508,6 +572,7 @@ class AccountingAgendaTest extends TestCase
      * @param list<array{remittance: Remittance, bookUpTo: \DateTimeImmutable}> $uncredited remesas enviadas que no han entrado
      * @param list<CashCount>                     $cashCounts el último arqueo de cada caja abierta
      * @param array<int, DayBalances>             $dayBalances saldo de cada cuenta el día de su arqueo; por omisión, 0
+     * @param list<array{0: BankStatementLine, 1: AccountEntry}> $bankProposals movimientos con un único apunte posible
      */
     private function agenda(
         array $received = [],
@@ -529,6 +594,7 @@ class AccountingAgendaTest extends TestCase
         array $dayBalances = [],
         array $officialNotices = [],
         int $unlinkedBankLines = 0,
+        array $bankProposals = [],
     ): AccountingAgenda {
         $receivedRepo = $this->createStub(ReceivedInvoiceRepository::class);
         $receivedRepo->method('findOpen')->willReturn($open);
@@ -570,6 +636,9 @@ class AccountingAgendaTest extends TestCase
         $notices->method('findUnreviewed')->willReturn($officialNotices);
         $bankLines = $this->createStub(BankStatementLineRepository::class);
         $bankLines->method('countUnlinked')->willReturn($unlinkedBankLines);
+        $bankLines->method('findUnlinked')->willReturn(array_map(static fn (array $pair): BankStatementLine => $pair[0], $bankProposals));
+        $matcher = $this->createStub(BankLineMatcher::class);
+        $matcher->method('proposalsFor')->willReturn($bankProposals);
 
         return new AccountingAgenda(
             $receivedRepo,
@@ -587,6 +656,7 @@ class AccountingAgendaTest extends TestCase
             $counts,
             $notices,
             $bankLines,
+            $matcher,
         );
     }
 

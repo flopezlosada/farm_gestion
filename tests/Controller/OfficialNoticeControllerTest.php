@@ -60,6 +60,22 @@ class OfficialNoticeControllerTest extends AbstractAuthenticatedTest
         $this->assertEquals($at, $this->em()->find(OfficialNotice::class, $notice->getId())->getReviewedAt(), 'La segunda vez no cambia nada.');
     }
 
+    /** Desde la portada de contabilidad se marca con su botón y se vuelve a la portada. */
+    public function testDesdeLaPortadaVuelveALaPortada(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
+        $notice = $this->notice();
+
+        $crawler = $client->request('GET', '/gestion/accounting/');
+        $this->assertResponseIsSuccessful();
+        $client->submit($crawler->filter(sprintf('.acc-todo form[action="/gestion/accounting/official-notices/%d/reviewed"]', $notice->getId()))->form());
+
+        $this->assertResponseRedirects('/gestion/accounting/');
+        $this->em()->clear();
+        $this->assertTrue($this->em()->find(OfficialNotice::class, $notice->getId())->isReviewed());
+    }
+
     /** Sin el token del formulario no se marca. */
     public function testSinTokenNoSeMarca(): void
     {

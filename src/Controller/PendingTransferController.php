@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\PendingTransfer;
 use App\Entity\User;
 use App\Form\AccountTransferType;
+use App\Http\BackToAgenda;
 use App\Repository\PendingTransferRepository;
 use App\Service\Accounting\TransferRecorder;
 use Doctrine\ORM\EntityManagerInterface;
@@ -100,10 +101,11 @@ class PendingTransferController extends AbstractController
     #[Route('/{id}/discard', name: 'accounting_transfer_pending_discard', requirements: ['id' => '\d+'], methods: ['POST'])]
     public function discard(PendingTransfer $transfer, Request $request, EntityManagerInterface $em, PendingTransferRepository $pending): Response
     {
+        $back = BackToAgenda::route($request, 'accounting_transfer_pending');
         if (!$this->isCsrfTokenValid('accounting_transfer_pending_discard_'.$transfer->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
 
-            return $this->redirectToRoute('accounting_transfer_pending');
+            return $this->redirectToRoute($back);
         }
         $removed = $em->wrapInTransaction(static function () use ($pending, $transfer, $em): bool {
             $locked = $pending->findLocked((int) $transfer->getId());
@@ -117,10 +119,10 @@ class PendingTransferController extends AbstractController
         if (!$removed) {
             $this->addFlash('warning', 'Ese traspaso ya está en el libro o ya se había tirado. Si está en el libro y no era, bórralo desde Movimientos.');
 
-            return $this->redirectToRoute('accounting_transfer_pending');
+            return $this->redirectToRoute($back);
         }
         $this->addFlash('success', 'Descartado. El libro no se ha tocado.');
 
-        return $this->redirectToRoute('accounting_transfer_pending');
+        return $this->redirectToRoute($back);
     }
 }
