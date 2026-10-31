@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\BankStatement;
 use App\Entity\BankStatementLine;
 use App\Entity\User;
+use App\Http\BackToAgenda;
 use App\Http\QueryId;
 use App\Repository\AccountEntryRepository;
 use App\Repository\BankStatementLineRepository;
@@ -130,9 +131,11 @@ class BankStatementController extends AbstractController
     public function link(Request $request, BankStatementLine $line, AccountEntryRepository $entries, BankStatementLineRepository $lines, EntityManagerInterface $em): Response
     {
         $statementId = QueryId::from($request->request, 'statement');
-        $back = $statementId !== null
-            ? $this->redirectToRoute('accounting_bank_statement_show', ['id' => $statementId])
-            : $this->redirectToRoute('accounting_bank_statements');
+        $back = match (true) {
+            BackToAgenda::requested($request) => $this->redirectToRoute(BackToAgenda::ROUTE),
+            $statementId !== null => $this->redirectToRoute('accounting_bank_statement_show', ['id' => $statementId]),
+            default => $this->redirectToRoute('accounting_bank_statements'),
+        };
         if (!$this->isCsrfTokenValid('bank_line_link_'.$line->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
 

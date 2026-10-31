@@ -7,6 +7,7 @@ use App\Entity\CashCount;
 use App\Entity\FinancialAccount;
 use App\Entity\IssuedInvoice;
 use App\Entity\OfficialNotice;
+use App\Entity\PendingTransfer;
 use App\Entity\Remittance;
 use App\Entity\RemittanceReturn;
 use App\Entity\ReturnStatus;
@@ -27,6 +28,7 @@ use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\Invoice\InvoiceQuarter;
 use App\Service\Accounting\IssuedInvoice\IssuedInvoiceBook;
 use App\Service\Accounting\MonthNames;
+use App\Service\Accounting\Norma43\BankLineMatcher;
 use App\Service\Accounting\OfficialNotice\OfficialNoticeAlert;
 use App\Service\Accounting\Remittance\BankReturns;
 use App\Service\Accounting\Remittance\RemittanceChargeWatch;
@@ -43,13 +45,22 @@ use App\Service\Accounting\Remittance\RemittanceChargeWatch;
  *
  * El módulo existe para que el libro esté al día y el paquete de la gestoría llegue
  * completo; esta lista es exactamente eso, ordenado por lo que aprieta. Cada tarea
- * lleva adónde se resuelve: aquí sólo se avisa.
+ * lleva adónde se resuelve; las que se deciden con un «sí» o un «no» (una notificación
+ * ya mirada, un traspaso del bot, un movimiento del banco con un solo apunte posible)
+ * llevan además sus botones ({@see AgendaAction}), que usan las rutas de siempre.
  */
 class AccountingAgenda
 {
 
     /** Días sin apuntes a partir de los que el libro de una cuenta de banco se da por atrasado. */
     public const STALE_BOOK_DAYS = 30;
+
+    /**
+     * Movimientos del banco que se proponen ligar como mucho. Tras subir un extracto
+     * pueden ser muchos y la portada es para lo que hay que hacer, no un listado: el
+     * resto sigue en la ficha del extracto.
+     */
+    public const MAX_BANK_PROPOSALS = 10;
 
     public function __construct(
         private readonly ReceivedInvoiceRepository $receivedInvoices,
@@ -67,6 +78,7 @@ class AccountingAgenda
         private readonly CashCountRepository $cashCounts,
         private readonly OfficialNoticeRepository $officialNotices,
         private readonly BankStatementLineRepository $bankLines,
+        private readonly BankLineMatcher $matcher,
     ) {
     }
 
@@ -85,6 +97,7 @@ class AccountingAgenda
             ...$this->unreviewedOfficialNotices(),
             $this->staleBankBooks($today),
             $this->unlinkedBankLines(),
+            ...$this->bankLineProposals(),
             ...$this->unexplainedCardPayments(),
             ...$this->accountantDeliveries($today),
             $this->openReceivedInvoices(),
@@ -94,7 +107,7 @@ class AccountingAgenda
             $this->unidentifiedReturns(),
             $this->openReturns(),
             $this->unpairedTransfers(),
-            $this->botTransfers(),
+            ...$this->botTransfers(),
             ...$this->cashCountMismatches(),
         ]));
 
@@ -121,6 +134,15 @@ class AccountingAgenda
                 OfficialNoticeAlert::DEEMED_NOTIFIED,
             ],
             'accounting_official_notices',
+            [],
+            null,
+            [AgendaAction::post(
+                'Ya la he mirado en la sede',
+                'Queda como revisada, con tu nombre, y deja de avisar. El correo del aviso no basta: hay que haberla abierto en la sede.',
+                'accounting_official_notice_reviewed',
+                ['id' => $notice->getId()],
+                'accounting_official_notice_reviewed_'.$notice->getId(),
+            )],
         ), $this->officialNotices->findUnreviewed());
     }
 
@@ -288,6 +310,52 @@ class AccountingAgenda
             ['Vienen de los extractos subidos. En la ficha de cada extracto se anotan, o se ligan al apunte que ya los tenía.'],
             'accounting_bank_statements',
         );
+    }
+
+    /**
+     * Los movimientos del banco con un único apunte posible que nadie más reclama
+     * ({@see BankLineMatcher::proposalsFor}): se confirman con un botón. Los que se ligan
+     * solos ya lo hicieron al subir el extracto; éstos son los que quedan a más días o
+     * cuyo apunte se anotó después. Como mucho {@see MAX_BANK_PROPOSALS}, los más
+     * recientes.
+     *
+     * @return list<AgendaItem>
+     */
+    private function bankLineProposals(): array
+    {
+        $proposals = \array_slice($this->matcher->proposalsFor($this->bankLines->findUnlinked()), 0, self::MAX_BANK_PROPOSALS);
+
+        return array_map(static function (array $pair): AgendaItem {
+            // Un movimiento y su único apunte posible.
+            [$line, $entry] = $pair;
+
+            return new AgendaItem(
+                AgendaUrgency::Normal,
+                sprintf(
+                    '¿El movimiento de %s del %s (%s €) es el apunte «%s» del %s?',
+                    $line->getAccount()->getName(),
+                    $line->getOperationDate()->format('d/m/Y'),
+                    number_format($line->getAmountCents() / 100, 2, ',', '.'),
+                    $entry->getConcept(),
+                    $entry->getDate()?->format('d/m/Y'),
+                ),
+                [
+                    sprintf('En el banco pone «%s».', $line->getSuggestedConcept()),
+                    'Mismo importe al céntimo y ningún otro movimiento puede ser ese apunte.',
+                ],
+                'accounting_bank_statements',
+                [],
+                null,
+                [AgendaAction::post(
+                    'Sí, es ése',
+                    'Se ligan: el movimiento queda anotado por ese apunte. El apunte no cambia.',
+                    'accounting_bank_line_link',
+                    ['id' => $line->getId()],
+                    'bank_line_link_'.$line->getId(),
+                    ['entry' => (int) $entry->getId()],
+                )],
+            );
+        }, $proposals);
     }
 
     /**
@@ -519,20 +587,46 @@ class AccountingAgenda
         );
     }
 
-    /** Traspasos contados por el bot que esperan a que alguien los revise. */
-    private function botTransfers(): ?AgendaItem
+    /**
+     * Traspasos contados por el bot que esperan a que alguien los revise, uno por uno
+     * (llegan pocos): revisarlo lleva al formulario ya relleno, porque lo entendido de
+     * una nota de voz puede estar mal; descartarlo se hace desde aquí.
+     *
+     * @return list<AgendaItem>
+     */
+    private function botTransfers(): array
     {
-        $count = \count($this->pendingTransfers->findUnconfirmed());
-        if ($count === 0) {
-            return null;
-        }
-
-        return new AgendaItem(
+        return array_map(static fn (PendingTransfer $t): AgendaItem => new AgendaItem(
             AgendaUrgency::Normal,
-            $count === 1 ? 'Confirmar 1 traspaso contado por el bot' : sprintf('Confirmar %d traspasos contados por el bot', $count),
-            ['No entran en el libro hasta que alguien los revisa: lo entendido de una nota de voz puede estar mal.'],
+            sprintf(
+                'Confirmar el traspaso de %s € de %s a %s que contó %s por el bot',
+                $t->getAmount() !== null ? number_format((float) $t->getAmount(), 2, ',', '.') : '¿?',
+                $t->getFrom()?->getName() ?? '¿?',
+                $t->getTo()?->getName() ?? '¿?',
+                $t->getSentBy()->getDisplayName(),
+            ),
+            [sprintf('Con fecha del %s. No entra en el libro hasta que alguien lo revisa.', $t->getDate()->format('d/m/Y'))],
             'accounting_transfer_pending',
-        );
+            [],
+            null,
+            [
+                AgendaAction::link(
+                    'Revisar y anotar',
+                    'Abre el traspaso ya relleno para corregirlo; se anota al guardarlo.',
+                    'accounting_transfer_pending_confirm',
+                    ['id' => $t->getId()],
+                ),
+                AgendaAction::post(
+                    'Descartar',
+                    'Se tira lo que contó el bot. El libro no se toca.',
+                    'accounting_transfer_pending_discard',
+                    ['id' => $t->getId()],
+                    'accounting_transfer_pending_discard_'.$t->getId(),
+                    [],
+                    false,
+                ),
+            ],
+        ), $this->pendingTransfers->findUnconfirmed());
     }
 
     /**

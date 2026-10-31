@@ -103,6 +103,25 @@ class PendingTransferControllerTest extends AbstractAuthenticatedTest
         $this->assertSame([], $this->entriesOf($box));
     }
 
+    /** Desde la portada: el enlace lleva al formulario relleno y descartar vuelve a la portada. */
+    public function testDesdeLaPortadaSeRevisaODescarta(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        [$box, $field] = $this->catalog();
+        $pending = $this->pending($box, $field, '20.00');
+
+        $crawler = $client->request('GET', '/gestion/accounting/');
+        $this->assertResponseIsSuccessful();
+        $this->assertCount(1, $crawler->filter(sprintf('.acc-todo a[href="/gestion/accounting/transfer/pending/%d"]', $pending->getId())));
+        $client->submit($crawler->filter(sprintf('.acc-todo form[action="/gestion/accounting/transfer/pending/%d/discard"]', $pending->getId()))->form());
+
+        $this->assertResponseRedirects('/gestion/accounting/');
+        $this->em()->clear();
+        $this->assertNull($this->em()->find(PendingTransfer::class, $pending->getId()));
+        $this->assertSame([], $this->entriesOf($box));
+    }
+
     /**
      * «Es otra cosa» en el bot: sin confirmar se tira; ya en el libro, no se da por
      * deshecho (seguiría contando en el saldo). Y borrar el traspaso en la web se lo

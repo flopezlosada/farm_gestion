@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\OfficialNotice;
 use App\Entity\User;
+use App\Http\BackToAgenda;
 use App\Repository\OfficialNoticeRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -53,10 +54,11 @@ class OfficialNoticeController extends AbstractController
     #[Route('/{id}/reviewed', name: 'accounting_official_notice_reviewed', requirements: ['id' => '\d+'], methods: ['POST'])]
     public function reviewed(OfficialNotice $notice, Request $request, EntityManagerInterface $em): Response
     {
+        $back = BackToAgenda::route($request, 'accounting_official_notices');
         if (!$this->isCsrfTokenValid('accounting_official_notice_reviewed_' . $notice->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
 
-            return $this->redirectToRoute('accounting_official_notices');
+            return $this->redirectToRoute($back);
         }
         $user = $this->getUser();
         if (!$user instanceof User) {
@@ -66,11 +68,11 @@ class OfficialNoticeController extends AbstractController
         if (!$notice->markReviewed($user, new \DateTimeImmutable())) {
             $this->addFlash('info', sprintf('Ya la había marcado %s.', $notice->getReviewedBy()?->getDisplayName() ?? 'otra persona'));
 
-            return $this->redirectToRoute('accounting_official_notices');
+            return $this->redirectToRoute($back);
         }
         $em->flush();
         $this->addFlash('success', sprintf('Notificación de %s marcada como revisada en la sede.', $notice->getAgency()));
 
-        return $this->redirectToRoute('accounting_official_notices');
+        return $this->redirectToRoute($back);
     }
 }

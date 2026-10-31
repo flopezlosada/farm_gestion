@@ -51,6 +51,11 @@
         .acc-todo .d { margin: 3px 0 0; padding: 0; list-style: none; font-size: 12.5px; line-height: 1.5; color: var(--prl-ink-soft, #5a564a); }
         .acc-todo .go { margin-top: 3px; font-size: 11px; color: var(--prl-ink-faint, #8d8773); }
         .acc-todo a.task:hover .go { color: var(--prl-sage-d, #2f4426); }
+        /* Los botones van bajo el texto, alineados con él (no con el punto), y cada uno dice qué pasa. */
+        .acc-todo .acts { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 0 14px 12px 36px; margin-top: -4px; }
+        .acc-todo .act { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; max-width: 34em; }
+        .acc-todo .act form { margin: 0; }
+        .acc-todo .act .why { font-size: 11.5px; line-height: 1.4; color: var(--prl-ink-faint, #8d8773); }
     </style>
 {% endblock %}
 
@@ -149,6 +154,8 @@
             {% if items is empty %}
                 <div class="acc-done"><i class="fa fa-check"></i> Todo al día: no hay nada pendiente.</div>
             {% else %}
+                {# Resolver desde aquí es escribir en el libro: sólo quien puede editar ve los botones. #}
+                {% set can_act = is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
                 <div class="prl-table-wrap">
                     <ul class="acc-todo">
                         {% for item in items %}
@@ -166,6 +173,26 @@
                                     </span>
                                     <i class="fa fa-chevron-right go" aria-hidden="true"></i>
                                 </a>
+                                {% if item.actions is not empty and can_act %}
+                                    <div class="acts">
+                                        {% for action in item.actions %}
+                                            {% set btn_class = 'prl-btn prl-btn--sm' ~ (action.primary ? ' prl-btn--primary' : '') %}
+                                            <div class="act">
+                                                {% if action.isPost() %}
+                                                    <form method="post" action="{{ path(action.route, action.routeParams) }}">
+                                                        <input type="hidden" name="_token" value="{{ csrf_token(action.csrfId) }}">
+                                                        <input type="hidden" name="_back" value="agenda">
+                                                        {% for name, value in action.fields %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+                                                        <button type="submit" class="{{ btn_class }}">{{ action.label }}</button>
+                                                    </form>
+                                                {% else %}
+                                                    <a class="{{ btn_class }}" href="{{ path(action.route, action.routeParams) }}">{{ action.label }}</a>
+                                                {% endif %}
+                                                <span class="why">{{ action.consequence }}</span>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
                             </li>
                         {% endfor %}
                     </ul>
