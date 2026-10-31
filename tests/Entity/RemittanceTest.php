@@ -104,7 +104,7 @@ class RemittanceTest extends TestCase
         $remittance = new Remittance(Remittance::KIND_BASKET, new \DateTimeImmutable('2026-09-01'), 'Recibos', Remittance::SOURCE_APP, null);
         $line = self::line('ANA LÓPEZ', '65.00', 'R-1');
         $remittance->addLine($line);
-        $remittance->markSent(null);
+        $remittance->markSent(null, new \DateTimeImmutable('2026-09-18'));
 
         $this->assertTrue($remittance->isSent());
         $this->assertNotNull($remittance->getSentAt());
@@ -115,7 +115,7 @@ class RemittanceTest extends TestCase
             static fn () => $remittance->removeLine($line),
             static fn () => $line->setAmount('1.00'),
             static fn () => $line->setIban('ES7921000813610123456789'),
-            static fn () => $remittance->markSent(null),
+            static fn () => $remittance->markSent(null, new \DateTimeImmutable('2026-09-18')),
         ];
         foreach ($attempts as $i => $attempt) {
             try {
@@ -133,7 +133,35 @@ class RemittanceTest extends TestCase
         $remittance = new Remittance(Remittance::KIND_BASKET, new \DateTimeImmutable('2026-09-01'), 'Recibos', Remittance::SOURCE_APP, null);
 
         $this->expectException(\LogicException::class);
-        $remittance->markSent(null);
+        $remittance->markSent(null, new \DateTimeImmutable('2026-09-18'));
+    }
+
+    /**
+     * Enviada lleva el día de cargo pedido, sin hora; es lo único que se cambia después
+     * (se volvió a subir con otra fecha) o se quita (no vigilarla). En un borrador no.
+     */
+    public function testElDiaDeCargoSePoneAlEnviarYSeCambiaDespues(): void
+    {
+        $remittance = new Remittance(Remittance::KIND_BASKET, new \DateTimeImmutable('2026-10-01'), 'Recibos', Remittance::SOURCE_APP, null);
+        $remittance->addLine(self::line('ANA LÓPEZ', '65.00', 'R-1'));
+        $this->assertNull($remittance->getChargeDate());
+
+        try {
+            $remittance->rescheduleCharge(new \DateTimeImmutable('2026-11-18'));
+            $this->fail('En un borrador la fecha se pone al enviarla.');
+        } catch (\LogicException) {
+            $this->assertNull($remittance->getChargeDate());
+        }
+
+        $remittance->markSent(null, new \DateTimeImmutable('2026-11-18 17:45'));
+        $this->assertSame('2026-11-18 00:00', $remittance->getChargeDate()?->format('Y-m-d H:i'));
+
+        $remittance->rescheduleCharge(new \DateTimeImmutable('2026-11-25'));
+        $this->assertSame('2026-11-25', $remittance->getChargeDate()?->format('Y-m-d'));
+        $this->assertSame('65.00', $remittance->getTotal(), 'Cambiar la fecha no toca los recibos.');
+
+        $remittance->rescheduleCharge(null);
+        $this->assertNull($remittance->getChargeDate());
     }
 
     /** La importada entra como enviada, pero se puede tirar para volver a importarla. */
@@ -143,6 +171,7 @@ class RemittanceTest extends TestCase
 
         $this->assertTrue($remittance->isSent());
         $this->assertTrue($remittance->isImported());
+        $this->assertNull($remittance->getChargeDate(), 'Del Excel no se sabe el día de cargo: no se vigila.');
         $this->assertTrue($remittance->isDeletable());
         $this->assertSame('10. 1ª Cuota SEMESTRAL 2025.xlsx', $remittance->getImportedFrom());
     }

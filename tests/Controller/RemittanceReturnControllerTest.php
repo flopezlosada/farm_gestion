@@ -124,7 +124,7 @@ class RemittanceReturnControllerTest extends AbstractAuthenticatedTest
         $this->assertSame(ReturnStatus::Recharging, $this->returnOf($luis)->getStatus());
 
         $draft = $this->em()->find(Remittance::class, $draft->getId());
-        $draft->markSent(null);
+        $draft->markSent(null, new \DateTimeImmutable('2026-09-18'));
         $this->em()->flush();
         $this->assertSame(ReturnStatus::Closed, $this->returnOf($luis)->getStatus());
         $client->request('GET', '/gestion/accounting/returns');

@@ -35,6 +35,24 @@ class RemittanceRepository extends ServiceEntityRepository
     }
 
     /**
+     * Las remesas enviadas con día de cargo: las que se vigila que entren en el banco.
+     * Sin sus recibos: el total sólo hace falta de las que no han entrado, que son
+     * pocas o ninguna.
+     *
+     * @return list<Remittance>
+     */
+    public function findSentWithChargeDate(): array
+    {
+        return $this->createQueryBuilder('r')
+            ->andWhere('r.status = :sent')->setParameter('sent', Remittance::STATUS_SENT)
+            ->andWhere('r.chargeDate IS NOT NULL')
+            ->orderBy('r.chargeDate', 'ASC')
+            ->addOrderBy('r.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * La última remesa de un tipo, o la última anterior a un mes: de la que sale la
      * remesa de ese mes, y contra la que se ven sus cambios.
      *

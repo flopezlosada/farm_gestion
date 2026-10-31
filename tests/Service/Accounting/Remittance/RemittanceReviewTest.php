@@ -96,7 +96,7 @@ class RemittanceReviewTest extends TestCase
     {
         $ana = self::partner(1, 'ANA', 'LOPEZ');
         $remittance = self::draft([self::line($ana, 'ANA LOPEZ', '70.00', 'CUOTA MENSUAL 1')]);
-        $remittance->markSent(null);
+        $remittance->markSent(null, new \DateTimeImmutable('2026-09-18'));
 
         $this->assertSame([], (new RemittanceReview())->lineWarnings($remittance, [1 => self::fee($ana, 6500)]));
     }

@@ -69,7 +69,7 @@ class RemittanceReturnTest extends TestCase
         $return->rechargeIn($retry);
         $this->assertSame(ReturnStatus::Recharging, $return->getStatus());
 
-        $draft->markSent(null);
+        $draft->markSent(null, new \DateTimeImmutable('2026-09-18'));
         $this->assertSame(ReturnStatus::Closed, $return->getStatus());
         $this->assertSame(ReturnOutcome::Recharge, $return->getOutcome());
     }
