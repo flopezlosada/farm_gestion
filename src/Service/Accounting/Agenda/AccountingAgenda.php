@@ -47,8 +47,6 @@ use App\Service\Accounting\Remittance\RemittanceChargeWatch;
  */
 class AccountingAgenda
 {
-    /** Días antes del plazo de la gestoría en que la entrega pasa a apremiar. */
-    public const ACCOUNTANT_SOON_DAYS = 7;
 
     /** Días sin apuntes a partir de los que el libro de una cuenta de banco se da por atrasado. */
     public const STALE_BOOK_DAYS = 30;
@@ -129,8 +127,8 @@ class AccountingAgenda
     /**
      * Lo que hay que mandar a la gestoría: los trimestres reabiertos para corregirlos,
      * que hay que volver a mandar, y el último trimestre cerrado mientras no conste
-     * entregado. Antes del plazo es una tarea más; en su última semana, pasado el plazo
-     * o reabierto, aprieta. Entregado, ya no sale: es una tarea hecha.
+     * entregado. Siempre aprieta: el plazo cae a los pocos días de acabar el trimestre
+     * ({@see InvoiceQuarter::DELIVERY_DAY}). Entregado, ya no sale: es una tarea hecha.
      *
      * @return list<AgendaItem>
      */
@@ -151,13 +149,10 @@ class AccountingAgenda
         $day = $today->setTime(0, 0);
         $deadlineText = sprintf('%d de %s', (int) $deadline->format('j'), mb_strtolower(MonthNames::LONG[(int) $deadline->format('n')]));
 
-        $items[] = $day > $deadline
-            ? $this->deliveryItem($quarter, AgendaUrgency::Soon, sprintf('Mandar el %s a la gestoría: el plazo acabó el %s', $quarter->label(), $deadlineText))
-            : $this->deliveryItem(
-                $quarter,
-                (int) $day->diff($deadline)->days <= self::ACCOUNTANT_SOON_DAYS ? AgendaUrgency::Soon : AgendaUrgency::Normal,
-                sprintf('Mandar el %s a la gestoría: plazo hasta el %s', $quarter->label(), $deadlineText),
-            );
+        // El plazo cae a los pocos días de acabar el trimestre: desde que sale, apremia.
+        $items[] = $this->deliveryItem($quarter, AgendaUrgency::Soon, $day > $deadline
+            ? sprintf('Mandar el %s a la gestoría: el plazo acabó el %s', $quarter->label(), $deadlineText)
+            : sprintf('Mandar el %s a la gestoría: plazo hasta el %s', $quarter->label(), $deadlineText));
 
         return $items;
     }

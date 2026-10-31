@@ -9,6 +9,9 @@ namespace App\Service\Accounting\Invoice;
  */
 final class InvoiceQuarter
 {
+    /** Día del mes siguiente al trimestre en que la gestoría quiere el paquete. */
+    public const DELIVERY_DAY = 5;
+
     /**
      * @param int $year    Año.
      * @param int $quarter Trimestre, del 1 al 4.
@@ -86,15 +89,13 @@ final class InvoiceQuarter
     }
 
     /**
-     * Último día para entregar el trimestre a la gestoría: los modelos trimestrales se
-     * presentan del 1 al 20 del mes siguiente, y los del cuarto trimestre hasta el 30
-     * de enero.
+     * Último día para entregar el trimestre a la gestoría: el 5 del mes siguiente, para
+     * que le dé tiempo a presentar los modelos trimestrales (que vencen el 20, y el 30
+     * de enero los del cuarto). Es el plazo que pide la gestoría, no el de Hacienda.
      */
     public function deliveryDeadline(): \DateTimeImmutable
     {
-        $nextMonth = $this->to()->modify('first day of next month');
-
-        return $nextMonth->setDate((int) $nextMonth->format('Y'), (int) $nextMonth->format('n'), $this->quarter === 4 ? 30 : 20);
+        return $this->dayAfter()->modify(sprintf('+%d days', self::DELIVERY_DAY - 1));
     }
 
     /** Como lo escribe la asociación en sus carpetas: «3T2026». */

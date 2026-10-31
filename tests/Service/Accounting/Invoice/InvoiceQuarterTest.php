@@ -32,12 +32,12 @@ class InvoiceQuarterTest extends TestCase
         $this->assertSame('1T2026', InvoiceQuarter::lastClosed(new \DateTimeImmutable('2026-04-01'))->label());
     }
 
-    /** Los trimestrales se presentan hasta el 20 del mes siguiente; el cuarto, hasta el 30 de enero. */
+    /** La gestoría quiere el paquete el 5 del mes siguiente, también el del cuarto trimestre. */
     public function testElPlazoDeEntrega(): void
     {
-        $this->assertSame('2026-04-20', InvoiceQuarter::of(2026, 1)->deliveryDeadline()->format('Y-m-d'));
-        $this->assertSame('2026-10-20', InvoiceQuarter::of(2026, 3)->deliveryDeadline()->format('Y-m-d'));
-        $this->assertSame('2027-01-30', InvoiceQuarter::of(2026, 4)->deliveryDeadline()->format('Y-m-d'));
+        $this->assertSame('2026-04-05', InvoiceQuarter::of(2026, 1)->deliveryDeadline()->format('Y-m-d'));
+        $this->assertSame('2026-10-05', InvoiceQuarter::of(2026, 3)->deliveryDeadline()->format('Y-m-d'));
+        $this->assertSame('2027-01-05', InvoiceQuarter::of(2026, 4)->deliveryDeadline()->format('Y-m-d'), 'cambia de año');
     }
 
     /** Termina al empezar el siguiente: el último día, aunque sea tarde, aún no. */

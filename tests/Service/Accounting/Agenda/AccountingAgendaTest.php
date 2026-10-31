@@ -55,23 +55,22 @@ class AccountingAgendaTest extends TestCase
     }
 
     /**
-     * Del 1 al 20 del mes siguiente al trimestre toca la gestoría; en la última semana
-     * aprieta, y pasado el plazo sin entregar sigue apretando.
+     * Del 1 al 5 del mes siguiente al trimestre toca la gestoría: apremia desde el
+     * primer día, el último aún vale, y pasado el plazo sin entregar sigue apremiando.
      */
     public function testLaGestoriaHastaQueConsteEntregado(): void
     {
         $agenda = $this->agenda(deliveries: []);
 
         $early = $this->only($agenda->items(new \DateTimeImmutable('2026-10-01')));
-        $this->assertSame('Mandar el 3T2026 a la gestoría: plazo hasta el 20 de octubre', $early->title);
-        $this->assertSame(AgendaUrgency::Normal, $early->urgency);
+        $this->assertSame('Mandar el 3T2026 a la gestoría: plazo hasta el 5 de octubre', $early->title);
+        $this->assertSame(AgendaUrgency::Soon, $early->urgency);
         $this->assertSame(['year' => 2026, 'quarter' => 3], $early->routeParams);
 
-        $this->assertSame(AgendaUrgency::Soon, $this->only($agenda->items(new \DateTimeImmutable('2026-10-16')))->urgency);
-        $this->assertSame(AgendaUrgency::Soon, $this->only($agenda->items(new \DateTimeImmutable('2026-10-20')))->urgency, 'el último día aún vale');
+        $this->assertSame('Mandar el 3T2026 a la gestoría: plazo hasta el 5 de octubre', $this->only($agenda->items(new \DateTimeImmutable('2026-10-05 18:00')))->title, 'el último día aún vale');
 
-        $late = $this->only($agenda->items(new \DateTimeImmutable('2026-11-15')));
-        $this->assertSame('Mandar el 3T2026 a la gestoría: el plazo acabó el 20 de octubre', $late->title);
+        $late = $this->only($agenda->items(new \DateTimeImmutable('2026-10-06')));
+        $this->assertSame('Mandar el 3T2026 a la gestoría: el plazo acabó el 5 de octubre', $late->title);
         $this->assertSame(AgendaUrgency::Soon, $late->urgency);
     }
 
@@ -142,12 +141,12 @@ class AccountingAgendaTest extends TestCase
         $this->assertSame(['0 facturas recibidas y 0 emitidas.'], $none->details);
     }
 
-    /** El cuarto trimestre se presenta hasta el 30 de enero. */
-    public function testElCuartoTrimestreHastaElTreintaDeEnero(): void
+    /** El cuarto trimestre, también el 5: el de enero del año siguiente. */
+    public function testElCuartoTrimestreHastaElCincoDeEnero(): void
     {
-        $item = $this->only($this->agenda()->items(new \DateTimeImmutable('2027-01-25')));
+        $item = $this->only($this->agenda()->items(new \DateTimeImmutable('2027-01-03')));
 
-        $this->assertSame('Mandar el 4T2026 a la gestoría: plazo hasta el 30 de enero', $item->title);
+        $this->assertSame('Mandar el 4T2026 a la gestoría: plazo hasta el 5 de enero', $item->title);
     }
 
     /**
