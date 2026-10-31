@@ -5,12 +5,14 @@ namespace App\Service\Accounting\Agenda;
 use App\Entity\AccountantDelivery;
 use App\Entity\FinancialAccount;
 use App\Entity\IssuedInvoice;
+use App\Entity\OfficialNotice;
 use App\Entity\Remittance;
 use App\Entity\RemittanceReturn;
 use App\Entity\ReturnStatus;
 use App\Repository\AccountEntryRepository;
 use App\Repository\FinancialAccountRepository;
 use App\Repository\IssuedInvoiceRepository;
+use App\Repository\OfficialNoticeRepository;
 use App\Repository\PendingTransferRepository;
 use App\Repository\ReceivedInvoiceRepository;
 use App\Repository\RemittanceRepository;
@@ -21,10 +23,12 @@ use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\Invoice\InvoiceQuarter;
 use App\Service\Accounting\IssuedInvoice\IssuedInvoiceBook;
 use App\Service\Accounting\MonthNames;
+use App\Service\Accounting\OfficialNotice\OfficialNoticeAlert;
 use App\Service\Accounting\Remittance\BankReturns;
 
 /**
- * Lo que queda por hacer en la contabilidad, para la portada: el libro de los bancos
+ * Lo que queda por hacer en la contabilidad, para la portada: las notificaciones
+ * oficiales sin revisar, el libro de los bancos
  * sin meter, la entrega del trimestre a la gestoría (o volver a mandarlo, si se
  * reabrió), la bandeja de facturas, lo
  * emitido sin cobrar, la remesa del mes, los recibos devueltos, los traspasos a
@@ -55,13 +59,14 @@ class AccountingAgenda
         private readonly ClosedPeriods $closed,
         private readonly RemittanceReturnRepository $returns,
         private readonly PendingTransferRepository $pendingTransfers,
+        private readonly OfficialNoticeRepository $officialNotices,
     ) {
     }
 
     /**
      * Las tareas pendientes a una fecha, las que aprietan primero y, a igual urgencia,
-     * en el orden del ritmo de trabajo: libro, tarjetas, gestoría, facturas, cobros,
-     * remesa, traspasos.
+     * en el orden del ritmo de trabajo: notificaciones oficiales, libro, tarjetas,
+     * gestoría, facturas, cobros, remesa, traspasos.
      *
      * @param \DateTimeImmutable $today Hoy.
      *
@@ -70,6 +75,7 @@ class AccountingAgenda
     public function items(\DateTimeImmutable $today): array
     {
         $items = array_values(array_filter([
+            ...$this->unreviewedOfficialNotices(),
             $this->staleBankBooks($today),
             ...$this->unexplainedCardPayments(),
             ...$this->accountantDeliveries($today),
@@ -86,6 +92,26 @@ class AccountingAgenda
         usort($items, static fn (AgendaItem $a, AgendaItem $b): int => $a->urgency->value <=> $b->urgency->value);
 
         return $items;
+    }
+
+    /**
+     * Las notificaciones oficiales que han avisado por correo y nadie ha mirado en la
+     * sede. Una por aviso (llegan pocas) y siempre apremian: a los 10 días cuentan como
+     * notificadas, se abran o no.
+     *
+     * @return list<AgendaItem>
+     */
+    private function unreviewedOfficialNotices(): array
+    {
+        return array_map(static fn (OfficialNotice $notice): AgendaItem => new AgendaItem(
+            AgendaUrgency::Soon,
+            sprintf('Notificación oficial sin revisar (%s)', $notice->getAgency()),
+            [
+                sprintf('El aviso llegó el %s. %s', $notice->getReceivedAt()->format('d/m/Y'), OfficialNoticeAlert::HOW_TO),
+                OfficialNoticeAlert::DEEMED_NOTIFIED,
+            ],
+            'accounting_official_notices',
+        ), $this->officialNotices->findUnreviewed());
     }
 
     /**
