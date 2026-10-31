@@ -102,7 +102,9 @@ class BankStatementController extends AbstractController
             $import->alreadyThere > 0 ? sprintf(' (%d ya estaban de otro extracto)', $import->alreadyThere) : '',
             $import->linked,
         ));
-        array_walk($import->warnings, fn (string $w) => $this->addFlash('warning', $w));
+        foreach ($import->warnings as $warning) {
+            $this->addFlash('warning', $warning);
+        }
 
         return \count($import->statements) === 1
             ? $this->redirectToRoute('accounting_bank_statement_show', ['id' => $import->statements[0]->getId()])
