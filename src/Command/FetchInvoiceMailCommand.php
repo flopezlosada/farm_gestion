@@ -3,7 +3,7 @@
 namespace App\Command;
 
 use App\Service\Accounting\Invoice\InvoiceMailbox;
-use App\Service\Accounting\Invoice\MailedInvoiceIntake;
+use App\Service\Accounting\Invoice\MailboxSorter;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -18,17 +18,20 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * Sólo las deja en la bandeja, en cola. Las lee la tarea que reintenta la lectura
  * ({@see ReadReceivedInvoicesCommand}), que corre cada hora: si un día llegan muchas
  * y se acaba el cupo de lectura, las termina sola los días siguientes.
+ *
+ * El aviso de una notificación electrónica oficial que llegue a este buzón no es una
+ * factura: avisa al momento a quien lleva la contabilidad ({@see MailboxSorter}).
  */
 #[AsCommand(name: 'app:fetch-invoice-mail', description: 'Recoge las facturas que han llegado al buzón de facturas.')]
 class FetchInvoiceMailCommand extends AbstractCronCommand
 {
     /**
-     * @param InvoiceMailbox      $mailbox El buzón.
-     * @param MailedInvoiceIntake $intake  Saca las facturas de cada correo.
+     * @param InvoiceMailbox $mailbox El buzón.
+     * @param MailboxSorter  $sorter  Lleva cada correo a su sitio: aviso oficial o facturas.
      */
     public function __construct(
         private readonly InvoiceMailbox $mailbox,
-        private readonly MailedInvoiceIntake $intake,
+        private readonly MailboxSorter $sorter,
     ) {
         parent::__construct();
     }
@@ -56,7 +59,7 @@ class FetchInvoiceMailCommand extends AbstractCronCommand
                 return Command::SUCCESS;
             }
 
-            $done = $this->mailbox->drain($this->intake->take(...));
+            $done = $this->mailbox->drain($this->sorter->take(...));
         } catch (\Throwable $e) {
             $io->error('No se pudo leer el buzón de facturas: ' . $e->getMessage());
 

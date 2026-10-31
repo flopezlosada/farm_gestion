@@ -44,6 +44,26 @@ parameters:
         - gemini-3.8-flash
         - gemini-2.5-flash
 
+    # Remitentes de los avisos de notificación electrónica oficial que, al llegar
+    # al buzón de facturas, mandan un aviso urgente a quien lleva la contabilidad.
+    # Clave: la dirección del remitente (da igual mayúsculas o minúsculas).
+    # `dkim`: dominios de firma que se aceptan para ese remitente (vale también un
+    # subdominio). El remitente se suplanta con facilidad: sólo avisa si el
+    # servidor del buzón certifica en su Authentication-Results una firma DKIM
+    # válida de uno de esos dominios; si no, se apunta en el log como sospechoso.
+    # Cuando llegue un aviso real de otro organismo, se añade aquí con el dominio
+    # de firma que traiga (se ve en las cabeceras del correo).
+    app.official_notice_senders:
+        noreply.dehu@correo.gob.es:
+            agency: 'DEHú'
+            dkim: ['correo.gob.es']
+        agenciatributaria@correo.aeat.es:
+            agency: 'Agencia Tributaria'
+            dkim: ['aeat.es', 'correo.aeat.es']
+        notificaciones.telematicas.giss@seg-social.es:
+            agency: 'Seguridad Social'
+            dkim: ['seg-social.es']
+
 services:
     # default configuration for services in *this* file
     _defaults:
