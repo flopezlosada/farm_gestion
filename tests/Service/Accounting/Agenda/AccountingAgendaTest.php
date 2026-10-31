@@ -4,6 +4,7 @@ namespace App\Tests\Service\Accounting\Agenda;
 
 use App\Entity\AccountantDelivery;
 use App\Entity\AccountEntry;
+use App\Entity\CashCount;
 use App\Entity\Customer;
 use App\Entity\FinancialAccount;
 use App\Entity\IssuedInvoice;
@@ -16,6 +17,7 @@ use App\Entity\RemittanceLine;
 use App\Entity\RemittanceReturn;
 use App\Entity\User;
 use App\Repository\AccountEntryRepository;
+use App\Repository\CashCountRepository;
 use App\Repository\FinancialAccountRepository;
 use App\Repository\IssuedInvoiceRepository;
 use App\Repository\OfficialNoticeRepository;
@@ -26,6 +28,7 @@ use App\Repository\RemittanceReturnRepository;
 use App\Service\Accounting\Agenda\AccountingAgenda;
 use App\Service\Accounting\Agenda\AgendaItem;
 use App\Service\Accounting\Agenda\AgendaUrgency;
+use App\Service\Accounting\CashCount\DayBalances;
 use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\AccountantPackage;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
@@ -405,6 +408,49 @@ class AccountingAgendaTest extends TestCase
     }
 
     /**
+     * Un arqueo que no cuadra sale con la diferencia con signo, por qué suele pasar y
+     * un enlace a anotar el apunte con la caja y la fecha puestas. Si cuadra con el
+     * saldo de antes o el de después de los apuntes del día, no sale.
+     */
+    public function testElArqueoQueNoCuadra(): void
+    {
+        $garden = $this->account('Caja de la huerta', FinancialAccount::KIND_CASH);
+        $local = $this->account('Caja del local', FinancialAccount::KIND_CASH);
+        $counts = [
+            new CashCount($garden, new \DateTimeImmutable('2026-10-30'), 40056, 41296, null, new \DateTimeImmutable('2026-10-30 20:15'), 'caja huerta 400,56', 7001),
+            new CashCount($local, new \DateTimeImmutable('2026-10-30'), 12000, 12000, null, new \DateTimeImmutable('2026-10-30 20:20'), 'caja local 120', null),
+        ];
+
+        $items = $this->agenda(cashCounts: $counts, dayBalances: [
+            $garden->getId() => new DayBalances(45000, 41296),
+            $local->getId() => new DayBalances(12000, 9500),
+        ])->items(new \DateTimeImmutable('2026-11-15'));
+
+        $count = array_values(array_filter($items, static fn (AgendaItem $i): bool => $i->route === 'accounting_entry_new'));
+        $this->assertCount(1, $count, 'la del local cuadra con el saldo de antes del ticket de ese día');
+        $this->assertSame('El arqueo de Caja de la huerta del 30/10/2026 no cuadra: -12,40 €', $count[0]->title);
+        $this->assertSame(AgendaUrgency::Normal, $count[0]->urgency);
+        $this->assertSame([
+            'Se contaron 400,56 € y el libro dice 412,96 € al cerrar ese día: faltan 12,40 € en la caja. Suele ser un ticket sin anotar o un traspaso sin registrar.',
+            'Al anotar lo que falta con fecha del 30/10/2026 o anterior, este aviso desaparece solo. No se hace ningún apunte automático.',
+        ], $count[0]->details);
+        $this->assertSame(['account' => $garden->getId(), 'date' => '2026-10-30'], $count[0]->routeParams);
+    }
+
+    /** Si sobra dinero, el signo es positivo; con el libro en negativo, también lo dice. */
+    public function testElArqueoQueSobraYElLibroEnNegativo(): void
+    {
+        $garden = $this->account('Caja de la huerta', FinancialAccount::KIND_CASH);
+        $count = new CashCount($garden, new \DateTimeImmutable('2026-10-30'), 500, -1500, null, new \DateTimeImmutable('2026-10-30 20:15'), 'caja huerta 5', null);
+
+        $item = $this->only($this->agenda(cashCounts: [$count], dayBalances: [$garden->getId() => new DayBalances(-1500, -1500)])
+            ->items(new \DateTimeImmutable('2026-11-15')));
+
+        $this->assertSame('El arqueo de Caja de la huerta del 30/10/2026 no cuadra: +20,00 €', $item->title);
+        $this->assertStringContainsString('el libro dice -15,00 € al cerrar ese día: sobran 20,00 €', $item->details[0]);
+    }
+
+    /**
      * Una notificación oficial sin revisar sale la primera, aunque la gestoría también
      * apriete: a los 10 días cuenta como notificada. Una tarea por aviso, con su
      * organismo y el día que llegó, y lleva a la lista donde se marca como revisada.
@@ -445,6 +491,8 @@ class AccountingAgendaTest extends TestCase
      * @param list<OfficialNotice>                $officialNotices notificaciones oficiales sin revisar
      * @param list<PendingTransfer>               $botTransfers traspasos del bot sin confirmar
      * @param list<array{remittance: Remittance, bookUpTo: \DateTimeImmutable}> $uncredited remesas enviadas que no han entrado
+     * @param list<CashCount>                     $cashCounts el último arqueo de cada caja abierta
+     * @param array<int, DayBalances>             $dayBalances saldo de cada cuenta el día de su arqueo; por omisión, 0
      */
     private function agenda(
         array $received = [],
@@ -462,6 +510,8 @@ class AccountingAgendaTest extends TestCase
         array $unlinkedReturns = [],
         array $botTransfers = [],
         array $uncredited = [],
+        array $cashCounts = [],
+        array $dayBalances = [],
         array $officialNotices = [],
     ): AccountingAgenda {
         $receivedRepo = $this->createStub(ReceivedInvoiceRepository::class);
@@ -478,6 +528,7 @@ class AccountingAgendaTest extends TestCase
         $entries->method('findExpensesWithoutInvoice')->willReturn($withoutInvoice);
         $entries->method('findUnlinkedReturnCharges')->willReturn($unlinkedReturns);
         $entries->method('balanceFor')->willReturnCallback(static fn (FinancialAccount $a): string => $balances[$a->getId()] ?? '0.00');
+        $entries->method('dayBalances')->willReturnCallback(static fn (FinancialAccount $a): DayBalances => $dayBalances[$a->getId()] ?? new DayBalances(0, 0));
         $latest = [];
         foreach ($deliveries ?? [$this->delivery(2026, 3)] as $delivery) {
             $latest[$delivery->getQuarter()->label()] = $delivery;
@@ -497,6 +548,8 @@ class AccountingAgendaTest extends TestCase
         $pendingTransfers->method('findUnconfirmed')->willReturn($botTransfers);
         $chargeWatch = $this->createStub(RemittanceChargeWatch::class);
         $chargeWatch->method('uncredited')->willReturn($uncredited);
+        $counts = $this->createStub(CashCountRepository::class);
+        $counts->method('findLatestOfActiveCashAccounts')->willReturn($cashCounts);
         $notices = $this->createStub(OfficialNoticeRepository::class);
         $notices->method('findUnreviewed')->willReturn($officialNotices);
 
@@ -513,6 +566,7 @@ class AccountingAgendaTest extends TestCase
             $returns,
             $pendingTransfers,
             $chargeWatch,
+            $counts,
             $notices,
         );
     }
