@@ -3,6 +3,7 @@
 namespace App\Repository;
 
 use App\Entity\AccountEntry;
+use App\Entity\BankStatementLine;
 use App\Entity\BudgetCategoryGroup;
 use App\Entity\FinancialAccount;
 use App\Entity\IssuedInvoice;
@@ -623,6 +624,66 @@ class AccountEntryRepository extends ServiceEntityRepository
             ->setMaxResults($limit)
             ->getQuery()
             ->getResult();
+    }
+
+    /**
+     * Los saldos del libro de una cuenta alrededor de un extracto, en céntimos y en una
+     * consulta: el de antes de empezar el primer día (apertura + apuntes anteriores) y
+     * el de acabar el último (apertura + apuntes hasta ese día incluido). Es lo que se
+     * compara con los saldos inicial y final que da el banco.
+     *
+     * @return array{before: int, through: int}
+     */
+    public function balancesAroundCents(FinancialAccount $account, \DateTimeImmutable $from, \DateTimeImmutable $to): array
+    {
+        $row = $this->createQueryBuilder('e')
+            ->select('COALESCE(SUM(CASE WHEN e.date < :from THEN e.amount ELSE 0 END), 0) AS beforeFrom')
+            ->addSelect('COALESCE(SUM(e.amount), 0) AS throughTo')
+            ->andWhere('e.account = :account')->setParameter('account', $account)
+            ->andWhere('e.date >= :opening')->setParameter('opening', $account->getOpeningDate())
+            ->andWhere('e.date <= :to')->setParameter('to', $to->format('Y-m-d'))
+            ->setParameter('from', $from->format('Y-m-d'))
+            ->getQuery()
+            ->getSingleResult();
+        $opening = IssuedInvoice::toCents($account->getOpeningBalance());
+
+        return [
+            'before' => $opening + IssuedInvoice::toCents((string) $row['beforeFrom']),
+            'through' => $opening + IssuedInvoice::toCents((string) $row['throughTo']),
+        ];
+    }
+
+    /**
+     * Los apuntes de unas cuentas entre dos fechas que no explican ningún movimiento
+     * del banco, en una consulta: los candidatos a emparejar con un extracto y lo que
+     * el extracto no trae. Desde la apertura de cada cuenta, por fecha.
+     *
+     * @param list<FinancialAccount> $accounts
+     * @param list<string>|null      $amounts  Sólo estos importes con signo («-12.50»); null, todos.
+     *
+     * @return list<AccountEntry>
+     */
+    public function findWithoutBankLine(array $accounts, \DateTimeImmutable $from, \DateTimeImmutable $to, ?array $amounts = null): array
+    {
+        if ($accounts === [] || $amounts === []) {
+            return [];
+        }
+        $qb = $this->createQueryBuilder('e')
+            ->innerJoin('e.account', 'a')
+            ->leftJoin(BankStatementLine::class, 'l', 'WITH', 'l.entry = e')
+            ->andWhere('l.id IS NULL')
+            ->andWhere('e.account IN (:accounts)')->setParameter('accounts', $accounts)
+            ->andWhere('e.date BETWEEN :from AND :to')
+            ->andWhere('e.date >= a.openingDate')
+            ->setParameter('from', $from->format('Y-m-d'))
+            ->setParameter('to', $to->format('Y-m-d'))
+            ->orderBy('e.date', 'ASC')
+            ->addOrderBy('e.id', 'ASC');
+        if ($amounts !== null) {
+            $qb->andWhere('e.amount IN (:amounts)')->setParameter('amounts', $amounts);
+        }
+
+        return $qb->getQuery()->getResult();
     }
 
     /** Redondea a dos decimales con punto, como los espera una columna DECIMAL. */

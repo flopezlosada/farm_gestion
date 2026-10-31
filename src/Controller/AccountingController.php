@@ -13,6 +13,7 @@ use App\Form\AccountEntryType;
 use App\Form\AccountTransferType;
 use App\Http\QueryId;
 use App\Repository\AccountEntryRepository;
+use App\Repository\BankStatementLineRepository;
 use App\Repository\BudgetCategoryRepository;
 use App\Repository\BudgetRepository;
 use App\Repository\FinancialAccountRepository;
@@ -413,6 +414,10 @@ class AccountingController extends AbstractController
     /**
      * Anotar un movimiento. Preselecciona cuenta y fecha si vienen en la URL, que es
      * como llega quien acaba de guardar otro apunte del mismo extracto.
+     *
+     * Desde un extracto del banco (`bank_line`) llega con cuenta, fecha, importe y
+     * concepto del movimiento, y al guardarlo queda ligado a él. Si se cambia la cuenta
+     * o el importe ya no es ese movimiento: se guarda sin ligar y se avisa.
      */
     #[Route('/entry/new', name: 'accounting_entry_new', methods: ['GET', 'POST'])]
     public function entryNew(
@@ -420,12 +425,22 @@ class AccountingController extends AbstractController
         EntityManagerInterface $em,
         FinancialAccountRepository $accounts,
         BudgetCategoryRepository $categories,
+        BankStatementLineRepository $bankLines,
     ): Response {
         $entry = new AccountEntry();
         $entry->setDate($this->parseDate($request->query->get('date')) ?? new \DateTimeImmutable('today'));
         $accountId = QueryId::from($request->query, 'account');
         if ($accountId !== null) {
             $entry->setAccount($accounts->find($accountId));
+        }
+        $bankLineId = QueryId::from($request->query, 'bank_line');
+        $bankLine = $bankLineId !== null ? $bankLines->find($bankLineId) : null;
+        $bankLine = $bankLine?->getEntry() === null ? $bankLine : null;
+        if ($bankLine !== null) {
+            $entry->setAccount($bankLine->getAccount())
+                ->setDate($bankLine->getOperationDate())
+                ->setAmount($bankLine->getAmount())
+                ->setConcept($bankLine->getSuggestedConcept());
         }
 
         $form = $this->createForm(AccountEntryType::class, $entry);
@@ -434,8 +449,18 @@ class AccountingController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             $entry->setCreatedBy($this->currentUser());
             $em->persist($entry);
+            try {
+                $bankLine?->linkTo($entry);
+            } catch (\DomainException) {
+                $this->addFlash('warning', 'No se ha ligado al movimiento del banco: se cambió la cuenta o el importe. Si es otro movimiento, sigue en el extracto sin anotar.');
+                $bankLine = null;
+            }
             $em->flush();
             $this->addFlash('success', sprintf('Anotado: %s.', $entry->getConcept()));
+            $statementId = QueryId::from($request->query, 'statement');
+            if ($bankLine !== null && $statementId !== null) {
+                return $this->redirectToRoute('accounting_bank_statement_show', ['id' => $statementId, '_fragment' => 'sin-apunte']);
+            }
 
             if ($request->request->has('and_new')) {
                 return $this->redirectToRoute('accounting_entry_new', [
