@@ -8,6 +8,7 @@ use App\Entity\FinancialAccount;
 use App\Entity\IssuedInvoice;
 use App\Entity\ReceivedInvoice;
 use App\Entity\RemittanceReturn;
+use App\Service\Accounting\CashCount\DayBalances;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
@@ -44,6 +45,34 @@ class AccountEntryRepository extends ServiceEntityRepository
         $moved = (string) $qb->getQuery()->getSingleScalarResult();
 
         return $this->money((float) $account->getOpeningBalance() + (float) $moved);
+    }
+
+    /**
+     * El saldo de una cuenta al empezar y al cerrar un día, en una consulta: lo que se
+     * compara con un arqueo, porque los apuntes no llevan hora. Siempre desde la
+     * apertura de la cuenta, como {@see balanceFor}.
+     *
+     * @param FinancialAccount   $account La cuenta.
+     * @param \DateTimeInterface $day     El día.
+     */
+    public function dayBalances(FinancialAccount $account, \DateTimeInterface $day): DayBalances
+    {
+        $row = $this->createQueryBuilder('e')
+            ->select(
+                'COALESCE(SUM(CASE WHEN e.date < :day THEN e.amount ELSE 0 END), 0) AS earlier',
+                'COALESCE(SUM(e.amount), 0) AS upToDay',
+            )
+            ->andWhere('e.account = :account')->setParameter('account', $account)
+            ->andWhere('e.date >= :opening')->setParameter('opening', $account->getOpeningDate())
+            ->andWhere('e.date <= :day')->setParameter('day', $day->format('Y-m-d'))
+            ->getQuery()
+            ->getSingleResult();
+        $opening = IssuedInvoice::toCents($account->getOpeningBalance());
+
+        return new DayBalances(
+            $opening + IssuedInvoice::toCents((string) $row['earlier']),
+            $opening + IssuedInvoice::toCents((string) $row['upToDay']),
+        );
     }
 
     /**

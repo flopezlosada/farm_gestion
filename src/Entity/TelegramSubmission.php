@@ -137,6 +137,15 @@ class TelegramSubmission
     private ?\DateTimeImmutable $resolvedAt = null;
 
     /**
+     * El `update_id` con que lo entregó Telegram. Se guarda para que un apartado que
+     * no debe registrar dos veces el mismo mensaje (un arqueo) lo reconozca también al
+     * colocarlo después desde la web. Null en los envíos de antes de guardarlo.
+     *
+     * @ORM\Column(name="update_id", type="bigint", nullable=true)
+     */
+    private ?string $updateId = null;
+
+    /**
      * @ORM\Column(name="created_at", type="datetime_immutable")
      */
     private \DateTimeImmutable $createdAt;
@@ -147,15 +156,23 @@ class TelegramSubmission
      * @param string             $kind   Qué es (foto, documento, voz, texto).
      * @param string             $text   Texto o pie ('' si no hay).
      * @param \DateTimeImmutable $sentAt Cuándo lo mandó.
+     * @param int|null           $updateId Su `update_id` de Telegram, si se sabe.
      */
-    public function __construct(User $user, string $chatId, string $kind, string $text, \DateTimeImmutable $sentAt)
+    public function __construct(User $user, string $chatId, string $kind, string $text, \DateTimeImmutable $sentAt, ?int $updateId = null)
     {
+        $this->updateId = $updateId !== null ? (string) $updateId : null;
         $this->user = $user;
         $this->chatId = $chatId;
         $this->kind = $kind;
         $this->text = $text !== '' ? $text : null;
         $this->sentAt = $sentAt;
         $this->createdAt = new \DateTimeImmutable();
+    }
+
+    /** El `update_id` con que lo entregó Telegram, si se sabe. */
+    public function getUpdateId(): ?int
+    {
+        return $this->updateId !== null ? (int) $this->updateId : null;
     }
 
     /**
