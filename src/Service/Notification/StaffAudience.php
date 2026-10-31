@@ -29,7 +29,7 @@ class StaffAudience
      * mande un push a los responsables de otra sección la añade aquí, o su gente
      * no verá dónde activar el push en la bandeja de gestión.
      */
-    public const PUSH_ROLES = ['ROLE_GESTION_LABORAL_EDIT'];
+    public const PUSH_ROLES = ['ROLE_GESTION_LABORAL_EDIT', 'ROLE_GESTION_CONTABILIDAD_EDIT'];
 
     public function __construct(
         private readonly UserRepository $users,

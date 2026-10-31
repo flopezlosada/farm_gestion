@@ -1,0 +1,119 @@
+{# ============================================================
+ # Avisos de notificación oficial llegados al buzón.
+ #
+ # Las pendientes se marcan como revisadas cuando alguien ha entrado en la sede.
+ # A propósito no hay ningún enlace a la sede ni a la notificación: se entra
+ # escribiendo la dirección a mano, nunca desde el correo.
+ #
+ # El controller pasa: pending (OfficialNotice sin revisar, las más antiguas
+ # primero) y reviewed (las últimas revisadas, con quién).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+
+{% block title %}Notificaciones oficiales · Contabilidad{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Notificaciones oficiales</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+{% set alert = 'App\\Service\\Accounting\\OfficialNotice\\OfficialNoticeAlert' %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Contabilidad',
+        'Notificaciones oficiales',
+        'Los avisos de DEHú, Agencia Tributaria o Seguridad Social que han llegado al buzón de facturas con la firma de su organismo. El correo sólo avisa: la notificación está en la sede.'
+    ) }}
+
+    <p class="csa-callout csa-callout--warning">
+        <i class="csa-callout__icon fa fa-exclamation-triangle"></i>
+        <span>
+            {{ constant(alert ~ '::HOW_TO') }}
+            {{ constant(alert ~ '::DEEMED_NOTIFIED') }}
+        </span>
+    </p>
+
+    <div class="prl-table-wrap">
+        {% if pending is empty %}
+            <div class="prl-empty">No hay ninguna sin revisar.</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th class="tight">Llegó</th>
+                        <th>Organismo</th>
+                        <th>Remitente</th>
+                        <th class="tight"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for n in pending %}
+                        <tr>
+                            <td class="tight">{{ n.receivedAt|date('d/m/Y H:i') }}</td>
+                            <td>{{ n.agency }}</td>
+                            <td>{{ n.sender }}</td>
+                            <td class="tight">
+                                {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+                                    <form method="post" action="{{ path('accounting_official_notice_reviewed', { id: n.id }) }}">
+                                        <input type="hidden" name="_token" value="{{ csrf_token('accounting_official_notice_reviewed_' ~ n.id) }}">
+                                        <button type="submit" class="prl-btn" title="Márcala cuando alguien haya entrado en la sede y la haya abierto. Deja de salir en la portada y queda quién y cuándo.">
+                                            <i class="fa fa-check"></i> Revisada en la sede
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+    {% if pending is not empty and is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+        <p class="csa-muted">
+            «Revisada en la sede»: márcala cuando alguien haya entrado en la sede y la haya abierto.
+            Deja de salir en la portada de contabilidad y queda quién lo hizo y cuándo.
+        </p>
+    {% endif %}
+
+    {% if reviewed is not empty %}
+        <h2 class="acc-subhead">Revisadas</h2>
+        <div class="prl-table-wrap">
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th class="tight">Llegó</th>
+                        <th>Organismo</th>
+                        <th class="tight">Revisada</th>
+                        <th>Por</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for n in reviewed %}
+                        <tr>
+                            <td class="tight">{{ n.receivedAt|date('d/m/Y') }}</td>
+                            <td>{{ n.agency }}</td>
+                            <td class="tight">{{ n.reviewedAt|date('d/m/Y H:i') }}</td>
+                            <td>{{ n.reviewedBy ? n.reviewedBy.displayName : 'Cuenta borrada' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+
+</div>
+{% endblock %}
