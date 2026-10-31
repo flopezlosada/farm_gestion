@@ -86,7 +86,7 @@ class CashCountRecorderTest extends KernelTestCase
     /** Una caja sin apuntes cuadra con su saldo de apertura: un solo saldo que enseñar. */
     public function testUnaCajaSinApuntesCuadraConSuApertura(): void
     {
-        $recorded = $this->count('caja huerta %s 300');
+        $recorded = $this->recordCount('caja huerta %s 300');
 
         $this->assertTrue($recorded->squares());
         $this->assertFalse($recorded->balances->changesThatDay());
@@ -105,12 +105,12 @@ class CashCountRecorderTest extends KernelTestCase
         $this->entry('2094-10-20', '100.56', 'Venta de plantel en el mercadillo');
         $this->entry(self::TODAY, '-50.00', 'Ticket ferretería: mangueras');
 
-        $before = $this->count('caja huerta %s 400,56');
+        $before = $this->recordCount('caja huerta %s 400,56');
         $this->assertTrue($before->squares());
         $this->assertSame('400.56', $before->count->getBookBalance(), 'el saldo que coincidía');
         $this->assertStringContainsString('En el libro: 400,56 € antes de lo anotado ese día y 350,56 € con ello. Cuadra', CashCountDestination::summarize($before));
 
-        $after = $this->count('caja huerta %s 350,56');
+        $after = $this->recordCount('caja huerta %s 350,56');
         $this->assertTrue($after->squares());
         $this->assertSame('350.56', $after->count->getBookBalance());
     }
@@ -120,14 +120,14 @@ class CashCountRecorderTest extends KernelTestCase
     {
         $this->entry(self::TODAY, '-50.00', 'Ticket ferretería: mangueras');
 
-        $short = $this->count('caja huerta %s 238,40');
+        $short = $this->recordCount('caja huerta %s 238,40');
         $this->assertFalse($short->squares());
         $this->assertSame('250.00', $short->count->getBookBalance());
         $this->assertSame('-11.60', $short->count->getDifference());
         $this->assertStringContainsString('No cuadra: faltan 11,60 €.', CashCountDestination::summarize($short));
         $this->assertNotNull($short->count->getId());
 
-        $over = $this->count('caja huerta %s 260');
+        $over = $this->recordCount('caja huerta %s 260');
         $this->assertSame('10.00', $over->count->getDifference());
         $this->assertStringContainsString('No cuadra: sobran 10,00 €.', CashCountDestination::summarize($over));
     }
@@ -137,7 +137,7 @@ class CashCountRecorderTest extends KernelTestCase
     {
         $this->entry(self::TODAY, '-20.00', 'Ticket gasolinera: desbrozadora');
 
-        $recorded = $this->count('caja huerta %s 300 30/10');
+        $recorded = $this->recordCount('caja huerta %s 300 30/10');
 
         $this->assertTrue($recorded->squares());
         $this->assertSame('2094-10-30', $recorded->count->getCountDate()->format('Y-m-d'));
@@ -148,9 +148,9 @@ class CashCountRecorderTest extends KernelTestCase
     {
         $updateId = random_int(900_000_000, 999_999_999);
 
-        $first = $this->count('caja huerta %s 300', $updateId);
+        $first = $this->recordCount('caja huerta %s 300', $updateId);
         $this->em->clear();
-        $again = $this->count('caja huerta %s 300', $updateId);
+        $again = $this->recordCount('caja huerta %s 300', $updateId);
 
         $this->assertSame($first->count->getId(), $again->count->getId());
         $this->assertCount(1, $this->em->getRepository(CashCount::class)->findBy(['account' => $this->garden->getId()]));
@@ -160,7 +160,7 @@ class CashCountRecorderTest extends KernelTestCase
     /** El nombre se busca sin mayúsculas, sin tildes y sin «de la». */
     public function testElNombreSinMayusculasNiTildes(): void
     {
-        $recorded = $this->count('CAJA de la Huérta ' . strtoupper($this->tag) . ' 300');
+        $recorded = $this->recordCount('CAJA de la Huérta ' . strtoupper($this->tag) . ' 300');
 
         $this->assertSame($this->garden->getId(), $recorded->count->getAccount()->getId());
     }
@@ -183,7 +183,7 @@ class CashCountRecorderTest extends KernelTestCase
     {
         $this->account('Caja huerta ' . $this->tag . ' vieja', '0', '2094-01-01');
 
-        $this->assertSame($this->garden->getId(), $this->count('caja huerta %s 300')->count->getAccount()->getId());
+        $this->assertSame($this->garden->getId(), $this->recordCount('caja huerta %s 300')->count->getAccount()->getId());
     }
 
     /** Una caja que no existe, o una cuenta que no es caja: no hay arqueo, y se dicen las cajas abiertas. */
@@ -225,7 +225,7 @@ class CashCountRecorderTest extends KernelTestCase
     {
         static::getContainer()->get(ClosedPeriods::class)->deliver(InvoiceQuarter::of(2094, 3), null);
 
-        $recorded = $this->count('caja huerta %s 300 30/09');
+        $recorded = $this->recordCount('caja huerta %s 300 30/09');
 
         $this->assertNotNull($recorded->count->getId());
         $this->assertTrue($recorded->squares());
@@ -237,7 +237,7 @@ class CashCountRecorderTest extends KernelTestCase
      */
     public function testLaPortadaAvisaYElTicketOlvidadoLoQuita(): void
     {
-        $this->count('caja huerta %s 276,60 30/10');
+        $this->recordCount('caja huerta %s 276,60 30/10');
 
         $item = $this->agendaItem();
         $this->assertNotNull($item, 'no cuadra: la portada lo avisa');
@@ -254,10 +254,10 @@ class CashCountRecorderTest extends KernelTestCase
     /** Si se contó mal y se manda otro el mismo día, vale el último. */
     public function testDelMismoDiaValeElUltimo(): void
     {
-        $this->count('caja huerta %s 280 30/10');
+        $this->recordCount('caja huerta %s 280 30/10');
         $this->assertNotNull($this->agendaItem());
 
-        $this->count('caja huerta %s 300 30/10');
+        $this->recordCount('caja huerta %s 300 30/10');
 
         $this->assertNull($this->agendaItem());
     }
@@ -265,16 +265,16 @@ class CashCountRecorderTest extends KernelTestCase
     /** Un arqueo posterior que cuadra sustituye a uno anterior que no. */
     public function testUnArqueoPosteriorSustituyeAlAnterior(): void
     {
-        $this->count('caja huerta %s 280 30/09');
+        $this->recordCount('caja huerta %s 280 30/09');
         $this->assertNotNull($this->agendaItem());
 
-        $this->count('caja huerta %s 300 30/10');
+        $this->recordCount('caja huerta %s 300 30/10');
 
         $this->assertNull($this->agendaItem());
     }
 
     /** Registra un arqueo; `%s` en el texto es la etiqueta de las cajas del test. */
-    private function count(string $text, ?int $updateId = null): RecordedCashCount
+    private function recordCount(string $text, ?int $updateId = null): RecordedCashCount
     {
         $text = sprintf($text, $this->tag);
 
@@ -291,7 +291,7 @@ class CashCountRecorderTest extends KernelTestCase
     private function rejection(string $text): string
     {
         try {
-            $this->count($text);
+            $this->recordCount($text);
         } catch (CashCountRejected $e) {
             return $e->getMessage();
         }
