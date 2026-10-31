@@ -52,6 +52,19 @@ class GeminiClient
     }
 
     /**
+     * Una fecha de una respuesta, pedida como AAAA-MM-DD: «2026-10-30» → fecha a
+     * medianoche; cualquier otra cosa (vacía, «30/10», un día que no existe), null.
+     *
+     * @param mixed $value Lo que ha contestado.
+     */
+    public static function isoDate(mixed $value): ?\DateTimeImmutable
+    {
+        $date = \is_string($value) ? \DateTimeImmutable::createFromFormat('!Y-m-d', $value) : false;
+
+        return $date !== false && $date->format('Y-m-d') === $value ? $date : null;
+    }
+
+    /**
      * Un fichero como parte de la petición.
      *
      * @param string $content  Contenido binario.

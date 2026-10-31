@@ -96,7 +96,7 @@ class DictatedInvoiceReader
 
         $series = ($data['serie'] ?? null) === IssuedInvoice::SERIES_X ? IssuedInvoice::SERIES_X : IssuedInvoice::SERIES_ORDINARY;
         $invoice = new IssuedInvoice($series, IssuedInvoice::SOURCE_TELEGRAM, $by);
-        $invoice->setIssueDate(self::date($data['fecha'] ?? null) ?? $today);
+        $invoice->setIssueDate(GeminiClient::isoDate($data['fecha'] ?? null) ?? $today);
         $heard = self::text($data['cliente_oido'] ?? null);
         $chosen = $byKey[(string) ($data['cliente'] ?? self::NONE)] ?? null;
         $invoice->setCustomer($chosen !== null && self::names($heard, $chosen) ? $chosen : null);
@@ -192,14 +192,6 @@ class DictatedInvoiceReader
             $words,
             static fn (string $w): bool => \strlen($w) >= 4 && !\in_array($w, self::GENERIC_WORDS, true),
         ));
-    }
-
-    /** «2026-06-30» → fecha; cualquier otra cosa, null. */
-    private static function date(mixed $value): ?\DateTimeImmutable
-    {
-        $date = \is_string($value) ? \DateTimeImmutable::createFromFormat('!Y-m-d', $value) : false;
-
-        return $date !== false && $date->format('Y-m-d') === $value ? $date : null;
     }
 
     /** Texto recortado, o null si viene vacío. */
