@@ -1,0 +1,172 @@
+{# ============================================================
+ # El cuadre de un extracto del banco con el libro: saldos, movimientos sin
+ # apunte (con lo que podrían ser) y apuntes que el banco no trae.
+ #
+ # El controller pasa: review (StatementReview).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
+
+{% set s = review.statement %}
+{% set can_edit = is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+
+{% block title %}Contabilidad · Extracto de {{ s.account.name }}{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_bank_statements') }}">Extractos del banco</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">{{ s.account.name }}, {{ s.from|date('d/m') }}–{{ s.to|date('d/m/Y') }}</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+    <style>
+        .bst-block { margin-top: var(--csa-sp-6, 28px); }
+        .bst-block h2 { font-size: 16px; margin: 0 0 4px; }
+        .bst-block > p { margin: 0 0 12px; max-width: 70ch; }
+        .bst-details { white-space: pre-line; }
+        .bst-candidate { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 2px 0; }
+        .bst-candidate form { margin: 0; display: inline-flex; }
+    </style>
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Contabilidad · Extractos',
+        s.account.name ~ ': del ' ~ s.from|date('d/m/Y') ~ ' al ' ~ s.to|date('d/m/Y'),
+        'Lo que dice el banco frente a lo que dice el libro, tal como está hoy. Si anotas o ligas algo, vuelve aquí: el cuadre se recalcula.'
+    ) }}
+
+    {# ============ SALDOS ============ #}
+    {% set od = review.openingDiffCents %}
+    {% set cd = review.closingDiffCents %}
+    <div class="prl-stats">
+        <div class="prl-stat">
+            <div class="v">{{ fmt.money(s.openingBalance) }}</div>
+            <div class="l">saldo inicial del banco</div>
+            <div class="s">{% if od is null %}el libro de la cuenta empieza después{% else %}libro: {{ fmt.money(review.bookOpeningCents / 100) }}{% endif %}</div>
+        </div>
+        <div class="prl-stat">
+            <div class="v">{{ fmt.money(s.closingBalance) }}</div>
+            <div class="l">saldo final del banco</div>
+            <div class="s">{% if cd is null %}el libro de la cuenta empieza después{% else %}libro: {{ fmt.money(review.bookClosingCents / 100) }}{% endif %}</div>
+        </div>
+        <a class="prl-stat" href="#sin-apunte">
+            <div class="v {{ review.unlinked is empty ? '' : 'acc-neg' }}">{{ review.unlinked|length }}</div>
+            <div class="l">movimientos sin apunte</div>
+            <div class="s">{{ review.linkedCount }} ya ligados</div>
+        </a>
+        <a class="prl-stat" href="#sin-movimiento">
+            <div class="v">{{ review.unbanked|length }}</div>
+            <div class="l">apuntes sin movimiento</div>
+        </a>
+    </div>
+
+    {% if review.balanced %}
+        {{ csa.callout('El libro cuadra con el banco al principio y al final del extracto.', 'success', 'check-circle') }}
+    {% else %}
+        {% if od is not null and od != 0 %}
+            {{ csa.callout('Al empezar, el libro dice ' ~ (review.bookOpeningCents / 100)|number_format(2, ',', '.') ~ ' € y el banco ' ~ s.openingBalance|number_format(2, ',', '.') ~ ' €. El problema viene de ANTES de este extracto (un apunte de fechas anteriores, o el saldo de apertura de la cuenta): búscalo en el extracto anterior. Aquí no se propone nada para taparlo.', 'warning', 'exclamation-triangle') }}
+        {% endif %}
+        {% if cd is not null and cd != 0 %}
+            {{ csa.callout('Al acabar, el libro tiene ' ~ (cd / 100)|abs|number_format(2, ',', '.') ~ ' € ' ~ (cd > 0 ? 'de más' : 'de menos') ~ ' que el banco. Lo explican los movimientos sin apunte y los apuntes sin movimiento de abajo' ~ (od is not null and od != 0 ? ', además de la diferencia con que empieza.' : '.'), 'warning', 'exclamation-triangle') }}
+        {% endif %}
+    {% endif %}
+
+    {# ============ MOVIMIENTOS SIN APUNTE ============ #}
+    <section class="bst-block" id="sin-apunte">
+        <h2>Movimientos del banco sin apunte</h2>
+        <p class="acc-muted">El banco dice que el dinero se movió y el libro no lo tiene. «Anotar» abre el alta con la cuenta, la fecha, el importe y el concepto ya puestos, y al guardarlo queda ligado. Si sale un apunte propuesto (mismo importe exacto, a una semana como mucho), «Es éste» lo liga sin tocar el apunte.</p>
+        <div class="prl-table-wrap">
+            {% if review.unlinked is empty %}
+                <div class="prl-empty">Todos los movimientos del banco de estas fechas tienen su apunte.</div>
+            {% else %}
+                <table class="prl-table">
+                    <thead>
+                        <tr>
+                            <th class="tight">Fecha</th>
+                            <th>Lo que dice el banco</th>
+                            <th class="tight acc-num">Importe</th>
+                            <th>Qué se hace</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in review.unlinked %}
+                            {% set line = row.line %}
+                            <tr>
+                                <td class="tight">{{ line.operationDate|date('d/m/Y') }}</td>
+                                <td>
+                                    <span class="bst-details">{{ line.details ?? ('Concepto ' ~ line.commonConcept ~ '-' ~ line.ownConcept) }}</span>
+                                    {% if line.grouped %}
+                                        <br><span class="acc-small acc-neg">Es un cargo de {{ line.groupedLabel }}: puede juntar varios apuntes. Si no hay uno de este importe, revísalo a mano.</span>
+                                    {% endif %}
+                                </td>
+                                <td class="acc-num">{{ fmt.money(line.amount) }}</td>
+                                <td>
+                                    {% for entry in row.candidates %}
+                                        <div class="bst-candidate">
+                                            <span><a href="{{ path('accounting_entry_show', { id: entry.id }) }}">{{ entry.date|date('d/m') }} · {{ entry.concept }}</a></span>
+                                            {% if can_edit %}
+                                                <form method="post" action="{{ path('accounting_bank_line_link', { id: line.id }) }}">
+                                                    <input type="hidden" name="_token" value="{{ csrf_token('bank_line_link_' ~ line.id) }}">
+                                                    <input type="hidden" name="entry" value="{{ entry.id }}">
+                                                    <input type="hidden" name="statement" value="{{ s.id }}">
+                                                    <button type="submit" class="prl-btn prl-btn--sm"><i class="fa fa-link"></i> Es éste</button>
+                                                </form>
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                    {% if can_edit %}
+                                        <a class="prl-btn prl-btn--sm{{ row.candidates is empty ? ' prl-btn--primary' : '' }}" href="{{ path('accounting_entry_new', { bank_line: line.id, statement: s.id }) }}"><i class="fa fa-plus"></i> Anotar</a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+        </div>
+    </section>
+
+    {# ============ APUNTES SIN MOVIMIENTO ============ #}
+    <section class="bst-block" id="sin-movimiento">
+        <h2>Apuntes de estas fechas que el banco no trae</h2>
+        <p class="acc-muted">Están en el libro de {{ s.account.name }} y no casan con ningún movimiento del extracto (los propuestos arriba no salen aquí). Puede estar duplicado, mal fechado o en otra cuenta: míralo en su ficha. Aquí no se borra nada.</p>
+        <div class="prl-table-wrap">
+            {% if review.unbanked is empty %}
+                <div class="prl-empty">Todos los apuntes de estas fechas están en el extracto.</div>
+            {% else %}
+                <table class="prl-table">
+                    <thead>
+                        <tr>
+                            <th class="tight">Fecha</th>
+                            <th>Concepto</th>
+                            <th class="tight acc-num">Importe</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in review.unbanked %}
+                            <tr>
+                                <td class="tight">{{ entry.date|date('d/m/Y') }}</td>
+                                <td><a href="{{ path('accounting_entry_show', { id: entry.id }) }}">{{ entry.concept }}</a></td>
+                                <td class="acc-num">{{ fmt.money(entry.amount) }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+        </div>
+    </section>
+
+</div>
+{% endblock %}

@@ -1,0 +1,54 @@
+{# ============================================================
+ # Elegir la cuenta del libro de un extracto que no casa por IBAN.
+ #
+ # El controller pasa: unresolved (Norma43Account[]), accounts (cuentas de
+ # banco activas sin IBAN), content (el fichero en base64), fileName, chosen.
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
+
+{% block title %}Contabilidad · Elegir la cuenta del extracto{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_bank_statements') }}">Extractos del banco</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Elegir la cuenta</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Contabilidad · Extractos', '¿De qué cuenta es este extracto?', 'Ninguna cuenta del libro tiene el IBAN de este extracto. Elige a cuál corresponde; sólo salen las cuentas de banco sin IBAN. Para no tener que elegirla cada mes, pon el IBAN en la ficha de la cuenta.') }}
+
+    <form method="post" action="{{ path('accounting_bank_statement_upload') }}" class="csa-form-narrow">
+        <input type="hidden" name="_token" value="{{ csrf_token('bank_statement_upload') }}">
+        <input type="hidden" name="content" value="{{ content }}">
+        <input type="hidden" name="file_name" value="{{ fileName }}">
+
+        <div class="csa-stack-lg">
+            {% for read in unresolved %}
+                <div class="csa-field">
+                    <label class="csa-label" for="account-{{ read.key }}">Cuenta {{ read.label }}, del {{ read.from|date('d/m/Y') }} al {{ read.to|date('d/m/Y') }} ({{ read.movements|length }} movimientos, saldo final {{ fmt.money(read.closingCents / 100) }})</label>
+                    <select class="csa-input" id="account-{{ read.key }}" name="account[{{ read.key }}]" required>
+                        <option value="">Elige la cuenta</option>
+                        {% for account in accounts %}
+                            <option value="{{ account.id }}" {{ (chosen[read.key] ?? null) == account.id ? 'selected' }}>{{ account.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            {% endfor %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('accounting_bank_statements') }) }}
+                    <button type="submit" class="csa-btn csa-btn--primary">Guardar el extracto</button>
+                </div>
+            </div>
+        </div>
+    </form>
+{% endblock %}
