@@ -32,6 +32,7 @@ use App\Service\Accounting\Invoice\AccountantPackage;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\Invoice\InvoiceQuarter;
 use App\Service\Accounting\IssuedInvoice\IssuedInvoiceBook;
+use App\Service\Accounting\Remittance\RemittanceChargeWatch;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\String\Slugger\AsciiSlugger;
@@ -371,6 +372,28 @@ class AccountingAgendaTest extends TestCase
         $this->assertSame([], array_filter($none, static fn (AgendaItem $i): bool => str_contains($i->title, 'devuelto')), 'Sin remesas aquí, las devoluciones no tienen recibo con el que ligarse.');
     }
 
+    /**
+     * Una remesa enviada que no ha entrado en el banco aprieta: qué remesa, cuánto,
+     * qué día se pidió, hasta dónde llega el extracto y qué hacer; lleva a su ficha.
+     */
+    public function testLaRemesaQueNoHaEntradoEnElBanco(): void
+    {
+        $remittance = new Remittance(Remittance::KIND_BASKET, new \DateTimeImmutable('2026-10-01'), 'Recibos OCTUBRE 2026', Remittance::SOURCE_APP, null);
+        $remittance->addLine((new RemittanceLine())->setDebtorName('ZZTEST ANA')->setIban('ES91 2100 0418 4502 0005 1332')->setMandateReference('CUOTA MENSUAL 900')
+            ->setMandateSignedOn(new \DateTimeImmutable('2022-11-01'))->setDebitReference('CUOTA MENSUAL 900 202610')->setSequenceType('RCUR')->setAmount('6842.50'));
+        $remittance->markSent(null, new \DateTimeImmutable('2026-10-19'));
+        $this->setId($remittance);
+
+        $item = $this->only($this->agenda(uncredited: [['remittance' => $remittance, 'bookUpTo' => new \DateTimeImmutable('2026-10-28')]])
+            ->items(new \DateTimeImmutable('2026-10-29')));
+
+        $this->assertSame(AgendaUrgency::Soon, $item->urgency);
+        $this->assertSame('La remesa «Recibos OCTUBRE 2026» (6.842,50 €, cargo pedido el 19/10) no ha entrado en el banco y el extracto ya llega al 28/10', $item->title);
+        $this->assertSame(['Entra en la banca, mira si está rechazada o pendiente y, si se rechazó entera, vuelve a subirla con fecha nueva y cámbiala en su ficha.'], $item->details);
+        $this->assertSame('accounting_remittance_show', $item->route);
+        $this->assertSame(['id' => $remittance->getId()], $item->routeParams);
+    }
+
     /** Lo contado por el bot sale hasta que se confirma o se descarta. */
     public function testLosTraspasosDelBotPorConfirmar(): void
     {
@@ -439,6 +462,7 @@ class AccountingAgendaTest extends TestCase
      * @param list<RemittanceReturn>              $openReturns recibos devueltos por resolver
      * @param list<AccountEntry>                  $unlinkedReturns devoluciones del banco sin recibo
      * @param list<PendingTransfer>               $botTransfers traspasos del bot sin confirmar
+     * @param list<array{remittance: Remittance, bookUpTo: \DateTimeImmutable}> $uncredited remesas enviadas que no han entrado
      * @param list<CashCount>                     $cashCounts el último arqueo de cada caja abierta
      * @param array<int, DayBalances>             $dayBalances saldo de cada cuenta el día de su arqueo; por omisión, 0
      */
@@ -457,6 +481,7 @@ class AccountingAgendaTest extends TestCase
         array $openReturns = [],
         array $unlinkedReturns = [],
         array $botTransfers = [],
+        array $uncredited = [],
         array $cashCounts = [],
         array $dayBalances = [],
     ): AccountingAgenda {
@@ -492,6 +517,8 @@ class AccountingAgendaTest extends TestCase
         $returns->method('findOpen')->willReturn($openReturns);
         $pendingTransfers = $this->createStub(PendingTransferRepository::class);
         $pendingTransfers->method('findUnconfirmed')->willReturn($botTransfers);
+        $chargeWatch = $this->createStub(RemittanceChargeWatch::class);
+        $chargeWatch->method('uncredited')->willReturn($uncredited);
         $counts = $this->createStub(CashCountRepository::class);
         $counts->method('findLatestOfActiveCashAccounts')->willReturn($cashCounts);
 
@@ -507,6 +534,7 @@ class AccountingAgendaTest extends TestCase
             $closed,
             $returns,
             $pendingTransfers,
+            $chargeWatch,
             $counts,
         );
     }

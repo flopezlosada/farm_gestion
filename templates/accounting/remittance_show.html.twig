@@ -10,8 +10,9 @@
  #
  # El controller pasa: remittance, previous, problems, warnings (por id de
  # recibo), withoutLine, changes, cases (en una enviada: los recibos que no
- # casan con su ficha, {@see RemittanceCases}) y everyone (las fichas, para
- # enlazar a mano).
+ # casan con su ficha, {@see RemittanceCases}), everyone (las fichas, para
+ # enlazar a mano) y usualChargeDate (en un borrador, el día de cargo que se
+ # propone; null si el libro no tiene abonos de remesa de los que sacarlo).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -50,6 +51,9 @@
         .rem-box { margin-bottom: var(--csa-sp-5, 20px); }
         .rem-box ul { margin: 4px 0 0; padding-left: 18px; }
         .rem-inline-form { display: inline; }
+        .rem-send, .rem-charge { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+        .rem-send label, .rem-charge label { font-size: 13px; color: var(--prl-ink-soft); }
+        .rem-send input[type="date"], .rem-charge input[type="date"] { height: 34px; width: auto; }
 
         /* Un recibo que no casa con su ficha: arriba quién es; debajo qué pasa, el
            arreglo propuesto (lo que haría una persona, con su botón) y las otras salidas. */
@@ -123,8 +127,10 @@
         </div>
         <div class="spacer"></div>
         {% if editable %}
-            <form method="post" action="{{ path('accounting_remittance_send', { id: remittance.id }) }}" onsubmit="return confirm('¿Ya se ha subido al banco? Desde aquí la remesa no se puede cambiar.');">
+            <form method="post" action="{{ path('accounting_remittance_send', { id: remittance.id }) }}" class="rem-send" onsubmit="return confirm('¿Ya se ha subido al banco? Desde aquí la remesa no se puede cambiar.');">
                 <input type="hidden" name="_token" value="{{ csrf_token('send-remittance-' ~ remittance.id) }}">
+                <label for="rem-charge-date" title="El día que se eligió en la banca al subirla. Con él se avisa si no entra en el banco.">Cargo el</label>
+                <input type="date" id="rem-charge-date" name="charge_date" class="csa-input" required value="{{ usualChargeDate ? usualChargeDate|date('Y-m-d') : '' }}">
                 <button type="submit" class="prl-btn prl-btn--primary"{{ problems is not empty ? ' disabled' }}><i class="fa fa-check"></i> Ya está enviada</button>
             </form>
         {% endif %}
@@ -145,6 +151,29 @@
                 <div class="csa-alert__body">Los recibos están completos. Revisa los avisos, descarga el Excel, súbelo a Fiare y vuelve a marcarla como enviada.</div>
             </div>
         {% endif %}
+    {% endif %}
+
+    {% if remittance.sent %}
+        {# El día de cargo: con él se avisa en la portada si el abono no entra en el banco. #}
+        <div class="csa-alert csa-alert--{{ remittance.chargeDate ? 'info' : 'warning' }} rem-box" role="status">
+            <i class="csa-alert__icon fa fa-calendar" aria-hidden="true"></i>
+            <div class="csa-alert__body">
+                {% if remittance.chargeDate %}
+                    Cargo pedido el {{ remittance.chargeDate|date('d/m/Y') }}. Si el extracto pasa de esa fecha y el abono no ha entrado, se avisa en la portada de contabilidad.
+                {% else %}
+                    Sin fecha de cargo: no se vigila si entra en el banco. Pon el día que se pidió al subirla para que se avise si no se cobra.
+                {% endif %}
+                {% if can_edit %}
+                    <form method="post" action="{{ path('accounting_remittance_charge_date', { id: remittance.id }) }}" class="rem-charge" style="margin-top: 10px;">
+                        <input type="hidden" name="_token" value="{{ csrf_token('charge-date-' ~ remittance.id) }}">
+                        <label for="rem-charge-change">{{ remittance.chargeDate ? 'Si se volvió a subir, nuevo día de cargo' : 'Día de cargo' }}</label>
+                        <input type="date" id="rem-charge-change" name="charge_date" class="csa-input" value="{{ remittance.chargeDate ? remittance.chargeDate|date('Y-m-d') : '' }}">
+                        <button type="submit" class="prl-btn"><i class="fa fa-check"></i> Guardar</button>
+                        {% if remittance.chargeDate %}<span class="acc-muted">Vacío, deja de vigilarse.</span>{% endif %}
+                    </form>
+                {% endif %}
+            </div>
+        </div>
     {% endif %}
 
     {% if toRecharge is not empty %}

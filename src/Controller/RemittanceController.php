@@ -22,6 +22,7 @@ use App\Service\Accounting\Remittance\MandatesToPartners;
 use App\Service\Accounting\Remittance\PartnerNameMatcher;
 use App\Service\Accounting\Remittance\RemittanceBase;
 use App\Service\Accounting\Remittance\RemittanceCases;
+use App\Service\Accounting\Remittance\RemittanceChargeWatch;
 use App\Service\Accounting\Remittance\RemittanceFromFees;
 use App\Service\Accounting\Remittance\RemittancePartnerMatcher;
 use App\Service\Accounting\Remittance\RemittancePeriodText;
@@ -63,6 +64,12 @@ class RemittanceController extends AbstractController
         Remittance::KIND_MEMBERSHIP => 6,
         Remittance::KIND_OTHER => 1,
     ];
+
+    /**
+     * Cuántos días antes o después de hoy se admite un día de cargo: más lejos es una
+     * errata (el año mal puesto) y la remesa se vigilaría en una fecha que no es.
+     */
+    private const CHARGE_DATE_RANGE_DAYS = 90;
 
     /** Todas, y la siguiente que toca preparar de cada tipo. */
     #[Route('', name: 'accounting_remittances', methods: ['GET'])]
@@ -301,7 +308,7 @@ class RemittanceController extends AbstractController
 
     /** Una remesa: sus recibos, y en un borrador lo que hay que revisar antes de enviarla. */
     #[Route('/{id}', name: 'accounting_remittance_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(Remittance $remittance, RemittanceRepository $remittances, RemittanceReview $review, BasketFeeExpectations $fees, ValidatorInterface $validator, RemittanceCases $cases, PartnerRepository $partners, RemittanceReturnRepository $returnRepository, BankReturns $bankReturns): Response
+    public function show(Remittance $remittance, RemittanceRepository $remittances, RemittanceReview $review, BasketFeeExpectations $fees, ValidatorInterface $validator, RemittanceCases $cases, PartnerRepository $partners, RemittanceReturnRepository $returnRepository, BankReturns $bankReturns, RemittanceChargeWatch $chargeWatch): Response
     {
         $everyone = $remittance->isSent() ? $partners->findBy([], ['surname' => 'ASC', 'name' => 'ASC']) : [];
 
@@ -332,6 +339,8 @@ class RemittanceController extends AbstractController
             'notReturned' => $remittance->isSent() ? BankReturns::notReturned($remittance, $returns) : [],
             // Borrador: lo devuelto que espera a volver a cobrarse.
             'toRecharge' => $remittance->isDraft() ? $returnRepository->findToRecharge() : [],
+            // Borrador: el día de cargo que se propone al darla por enviada.
+            'usualChargeDate' => $remittance->isDraft() ? $chargeWatch->usualChargeDate(new \DateTimeImmutable('today')) : null,
         ]);
     }
 
@@ -366,10 +375,52 @@ class RemittanceController extends AbstractController
 
             return $back;
         }
+        $chargeDate = self::chargeDate((string) $request->request->get('charge_date'));
+        if ($chargeDate === null) {
+            $this->addFlash('warning', 'Falta el día de cargo que se pidió al banco, o no es una fecha válida.');
 
-        $remittance->markSent($this->actor());
+            return $back;
+        }
+
+        $remittance->markSent($this->actor(), $chargeDate);
         $em->flush();
-        $this->addFlash('success', 'Remesa dada por enviada. Ya no se puede cambiar.');
+        $this->addFlash('success', sprintf('Remesa dada por enviada, con cargo el %s. Ya no se puede cambiar.', $chargeDate->format('d/m/Y')));
+
+        return $back;
+    }
+
+    /**
+     * Cambiar el día de cargo de una remesa enviada (se rechazó y se volvió a subir, o
+     * es una importada que se quiere vigilar), o quitarlo para dejar de vigilarla.
+     */
+    #[Route('/{id}/charge-date', name: 'accounting_remittance_charge_date', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
+    public function chargeDateChange(Request $request, Remittance $remittance, EntityManagerInterface $em): Response
+    {
+        $back = $this->redirectToRoute('accounting_remittance_show', ['id' => $remittance->getId()]);
+        if (!$this->isCsrfTokenValid('charge-date-' . $remittance->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('danger', 'La página había caducado. Vuelve a intentarlo.');
+
+            return $back;
+        }
+        if (!$remittance->isSent()) {
+            $this->addFlash('warning', 'La fecha de cargo se pone al darla por enviada.');
+
+            return $back;
+        }
+        $raw = trim((string) $request->request->get('charge_date'));
+        $chargeDate = self::chargeDate($raw);
+        if ($raw !== '' && $chargeDate === null) {
+            $this->addFlash('warning', 'El día de cargo no es una fecha válida.');
+
+            return $back;
+        }
+
+        $remittance->rescheduleCharge($chargeDate);
+        $em->flush();
+        $this->addFlash('success', $chargeDate !== null
+            ? sprintf('Día de cargo cambiado al %s: se vigila que entre en el banco.', $chargeDate->format('d/m/Y'))
+            : 'Quitado el día de cargo: ya no se vigila si entra en el banco.');
 
         return $back;
     }
@@ -610,6 +661,24 @@ class RemittanceController extends AbstractController
             ->setDebtorName(mb_strtoupper($partner->getLegalName()))
             ->setIban($partner->getIban())
             ->setAmount($fee !== null ? IssuedInvoice::fromCents($fee['cents']) : '0');
+    }
+
+    /**
+     * El día de cargo de un formulario, «2026-11-18». Null si no viene, no es una fecha
+     * que exista (el 31 de febrero no se convierte en marzo) o está a más de
+     * {@see CHARGE_DATE_RANGE_DAYS} días de hoy.
+     */
+    private static function chargeDate(string $raw): ?\DateTimeImmutable
+    {
+        $raw = trim($raw);
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $raw);
+        if ($date === false || $date->format('Y-m-d') !== $raw) {
+            return null;
+        }
+        $today = new \DateTimeImmutable('today');
+        $range = sprintf('%d days', self::CHARGE_DATE_RANGE_DAYS);
+
+        return $date >= $today->modify('-' . $range) && $date <= $today->modify('+' . $range) ? $date : null;
     }
 
     private function sentRedirect(Remittance $remittance): Response
