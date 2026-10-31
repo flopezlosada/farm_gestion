@@ -564,6 +564,25 @@ class AccountEntryRepository extends ServiceEntityRepository
     }
 
     /**
+     * Los últimos apuntes cuyo concepto empieza por un prefijo, el más reciente
+     * primero y con su cuenta: de los abonos de remesa sale en qué cuenta entran y qué
+     * día del mes se suelen cargar.
+     *
+     * @return list<AccountEntry>
+     */
+    public function findLatestByConceptPrefix(string $prefix, int $limit): array
+    {
+        return $this->createQueryBuilder('e')
+            ->innerJoin('e.account', 'a')->addSelect('a')
+            ->andWhere('e.concept LIKE :prefix')->setParameter('prefix', addcslashes($prefix, '%_') . '%')
+            ->orderBy('e.date', 'DESC')
+            ->addOrderBy('e.id', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Los apuntes con ese prefijo desde una fecha que aún no son la devolución de
      * ningún recibo: lo que el banco ha devuelto sin saber todavía de quién es.
      *
