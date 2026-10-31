@@ -162,6 +162,21 @@ class FinancialAccount
         return $this;
     }
 
+    /**
+     * Entidad + oficina + nº de cuenta sacados de un IBAN español (caracteres 5-8,
+     * 9-12 y 15-24): lo que identifica la cuenta en un extracto Norma 43. Null si no
+     * tiene IBAN o no es español.
+     */
+    public function getBankKey(): ?string
+    {
+        $iban = $this->iban ?? '';
+        if (preg_match('/^ES\d{22}$/', $iban) !== 1) {
+            return null;
+        }
+
+        return substr($iban, 4, 8).substr($iban, 14, 10);
+    }
+
     public function getOpeningBalance(): string
     {
         return $this->openingBalance;
