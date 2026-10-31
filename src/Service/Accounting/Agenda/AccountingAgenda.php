@@ -22,12 +22,14 @@ use App\Service\Accounting\Invoice\InvoiceQuarter;
 use App\Service\Accounting\IssuedInvoice\IssuedInvoiceBook;
 use App\Service\Accounting\MonthNames;
 use App\Service\Accounting\Remittance\BankReturns;
+use App\Service\Accounting\Remittance\RemittanceChargeWatch;
 
 /**
  * Lo que queda por hacer en la contabilidad, para la portada: el libro de los bancos
  * sin meter, la entrega del trimestre a la gestoría (o volver a mandarlo, si se
  * reabrió), la bandeja de facturas, lo
- * emitido sin cobrar, la remesa del mes, los recibos devueltos, los traspasos a
+ * emitido sin cobrar, la remesa del mes, las remesas que no han entrado en el
+ * banco, los recibos devueltos, los traspasos a
  * medias y los que se han contado por el bot. Si no devuelve
  * nada, todo está al día.
  *
@@ -55,6 +57,7 @@ class AccountingAgenda
         private readonly ClosedPeriods $closed,
         private readonly RemittanceReturnRepository $returns,
         private readonly PendingTransferRepository $pendingTransfers,
+        private readonly RemittanceChargeWatch $chargeWatch,
     ) {
     }
 
@@ -76,6 +79,7 @@ class AccountingAgenda
             $this->openReceivedInvoices(),
             ...$this->uncollectedIssuedInvoices($today),
             $this->monthlyRemittance($today),
+            ...$this->uncreditedRemittances(),
             $this->unidentifiedReturns(),
             $this->openReturns(),
             $this->unpairedTransfers(),
@@ -378,6 +382,31 @@ class AccountingAgenda
             'accounting_remittance_show',
             ['id' => $remittance->getId()],
         );
+    }
+
+    /**
+     * Las remesas enviadas que no han entrado en el banco cuando el libro ya llega más
+     * allá de su día de cargo ({@see RemittanceChargeWatch}). Aprieta: son las cuotas
+     * de un mes sin cobrar. Se quita sola al anotar el abono, o al cambiar en la ficha
+     * el día de cargo cuando se vuelve a subir.
+     *
+     * @return list<AgendaItem>
+     */
+    private function uncreditedRemittances(): array
+    {
+        return array_map(static fn (array $row): AgendaItem => new AgendaItem(
+            AgendaUrgency::Soon,
+            sprintf(
+                'La remesa «%s» (%s €, cargo pedido el %s) no ha entrado en el banco y el extracto ya llega al %s',
+                $row['remittance']->getLabel(),
+                number_format((float) $row['remittance']->getTotal(), 2, ',', '.'),
+                $row['remittance']->getChargeDate()?->format('d/m'),
+                $row['bookUpTo']->format('d/m'),
+            ),
+            ['Entra en la banca, mira si está rechazada o pendiente y, si se rechazó entera, vuelve a subirla con fecha nueva y cámbiala en su ficha.'],
+            'accounting_remittance_show',
+            ['id' => $row['remittance']->getId()],
+        ), $this->chargeWatch->uncredited());
     }
 
     /**
