@@ -59,15 +59,7 @@ class CashCountRecorder
             return new RecordedCashCount($already, $this->entries->dayBalances($already->getAccount(), $already->getCountDate()));
         }
 
-        $account = $this->findCashAccount($message->accountName);
-        if (!$account->isOpenOn($message->date)) {
-            throw new CashCountRejected(sprintf(
-                '%s se lleva en la web desde el %s: un arqueo de antes no se puede comparar con el libro.',
-                $account->getName(),
-                $account->getOpeningDate()?->format('d/m/Y'),
-            ));
-        }
-
+        $account = $this->check($message);
         $balances = $this->entries->dayBalances($account, $message->date);
         $count = new CashCount(
             $account,
@@ -86,6 +78,49 @@ class CashCountRecorder
     }
 
     /**
+     * La caja del arqueo, si se puede registrar: existe, está abierta y ya se llevaba
+     * en la web ese día. Sin guardar nada: es lo que se comprueba antes de enseñar lo
+     * entendido para confirmarlo.
+     *
+     * @param CashCountMessage $message Lo entendido del mensaje.
+     *
+     * @throws CashCountRejected Si la caja no se sabe cuál es, está retirada o la fecha es anterior a su apertura.
+     */
+    public function check(CashCountMessage $message): FinancialAccount
+    {
+        $account = $this->findCashAccount($message->accountName);
+        if (!$account->isOpenOn($message->date)) {
+            throw new CashCountRejected(sprintf(
+                '%s se lleva en la web desde el %s: un arqueo de antes no se puede comparar con el libro.',
+                $account->getName(),
+                $account->getOpeningDate()?->format('d/m/Y'),
+            ));
+        }
+
+        return $account;
+    }
+
+    /**
+     * Las cajas de efectivo que se pueden contar, en el orden del libro.
+     *
+     * @return list<FinancialAccount>
+     */
+    public function openCashAccounts(): array
+    {
+        return array_values(array_filter($this->cashAccounts(), static fn (FinancialAccount $a): bool => $a->isActive()));
+    }
+
+    /**
+     * Todas las cajas de efectivo, retiradas incluidas, en el orden del libro.
+     *
+     * @return list<FinancialAccount>
+     */
+    private function cashAccounts(): array
+    {
+        return $this->accounts->findBy(['kind' => FinancialAccount::KIND_CASH], ['sortOrder' => 'ASC', 'name' => 'ASC']);
+    }
+
+    /**
      * La caja de efectivo abierta con ese nombre.
      *
      * @param string $name El nombre tal como se escribió («huerta», «Caja de la Huerta»).
@@ -95,7 +130,7 @@ class CashCountRecorder
     public function findCashAccount(string $name): FinancialAccount
     {
         $wanted = self::words($name);
-        $cash = $this->accounts->findBy(['kind' => FinancialAccount::KIND_CASH], ['sortOrder' => 'ASC', 'name' => 'ASC']);
+        $cash = $this->cashAccounts();
         $active = array_values(array_filter($cash, static fn (FinancialAccount $a): bool => $a->isActive()));
 
         $matching = self::matching($active, $wanted);

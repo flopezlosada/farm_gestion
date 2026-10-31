@@ -5,6 +5,7 @@ namespace App\Service\Telegram;
 use App\Entity\TelegramLink;
 use App\Entity\TelegramSubmission;
 use App\Entity\User;
+use App\Service\Telegram\Destination\ConfirmedDestination;
 use App\Service\Telegram\Destination\TelegramDestination;
 use App\Service\Telegram\Destination\TelegramRejected;
 use Doctrine\DBAL\LockMode;
@@ -205,6 +206,62 @@ class TelegramSubmissionRouter
     }
 
     /**
+     * Antes de guardarlo, le enseña a quien lo mandó lo entendido, con «Sí, está bien»
+     * (que lo guarda: {@see route()}) y «No, está mal» (que lo descarta:
+     * {@see discard()}). Mientras no conteste, queda pendiente en la web con esa
+     * pregunta. Si estaba en otro apartado, primero se deshace allí, como al
+     * colocarlo; y con la fila bloqueada, por lo mismo que {@see route()}.
+     *
+     * @param TelegramSubmission   $submission  El envío.
+     * @param ConfirmedDestination $destination El apartado que pide confirmar.
+     *
+     * @return string|null Null si se ha preguntado; si no, por qué no se puede guardar ahí.
+     */
+    public function propose(TelegramSubmission $submission, ConfirmedDestination $destination): ?string
+    {
+        $result = $this->em->wrapInTransaction(function () use ($submission, $destination): array {
+            $this->em->refresh($submission, LockMode::PESSIMISTIC_WRITE);
+            if ($submission->getStatus() === TelegramSubmission::STATUS_DISCARDED) {
+                return ['problem' => 'Ese envío ya se descartó.', 'changed' => false];
+            }
+            $refused = $this->undoCurrent($submission);
+            if ($refused !== null) {
+                return ['problem' => $refused, 'changed' => false, 'settled' => true];
+            }
+
+            $input = $this->inputFor($submission);
+            try {
+                $preview = $destination->preview($input, $submission->getUser());
+            } catch (TelegramRejected $e) {
+                $submission->askAbout($destination->label() . ': ' . $e->getMessage());
+                $this->em->flush();
+
+                return ['problem' => $e->getMessage(), 'changed' => false];
+            } finally {
+                $input->cleanUp();
+            }
+
+            $submission->askAbout($preview->question);
+            $submission->transcribe($preview->transcript);
+            $this->em->flush();
+
+            return ['problem' => null, 'changed' => true, 'question' => $preview->question];
+        });
+
+        if ($result['changed']) {
+            $messageId = $this->chat($submission)->replace($submission->getBotMessageId(), $result['question'], [
+                [['✓ Sí, está bien', $this->callback($submission, 'y', $destination->key())]],
+                [['✗ No, está mal', $this->callback($submission, 'x')]],
+            ]);
+            $submission->setBotMessageId($messageId);
+            $this->em->flush();
+        }
+        $this->tellSettled($submission, $result);
+
+        return $result['problem'];
+    }
+
+    /**
      * No era nada que guardar. Si estaba en un apartado, se deshace allí antes. El
      * fichero se conserva, como en la bandeja de facturas: descartar no es borrar.
      * Con la fila bloqueada, por lo mismo que {@see route()}.
@@ -341,7 +398,7 @@ class TelegramSubmissionRouter
      */
     public static function parseCallback(string $data): ?array
     {
-        if (preg_match('~^' . self::CALLBACK_PREFIX . ':(\d+):([orxkc])(?::([a-z0-9_-]{1,40}))?$~', $data, $m) !== 1) {
+        if (preg_match('~^' . self::CALLBACK_PREFIX . ':(\d+):([orxkcy])(?::([a-z0-9_-]{1,40}))?$~', $data, $m) !== 1) {
             return null;
         }
 
@@ -458,6 +515,7 @@ class TelegramSubmissionRouter
             0,
             $submission->getMimeType(),
             $submission->getUpdateId(),
+            $submission->getTranscript(),
         );
         if ($fileName !== null) {
             $input->setDownloader(function () use ($fileName): string {

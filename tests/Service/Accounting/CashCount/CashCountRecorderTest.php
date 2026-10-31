@@ -220,6 +220,38 @@ class CashCountRecorderTest extends KernelTestCase
         $this->assertStringContainsString('desde el 01/06/2094', $this->rejection('caja local %s 0 31/05'));
     }
 
+    /**
+     * Comprobarlo antes de enseñarlo para confirmar: la caja y la fecha se validan igual
+     * que al registrar, pero no se guarda nada.
+     */
+    public function testComprobarNoGuardaNada(): void
+    {
+        $text = sprintf('caja huerta %s 300', $this->tag);
+
+        $account = $this->recorder->check(CashCountMessage::parse($text, new \DateTimeImmutable(self::TODAY)));
+
+        $this->assertSame($this->garden->getId(), $account->getId());
+        $this->assertSame([], $this->em->getRepository(CashCount::class)->findBy(['account' => $this->garden->getId()]));
+
+        $this->account('Caja local ' . $this->tag, '0', '2094-06-01');
+        $this->expectException(CashCountRejected::class);
+        $this->recorder->check(CashCountMessage::parse(sprintf('caja local %s 0 31/05', $this->tag), new \DateTimeImmutable(self::TODAY)));
+    }
+
+    /** Las cajas que se le ofrecen a Gemini al leer un arqueo dicho: sólo las de efectivo abiertas. */
+    public function testLasCajasQueSePuedenContarSonLasDeEfectivoAbiertas(): void
+    {
+        $retired = $this->account('Caja local ' . $this->tag, '0', '2094-01-01')->setActive(false);
+        $bank = $this->account('Banco ' . $this->tag, '0', '2094-01-01', FinancialAccount::KIND_BANK);
+        $this->em->flush();
+
+        $ids = array_map(static fn (FinancialAccount $a): ?int => $a->getId(), $this->recorder->openCashAccounts());
+
+        $this->assertContains($this->garden->getId(), $ids);
+        $this->assertNotContains($retired->getId(), $ids);
+        $this->assertNotContains($bank->getId(), $ids);
+    }
+
     /** Con el trimestre entregado a la gestoría, el arqueo se registra igual: no es un apunte. */
     public function testConElTrimestreEntregadoSeRegistraIgual(): void
     {

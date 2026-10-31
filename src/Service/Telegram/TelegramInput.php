@@ -33,6 +33,8 @@ final class TelegramInput
      * @param string|null        $mimeType Tipo según Telegram, sin comprobar.
      * @param int|null           $updateId `update_id` del mensaje en Telegram; null si se
      *                                     rehace desde un envío guardado (se coloca desde la web).
+     * @param string|null        $transcript Lo entendido de la nota de voz que ya se le enseñó a
+     *                                     quien la mandó para confirmarlo; null si no se le enseñó.
      */
     public function __construct(
         public readonly string $kind,
@@ -43,6 +45,7 @@ final class TelegramInput
         public readonly int $fileSize = 0,
         public readonly ?string $mimeType = null,
         public readonly ?int $updateId = null,
+        public readonly ?string $transcript = null,
     ) {
     }
 

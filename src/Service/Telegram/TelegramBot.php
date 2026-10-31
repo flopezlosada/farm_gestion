@@ -9,6 +9,7 @@ use App\Repository\TelegramLinkRepository;
 use App\Repository\TelegramSubmissionRepository;
 use App\Service\Ai\GeminiException;
 use App\Service\Telegram\Destination\CommandDestination;
+use App\Service\Telegram\Destination\ConfirmedDestination;
 use App\Service\Telegram\Destination\TelegramDestination;
 use App\Service\Telegram\Destination\TelegramRejected;
 use Doctrine\ORM\EntityManagerInterface;
@@ -35,6 +36,8 @@ use Symfony\Component\RateLimiter\RateLimiterFactory;
  * - Vaya donde vaya sin preguntar, se le cuenta lo que se ha entendido con un
  *   botón «Es otra cosa», por si el bot se equivocó, y otro «Correcto» para
  *   darlo por bueno y que no quede nada por pulsar.
+ * - Salvo en un apartado que pide confirmar ({@see ConfirmedDestination}): ahí no se
+ *   guarda nada hasta que quien lo mandó dice que lo entendido está bien.
  *
  * Llegue el mensaje por el webhook (servidor) o por getUpdates (local), pasa por
  * aquí. Añadir una opción al bot es añadir un destino, sin tocar esta clase.
@@ -247,9 +250,12 @@ class TelegramBot
         // es por cómo está escrita. Y si no se puede atender, es un error de esa orden
         // (un importe dudoso, una caja que no existe): se dice, sin ofrecer otros
         // apartados que no tienen nada que ver.
-        $commands = array_values(array_filter($candidates, static fn (TelegramDestination $d): bool => $d instanceof CommandDestination));
+        $commands = array_values(array_filter(
+            $candidates,
+            static fn (TelegramDestination $d): bool => $d instanceof CommandDestination && $d->recognizes($input),
+        ));
         if (\count($commands) === 1) {
-            $refused = $this->router->route($submission, $commands[0]);
+            $refused = $this->offer($submission, $commands[0]);
             if ($refused !== null) {
                 $this->router->refuse($submission, $refused);
             }
@@ -301,7 +307,7 @@ class TelegramBot
      */
     private function routeAlone(TelegramSubmission $submission, TelegramDestination $destination, array $candidates): void
     {
-        $refused = $this->router->route($submission, $destination);
+        $refused = $this->offer($submission, $destination);
         if ($refused === null) {
             return;
         }
@@ -313,6 +319,18 @@ class TelegramBot
             return;
         }
         $this->router->ask($submission, $others, $refused . "\n\n¿Es alguna de estas cosas?");
+    }
+
+    /**
+     * Lo coloca en un destino; si ese destino pide confirmar, sólo enseña lo entendido.
+     *
+     * @return string|null Null si ha ido bien; si no, por qué.
+     */
+    private function offer(TelegramSubmission $submission, TelegramDestination $destination): ?string
+    {
+        return $destination instanceof ConfirmedDestination
+            ? $this->router->propose($submission, $destination)
+            : $this->router->route($submission, $destination);
     }
 
     /**
@@ -329,9 +347,9 @@ class TelegramBot
     }
 
     /**
-     * Alguien ha pulsado un botón de un envío: colocarlo, descartarlo, «Es otra
-     * cosa», «Estaba bien» o «Correcto». Sólo vale para quien lo mandó, y mientras siga
-     * vinculado.
+     * Alguien ha pulsado un botón de un envío: colocarlo, confirmar lo entendido,
+     * descartarlo, «Es otra cosa», «Estaba bien» o «Correcto». Sólo vale para quien
+     * lo mandó, y mientras siga vinculado.
      *
      * @param array<string, mixed> $callback La pulsación, tal como la manda Telegram.
      */
@@ -367,6 +385,7 @@ class TelegramBot
                 'c' => $this->settle($submission),
                 'x' => $this->router->discard($submission),
                 'r' => $this->routeTo($submission, (string) $parsed['key']),
+                'y' => $this->confirm($submission, (string) $parsed['key']),
             };
         } finally {
             $this->answer($callbackId, $problem);
@@ -407,13 +426,39 @@ class TelegramBot
     /** Un botón con un destino: sólo uno de los que esta persona puede usar para esto. */
     private function routeTo(TelegramSubmission $submission, string $key): ?string
     {
+        $destination = $this->candidate($submission, $key);
+
+        return $destination !== null ? $this->offer($submission, $destination) : 'Eso ya no está disponible.';
+    }
+
+    /**
+     * «Sí, está bien»: se guarda lo que se enseñó. Ya está confirmado, así que se queda
+     * sin botones en vez de volver a preguntar con «Correcto» / «Es otra cosa».
+     */
+    private function confirm(TelegramSubmission $submission, string $key): ?string
+    {
+        $destination = $this->candidate($submission, $key);
+        if ($destination === null) {
+            return 'Eso ya no está disponible.';
+        }
+        $problem = $this->router->route($submission, $destination);
+        if ($problem === null && $submission->isRouted()) {
+            $this->router->settle($submission);
+        }
+
+        return $problem;
+    }
+
+    /** El destino de esa clave, si es uno de los que esta persona puede usar para este envío. */
+    private function candidate(TelegramSubmission $submission, string $key): ?TelegramDestination
+    {
         foreach ($this->router->candidatesFor($submission) as $destination) {
             if ($destination->key() === $key) {
-                return $this->router->route($submission, $destination);
+                return $destination;
             }
         }
 
-        return 'Eso ya no está disponible.';
+        return null;
     }
 
     /** Contesta a la pulsación; si falla, no importa: lo hecho, hecho está. */

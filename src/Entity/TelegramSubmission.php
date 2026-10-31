@@ -146,6 +146,16 @@ class TelegramSubmission
     private ?string $updateId = null;
 
     /**
+     * Lo que el bot ha entendido de una nota de voz, puesto por escrito, cuando se le
+     * enseña a quien la mandó para que lo confirme («caja Caja de la huerta 456,50
+     * 30/10/2026»). Al confirmar se guarda ESTO y no otra lectura del audio, que podría
+     * salir distinta de lo que se enseñó. Null si no se ha enseñado nada así.
+     *
+     * @ORM\Column(name="transcript", type="text", nullable=true)
+     */
+    private ?string $transcript = null;
+
+    /**
      * @ORM\Column(name="created_at", type="datetime_immutable")
      */
     private \DateTimeImmutable $createdAt;
@@ -238,6 +248,22 @@ class TelegramSubmission
         $this->summary = mb_substr($summary, 0, 255);
         $this->resolvedBy = $by;
         $this->resolvedAt = $now;
+    }
+
+    /**
+     * Apunta lo entendido de la nota de voz, tal como se le ha enseñado a quien la mandó.
+     *
+     * @param string|null $transcript Lo entendido, por escrito; null si no hay nada que apuntar.
+     */
+    public function transcribe(?string $transcript): void
+    {
+        $this->transcript = $transcript;
+    }
+
+    /** Lo entendido de la nota de voz que se le enseñó a quien la mandó, si se le enseñó. */
+    public function getTranscript(): ?string
+    {
+        return $this->transcript;
     }
 
     /**
