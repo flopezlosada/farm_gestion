@@ -118,6 +118,10 @@ class NotificationLink
             // La respuesta a sus vacaciones lleva al trabajador a sus vacaciones,
             // donde ve el estado y los días que le quedan.
             str_starts_with($kind, 'work.') => $this->urlGenerator->generate('work_vacations'),
+            // El aviso de una notificación oficial lleva a la lista de avisos sin
+            // revisar, donde se marca cuando alguien ha entrado en la sede. Nunca al
+            // enlace del correo, que es justo lo que se suplanta.
+            str_starts_with($kind, 'accounting.') => $this->urlGenerator->generate('accounting_official_notices'),
             // Cualquier otro no tiene mejor sitio que la bandeja. Es el caso de
             // un aviso viejo cuyo `kind` ya no se emite, y de uno nuevo al que se
             // le olvidó su línea aquí: molesta, pero no deja a nadie en un 404.

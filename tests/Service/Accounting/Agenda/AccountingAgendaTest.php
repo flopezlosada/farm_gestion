@@ -8,6 +8,7 @@ use App\Entity\Customer;
 use App\Entity\FinancialAccount;
 use App\Entity\IssuedInvoice;
 use App\Entity\IssuedInvoiceLine;
+use App\Entity\OfficialNotice;
 use App\Entity\PendingTransfer;
 use App\Entity\ReceivedInvoice;
 use App\Entity\Remittance;
@@ -17,6 +18,7 @@ use App\Entity\User;
 use App\Repository\AccountEntryRepository;
 use App\Repository\FinancialAccountRepository;
 use App\Repository\IssuedInvoiceRepository;
+use App\Repository\OfficialNoticeRepository;
 use App\Repository\PendingTransferRepository;
 use App\Repository\ReceivedInvoiceRepository;
 use App\Repository\RemittanceRepository;
@@ -403,6 +405,31 @@ class AccountingAgendaTest extends TestCase
     }
 
     /**
+     * Una notificación oficial sin revisar sale la primera, aunque la gestoría también
+     * apriete: a los 10 días cuenta como notificada. Una tarea por aviso, con su
+     * organismo y el día que llegó, y lleva a la lista donde se marca como revisada.
+     */
+    public function testLaNotificacionOficialSinRevisarVaLaPrimera(): void
+    {
+        $dehu = new OfficialNotice(str_repeat('a', 64), 'DEHú', 'noreply.dehu@correo.gob.es', new \DateTimeImmutable('2026-10-14 09:12'));
+        $aeat = new OfficialNotice(str_repeat('b', 64), 'Agencia Tributaria', 'agenciatributaria@correo.aeat.es', new \DateTimeImmutable('2026-10-15 17:40'));
+
+        $items = $this->agenda(deliveries: [], officialNotices: [$dehu, $aeat])->items(new \DateTimeImmutable('2026-10-16'));
+
+        $this->assertSame([
+            'Notificación oficial sin revisar (DEHú)',
+            'Notificación oficial sin revisar (Agencia Tributaria)',
+            'Mandar el 3T2026 a la gestoría: plazo hasta el 20 de octubre',
+        ], array_map(static fn (AgendaItem $i): string => $i->title, $items));
+        $this->assertSame(AgendaUrgency::Soon, $items[0]->urgency);
+        $this->assertSame('accounting_official_notices', $items[0]->route);
+        $this->assertSame([
+            'El aviso llegó el 14/10/2026. Escribe tú dehu.redsara.es (o la sede del organismo) y entra con certificado; no uses el enlace del correo.',
+            'Si nadie la abre en 10 días naturales desde que se puso a disposición, cuenta como notificada y corren los plazos.',
+        ], $items[0]->details);
+    }
+
+    /**
      * @param list<ReceivedInvoice>               $received  del trimestre, para la gestoría
      * @param list<ReceivedInvoice>               $open      en la bandeja
      * @param list<IssuedInvoice>                 $unpaid    emitidas sin apunte
@@ -415,6 +442,7 @@ class AccountingAgendaTest extends TestCase
      * @param array<int, string>                  $balances  saldo por cuenta; por omisión, 0
      * @param list<RemittanceReturn>              $openReturns recibos devueltos por resolver
      * @param list<AccountEntry>                  $unlinkedReturns devoluciones del banco sin recibo
+     * @param list<OfficialNotice>                $officialNotices notificaciones oficiales sin revisar
      * @param list<PendingTransfer>               $botTransfers traspasos del bot sin confirmar
      * @param list<array{remittance: Remittance, bookUpTo: \DateTimeImmutable}> $uncredited remesas enviadas que no han entrado
      */
@@ -434,6 +462,7 @@ class AccountingAgendaTest extends TestCase
         array $unlinkedReturns = [],
         array $botTransfers = [],
         array $uncredited = [],
+        array $officialNotices = [],
     ): AccountingAgenda {
         $receivedRepo = $this->createStub(ReceivedInvoiceRepository::class);
         $receivedRepo->method('findOpen')->willReturn($open);
@@ -468,6 +497,8 @@ class AccountingAgendaTest extends TestCase
         $pendingTransfers->method('findUnconfirmed')->willReturn($botTransfers);
         $chargeWatch = $this->createStub(RemittanceChargeWatch::class);
         $chargeWatch->method('uncredited')->willReturn($uncredited);
+        $notices = $this->createStub(OfficialNoticeRepository::class);
+        $notices->method('findUnreviewed')->willReturn($officialNotices);
 
         return new AccountingAgenda(
             $receivedRepo,
@@ -482,6 +513,7 @@ class AccountingAgendaTest extends TestCase
             $returns,
             $pendingTransfers,
             $chargeWatch,
+            $notices,
         );
     }
 

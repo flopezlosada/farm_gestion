@@ -144,6 +144,13 @@ class Notification
     public const KIND_WORK_ABSENCE_DECIDED = 'work.absence_decided';
 
     /**
+     * Ha llegado al buzón el aviso de una notificación electrónica oficial (va a
+     * quien lleva la contabilidad). Si nadie la abre en la sede en 10 días
+     * naturales, cuenta como notificada.
+     */
+    public const KIND_ACCOUNTING_OFFICIAL_NOTICE = 'accounting.official_notice';
+
+    /**
      * @ORM\Id
      * @ORM\GeneratedValue
      * @ORM\Column(type="integer")

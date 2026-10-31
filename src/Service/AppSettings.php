@@ -788,9 +788,11 @@ class AppSettings
         // que la lectura horaria las tenga leídas cuando alguien abra la bandeja.
         self::CRON_INVOICE_MAIL => [
             'command' => 'app:fetch-invoice-mail',
-            // Ningún canal: no entrega nada a nadie, deja las facturas en la
-            // bandeja de contabilidad.
-            'channels' => [],
+            // Las facturas no avisan a nadie (se quedan en la bandeja de
+            // contabilidad), pero el aviso de una notificación oficial va al móvil
+            // de quien lleva la contabilidad y a su bandeja de avisos. Sin
+            // `confirm`: volver a pasarla no repite ningún aviso.
+            'channels' => ['push', 'inbox'],
             'needs_recipient' => false,
             'confirm' => false,
             'dry' => true,
@@ -1046,7 +1048,7 @@ class AppSettings
         self::CRON_INVOICE_MAIL => [
             'group' => 'Tareas programadas',
             'label' => 'Recoger las facturas del buzón',
-            'help' => 'Cada mañana recoge los adjuntos de los correos que han llegado al buzón de facturas y los deja en la bandeja de facturas recibidas, en cola para leerlos (app:fetch-invoice-mail). Los correos no se borran: se archivan en la carpeta «Archivadas» del buzón, o en «Revisar» si no traían nada que valga como factura (sin adjunto, o con un enlace para descargarla). No manda nada a nadie. Requiere la contabilidad encendida y el buzón configurado en el servidor.',
+            'help' => 'Cada mañana recoge los adjuntos de los correos que han llegado al buzón de facturas y los deja en la bandeja de facturas recibidas, en cola para leerlos (app:fetch-invoice-mail). Los correos no se borran: se archivan en la carpeta «Archivadas» del buzón, o en «Revisar» si no traían nada que valga como factura (sin adjunto, o con un enlace para descargarla). Si llega el aviso de una notificación oficial (DEHú, Agencia Tributaria, Seguridad Social) firmado por su organismo, avisa al momento al móvil y a la bandeja de quien lleva la contabilidad y lo deja en la portada de contabilidad hasta que alguien lo marque como revisado en la sede. Requiere la contabilidad encendida y el buzón configurado en el servidor.',
             'default' => true,
         ],
         self::CRON_OFFSITE_BACKUP => [
