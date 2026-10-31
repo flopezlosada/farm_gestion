@@ -12,8 +12,8 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * El emparejado de movimientos del banco con apuntes, sin base de datos: importe exacto
- * con signo, misma cuenta, ±3 días y único para ligarse solo; hasta ±7 o con varios
- * candidatos, sólo se propone.
+ * con signo, misma cuenta, ±3 días y único (o el mismo día con tantos apuntes como
+ * movimientos) para ligarse solo; hasta ±7 o con varios candidatos, sólo se propone.
  */
 class BankLineMatcherTest extends TestCase
 {
@@ -86,9 +86,52 @@ class BankLineMatcherTest extends TestCase
         $bank = $this->account();
         $first = $this->line($bank, '2026-10-10', -1500);
         $second = $this->line($bank, '2026-10-11', -1500);
-        $entry = $this->entry($bank, '2026-10-10', '-15.00');
+        $entry = $this->entry($bank, '2026-10-12', '-15.00');
 
         $this->assertSame([], BankLineMatcher::safePairs([$first, $second], [$entry]));
+    }
+
+    /**
+     * Dos de 10 € el mismo día en el banco y dos en el libro, con más de 10 € alrededor:
+     * se ligan los del día entre sí, en orden, aunque cada apunte sea candidato de
+     * varios movimientos de la semana.
+     */
+    public function testElMismoDiaConTantosApuntesComoMovimientosSeLigan(): void
+    {
+        $bank = $this->account();
+        $a = $this->line($bank, '2026-01-18', 1000);
+        $b = $this->line($bank, '2026-01-18', 1000);
+        $other = $this->line($bank, '2026-01-15', 1000);
+        $ea = $this->entry($bank, '2026-01-18', '10.00');
+        $eb = $this->entry($bank, '2026-01-18', '10.00');
+        $eOther = $this->entry($bank, '2026-01-15', '10.00');
+        $eLoose = $this->entry($bank, '2026-01-16', '10.00');
+
+        $this->assertSame(
+            [[$a, $ea], [$b, $eb], [$other, $eOther]],
+            BankLineMatcher::safePairs([$a, $b, $other], [$eb, $eLoose, $eOther, $ea]),
+            'los apuntes del día por orden de alta; el suelto del 16 no se usa',
+        );
+    }
+
+    /** Dos movimientos el mismo día y un solo apunte ese día: no se sabe cuál es, se propone. */
+    public function testElMismoDiaConMenosApuntesNoSeLiga(): void
+    {
+        $bank = $this->account();
+        $a = $this->line($bank, '2026-10-10', -1500);
+        $b = $this->line($bank, '2026-10-10', -1500);
+
+        $this->assertSame([], BankLineMatcher::safePairs([$a, $b], [$this->entry($bank, '2026-10-10', '-15.00')]));
+    }
+
+    /** El grupo del mismo día es de una cuenta: el apunte de otra cuenta no cuenta. */
+    public function testElMismoDiaEsPorCuenta(): void
+    {
+        $bank = $this->account();
+        $line = $this->line($bank, '2026-10-10', -1500);
+        $elsewhere = $this->entry($this->account(), '2026-10-10', '-15.00');
+
+        $this->assertSame([], BankLineMatcher::safePairs([$line], [$elsewhere]));
     }
 
     /** Con dos movimientos y dos apuntes cada uno a su fecha y lejos del otro, se ligan los dos. */
