@@ -8,6 +8,7 @@ use App\Entity\User;
 use App\Repository\TelegramLinkRepository;
 use App\Repository\TelegramSubmissionRepository;
 use App\Service\Ai\GeminiException;
+use App\Service\Telegram\Destination\CommandDestination;
 use App\Service\Telegram\Destination\TelegramDestination;
 use App\Service\Telegram\Destination\TelegramRejected;
 use Doctrine\ORM\EntityManagerInterface;
@@ -181,7 +182,7 @@ class TelegramBot
             return;
         }
 
-        $input = TelegramInput::fromMessage($message);
+        $input = TelegramInput::fromMessage($message, isset($update['update_id']) ? (int) $update['update_id'] : null);
         if ($input === null) {
             $chat->say($this->help($link->getUser()));
 
@@ -242,6 +243,20 @@ class TelegramBot
      */
     private function place(TelegramSubmission $submission, TelegramInput $input, array $candidates): void
     {
+        // Una orden con su formato («caja huerta 400,56») no se clasifica: se sabe qué
+        // es por cómo está escrita. Y si no se puede atender, es un error de esa orden
+        // (un importe dudoso, una caja que no existe): se dice, sin ofrecer otros
+        // apartados que no tienen nada que ver.
+        $commands = array_values(array_filter($candidates, static fn (TelegramDestination $d): bool => $d instanceof CommandDestination));
+        if (\count($commands) === 1) {
+            $refused = $this->router->route($submission, $commands[0]);
+            if ($refused !== null) {
+                $this->router->refuse($submission, $refused);
+            }
+
+            return;
+        }
+
         // Se clasifica aunque sólo haya un apartado posible: con permisos por
         // apartado es lo normal, y mandarlo directo metería la foto de una lechuga
         // en la bandeja de facturas de quien sólo puede mandar facturas. El
