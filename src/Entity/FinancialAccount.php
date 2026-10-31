@@ -143,6 +143,12 @@ class FinancialAccount
         return $this->kind === self::KIND_BANK;
     }
 
+    /** Si es una caja de efectivo: la única clase de cuenta que se cuenta a mano (arqueo). */
+    public function isCash(): bool
+    {
+        return $this->kind === self::KIND_CASH;
+    }
+
     /** Si es una tarjeta, que el banco liquida de golpe con un traspaso. */
     public function isCard(): bool
     {

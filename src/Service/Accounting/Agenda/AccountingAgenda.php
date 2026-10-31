@@ -3,6 +3,7 @@
 namespace App\Service\Accounting\Agenda;
 
 use App\Entity\AccountantDelivery;
+use App\Entity\CashCount;
 use App\Entity\FinancialAccount;
 use App\Entity\IssuedInvoice;
 use App\Entity\Remittance;
@@ -10,12 +11,14 @@ use App\Entity\RemittanceReturn;
 use App\Entity\ReturnStatus;
 use App\Repository\AccountEntryRepository;
 use App\Repository\BankStatementLineRepository;
+use App\Repository\CashCountRepository;
 use App\Repository\FinancialAccountRepository;
 use App\Repository\IssuedInvoiceRepository;
 use App\Repository\PendingTransferRepository;
 use App\Repository\ReceivedInvoiceRepository;
 use App\Repository\RemittanceRepository;
 use App\Repository\RemittanceReturnRepository;
+use App\Service\Accounting\CashCount\DayBalances;
 use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\AccountantPackage;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
@@ -30,9 +33,9 @@ use App\Service\Accounting\Remittance\RemittanceChargeWatch;
  * sin meter, los movimientos de los extractos sin anotar, la entrega del trimestre a la gestoría (o volver a mandarlo, si se
  * reabrió), la bandeja de facturas, lo
  * emitido sin cobrar, la remesa del mes, las remesas que no han entrado en el
- * banco, los recibos devueltos, los traspasos a
- * medias y los que se han contado por el bot. Si no devuelve
- * nada, todo está al día.
+ * banco, los recibos devueltos, los traspasos a medias y los que se han contado por
+ * el bot, y las cajas cuyo último arqueo no cuadra con el libro. Si no devuelve nada,
+ * todo está al día.
  *
  * El módulo existe para que el libro esté al día y el paquete de la gestoría llegue
  * completo; esta lista es exactamente eso, ordenado por lo que aprieta. Cada tarea
@@ -59,6 +62,7 @@ class AccountingAgenda
         private readonly RemittanceReturnRepository $returns,
         private readonly PendingTransferRepository $pendingTransfers,
         private readonly RemittanceChargeWatch $chargeWatch,
+        private readonly CashCountRepository $cashCounts,
         private readonly BankStatementLineRepository $bankLines,
     ) {
     }
@@ -66,7 +70,7 @@ class AccountingAgenda
     /**
      * Las tareas pendientes a una fecha, las que aprietan primero y, a igual urgencia,
      * en el orden del ritmo de trabajo: libro, tarjetas, gestoría, facturas, cobros,
-     * remesa, traspasos.
+     * remesa, traspasos, arqueos.
      *
      * @param \DateTimeImmutable $today Hoy.
      *
@@ -87,6 +91,7 @@ class AccountingAgenda
             $this->openReturns(),
             $this->unpairedTransfers(),
             $this->botTransfers(),
+            ...$this->cashCountMismatches(),
         ]));
 
         // usort es estable: a igual urgencia se respeta el orden de arriba.
@@ -507,5 +512,48 @@ class AccountingAgenda
             ['No entran en el libro hasta que alguien los revisa: lo entendido de una nota de voz puede estar mal.'],
             'accounting_transfer_pending',
         );
+    }
+
+    /**
+     * Las cajas cuyo último arqueo no cuadra con el libro. Se recalcula cada vez y no
+     * se usa la diferencia guardada al llegar: si después se anota el ticket olvidado
+     * con fecha de ese día o anterior, el aviso se va solo. Lleva a anotar el apunte
+     * que falta, con la caja y la fecha puestas; nunca se apunta nada solo.
+     *
+     * Una consulta de saldo por caja con arqueo: hay dos o tres.
+     *
+     * @return list<AgendaItem>
+     */
+    private function cashCountMismatches(): array
+    {
+        $items = [];
+        foreach ($this->cashCounts->findLatestOfActiveCashAccounts() as $count) {
+            /** @var CashCount $count */
+            $balances = $this->entries->dayBalances($count->getAccount(), $count->getCountDate());
+            if ($balances->matches($count->getCountedCents())) {
+                continue;
+            }
+            $difference = $count->getCountedCents() - $balances->closingCents;
+            $day = $count->getCountDate()->format('d/m/Y');
+
+            $items[] = new AgendaItem(
+                AgendaUrgency::Normal,
+                sprintf('El arqueo de %s del %s no cuadra: %s%s', $count->getAccount()->getName(), $day, $difference > 0 ? '+' : '', DayBalances::euros($difference)),
+                [
+                    sprintf(
+                        'Se contaron %s y el libro dice %s al cerrar ese día: %s %s en la caja. Suele ser un ticket sin anotar o un traspaso sin registrar.',
+                        DayBalances::euros($count->getCountedCents()),
+                        DayBalances::euros($balances->closingCents),
+                        $difference < 0 ? 'faltan' : 'sobran',
+                        DayBalances::euros(abs($difference)),
+                    ),
+                    sprintf('Al anotar lo que falta con fecha del %s o anterior, este aviso desaparece solo. No se hace ningún apunte automático.', $day),
+                ],
+                'accounting_entry_new',
+                ['account' => $count->getAccount()->getId(), 'date' => $count->getCountDate()->format('Y-m-d')],
+            );
+        }
+
+        return $items;
     }
 }
