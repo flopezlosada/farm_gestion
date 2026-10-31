@@ -480,7 +480,7 @@ class AccountingAgendaTest extends TestCase
         $this->assertSame([
             'Notificación oficial sin revisar (DEHú)',
             'Notificación oficial sin revisar (Agencia Tributaria)',
-            'Mandar el 3T2026 a la gestoría: plazo hasta el 20 de octubre',
+            'Mandar el 3T2026 a la gestoría: el plazo acabó el 5 de octubre',
         ], array_map(static fn (AgendaItem $i): string => $i->title, $items));
         $this->assertSame(AgendaUrgency::Soon, $items[0]->urgency);
         $this->assertSame('accounting_official_notices', $items[0]->route);
