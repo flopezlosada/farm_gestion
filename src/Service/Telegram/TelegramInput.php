@@ -31,6 +31,8 @@ final class TelegramInput
      * @param string|null        $fileName Nombre del fichero (inventado para fotos y notas de voz).
      * @param int                $fileSize Tamaño según Telegram (0 si no lo dice).
      * @param string|null        $mimeType Tipo según Telegram, sin comprobar.
+     * @param int|null           $updateId `update_id` del mensaje en Telegram; null si se
+     *                                     rehace desde un envío guardado (se coloca desde la web).
      */
     public function __construct(
         public readonly string $kind,
@@ -40,6 +42,7 @@ final class TelegramInput
         public readonly ?string $fileName = null,
         public readonly int $fileSize = 0,
         public readonly ?string $mimeType = null,
+        public readonly ?int $updateId = null,
     ) {
     }
 
@@ -47,9 +50,10 @@ final class TelegramInput
      * Lo que se entiende de un mensaje de Telegram; null si no es nada de lo que el
      * bot sabe recibir (una pegatina, una ubicación…).
      *
-     * @param array<string, mixed> $message Mensaje tal como lo da Telegram.
+     * @param array<string, mixed> $message  Mensaje tal como lo da Telegram.
+     * @param int|null             $updateId `update_id` del «update» que lo trae.
      */
-    public static function fromMessage(array $message): ?self
+    public static function fromMessage(array $message, ?int $updateId = null): ?self
     {
         $sentAt = (new \DateTimeImmutable())->setTimestamp((int) ($message['date'] ?? time()));
         $caption = trim((string) ($message['caption'] ?? ''));
@@ -57,25 +61,25 @@ final class TelegramInput
         if (isset($message['document']['file_id'])) {
             $doc = $message['document'];
 
-            return new self(self::DOCUMENT, $caption, $sentAt, (string) $doc['file_id'], (string) ($doc['file_name'] ?? 'documento'), (int) ($doc['file_size'] ?? 0), $doc['mime_type'] ?? null);
+            return new self(self::DOCUMENT, $caption, $sentAt, (string) $doc['file_id'], (string) ($doc['file_name'] ?? 'documento'), (int) ($doc['file_size'] ?? 0), $doc['mime_type'] ?? null, $updateId);
         }
 
         if (isset($message['photo']) && \is_array($message['photo']) && $message['photo'] !== []) {
             // Telegram manda varias copias de cada foto, de menor a mayor.
             $largest = end($message['photo']);
 
-            return new self(self::PHOTO, $caption, $sentAt, (string) $largest['file_id'], sprintf('foto-telegram-%s.jpg', $sentAt->format('Y-m-d-His')), (int) ($largest['file_size'] ?? 0), 'image/jpeg');
+            return new self(self::PHOTO, $caption, $sentAt, (string) $largest['file_id'], sprintf('foto-telegram-%s.jpg', $sentAt->format('Y-m-d-His')), (int) ($largest['file_size'] ?? 0), 'image/jpeg', $updateId);
         }
 
         if (isset($message['voice']['file_id'])) {
             $voice = $message['voice'];
 
-            return new self(self::VOICE, $caption, $sentAt, (string) $voice['file_id'], sprintf('voz-telegram-%s.ogg', $sentAt->format('Y-m-d-His')), (int) ($voice['file_size'] ?? 0), $voice['mime_type'] ?? 'audio/ogg');
+            return new self(self::VOICE, $caption, $sentAt, (string) $voice['file_id'], sprintf('voz-telegram-%s.ogg', $sentAt->format('Y-m-d-His')), (int) ($voice['file_size'] ?? 0), $voice['mime_type'] ?? 'audio/ogg', $updateId);
         }
 
         $text = trim((string) ($message['text'] ?? ''));
 
-        return $text !== '' ? new self(self::TEXT, $text, $sentAt) : null;
+        return $text !== '' ? new self(self::TEXT, $text, $sentAt, updateId: $updateId) : null;
     }
 
     /** Si trae fichero. */

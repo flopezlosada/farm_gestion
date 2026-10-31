@@ -78,7 +78,7 @@ class TelegramSubmissionRouter
      */
     public function record(TelegramInput $input, TelegramLink $link, string $chatId): TelegramSubmission
     {
-        $submission = new TelegramSubmission($link->getUser(), $chatId, $input->kind, $input->text, $input->sentAt);
+        $submission = new TelegramSubmission($link->getUser(), $chatId, $input->kind, $input->text, $input->sentAt, $input->updateId);
         if ($input->hasFile()) {
             $path = $input->localPath();
             $mimeType = MimeTypes::getDefault()->guessMimeType($path);
@@ -457,6 +457,7 @@ class TelegramSubmissionRouter
             $submission->getOriginalName(),
             0,
             $submission->getMimeType(),
+            $submission->getUpdateId(),
         );
         if ($fileName !== null) {
             $input->setDownloader(function () use ($fileName): string {
