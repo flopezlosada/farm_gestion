@@ -261,6 +261,8 @@
                                    route == 'accounting_index') }}
                                 {{ _self.nav_link('Movimientos', path('accounting_ledger'), 'fa-list',
                                    route starts with 'accounting_ledger' or route starts with 'accounting_month' or route starts with 'accounting_entry' or route starts with 'accounting_transfer') }}
+                                {{ _self.nav_link('Extractos', path('accounting_bank_statements'), 'fa-university',
+                                   route starts with 'accounting_bank_') }}
                                 {{ _self.nav_link('Facturas', path('accounting_invoices'), 'fa-file-text-o',
                                    route starts with 'accounting_invoice' or route starts with 'accounting_issued_invoice') }}
                                 {{ _self.nav_link('Remesas', path('accounting_remittances'), 'fa-exchange',

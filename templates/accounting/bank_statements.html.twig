@@ -1,0 +1,83 @@
+{# ============================================================
+ # Los extractos del banco subidos (Norma 43) y el sitio para subir otro.
+ #
+ # El controller pasa: statements (BankStatement[], recientes primero) y
+ # unlinked ([id del extracto => movimientos sin apunte]).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% import 'accounting/_money.html.twig' as fmt %}
+
+{% block title %}Contabilidad · Extractos del banco{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('accounting_index') }}">Contabilidad</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Extractos del banco</span>
+{% endblock %}
+
+{% block more_css %}
+    {{ parent() }}
+    {% include 'partner/_listing_styles.html.twig' %}
+    {% include 'accounting/_styles.html.twig' %}
+{% endblock %}
+
+{% block csa_main %}
+<div class="prl">
+
+    {{ csa.page_header(
+        'Contabilidad · Extractos',
+        'Extractos del banco',
+        'Sube cada mes el extracto en formato Norma 43 (cuaderno 43) que da la banca online. Se comprueba que está entero, se guardan sus movimientos y se cuadran con el libro: verás qué le falta al libro y qué apuntes no trae el banco.'
+    ) }}
+
+    {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+        <div class="prl-toolbar">
+            <form method="post" action="{{ path('accounting_bank_statement_upload') }}" enctype="multipart/form-data" class="inv-upload">
+                <input type="hidden" name="_token" value="{{ csrf_token('bank_statement_upload') }}">
+                <input type="file" name="file" required>
+                <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-upload"></i> Subir extracto</button>
+                <span class="acc-muted acc-small">Si algo del fichero no cuadra, no se guarda nada. Volver a subir uno ya subido no duplica movimientos.</span>
+            </form>
+        </div>
+    {% endif %}
+
+    <div class="prl-table-wrap">
+        {% if statements is empty %}
+            <div class="prl-empty">Todavía no se ha subido ningún extracto.</div>
+        {% else %}
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th>Cuenta</th>
+                        <th class="tight">Del</th>
+                        <th class="tight">Al</th>
+                        <th class="tight acc-num">Saldo inicial</th>
+                        <th class="tight acc-num">Saldo final</th>
+                        <th class="tight acc-num">Sin anotar</th>
+                        <th class="tight">Subido</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in statements %}
+                        {% set pending = unlinked[s.id] ?? 0 %}
+                        <tr>
+                            <td><a class="acc-strong" href="{{ path('accounting_bank_statement_show', { id: s.id }) }}">{{ s.account.name }}</a><br><span class="acc-muted acc-small">{{ s.fileName }}</span></td>
+                            <td class="tight">{{ s.from|date('d/m/Y') }}</td>
+                            <td class="tight">{{ s.to|date('d/m/Y') }}</td>
+                            <td class="acc-num">{{ fmt.money(s.openingBalance) }}</td>
+                            <td class="acc-num">{{ fmt.money(s.closingBalance) }}</td>
+                            <td class="acc-num {{ pending > 0 ? 'acc-neg' : '' }}">{{ pending }}</td>
+                            <td class="tight">{{ s.importedAt|date('d/m/Y') }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

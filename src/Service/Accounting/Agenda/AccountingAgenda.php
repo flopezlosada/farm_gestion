@@ -11,6 +11,7 @@ use App\Entity\Remittance;
 use App\Entity\RemittanceReturn;
 use App\Entity\ReturnStatus;
 use App\Repository\AccountEntryRepository;
+use App\Repository\BankStatementLineRepository;
 use App\Repository\CashCountRepository;
 use App\Repository\FinancialAccountRepository;
 use App\Repository\IssuedInvoiceRepository;
@@ -32,8 +33,8 @@ use App\Service\Accounting\Remittance\RemittanceChargeWatch;
 
 /**
  * Lo que queda por hacer en la contabilidad, para la portada: las notificaciones
- * oficiales sin revisar, el libro de los bancos
- * sin meter, la entrega del trimestre a la gestoría (o volver a mandarlo, si se
+ * oficiales sin revisar, el libro de los bancos sin meter, los movimientos de los
+ * extractos sin anotar, la entrega del trimestre a la gestoría (o volver a mandarlo, si se
  * reabrió), la bandeja de facturas, lo
  * emitido sin cobrar, la remesa del mes, las remesas que no han entrado en el
  * banco, los recibos devueltos, los traspasos a medias y los que se han contado por
@@ -67,6 +68,7 @@ class AccountingAgenda
         private readonly RemittanceChargeWatch $chargeWatch,
         private readonly CashCountRepository $cashCounts,
         private readonly OfficialNoticeRepository $officialNotices,
+        private readonly BankStatementLineRepository $bankLines,
     ) {
     }
 
@@ -84,6 +86,7 @@ class AccountingAgenda
         $items = array_values(array_filter([
             ...$this->unreviewedOfficialNotices(),
             $this->staleBankBooks($today),
+            $this->unlinkedBankLines(),
             ...$this->unexplainedCardPayments(),
             ...$this->accountantDeliveries($today),
             $this->openReceivedInvoices(),
@@ -269,6 +272,26 @@ class AccountingAgenda
                 $stale,
             ),
             'accounting_ledger',
+        );
+    }
+
+    /**
+     * Los movimientos de los extractos subidos que el libro aún no tiene: el banco dice
+     * que el dinero se movió y no hay apunte que lo diga. Va junto al libro atrasado
+     * porque es lo mismo visto desde el banco.
+     */
+    private function unlinkedBankLines(): ?AgendaItem
+    {
+        $count = $this->bankLines->countUnlinked();
+        if ($count === 0) {
+            return null;
+        }
+
+        return new AgendaItem(
+            AgendaUrgency::Normal,
+            $count === 1 ? '1 movimiento del banco sin anotar' : sprintf('%d movimientos del banco sin anotar', $count),
+            ['Vienen de los extractos subidos. En la ficha de cada extracto se anotan, o se ligan al apunte que ya los tenía.'],
+            'accounting_bank_statements',
         );
     }
 
