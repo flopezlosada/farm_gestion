@@ -4,7 +4,6 @@ namespace App\Tests\Service\Accounting\CashCount;
 
 use App\Service\Accounting\CashCount\CashCountMessage;
 use App\Service\Accounting\CashCount\CashCountRejected;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -29,7 +28,7 @@ class CashCountMessageTest extends TestCase
         yield 'cero con decimales' => ['0,00', 0];
     }
 
-    #[DataProvider('amounts')]
+    /** @dataProvider amounts */
     public function testImportesQueSeEntienden(string $raw, int $cents): void
     {
         $this->assertSame($cents, CashCountMessage::amountCents($raw));
@@ -55,7 +54,7 @@ class CashCountMessageTest extends TestCase
         yield 'dos separadores decimales' => ['400,5,6'];
     }
 
-    #[DataProvider('ambiguousAmounts')]
+    /** @dataProvider ambiguousAmounts */
     public function testImportesDudososSePidenConComaDecimal(string $raw): void
     {
         $this->expectException(CashCountRejected::class);
