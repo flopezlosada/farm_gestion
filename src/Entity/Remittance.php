@@ -111,6 +111,16 @@ class Remittance
     private ?\DateTimeImmutable $sentAt = null;
 
     /**
+     * El día de cargo que se pidió al banco al subirla. Con él se vigila que el abono
+     * entre en el libro (lo hace `RemittanceChargeWatch`); sin él (las importadas,
+     * las de antes) no se vigila. No sale del mes de la remesa: lo que se cobra y
+     * cuándo se carga son cosas distintas.
+     *
+     * @ORM\Column(name="charge_date", type="date_immutable", nullable=true)
+     */
+    private ?\DateTimeImmutable $chargeDate = null;
+
+    /**
      * @ORM\ManyToOne(targetEntity="User")
      * @ORM\JoinColumn(name="sent_by_id", nullable=true, onDelete="SET NULL")
      */
@@ -185,11 +195,14 @@ class Remittance
     }
 
     /**
-     * Darla por enviada al banco: desde aquí es histórico y no se cambia.
+     * Darla por enviada al banco: desde aquí es histórico y no se cambia. Lleva el día
+     * de cargo que se pidió, para vigilar que se cobre.
+     *
+     * @param \DateTimeImmutable $chargeDate El día de cargo pedido al banco.
      *
      * @throws \LogicException Si no es un borrador o aún tiene problemas.
      */
-    public function markSent(?User $by): void
+    public function markSent(?User $by, \DateTimeImmutable $chargeDate): void
     {
         if ($this->status !== self::STATUS_DRAFT) {
             throw new \LogicException('Sólo se envía un borrador.');
@@ -200,6 +213,24 @@ class Remittance
         $this->status = self::STATUS_SENT;
         $this->sentAt = new \DateTimeImmutable();
         $this->sentBy = $by;
+        $this->chargeDate = $chargeDate->setTime(0, 0);
+    }
+
+    /**
+     * Cambiar el día de cargo de una remesa ya enviada: se rechazó y se volvió a subir
+     * con otra fecha, o se le pone a una importada para vigilarla. Sin fecha deja de
+     * vigilarse. Es lo único que se cambia de una enviada: no toca ningún recibo.
+     *
+     * @param \DateTimeImmutable|null $chargeDate El nuevo día de cargo, o null para no vigilarla.
+     *
+     * @throws \LogicException Si aún es un borrador: la fecha se pone al enviarla.
+     */
+    public function rescheduleCharge(?\DateTimeImmutable $chargeDate): void
+    {
+        if (!$this->isSent()) {
+            throw new \LogicException('La fecha de cargo se pone al darla por enviada.');
+        }
+        $this->chargeDate = $chargeDate?->setTime(0, 0);
     }
 
     /**
@@ -353,6 +384,11 @@ class Remittance
     public function getSentAt(): ?\DateTimeImmutable
     {
         return $this->sentAt;
+    }
+
+    public function getChargeDate(): ?\DateTimeImmutable
+    {
+        return $this->chargeDate;
     }
 
     public function getSentBy(): ?User

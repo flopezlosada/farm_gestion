@@ -177,13 +177,36 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
         $this->assertResponseIsSuccessful();
         $this->assertStringContainsString('09. Recibos SEPTIEMBRE 2096.xlsx', rawurldecode((string) $client->getResponse()->headers->get('Content-Disposition')));
 
-        // 6. Enviarla: los cambios respecto a agosto, y ya no se toca.
+        // 6. Enviarla pide el día de cargo: sin él, o con una fecha que no existe, no se envía.
         $crawler = $client->request('GET', '/gestion/accounting/remittances/' . $september->getId());
         $this->assertSelectorTextContains('body', 'Cambia');
-        $client->submit($crawler->filter('form[action$="/send"]')->form());
+        $send = $crawler->filter('form[action$="/send"]')->form();
+        $client->submit($send, ['charge_date' => '']);
+        $this->assertTrue($this->remittance('2096-09')->isDraft(), 'Sin día de cargo no se da por enviada.');
+        $client->submit($send, ['charge_date' => (new \DateTimeImmutable('today'))->format('Y') . '-02-31']);
+        $this->assertTrue($this->remittance('2096-09')->isDraft(), 'El 31 de febrero no es un día de cargo.');
+
+        // Con él, los cambios respecto a agosto quedan y ya no se toca.
+        $chargeDate = new \DateTimeImmutable('today +6 days');
+        $client->submit($send, ['charge_date' => $chargeDate->format('Y-m-d')]);
         $september = $this->remittance('2096-09');
         $this->assertTrue($september->isSent());
         $this->assertSame('150.00', $september->getTotal());
+        $this->assertSame($chargeDate->format('Y-m-d'), $september->getChargeDate()?->format('Y-m-d'));
+
+        // 7. El día de cargo sí se cambia (se volvió a subir) y se quita (no vigilarla).
+        $crawler = $client->request('GET', '/gestion/accounting/remittances/' . $september->getId());
+        $this->assertSelectorTextContains('body', 'Cargo pedido el ' . $chargeDate->format('d/m/Y'));
+        $change = $crawler->filter('form[action$="/charge-date"]')->form();
+        $later = $chargeDate->modify('+7 days');
+        $client->submit($change, ['charge_date' => $later->format('Y-m-d')]);
+        $this->assertSame($later->format('Y-m-d'), $this->remittance('2096-09')->getChargeDate()?->format('Y-m-d'));
+        $client->submit($change, ['charge_date' => '2096-13-01']);
+        $this->assertSame($later->format('Y-m-d'), $this->remittance('2096-09')->getChargeDate()?->format('Y-m-d'), 'Una fecha mal puesta no borra la que había.');
+        $client->submit($change, ['charge_date' => '']);
+        $this->assertNull($this->remittance('2096-09')->getChargeDate());
+        $client->request('GET', '/gestion/accounting/remittances/' . $september->getId());
+        $this->assertSelectorTextContains('body', 'Sin fecha de cargo: no se vigila');
 
         $client->request('GET', sprintf('/gestion/accounting/remittances/lines/%d/edit', $luis->getId()));
         $this->assertResponseRedirects('/gestion/accounting/remittances/' . $september->getId());
