@@ -10,6 +10,8 @@ use App\Entity\BudgetCategoryGroup;
 use App\Entity\FinancialAccount;
 use App\Entity\Setting;
 use App\Service\AppSettings;
+use App\Service\Accounting\Norma43\Norma43Account;
+use App\Tests\Service\Accounting\Norma43\BankSheet;
 use App\Tests\Service\Accounting\Norma43\N43;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -123,6 +125,38 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         $this->assertSelectorTextContains('body', 'No se ha guardado nada');
     }
 
+    /**
+     * La hoja de Excel del banco sin IBAN: se pide la cuenta (la clave no puede ir vacía
+     * en el formulario) y, elegida, el extracto se guarda con sus movimientos.
+     */
+    public function testHojaDeExcelSinIbanPideLaCuentaYSeGuarda(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
+        $this->account = $this->bankAccount(sprintf('%010d', random_int(0, 9_999_999_999)));
+        $this->account->setIban(null);
+        static::getContainer()->get(EntityManagerInterface::class)->flush();
+
+        $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
+        $form = $crawler->filter('form.inv-upload')->form();
+        $form['file']->upload($this->tempFile(BankSheet::fiareLike(500.00, [
+            ['2091-04-03', -25.00, 'COMPRA SEMILLAS'],
+            ['2091-04-09', 40.00, 'TRF. CUOTA INVENTADA'],
+        ]), 'movimientos.xls'));
+        $crawler = $client->submit($form);
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorTextContains('body', 'cuenta sin IBAN en el fichero');
+        $choose = $crawler->filter('form.csa-form-narrow')->form();
+        $choose['account['.Norma43Account::UNKNOWN_KEY.']']->select((string) $this->account->getId());
+        $client->submit($choose);
+
+        $this->assertResponseRedirects();
+        $client->followRedirect();
+        $this->assertSelectorTextContains('h1', $this->account->getName());
+        $this->assertSelectorTextContains('#sin-apunte', 'COMPRA SEMILLAS');
+    }
+
     private function bankAccount(string $number): FinancialAccount
     {
         $em = static::getContainer()->get(EntityManagerInterface::class);
@@ -147,11 +181,11 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         return $category;
     }
 
-    private function tempFile(string $content): UploadedFile
+    private function tempFile(string $content, string $name = 'extracto.n43'): UploadedFile
     {
         $path = tempnam(sys_get_temp_dir(), 'n43');
         file_put_contents($path, $content);
 
-        return new UploadedFile($path, 'extracto.n43', 'text/plain', null, true);
+        return new UploadedFile($path, $name, null, null, true);
     }
 }

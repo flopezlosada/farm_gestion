@@ -32,15 +32,29 @@ final class Norma43Account
     ) {
     }
 
+    /**
+     * Clave de la cuenta cuando el fichero no dice cuál es (una hoja de Excel sin IBAN en
+     * el título). No son cifras, así que nunca casa con el IBAN de una cuenta del libro.
+     */
+    public const UNKNOWN_KEY = 'sin-iban';
+
     /** Entidad + oficina + cuenta: lo que se compara con el IBAN de las cuentas del libro. */
     public function key(): string
     {
-        return $this->bank.$this->branch.$this->number;
+        return $this->isKnown() ? $this->bank.$this->branch.$this->number : self::UNKNOWN_KEY;
     }
 
     /** La cuenta para enseñarla sin el número entero: «2100 0418 ····1234». */
     public function label(): string
     {
-        return sprintf('%s %s ····%s', $this->bank, $this->branch, substr($this->number, -4));
+        return $this->isKnown()
+            ? sprintf('%s %s ····%s', $this->bank, $this->branch, substr($this->number, -4))
+            : 'cuenta sin IBAN en el fichero';
+    }
+
+    /** Si el fichero dice de qué cuenta es. */
+    private function isKnown(): bool
+    {
+        return $this->bank.$this->branch.$this->number !== '';
     }
 }

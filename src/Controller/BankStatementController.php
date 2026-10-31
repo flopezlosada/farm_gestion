@@ -11,8 +11,8 @@ use App\Repository\BankStatementLineRepository;
 use App\Repository\BankStatementRepository;
 use App\Service\Accounting\Norma43\BankLineMatcher;
 use App\Service\Accounting\Norma43\BankStatementImporter;
+use App\Service\Accounting\Norma43\BankStatementReader;
 use App\Service\Accounting\Norma43\Norma43Exception;
-use App\Service\Accounting\Norma43\Norma43Reader;
 use App\Service\Accounting\Norma43\StatementReviewer;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -23,7 +23,7 @@ use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
- * Los extractos del banco en Norma 43: se suben, se guardan sus movimientos y se cuadran
+ * Los extractos del banco, en Norma 43 o en la hoja de Excel de la banca online: se suben, se guardan sus movimientos y se cuadran
  * con el libro. El banco es la fuente de los movimientos de una cuenta de banco; aquí se
  * ve qué movimientos le faltan al libro y qué apuntes no trae el banco.
  *
@@ -55,7 +55,7 @@ class BankStatementController extends AbstractController
      */
     #[Route('/upload', name: 'accounting_bank_statement_upload', methods: ['POST'])]
     #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
-    public function upload(Request $request, Norma43Reader $reader, BankStatementImporter $importer): Response
+    public function upload(Request $request, BankStatementReader $reader, BankStatementImporter $importer): Response
     {
         $back = $this->redirectToRoute('accounting_bank_statements');
         if (!$this->isCsrfTokenValid('bank_statement_upload', (string) $request->request->get('_token'))) {
@@ -171,7 +171,7 @@ class BankStatementController extends AbstractController
         $content = (string) $request->request->get('content');
         $raw = $content !== '' ? base64_decode($content, true) : false;
         if ($raw === false || $raw === '' || \strlen($raw) > self::MAX_BYTES) {
-            return ['', '', 'Elige el fichero del extracto (Norma 43 / cuaderno 43).'];
+            return ['', '', 'Elige el fichero del extracto (Norma 43 o la hoja de Excel del banco).'];
         }
 
         return [$raw, mb_substr((string) $request->request->get('file_name'), 0, 255), null];
