@@ -9,6 +9,8 @@ use App\Entity\TelegramSubmission;
 use App\Entity\User;
 use App\Repository\TelegramLinkRepository;
 use App\Repository\TelegramSubmissionRepository;
+use App\Service\Accounting\CashCount\CashCountRecorder;
+use App\Service\Accounting\CashCount\DictatedCashCountReader;
 use App\Service\Ai\GeminiClient;
 use App\Service\AppSettings;
 use App\Service\Telegram\Destination\CashCountDestination;
@@ -373,12 +375,15 @@ class CashCountBotTest extends KernelTestCase
 
         $c = static::getContainer();
         $api = new TelegramBotApi($telegram, '123:TOKEN');
+        $geminiClient = new GeminiClient($gemini, 'clave', ['modelo-a']);
+        // Con el Gemini simulado también para leer la voz: el del contenedor no tiene clave.
+        $cashCount = new CashCountDestination($c->get(CashCountRecorder::class), new DictatedCashCountReader($geminiClient), $this->em, $this->settings, new NullLogger());
 
         return new TelegramBot(
             $api,
             $c->get(TelegramLinkRepository::class),
-            new TelegramClassifier(new GeminiClient($gemini, 'clave', ['modelo-a'])),
-            new TelegramSubmissionRouter([$c->get(CashCountDestination::class), $notes], $c->get(TelegramFileStore::class), $api, $this->em, new NullLogger(), $c->get(TelegramPermissions::class)),
+            new TelegramClassifier($geminiClient),
+            new TelegramSubmissionRouter([$cashCount, $notes], $c->get(TelegramFileStore::class), $api, $this->em, new NullLogger(), $c->get(TelegramPermissions::class)),
             $c->get(TelegramSubmissionRepository::class),
             $this->em,
             // Cada bot con su caché: como si se hubiera vaciado entre una entrega y otra.
