@@ -15,6 +15,7 @@ use App\Entity\RemittanceLine;
 use App\Entity\RemittanceReturn;
 use App\Entity\User;
 use App\Repository\AccountEntryRepository;
+use App\Repository\BankStatementLineRepository;
 use App\Repository\FinancialAccountRepository;
 use App\Repository\IssuedInvoiceRepository;
 use App\Repository\PendingTransferRepository;
@@ -66,6 +67,21 @@ class AccountingAgendaTest extends TestCase
         $late = $this->only($agenda->items(new \DateTimeImmutable('2026-11-15')));
         $this->assertSame('Mandar el 3T2026 a la gestoría: el plazo acabó el 20 de octubre', $late->title);
         $this->assertSame(AgendaUrgency::Soon, $late->urgency);
+    }
+
+    /**
+     * Los movimientos de los extractos que el libro no tiene: una tarea que lleva a los
+     * extractos, en singular y en plural; sin ninguno, no sale.
+     */
+    public function testLosMovimientosDelBancoSinAnotar(): void
+    {
+        $one = $this->only($this->agenda(unlinkedBankLines: 1)->items(new \DateTimeImmutable('2026-11-15')));
+        $this->assertSame('1 movimiento del banco sin anotar', $one->title);
+        $this->assertSame('accounting_bank_statements', $one->route);
+        $this->assertSame(AgendaUrgency::Normal, $one->urgency);
+
+        $many = $this->only($this->agenda(unlinkedBankLines: 12)->items(new \DateTimeImmutable('2026-11-15')));
+        $this->assertSame('12 movimientos del banco sin anotar', $many->title);
     }
 
     /** Entregado, el trimestre ya no es una tarea: ni dentro del plazo ni después. */
@@ -409,6 +425,7 @@ class AccountingAgendaTest extends TestCase
         array $openReturns = [],
         array $unlinkedReturns = [],
         array $botTransfers = [],
+        int $unlinkedBankLines = 0,
     ): AccountingAgenda {
         $receivedRepo = $this->createStub(ReceivedInvoiceRepository::class);
         $receivedRepo->method('findOpen')->willReturn($open);
@@ -441,6 +458,8 @@ class AccountingAgendaTest extends TestCase
         $returns->method('findOpen')->willReturn($openReturns);
         $pendingTransfers = $this->createStub(PendingTransferRepository::class);
         $pendingTransfers->method('findUnconfirmed')->willReturn($botTransfers);
+        $bankLines = $this->createStub(BankStatementLineRepository::class);
+        $bankLines->method('countUnlinked')->willReturn($unlinkedBankLines);
 
         return new AccountingAgenda(
             $receivedRepo,
@@ -454,6 +473,7 @@ class AccountingAgendaTest extends TestCase
             $closed,
             $returns,
             $pendingTransfers,
+            $bankLines,
         );
     }
 
