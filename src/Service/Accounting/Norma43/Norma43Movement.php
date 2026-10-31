@@ -40,9 +40,15 @@ final class Norma43Movement
     ) {
     }
 
-    /** Lo que identifica al movimiento, sin el ordinal: dos movimientos con la misma clave son indistinguibles. */
+    /**
+     * Lo que identifica al movimiento, sin el ordinal: dos movimientos con la misma clave
+     * son indistinguibles. Sólo fecha e importe, porque es lo único que traen igual el
+     * Norma 43 y la hoja de Excel: con documento y referencias, el mismo movimiento
+     * subido una vez en cada formato (octubre en la hoja del año y luego en el Norma 43
+     * del mes) entraría dos veces.
+     */
     public function identity(): string
     {
-        return implode('|', [$this->operationDate->format('Y-m-d'), $this->amountCents, $this->document, $this->reference1, $this->reference2]);
+        return $this->operationDate->format('Y-m-d').'|'.$this->amountCents;
     }
 }

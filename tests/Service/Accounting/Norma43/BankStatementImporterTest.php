@@ -10,6 +10,7 @@ use App\Entity\BudgetCategoryGroup;
 use App\Entity\FinancialAccount;
 use App\Service\Accounting\Norma43\BankStatementImport;
 use App\Service\Accounting\Norma43\BankStatementImporter;
+use App\Service\Accounting\Norma43\BankStatementReader;
 use App\Service\Accounting\Norma43\Norma43Exception;
 use App\Service\Accounting\Norma43\Norma43Reader;
 use App\Service\Accounting\Norma43\StatementReviewer;
@@ -107,6 +108,31 @@ class BankStatementImporterTest extends KernelTestCase
         $this->assertSame(4, $this->em->getRepository(BankStatementLine::class)->count(['account' => $account]));
     }
 
+    /**
+     * El mismo mes en Norma 43 y, después, dentro de la hoja de Excel del banco (que no
+     * trae documento ni referencias): sólo entra lo que la hoja trae de más.
+     */
+    public function testNorma43YHojaDelMismoMesNoDuplican(): void
+    {
+        [$account, $number] = $this->bankAccount(openingBalance: '1200.00');
+        $this->import(N43::file(N43::account('9999', '0001', $number, '910301', '910331', 120000, [
+            ['910305', -4550, ['RECIBO LUZ']],
+            ['910312', 3000, ['TRANSFERENCIA']],
+            ['910312', 3000, ['TRANSFERENCIA']],
+        ])));
+
+        $sheet = $this->import(BankSheet::caixaLike('ES00'.'9999'.'0001'.'00'.$number, 1200.00, [
+            ['2091-03-05', -45.50, 'RECIBO LUZ'],
+            ['2091-03-12', 30.00, 'TRANSFERENCIA'],
+            ['2091-03-12', 30.00, 'TRANSFERENCIA'],
+            ['2091-04-02', -12.00, 'COMISION'],
+        ]));
+
+        $this->assertSame(1, $sheet->added);
+        $this->assertSame(3, $sheet->alreadyThere);
+        $this->assertSame(4, $this->em->getRepository(BankStatementLine::class)->count(['account' => $account]));
+    }
+
     /** Un extracto que empieza antes que el libro de la cuenta no compara el saldo inicial. */
     public function testElLibroEmpiezaDespues(): void
     {
@@ -177,9 +203,9 @@ class BankStatementImporterTest extends KernelTestCase
     private function import(string $raw): BankStatementImport
     {
         $importer = static::getContainer()->get(BankStatementImporter::class);
-        $file = (new Norma43Reader())->read($raw);
+        $file = static::getContainer()->get(BankStatementReader::class)->read($raw);
 
-        return $importer->import($file, $importer->resolve($file)['resolved'], 'extracto.n43', null);
+        return $importer->import($file, $importer->resolve($file)['resolved'], 'extracto', null);
     }
 
     /**

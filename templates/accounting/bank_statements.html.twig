@@ -1,5 +1,5 @@
 {# ============================================================
- # Los extractos del banco subidos (Norma 43) y el sitio para subir otro.
+ # Los extractos del banco subidos (Norma 43 u hoja de Excel) y el sitio para subir otro.
  #
  # El controller pasa: statements (BankStatement[], recientes primero) y
  # unlinked ([id del extracto => movimientos sin apunte]).
@@ -31,7 +31,7 @@
     {{ csa.page_header(
         'Contabilidad · Extractos',
         'Extractos del banco',
-        'Sube cada mes el extracto en formato Norma 43 (cuaderno 43) que da la banca online. Se comprueba que está entero, se guardan sus movimientos y se cuadran con el libro: verás qué le falta al libro y qué apuntes no trae el banco.'
+        'Sube cada mes el extracto que da la banca online: el fichero Norma 43 (cuaderno 43) o la hoja de movimientos en Excel (.xls o .xlsx, con columnas Fecha, Importe y Saldo). Se comprueba que está entero, se guardan sus movimientos y se cuadran con el libro: verás qué le falta al libro y qué apuntes no trae el banco.'
     ) }}
 
     {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
