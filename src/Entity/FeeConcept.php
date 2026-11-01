@@ -75,6 +75,22 @@ enum FeeConcept: string
         return \in_array($this, [self::MembershipSignup, self::MembershipUpkeep], true);
     }
 
+    /**
+     * Los repartos de un mes normal: cuatro la semanal, dos la quincenal y uno la
+     * mensual, también si es compartida. Es la cuenta con la que se acuerdan los precios
+     * por reparto (el transporte), igual en los meses de cinco viernes: la cuota es
+     * mensual.
+     */
+    public function deliveriesPerMonth(): int
+    {
+        return match ($this) {
+            self::VegWeekly, self::VegWeeklyShared, self::EggWeekly => 4,
+            self::VegBiweekly, self::VegBiweeklyShared, self::EggBiweekly => 2,
+            self::VegMonthly, self::VegMonthlyShared, self::EggMonthly => 1,
+            self::MembershipSignup, self::MembershipUpkeep => throw new \LogicException('Una cuota de socix no va por repartos.'),
+        };
+    }
+
     /** Si es de huevos (si no, de verdura). */
     public function isEgg(): bool
     {

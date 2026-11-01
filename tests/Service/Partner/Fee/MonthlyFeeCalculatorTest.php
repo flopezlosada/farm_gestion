@@ -15,6 +15,8 @@ use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerEvent;
 use App\Entity\PartnerPause;
 use App\Service\Partner\Fee\FeeCharge;
+use App\Entity\TransportRate;
+use App\Entity\WeeklyBasketGroup;
 use App\Service\Partner\Fee\FeeSchedule;
 use App\Service\Partner\Fee\FeeStatement;
 use App\Service\Partner\Fee\MonthlyFeeCalculator;
@@ -52,21 +54,28 @@ class MonthlyFeeCalculatorTest extends TestCase
         return (new Partner())->setname($name)->setParent($head);
     }
 
-    private static function share(Partner $partner, int $basketShare, ?string $start = null, ?string $end = null, bool $active = true, ?int $eggAmount = null, ?int $eggPeriod = null, ?Partner $payer = null, ?string $transport = null): PartnerBasketShare
+    private static function share(Partner $partner, int $basketShare, ?string $start = null, ?string $end = null, bool $active = true, ?int $eggAmount = null, ?int $eggPeriod = null, ?Partner $payer = null, int $amount = 1): PartnerBasketShare
     {
         $share = new PartnerBasketShare();
         $share->setPartner($partner);
         $share->setBasketShare(self::withId(BasketShare::class, $basketShare));
-        $share->setAmount(1);
+        $share->setAmount($amount);
         $share->setStartDate($start !== null ? new \DateTime($start) : null);
         $share->setEndDate($end !== null ? new \DateTime($end) : null);
         $share->setIsActive($active);
         $share->setEggAmount($eggAmount !== null ? self::withId(EggAmount::class, $eggAmount) : null);
         $share->setEggPeriod($eggPeriod !== null ? self::withId(EggPeriod::class, $eggPeriod) : null);
         $share->setPayerPartner($payer);
-        $share->setTransportPrice($transport);
 
         return $share;
+    }
+
+    /** Un grupo de recogida que paga transporte: el de Carla y el de las pruebas de transporte. */
+    private static ?WeeklyBasketGroup $far = null;
+
+    private static function far(): WeeklyBasketGroup
+    {
+        return self::$far ??= self::withId(WeeklyBasketGroup::class, 900);
     }
 
     private static function schedule(): FeeSchedule
@@ -81,6 +90,8 @@ class MonthlyFeeCalculatorTest extends TestCase
             $rate(FeeConcept::VegBiweeklyShared, '30', '2026-01-01'),
             $rate(FeeConcept::VegMonthly, '30', '2026-01-01'),
             $rate(FeeConcept::EggWeekly, '20', '2026-01-01'),
+        ], [
+            new TransportRate(self::far(), '2', new \DateTimeImmutable('2026-01-01'), null),
         ]);
     }
 
@@ -106,7 +117,8 @@ class MonthlyFeeCalculatorTest extends TestCase
         $ana = self::partner('Ana');                 // semanal todo el mes con una docena semanal
         $bea = self::partner('Bea');                 // de semanal a quincenal el día 15
         $hogar = self::partner('Hogar');             // encabeza la familia de Carla
-        $carla = self::partner('Carla', $hogar);     // quincenal compartida; paga la familia
+        $carla = self::partner('Carla', $hogar);     // quincenal compartida en un grupo con transporte; paga la familia
+        $carla->setWeeklyBasketGroup(self::far());
         $dani = self::partner('Dani');               // semanal, en pausa del 10 al 25
         $eva = self::partner('Eva');                 // semanal; se la paga Fran
         $fran = self::partner('Fran');
@@ -118,7 +130,7 @@ class MonthlyFeeCalculatorTest extends TestCase
             self::share($ana, BasketShare::ID_WEEKLY, eggAmount: 2, eggPeriod: EggPeriod::ID_WEEKLY),
             self::share($bea, BasketShare::ID_WEEKLY, end: '2026-08-14', active: false),
             self::share($bea, BasketShare::ID_BIWEEKLY, start: '2026-08-15'),
-            self::share($carla, BasketShare::ID_BIWEEKLY_SHARED, start: '2025-01-01', transport: '4.00'),
+            self::share($carla, BasketShare::ID_BIWEEKLY_SHARED, start: '2025-01-01'),
             self::share($dani, BasketShare::ID_WEEKLY),
             self::share($eva, BasketShare::ID_WEEKLY, payer: $fran),
             self::share($gil, BasketShare::ID_WEEKLY, active: false),
@@ -146,7 +158,8 @@ class MonthlyFeeCalculatorTest extends TestCase
         $this->assertSame('80.00', $bea->getTotal());
 
         // Carla, compartida: el precio de la quincenal compartida (30), que no sigue a la
-        // quincenal cuando ésta sube el 15, más el transporte; lo paga quien encabeza su familia.
+        // quincenal cuando ésta sube el 15, más el transporte de su grupo (2 € por reparto,
+        // dos repartos al mes); lo paga quien encabeza su familia.
         $this->assertSame('34.00', self::of($statements, $hogar)->getTotal());
         $this->assertSame([$carla], self::of($statements, $hogar)->getCoveredPartners());
 
@@ -297,6 +310,52 @@ class MonthlyFeeCalculatorTest extends TestCase
         // Fuera de junio y diciembre no hay mantenimiento; la inscripción sólo a quien empieza.
         $nov = MonthlyFeeCalculator::compute(new \DateTimeImmutable('2026-11-01'), self::weeks(), [self::share($ana, BasketShare::ID_WEEKLY)], new FeeSchedule($rates), [], []);
         $this->assertSame([], $nov->getStatements()[0]->getCharges());
+    }
+
+    /**
+     * El transporte lo pone el grupo de recogida, por cesta y reparto: a 4 € la cesta,
+     * la quincenal paga 8 al mes. Se cobra por cada cesta, sigue al grupo de quien la
+     * recoge aunque la pague otra persona, cambia de precio la semana en que cambia, y
+     * no lo paga ni un grupo sin precio ni una cesta de solo huevos.
+     */
+    public function testElTransporteLoPoneElGrupoDeRecogida(): void
+    {
+        $cascorro = self::withId(WeeklyBasketGroup::class, 901);
+        $berrueco = self::withId(WeeklyBasketGroup::class, 902);
+        $finca = self::withId(WeeklyBasketGroup::class, 903);
+        $schedule = new FeeSchedule([
+            new FeeRate(FeeConcept::VegWeekly, '100', new \DateTimeImmutable('2026-01-01'), null),
+            new FeeRate(FeeConcept::VegBiweekly, '55', new \DateTimeImmutable('2026-01-01'), null),
+            new FeeRate(FeeConcept::VegMonthly, '30', new \DateTimeImmutable('2026-01-01'), null),
+            new FeeRate(FeeConcept::EggWeekly, '24', new \DateTimeImmutable('2026-01-01'), null),
+        ], [
+            new TransportRate($cascorro, '4', new \DateTimeImmutable('2026-01-01'), null),
+            new TransportRate($cascorro, '5', new \DateTimeImmutable('2026-08-15'), null),
+            new TransportRate($berrueco, '3', new \DateTimeImmutable('2026-01-01'), null),
+        ]);
+        $in = static fn (string $name, WeeklyBasketGroup $group): Partner => self::partner($name)->setWeeklyBasketGroup($group);
+
+        $irene = $in('Irene', $cascorro);   // dos quincenales en Cascorro
+        $juan = $in('Juan', $berrueco);     // mensual en El Berrueco
+        $kike = $in('Kike', $cascorro);     // solo huevos en Cascorro
+        $lola = $in('Lola', $finca);        // semanal en la finca, y paga la de Mario
+        $mario = $in('Mario', $berrueco);   // semanal en El Berrueco, la paga Lola
+
+        $fees = MonthlyFeeCalculator::compute(new \DateTimeImmutable('2026-08-01'), self::weeks(), [
+            self::share($irene, BasketShare::ID_BIWEEKLY, amount: 2),
+            self::share($juan, BasketShare::ID_MONTHLY),
+            self::share($kike, BasketShare::ID_ONLY_EGG, eggAmount: 1, eggPeriod: EggPeriod::ID_WEEKLY),
+            self::share($lola, BasketShare::ID_WEEKLY),
+            self::share($mario, BasketShare::ID_WEEKLY, payer: $lola),
+        ], $schedule, [], []);
+        $transport = static fn (Partner $payer): array => array_map(static fn ($l): int => $l->transportCents, self::of($fees->getStatements(), $payer)->getLines());
+
+        // Dos cestas × dos repartos: 4 € las semanas del 7 y el 14, 5 € las del 21 y el 28.
+        $this->assertSame([1800], $transport($irene));
+        $this->assertSame([300], $transport($juan), 'El Berrueco: 3 € a la mensual.');
+        $this->assertSame([0], $transport($kike), 'Solo huevos no es una cesta: no paga transporte.');
+        $this->assertSame([0, 1200], $transport($lola), 'La de Lola no paga; la de Mario, la de su grupo, aunque la pague Lola.');
+        $this->assertSame('212.00', self::of($fees->getStatements(), $lola)->getTotal());
     }
 
     /** Sin semanas de reparto dadas de alta no hay nada que prorratear: nadie paga. */

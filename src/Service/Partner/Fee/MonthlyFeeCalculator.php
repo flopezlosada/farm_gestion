@@ -36,6 +36,13 @@ use Doctrine\ORM\EntityManagerInterface;
  * que cobrar (empieza tras el último viernes, o en pausa), la inscripción no se cobra
  * nunca; no se guarda quién la pagó.
  *
+ * El transporte lo pone el grupo de recogida de quien recoge la cesta (no el de quien
+ * la paga), con el precio que tenga cada semana: {@see FeeSchedule::transportMonthPrice}.
+ * Va por cada cesta: dos cestas, dos transportes. El grupo es el que tiene HOY: la
+ * ficha no guarda en qué grupo estuvo antes, así que recalcular un mes pasado de quien
+ * ha cambiado de grupo da el transporte del grupo nuevo. Lo cobrado de verdad queda en
+ * cada remesa enviada.
+ *
  * Las semanas cerradas por un festivo o los cambios puntuales de una semana NO
  * descuentan: la cuota es mensual y se paga por la cesta, no por cada reparto.
  *
@@ -169,8 +176,9 @@ class MonthlyFeeCalculator
         }
 
         $missing = [];
-        $veg = $egg = 0;
+        $veg = $egg = $transport = 0;
         $basketShare = $share->getBasketShare();
+        $group = $share->getPartner()?->getWeeklyBasketGroup();
         $eggAmount = $share->getEggAmount();
         $eggPeriod = $share->getEggPeriod();
         foreach ($active as $week) {
@@ -180,6 +188,7 @@ class MonthlyFeeCalculator
             } else {
                 $veg += IssuedInvoice::toCents($vegPrice) * (int) $share->getAmount();
             }
+            $transport += IssuedInvoice::toCents($schedule->transportMonthPrice($group, $basketShare, $week)) * (int) $share->getAmount();
             if ($eggAmount !== null && $eggPeriod !== null) {
                 $dozenPrice = $schedule->eggDozenMonthPrice($eggPeriod, $week);
                 if ($dozenPrice === null) {
@@ -193,7 +202,6 @@ class MonthlyFeeCalculator
         // Cada semana es una parte igual del mes: la suma de las cuotas mensuales de
         // las semanas que la tuvo, entre las semanas del mes. Se redondea una vez.
         $n = \count($weeks);
-        $transport = IssuedInvoice::toCents((string) ($share->getTransportPrice() ?? '0')) * \count($active);
 
         return new FeeLine(
             $share,
@@ -262,9 +270,10 @@ class MonthlyFeeCalculator
     private function shares(\DateTimeImmutable $start, \DateTimeImmutable $end): array
     {
         return $this->em->createQueryBuilder()
-            ->select('s', 'p', 'head', 'payer', 'payerHead', 'bs', 'ea', 'ep')
+            ->select('s', 'p', 'g', 'head', 'payer', 'payerHead', 'bs', 'ea', 'ep')
             ->from(PartnerBasketShare::class, 's')
             ->join('s.partner', 'p')
+            ->leftJoin('p.weekly_basket_group', 'g')
             ->leftJoin('p.parent', 'head')
             ->leftJoin('s.payer_partner', 'payer')
             ->leftJoin('payer.parent', 'payerHead')
