@@ -1,7 +1,7 @@
 {# ============================================================
  # El desglose de una cuota calculada (FeeStatement), igual en la ficha
  # y en «Cuotas del mes»: qué cesta cuesta qué (y de quién es, si paga la
- # de otra persona) y cada ajuste con su motivo y A DÓNDE VA lo de más.
+ # de otra persona), las cuotas de socix del mes, y cada ajuste con su motivo y A DÓNDE VA lo de más.
  #
  #   {% import 'partner/_fee_breakdown.html.twig' as bd %}
  #   {{ bd.styles() }}  una vez, dentro de <style>
@@ -31,6 +31,13 @@
                 {% if l.share.partner != statement.payer %}<span class="fee-bd__soft">(de {{ l.share.partner.legalName }})</span>{% endif %}
                 {% if l.partial %}<span class="fee-bd__part">{{ l.weeks }} de {{ l.monthWeeks }} semanas</span>{% endif %}
                 {% if parts|length > 1 %}<span class="fee-bd__soft">— {{ parts|join(' + ') }}</span>{% endif %}
+            </li>
+        {% endfor %}
+        {# Las cuotas de socix del mes: inscripción el mes de la primera cesta, mantenimiento en junio y diciembre. #}
+        {% for c in statement.charges %}
+            <li>
+                {{ c.concept.label }} · {% if c.missing %}<span class="fee-bd__part">sin precio</span>{% else %}<b>{{ fmt.money(c.total) }}</b>{% endif %}
+                {% if c.household != statement.payer %}<span class="fee-bd__soft">(de {{ c.household.legalName }})</span>{% endif %}
             </li>
         {% endfor %}
     </ul>

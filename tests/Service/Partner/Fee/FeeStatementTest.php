@@ -3,8 +3,10 @@
 namespace App\Tests\Service\Partner\Fee;
 
 use App\Entity\FeeAdjustment;
+use App\Entity\FeeConcept;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
+use App\Service\Partner\Fee\FeeCharge;
 use App\Service\Partner\Fee\FeeLine;
 use App\Service\Partner\Fee\FeeStatement;
 use PHPUnit\Framework\TestCase;
@@ -81,5 +83,25 @@ class FeeStatementTest extends TestCase
         $more = new FeeAdjustment($payer, '55.00', 'sigue pagando aunque se fue', new \DateTimeImmutable('2026-11-01'));
 
         $this->assertTrue(self::statement($payer, [], [$more])->needsBreakdown());
+    }
+
+    /**
+     * La cuota de socix suma al total y se explica aunque haya una sola cesta; sin
+     * precio no se puede cobrar y dice qué falta.
+     */
+    public function testLaCuotaDeSocixSumaSeDesglosaYSinPrecioNoSeCobra(): void
+    {
+        $payer = new Partner();
+        $statement = self::statement($payer, [self::line($payer)]);
+        $statement->addCharge(new FeeCharge(FeeConcept::MembershipSignup, $payer, 2500));
+
+        $this->assertSame('97.00', $statement->getTotal(), '55 + 12 + 5 de la cesta y 25 de inscripción.');
+        $this->assertSame(2500, $statement->getChargesCents());
+        $this->assertTrue($statement->needsBreakdown());
+        $this->assertSame([], $statement->getMissingConcepts());
+
+        $statement->addCharge(new FeeCharge(FeeConcept::MembershipUpkeep, $payer, null));
+        $this->assertSame([FeeConcept::MembershipUpkeep], $statement->getMissingConcepts());
+        $this->assertStringContainsString('cuota de mantenimiento', $statement->getProblems()[0]);
     }
 }

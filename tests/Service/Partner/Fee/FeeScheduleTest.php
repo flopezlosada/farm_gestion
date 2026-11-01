@@ -77,10 +77,10 @@ class FeeScheduleTest extends TestCase
     public function testDiceQueConceptosNoTienenPrecio(): void
     {
         $this->assertSame(
-            [FeeConcept::VegBiweeklyShared, FeeConcept::VegMonthlyShared, FeeConcept::EggBiweekly, FeeConcept::EggMonthly],
+            [FeeConcept::VegBiweeklyShared, FeeConcept::VegMonthlyShared, FeeConcept::EggBiweekly, FeeConcept::EggMonthly, FeeConcept::MembershipSignup, FeeConcept::MembershipUpkeep],
             $this->schedule()->missingOn(new \DateTimeImmutable('2026-10-14')),
         );
-        $this->assertCount(9, (new FeeSchedule([]))->missingOn(new \DateTimeImmutable('2026-10-14')), 'Sin tarifas, falta todo.');
+        $this->assertCount(\count(FeeConcept::cases()), (new FeeSchedule([]))->missingOn(new \DateTimeImmutable('2026-10-14')), 'Sin tarifas, falta todo.');
     }
 
     /**
