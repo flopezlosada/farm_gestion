@@ -37,6 +37,7 @@ class TransportRateType extends AbstractType
                 'constraints' => [
                     new Assert\NotBlank(message: 'Escribe el precio.'),
                     new Assert\Positive(message: 'El precio tiene que ser mayor que cero.'),
+                    new Assert\LessThan(value: 1000, message: 'Es el precio de llevar UNA cesta en UN reparto: no llega a 1.000 €.'),
                 ],
             ])
             ->add('validFrom', DateType::class, [

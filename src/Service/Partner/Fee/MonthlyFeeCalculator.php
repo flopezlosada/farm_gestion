@@ -28,7 +28,10 @@ use Doctrine\ORM\EntityManagerInterface;
  *
  * El transporte lo pone el grupo de recogida de quien recoge la cesta (no el de quien
  * la paga), con el precio que tenga cada semana: {@see FeeSchedule::transportMonthPrice}.
- * Va por cada cesta: dos cestas, dos transportes.
+ * Va por cada cesta: dos cestas, dos transportes. El grupo es el que tiene HOY: la
+ * ficha no guarda en qué grupo estuvo antes, así que recalcular un mes pasado de quien
+ * ha cambiado de grupo da el transporte del grupo nuevo. Lo cobrado de verdad queda en
+ * cada remesa enviada.
  *
  * Las semanas cerradas por un festivo o los cambios puntuales de una semana NO
  * descuentan: la cuota es mensual y se paga por la cesta, no por cada reparto.

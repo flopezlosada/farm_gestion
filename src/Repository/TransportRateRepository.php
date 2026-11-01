@@ -18,7 +18,7 @@ class TransportRateRepository extends ServiceEntityRepository
     }
 
     /**
-     * Todos los precios de transporte con su grupo y su nodo, en una consulta: son
+     * Todos los precios de transporte con su grupo, su nodo y quién los puso, en una consulta: son
      * pocas filas y así se puede preguntar por cientos de cestas sin ir a la base.
      *
      * @return list<TransportRate>
@@ -26,9 +26,10 @@ class TransportRateRepository extends ServiceEntityRepository
     public function findAllWithGroup(): array
     {
         return $this->createQueryBuilder('t')
-            ->addSelect('g', 'n')
+            ->addSelect('g', 'n', 'u')
             ->join('t.pickupGroup', 'g')
             ->leftJoin('g.node', 'n')
+            ->leftJoin('t.createdBy', 'u')
             ->getQuery()->getResult();
     }
 
