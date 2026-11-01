@@ -8,6 +8,7 @@ use App\Entity\TimeEntry;
 use App\Entity\User;
 use App\Entity\Worker;
 use App\Entity\WorkMonthClose;
+use App\Entity\WorkSchedule;
 use App\Service\AppSettings;
 use App\Service\Staff\WorkMonth;
 use Doctrine\ORM\EntityManagerInterface;
@@ -58,6 +59,9 @@ class WorkMonthCloseControllerTest extends WebTestCase
         }
         foreach ($em->getRepository(Absence::class)->findAll() as $a) {
             $em->remove($a);
+        }
+        foreach ($em->getRepository(WorkSchedule::class)->findAll() as $ws) {
+            $em->remove($ws);
         }
         $em->flush();
         foreach ($em->getRepository(Worker::class)->findAll() as $w) {
@@ -269,11 +273,13 @@ class WorkMonthCloseControllerTest extends WebTestCase
         ]);
         $this->assertNull($this->standingClose($worker));
 
-        // El hueco enlaza al formulario de ausencia con ese día ya puesto.
+        // El hueco abre el día, y desde ahí el formulario de ausencia con ese día ya puesto.
         $crawler = $this->client->request('GET', $this->closeUrl());
         $link = $crawler->filter('a.mc-gap');
         $this->assertCount(1, $link, 'Sólo el día sin cubrir es un hueco.');
         $crawler = $this->client->click($link->link());
+        $this->assertResponseIsSuccessful();
+        $crawler = $this->client->click($crawler->selectLink('Registrar la ausencia')->link());
         $this->assertResponseIsSuccessful();
         $form = $crawler->selectButton('Registrar ausencia')->form();
         $this->assertSame($gap, $form['absence[startDate]']->getValue());
@@ -319,5 +325,41 @@ class WorkMonthCloseControllerTest extends WebTestCase
         $this->assertResponseIsSuccessful();
         $this->assertStringContainsString('aún no ha terminado', $crawler->filter('.csa-callout')->text());
         $this->assertCount(0, $crawler->filter('form[action*="/gestion/staff/close/approve/"]'));
+    }
+
+    public function testElSupervisorRellenaUnDiaConSuHorarioYElMesSePuedeAprobar(): void
+    {
+        $worker = $this->makeWorker();
+        $day = $this->weekdayAfterTheTenth();
+        $date = sprintf('%s-%02d', $this->month->key(), $day);
+        $dow = (int) (new \DateTimeImmutable($date))->format('N');
+        $this->em->persist((new WorkSchedule())->setWorker($worker)->setDayOfWeek($dow)->setTimes([['08:00', '15:00']]));
+        $this->em->flush();
+        // Todo el mes justificado salvo ese día: es el único hueco.
+        $this->excuse($worker, [$day]);
+
+        $crawler = $this->client->request('GET', sprintf('/gestion/staff/%d/day/%s', $worker->getId(), $date));
+        $this->assertResponseIsSuccessful();
+        $form = $crawler->filter('form[action$="/day/' . $date . '/autofill"]');
+        $this->assertCount(1, $form, 'Debe ofrecerse rellenar con su horario.');
+
+        $this->client->request('POST', sprintf('/gestion/staff/%d/day/%s/autofill', $worker->getId(), $date), [
+            '_token' => $form->filter('input[name="_token"]')->attr('value'),
+        ]);
+        $this->assertResponseRedirects();
+
+        $this->em->clear();
+        $entries = $this->em->getRepository(TimeEntry::class)->findBy(['worker' => $worker->getId()], ['occurredAt' => 'ASC']);
+        $this->assertSame(['08:00', '15:00'], array_map(
+            static fn (TimeEntry $e) => $e->getOccurredAt()->setTimezone(new \DateTimeZone('Europe/Madrid'))->format('H:i'),
+            $entries,
+        ));
+        foreach ($entries as $entry) {
+            $this->assertSame(TimeEntry::SOURCE_SUPERVISOR, $entry->getSource(), 'La traza debe decir que lo apuntó el supervisor.');
+        }
+
+        // Sin huecos, el mes ya se aprueba.
+        $this->approve($worker);
+        $this->assertNotNull($this->standingClose($worker));
     }
 }

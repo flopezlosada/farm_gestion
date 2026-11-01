@@ -22,6 +22,7 @@ use App\Service\Staff\ClosedWorkMonthException;
 use App\Service\Staff\AbsenceNotifier;
 use App\Service\Staff\ClosedWorkMonths;
 use App\Service\Staff\PunchSequenceException;
+use App\Service\Staff\ScheduleAutofill;
 use App\Service\Staff\TimesheetPdfRenderer;
 use App\Service\Staff\WorkingDayCounter;
 use App\Service\Staff\YearCalendarBuilder;
@@ -283,7 +284,7 @@ class WorkerController extends AbstractController
             if ($absences->findOverlappingForWorker($worker, $absence->getStartDate(), $absence->getEndDate()) !== []) {
                 $this->addFlash('error', 'Ese trabajador ya tiene una ausencia en esas fechas.');
 
-                return $this->redirectAfterAbsence($back, $worker, $day);
+                return $this->redirectAfterGap($back, $worker, $day);
             }
             // Se registra ya aprobada, así que cambia el registro de esos meses
             // (los de una baja abierta, hasta hoy).
@@ -293,7 +294,7 @@ class WorkerController extends AbstractController
             } catch (ClosedWorkMonthException $e) {
                 $this->addFlash('error', $e->getMessage());
 
-                return $this->redirectAfterAbsence($back, $worker, $day);
+                return $this->redirectAfterGap($back, $worker, $day);
             }
             $absence->setStatus(Absence::STATUS_APPROVED);
             $absence->setApprovedBy($this->getUser());
@@ -301,27 +302,28 @@ class WorkerController extends AbstractController
             $em->flush();
             $this->addFlash('success', 'Ausencia registrada.');
 
-            return $this->redirectAfterAbsence($back, $worker, $day);
+            return $this->redirectAfterGap($back, $worker, $day);
         }
 
         return $this->render('staff/absence_new.html.twig', [
             'worker' => $worker,
             'form' => $form->createView(),
-            'cancel_url' => $this->redirectAfterAbsence($back, $worker, $day)->getTargetUrl(),
+            'cancel_url' => $this->redirectAfterGap($back, $worker, $day)->getTargetUrl(),
         ]);
     }
 
     /**
-     * A dónde se vuelve tras registrar una ausencia: a la pantalla desde la que
-     * se fue a justificar el hueco, o a la ficha. `back` es una lista cerrada,
-     * no una URL, para que nadie pueda usarlo de redirección abierta.
+     * A dónde se vuelve tras justificar un hueco (registrar una ausencia o
+     * rellenar el día con el horario): a la pantalla desde la que se fue, o a la
+     * ficha. `back` es una lista cerrada, no una URL, para que nadie pueda usarlo
+     * de redirección abierta.
      *
      * @param string                  $back   `close`, `day`, `gaps` o cualquier otra cosa (ficha).
      * @param Worker                  $worker Trabajador.
      * @param \DateTimeImmutable|null $day    Día que se justificaba (para volver a su mes o a su día).
      * @return RedirectResponse
      */
-    private function redirectAfterAbsence(string $back, Worker $worker, ?\DateTimeImmutable $day): RedirectResponse
+    private function redirectAfterGap(string $back, Worker $worker, ?\DateTimeImmutable $day): RedirectResponse
     {
         return match (true) {
             $back === 'close' && $day !== null => $this->redirectToRoute('staff_month_close', ['year' => (int) $day->format('Y'), 'month' => (int) $day->format('n')]),
@@ -921,22 +923,27 @@ class WorkerController extends AbstractController
      * Detalle de un día: los fichajes de esa jornada con los controles para
      * corregir/anular/añadir. Es a donde lleva cada celda del calendario.
      *
+     * @param Request             $request ?back=close si se llega desde el cierre de mes: rellenar o
+     *                                     registrar la ausencia devuelve allí.
      * @param Worker              $worker
      * @param string              $date   Día en formato Y-m-d.
      * @param TimeEntryRepository $timeEntries
      * @param WorkdayBuilder      $workdays
      * @param ClosedWorkMonths    $closedMonths
      * @param AbsenceRepository   $absences
+     * @param ScheduleAutofill    $autofill
      * @return Response
      */
     #[Route('/{id}/day/{date}', name: 'staff_day', methods: ['GET'], requirements: ['id' => '\d+', 'date' => '\d{4}-\d{2}-\d{2}'])]
     public function day(
+        Request $request,
         Worker $worker,
         string $date,
         TimeEntryRepository $timeEntries,
         WorkdayBuilder $workdays,
         ClosedWorkMonths $closedMonths,
         AbsenceRepository $absences,
+        ScheduleAutofill $autofill,
     ): Response {
         $madrid = new \DateTimeZone('Europe/Madrid');
 
@@ -960,7 +967,47 @@ class WorkerController extends AbstractController
             'voided' => $timeEntries->findVoidedForWorkerBetween($worker, $dayStart, $dayEnd),
             'closed' => $closedMonths->isClosed($worker, $dayStart),
             'absence_type' => $absences->coveredDaysForWorkerBetween($worker, $dayStart, $dayStart)[$date] ?? null,
+            'can_autofill' => $autofill->isAvailableFor($worker, $dayStart),
+            'back' => $request->query->get('back') === 'close' ? 'close' : 'day',
         ]);
+    }
+
+    /**
+     * Rellena con el horario habitual del trabajador los fichajes que le falten
+     * ese día. Es para un día que el supervisor sabe que se trabajó y que no se
+     * fichó (p. ej. olvido): cada fichaje queda en la traza como apuntado por el
+     * supervisor. Un día que NO se trabajó no se rellena: se registra la ausencia.
+     * Escritura: ROLE_GESTION_LABORAL_EDIT vía access_control (POST).
+     *
+     * @param Request          $request  `back=close` vuelve al cierre de mes si se rellenó algo.
+     * @param Worker           $worker
+     * @param string           $date     Día en formato Y-m-d.
+     * @param ScheduleAutofill $autofill
+     * @return Response
+     */
+    #[Route('/{id}/day/{date}/autofill', name: 'staff_day_autofill', methods: ['POST'], requirements: ['id' => '\d+', 'date' => '\d{4}-\d{2}-\d{2}'])]
+    public function autofillDay(Request $request, Worker $worker, string $date, ScheduleAutofill $autofill): Response
+    {
+        if (!$this->isCsrfTokenValid('staff_entry' . $worker->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $this->redirectToRoute('staff_day', ['id' => $worker->getId(), 'date' => $date]);
+        }
+
+        $dayStart = \DateTimeImmutable::createFromFormat('!Y-m-d', $date, new \DateTimeZone('Europe/Madrid'));
+        if ($dayStart === false || !$autofill->isAvailableFor($worker, $dayStart)) {
+            $this->addFlash('error', 'Ese día no se puede rellenar con el horario (futuro, festivo, con ausencia, sin horario o mes aprobado).');
+
+            return $this->redirectToRoute('staff_day', ['id' => $worker->getId(), 'date' => $date]);
+        }
+
+        $created = $autofill->fill($worker, $dayStart, $this->getUser(), TimeEntry::SOURCE_SUPERVISOR);
+        $this->addFlash($created !== [] ? 'success' : 'notice', $created !== []
+            ? sprintf('Se han añadido %d fichaje(s) con su horario habitual.', count($created))
+            : 'No había nada que rellenar: revisa que la hora encaje con lo ya fichado.');
+
+        // Si no se añadió nada, se queda en el día para ver qué no encajó.
+        return $this->redirectAfterGap($created !== [] ? (string) $request->request->get('back', 'day') : 'day', $worker, $dayStart);
     }
 
     /**
