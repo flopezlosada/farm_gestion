@@ -26,6 +26,14 @@
         'Categoría, título, imagen de portada y contenido.'
     ) }}
 
+    {# Borrado: formulario propio fuera del de edición (no se anidan forms); lo
+     # envía el diálogo de confirmación. #}
+    <div style="display: none;">
+        {{ form_start(delete_form, { attr: { id: 'blog-delete-form' } }) }}
+            {{ form_rest(delete_form) }}
+        {{ form_end(delete_form, { render_rest: false }) }}
+    </div>
+
     {{ form_start(edit_form, {
         action: path('blog_update', { id: entity.id }),
         method: 'put',
@@ -65,7 +73,19 @@
         </div>
 
         <div class="csa-row-between" style="margin-top: var(--csa-sp-6); padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
-            <div>
+            <div class="csa-row">
+                <button type="button" class="csa-btn csa-btn--ghost"
+                        onclick="document.getElementById('confirm-blog-delete').showModal()">
+                    <i class="fa fa-trash-o"></i> Eliminar noticia
+                </button>
+                {{ csa.confirm_dialog('confirm-blog-delete', {
+                    variant: 'danger',
+                    eyebrow: 'Acción permanente',
+                    title: 'Eliminar «' ~ entity.title ~ '»',
+                    body: 'Se borra la noticia del blog público junto con sus imágenes, audios, vídeos y documentos. No se puede recuperar.',
+                    confirm_label: 'Eliminar',
+                    external_form_id: 'blog-delete-form',
+                }) }}
                 {# Vista pública. Sólo aparece si la noticia ya tiene slug
                  # (las recién creadas que aún no se hayan guardado no lo
                  # tienen). target=_blank para no sacar al admin del editor. #}
