@@ -68,6 +68,7 @@ class MonthlyFeeCalculatorTest extends TestCase
             $rate(FeeConcept::VegWeekly, '100', '2026-01-01'),
             $rate(FeeConcept::VegBiweekly, '55', '2026-01-01'),
             $rate(FeeConcept::VegBiweekly, '60', '2026-08-15'),
+            $rate(FeeConcept::VegBiweeklyShared, '30', '2026-01-01'),
             $rate(FeeConcept::VegMonthly, '30', '2026-01-01'),
             $rate(FeeConcept::EggWeekly, '20', '2026-01-01'),
         ]);
@@ -134,9 +135,9 @@ class MonthlyFeeCalculatorTest extends TestCase
         $this->assertTrue($bea->getLines()[0]->isPartial());
         $this->assertSame('80.00', $bea->getTotal());
 
-        // Carla, compartida: la mitad de la quincenal (27,50 dos semanas y 30 las otras
-        // dos) más el transporte; lo paga quien encabeza su familia.
-        $this->assertSame('32.75', self::of($statements, $hogar)->getTotal());
+        // Carla, compartida: el precio de la quincenal compartida (30), que no sigue a la
+        // quincenal cuando ésta sube el 15, más el transporte; lo paga quien encabeza su familia.
+        $this->assertSame('34.00', self::of($statements, $hogar)->getTotal());
         $this->assertSame([$carla], self::of($statements, $hogar)->getCoveredPartners());
 
         // Dani: recoge el 7 y el 28 (en pausa del 10 al 25) y no llega este mes.

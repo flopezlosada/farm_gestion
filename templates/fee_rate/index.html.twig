@@ -2,7 +2,7 @@
  # Las tarifas: lo que cuesta al mes cada cesta de verdura y cada docena
  # de huevos, desde cuándo, lo que ya está programado y el historial.
  #
- # El controller pasa: groups (veg, egg: concept, current, next, shared),
+ # El controller pasa: groups (veg, egg: concept, current, next),
  # missing (conceptos sin precio hoy), history (todos, el más reciente
  # primero), today.
  # ============================================================ #}
@@ -79,7 +79,6 @@
                         <tr>
                             <th>Concepto</th>
                             <th class="tight acc-num">Hoy</th>
-                            {% if key == 'veg' %}<th class="tight acc-num">Compartida</th>{% endif %}
                             <th class="tight">Próximo cambio</th>
                             {% if can_edit %}<th class="tight"></th>{% endif %}
                         </tr>
@@ -99,9 +98,6 @@
                                         <span class="fee-none">Sin precio</span>
                                     {% endif %}
                                 </td>
-                                {% if key == 'veg' %}
-                                    <td class="acc-num" data-label="Compartida">{{ row.shared is not null ? fmt.money(row.shared) : '—' }}</td>
-                                {% endif %}
                                 <td data-label="Próximo cambio">
                                     {% if row.next %}
                                         <span class="prl-chip prl-chip--warn"><span class="dot"></span>{{ fmt.money(row.next.price) }} desde {{ row.next.validFrom|date('d/m/Y') }}</span>
