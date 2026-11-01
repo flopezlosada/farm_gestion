@@ -67,14 +67,27 @@ class Worker
 
     /**
      * Fecha de alta laboral. Obligatoria: es el suelo del registro de jornada
-     * (no hay fichajes legítimos anteriores) y la base para prorratear las
-     * vacaciones del primer año.
+     * (no hay fichajes legítimos anteriores; ver también
+     * {@see self::$recordingStartDate}) y la base para prorratear las vacaciones
+     * del primer año.
      *
      * @var \DateTimeImmutable|null
      * @ORM\Column(name="hire_date", type="date_immutable")
      */
     #[Assert\NotNull]
     private $hireDate;
+
+    /**
+     * Desde cuándo se lleva su registro de jornada en esta aplicación. Para quien
+     * ya trabajaba cuando se empezó a fichar aquí: los días entre el alta y esta
+     * fecha no son huecos (no hay registro en la app que pedir), pero tampoco se
+     * puede mover el alta, que es la fecha real del contrato y sostiene las
+     * vacaciones del primer año. Null = desde el alta.
+     *
+     * @var \DateTimeImmutable|null
+     * @ORM\Column(name="recording_start_date", type="date_immutable", nullable=true)
+     */
+    private $recordingStartDate;
 
     /**
      * Días de vacaciones al año en jornadas LABORABLES (el convenio habitual son
@@ -202,6 +215,40 @@ class Worker
         $this->hireDate = $hireDate;
 
         return $this;
+    }
+
+    /**
+     * @return \DateTimeImmutable|null Desde cuándo se registra su jornada en la app; null = desde el alta.
+     */
+    public function getRecordingStartDate(): ?\DateTimeImmutable
+    {
+        return $this->recordingStartDate;
+    }
+
+    /**
+     * @param \DateTimeImmutable|null $recordingStartDate Null = desde el alta.
+     * @return self
+     */
+    public function setRecordingStartDate(?\DateTimeImmutable $recordingStartDate): self
+    {
+        $this->recordingStartDate = $recordingStartDate;
+
+        return $this;
+    }
+
+    /**
+     * Primer día en que se le exige registro de jornada: el más tardío entre el
+     * alta y el inicio del registro en la app. Antes de ese día no hay huecos.
+     *
+     * @return \DateTimeImmutable|null Null sólo si no tiene alta (ficha incompleta).
+     */
+    public function getRecordFloor(): ?\DateTimeImmutable
+    {
+        if ($this->hireDate === null || $this->recordingStartDate === null) {
+            return $this->hireDate;
+        }
+
+        return max($this->hireDate, $this->recordingStartDate);
     }
 
     /**

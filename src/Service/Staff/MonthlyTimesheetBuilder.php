@@ -30,6 +30,12 @@ class MonthlyTimesheetBuilder
     public const STATUS_MISSING = 'missing';
     /** Anterior a la fecha de alta del trabajador (no hay registro legítimo). */
     public const STATUS_BEFORE_HIRE = 'before_hire';
+    /**
+     * Ya de alta, pero anterior a cuando se empezó a llevar su registro en la app
+     * ({@see \App\Entity\Worker::getRecordingStartDate()}): no hay registro aquí
+     * que pedir, y no se le llama «antes del alta» porque no lo es.
+     */
+    public const STATUS_BEFORE_RECORDING = 'before_recording';
     /** Hoy o posterior: aún no ha terminado, no es un olvido. */
     public const STATUS_FUTURE = 'future';
 
@@ -42,6 +48,7 @@ class MonthlyTimesheetBuilder
         self::STATUS_ABSENCE => 'Ausencia',
         self::STATUS_MISSING => 'Sin fichar',
         self::STATUS_BEFORE_HIRE => 'Antes del alta',
+        self::STATUS_BEFORE_RECORDING => 'Antes de iniciar el registro',
         self::STATUS_FUTURE => 'Por venir',
     ];
 
@@ -57,6 +64,7 @@ class MonthlyTimesheetBuilder
      * @param array<string, string>   $holidayNames    Nombre del festivo por día 'Y-m-d'.
      * @param WorkingWeek             $workingWeek   Días de la semana que le toca trabajar.
      * @param \DateTimeImmutable|null $hireDate      Fecha de alta (suelo del registro), o null.
+     * @param \DateTimeImmutable|null $recordingStart Inicio del registro en la app, o null (desde el alta).
      * @param \DateTimeImmutable      $today         Día de hoy (para marcar futuros).
      * @return array{
      *     rows: array<int, array{date: \DateTimeImmutable, dow: int, segments: array, totalMinutes: int, status: string, absenceType: string|null, holidayName: string|null, open: bool, anomaly: bool, deferred: bool}>,
@@ -77,11 +85,13 @@ class MonthlyTimesheetBuilder
         array $holidayNames,
         WorkingWeek $workingWeek,
         ?\DateTimeImmutable $hireDate,
+        ?\DateTimeImmutable $recordingStart,
         \DateTimeImmutable $today,
     ): array {
         $cursor = new \DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $year, $month), $tz);
         $monthEnd = $cursor->modify('first day of next month');
         $hireKey = $hireDate?->format('Y-m-d');
+        $recordingKey = $recordingStart?->format('Y-m-d');
         $todayKey = $today->format('Y-m-d');
 
         $rows = [];
@@ -96,7 +106,7 @@ class MonthlyTimesheetBuilder
             $dow = (int) $cursor->format('N'); // 1 (lunes) .. 7 (domingo)
             $worked = $workedDays[$key] ?? null;
 
-            $status = $this->classify($cursor, $worked, $coveredAbsences, $holidayNames, $workingWeek, $hireKey, $todayKey);
+            $status = $this->classify($cursor, $worked, $coveredAbsences, $holidayNames, $workingWeek, $hireKey, $recordingKey, $todayKey);
 
             $minutes = $worked['totalMinutes'] ?? 0;
             if ($status === self::STATUS_WORKED) {
@@ -150,6 +160,7 @@ class MonthlyTimesheetBuilder
      * @param array<string, string> $holidayNames    Festivos por día.
      * @param WorkingWeek           $workingWeek     Días que le toca trabajar.
      * @param string|null           $hireKey         Fecha de alta 'Y-m-d', o null.
+     * @param string|null           $recordingKey    Inicio del registro en la app 'Y-m-d', o null.
      * @param string                $todayKey        Hoy 'Y-m-d'.
      * @return string Una de las constantes STATUS_*.
      */
@@ -160,6 +171,7 @@ class MonthlyTimesheetBuilder
         array $holidayNames,
         WorkingWeek $workingWeek,
         ?string $hireKey,
+        ?string $recordingKey,
         string $todayKey,
     ): string {
         $key = $day->format('Y-m-d');
@@ -171,6 +183,10 @@ class MonthlyTimesheetBuilder
 
         if ($hireKey !== null && $key < $hireKey) {
             return self::STATUS_BEFORE_HIRE;
+        }
+
+        if ($recordingKey !== null && $key < $recordingKey) {
+            return self::STATUS_BEFORE_RECORDING;
         }
 
         if (isset($coveredAbsences[$key])) {

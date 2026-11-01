@@ -78,7 +78,7 @@ class MonthlyTimesheetReport
 
         $sheets = [];
         foreach ($period->months() as $month) {
-            $sheet = $this->builder->build($month->year, $month->month, $tz, $workedDays, $covered, $holidayNames, $workingWeek, $worker->getHireDate(), $today);
+            $sheet = $this->builder->build($month->year, $month->month, $tz, $workedDays, $covered, $holidayNames, $workingWeek, $worker->getHireDate(), $worker->getRecordingStartDate(), $today);
             $sheet['close'] = $closes[$month->key()] ?? null;
             $sheets[$month->key()] = $sheet;
         }

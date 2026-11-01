@@ -22,12 +22,12 @@ namespace App\Service\Staff;
 class GapFinder
 {
     /**
-     * Días-hueco en [from, today) a partir del alta, descontando trabajados y
-     * cubiertos.
+     * Días-hueco en [from, today) a partir del primer día con registro exigible,
+     * descontando trabajados y cubiertos.
      *
      * @param \DateTimeImmutable     $from         Inicio de la ventana (incluido).
      * @param \DateTimeImmutable     $today        Hoy (excluido: no se evalúa el día en curso).
-     * @param \DateTimeImmutable     $hireDate     Alta del trabajador (no hay huecos antes).
+     * @param \DateTimeImmutable     $recordFloor  Primer día con registro exigible (no hay huecos antes; {@see \App\Entity\Worker::getRecordFloor()}).
      * @param array<string, bool>    $workedDates  Días con algún fichaje, clave 'Y-m-d'.
      * @param array<string, bool>    $coveredDates Días cubiertos por ausencia, clave 'Y-m-d'.
      * @param array<string, mixed>   $holidayDates Días festivos, clave 'Y-m-d'.
@@ -37,14 +37,14 @@ class GapFinder
     public function gapsFor(
         \DateTimeImmutable $from,
         \DateTimeImmutable $today,
-        \DateTimeImmutable $hireDate,
+        \DateTimeImmutable $recordFloor,
         array $workedDates,
         array $coveredDates,
         array $holidayDates,
         WorkingWeek $workingWeek,
     ): array {
-        // El barrido empieza en el más tardío entre la ventana y el alta.
-        $cursor = $from > $hireDate ? $from : $hireDate;
+        // El barrido empieza en el más tardío entre la ventana y el suelo del registro.
+        $cursor = $from > $recordFloor ? $from : $recordFloor;
         $cursor = $cursor->setTime(0, 0, 0);
         $end = $today->setTime(0, 0, 0);
 

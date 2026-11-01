@@ -37,7 +37,7 @@ class MonthlyTimesheetBuilderTest extends TestCase
         ];
     }
 
-    private function build(array $worked, array $covered, array $holidays, ?string $hire, ?WorkingWeek $week = null): array
+    private function build(array $worked, array $covered, array $holidays, ?string $hire, ?WorkingWeek $week = null, ?string $recordingStart = null): array
     {
         return $this->builder->build(
             2026,
@@ -48,6 +48,7 @@ class MonthlyTimesheetBuilderTest extends TestCase
             $holidays,
             $week ?? WorkingWeek::mondayToFriday(),
             $hire !== null ? new \DateTimeImmutable($hire, $this->madrid) : null,
+            $recordingStart !== null ? new \DateTimeImmutable($recordingStart, $this->madrid) : null,
             new \DateTimeImmutable('2026-06-15', $this->madrid), // hoy muy posterior: ningún día de feb es futuro
         );
     }
@@ -118,6 +119,7 @@ class MonthlyTimesheetBuilderTest extends TestCase
             [],
             [],
             WorkingWeek::mondayToFriday(),
+            null,
             null,
             new \DateTimeImmutable('2026-02-10', $this->madrid),
         );
@@ -225,5 +227,46 @@ class MonthlyTimesheetBuilderTest extends TestCase
         $sheet = $this->build(['2026-02-04' => $open, '2026-02-05' => $anomaly, '2026-02-06' => $this->workedDay('2026-02-06', 480)], [], [], null);
 
         $this->assertSame(2, $sheet['issueDays']);
+    }
+
+    public function testAntesDeIniciarElRegistroNoEsHuecoNiAntesDelAlta(): void
+    {
+        // Alta antigua; el registro en la app empieza el jueves 12. Los días
+        // laborables previos no son huecos, y tampoco «antes del alta».
+        $sheet = $this->build(
+            ['2026-02-11' => $this->workedDay('2026-02-11', 240)], // fichó antes del arranque: cuenta igual
+            [],
+            [],
+            '2017-06-09',
+            null,
+            '2026-02-12',
+        );
+
+        $rows = [];
+        foreach ($sheet['rows'] as $row) {
+            $rows[$row['date']->format('Y-m-d')] = $row;
+        }
+
+        $this->assertSame(MonthlyTimesheetBuilder::STATUS_BEFORE_RECORDING, $rows['2026-02-02']['status']);
+        $this->assertSame(MonthlyTimesheetBuilder::STATUS_BEFORE_RECORDING, $rows['2026-02-10']['status']);
+        $this->assertSame(MonthlyTimesheetBuilder::STATUS_WORKED, $rows['2026-02-11']['status']);
+        // Desde el arranque, un laborable sin nada sí es hueco: el 12 es jueves.
+        $this->assertSame(MonthlyTimesheetBuilder::STATUS_MISSING, $rows['2026-02-12']['status']);
+        // Huecos sólo del 12 en adelante: 12, 13, 16-20, 23-27 = 12 días laborables.
+        $this->assertSame(12, $sheet['missingDays']);
+    }
+
+    public function testElAltaPosteriorAlArranqueMandaSobreElArranque(): void
+    {
+        // Registro «desde» el 2, pero el alta es el 5: antes del 5 es «antes del alta».
+        $sheet = $this->build([], [], [], '2026-02-05', null, '2026-02-02');
+
+        $rows = [];
+        foreach ($sheet['rows'] as $row) {
+            $rows[$row['date']->format('Y-m-d')] = $row;
+        }
+
+        $this->assertSame(MonthlyTimesheetBuilder::STATUS_BEFORE_HIRE, $rows['2026-02-03']['status']);
+        $this->assertSame(MonthlyTimesheetBuilder::STATUS_MISSING, $rows['2026-02-05']['status']);
     }
 }

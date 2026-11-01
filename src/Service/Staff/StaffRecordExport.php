@@ -83,7 +83,7 @@ class StaffRecordExport
                 // Lo que aún no ha pasado, por fecha y no por situación (un sábado
                 // por venir está clasificado como fin de semana); hoy, si ya
                 // tiene tramos, sí entra, como en el PDF.
-                if (MonthlyTimesheetBuilder::STATUS_BEFORE_HIRE === $day['status'] || ([] === $day['segments'] && $day['date']->format('Y-m-d') >= $todayKey)) {
+                if (in_array($day['status'], [MonthlyTimesheetBuilder::STATUS_BEFORE_HIRE, MonthlyTimesheetBuilder::STATUS_BEFORE_RECORDING], true) || ([] === $day['segments'] && $day['date']->format('Y-m-d') >= $todayKey)) {
                     continue;
                 }
                 $common = [$page['worker']->getName(), $day['date']->format('d/m/Y')];
