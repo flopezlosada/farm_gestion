@@ -55,7 +55,7 @@ class AccountingWorkerController extends AbstractController
         }
 
         return $this->render('accounting/workers.html.twig', [
-            'workers' => $workers->findBy([], ['active' => 'DESC', 'name' => 'ASC']),
+            'workers' => self::activeFirst($workers->findBy([], ['name' => 'ASC'])),
             'salaries' => $salaries->findAllByWorker(),
             'costs' => $costs,
             'totals' => $totals,
@@ -165,5 +165,19 @@ class AccountingWorkerController extends AbstractController
         }
 
         return true;
+    }
+
+    /**
+     * Quienes siguen trabajando primero, y luego los de baja, cada grupo en el orden
+     * en que llega.
+     *
+     * @param list<Worker> $workers
+     * @return list<Worker>
+     */
+    private static function activeFirst(array $workers): array
+    {
+        usort($workers, static fn (Worker $a, Worker $b): int => (int) $b->isActive() <=> (int) $a->isActive());
+
+        return $workers;
     }
 }

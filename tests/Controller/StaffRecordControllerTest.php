@@ -245,7 +245,7 @@ class StaffRecordControllerTest extends WebTestCase
         $worker = (new Worker())
             ->setName($name)
             ->setHireDate(new \DateTimeImmutable('2020-01-01'))
-            ->setActive($active)
+            ->setLeaveDate($active ? null : new \DateTimeImmutable('yesterday'))
             ->setAnnualVacationDays(22);
         $this->em->persist($worker);
         $this->em->flush();

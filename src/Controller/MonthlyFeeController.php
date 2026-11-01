@@ -33,7 +33,7 @@ class MonthlyFeeController extends AbstractController
         $filter = \in_array($request->query->get('show'), self::FILTERS, true) ? $request->query->get('show') : 'all';
         $fees = $calculator->forMonth($month);
         $statements = $fees->getStatements();
-        $problems = array_values(array_filter($statements, static fn (FeeStatement $s): bool => !$s->isChargeable()));
+        $problems = array_values(array_filter($statements, static fn (FeeStatement $s): bool => $s->getProblems() !== []));
 
         return $this->render('monthly_fee/index.html.twig', [
             'fees' => $fees,

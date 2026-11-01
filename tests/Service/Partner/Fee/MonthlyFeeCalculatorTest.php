@@ -13,6 +13,8 @@ use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerEvent;
 use App\Entity\PartnerPause;
+use App\Entity\Worker;
+use App\Entity\WorkerLeaveBasket;
 use App\Service\Partner\Fee\FeeSchedule;
 use App\Service\Partner\Fee\FeeStatement;
 use App\Service\Partner\Fee\MonthlyFeeCalculator;
@@ -239,5 +241,125 @@ class MonthlyFeeCalculatorTest extends TestCase
         $fees = MonthlyFeeCalculator::compute(new \DateTimeImmutable('2026-08-01'), [], [self::share(self::partner('Ana'), BasketShare::ID_WEEKLY)], self::schedule(), [], []);
 
         $this->assertSame([], $fees->getStatements());
+    }
+
+    /**
+     * Trabajadorx con ficha de socix, como sale de la base: alta, baja y la decisión
+     * sobre su cesta, con lo que esté a null si no se ha rellenado.
+     */
+    private static function worker(Partner $partner, string $hire, ?string $leave = null, ?WorkerLeaveBasket $after = null, ?string $giftUntil = null): Worker
+    {
+        return (new Worker())
+            ->setName($partner->getName())
+            ->setHireDate(new \DateTimeImmutable($hire))
+            ->setLeaveDate($leave !== null ? new \DateTimeImmutable($leave) : null)
+            ->setPartner($partner)
+            ->setBasketAfterLeave($after)
+            ->setBasketGiftUntil($giftUntil !== null ? new \DateTimeImmutable($giftUntil) : null);
+    }
+
+    /** Con mandato, para que lo único que pueda fallar sea lo de la cesta de trabajador. */
+    private static function withMandate(Partner $partner): Partner
+    {
+        return $partner->setIban('ES9121000418450200051332')->setMandateReference('CUOTA 1')->setMandateSignedOn(new \DateTimeImmutable('2022-11-01'));
+    }
+
+    /** @param list<Worker> $workers */
+    private static function fees(array $shares, array $workers): array
+    {
+        return MonthlyFeeCalculator::compute(new \DateTimeImmutable('2026-08-01'), self::weeks(), $shares, self::schedule(), [], [], [], $workers)->getStatements();
+    }
+
+    /**
+     * Quien trabaja todo el mes no paga nada, ni verdura ni huevos, y no es un recibo
+     * que falle: no hay recibo. Ni siquiera hace falta que tenga mandato.
+     */
+    public function testQuienTrabajaNoPagaSuCesta(): void
+    {
+        $alba = self::partner('Alba');
+        $fees = MonthlyFeeCalculator::compute(new \DateTimeImmutable('2026-08-01'), self::weeks(), [self::share($alba, BasketShare::ID_WEEKLY, eggAmount: 2, eggPeriod: EggPeriod::ID_WEEKLY)], self::schedule(), [], [], [], [self::worker($alba, '2017-06-09')]);
+        $statement = self::of($fees->getStatements(), $alba);
+
+        $this->assertSame('0.00', $statement->getTotal());
+        $this->assertTrue($statement->getLines()[0]->isFree());
+        $this->assertSame(4, $statement->getLines()[0]->freeWeeks);
+        $this->assertTrue($statement->isFree());
+        $this->assertSame([], $statement->getProblems(), 'Sin mandato y a 0 €, pero no es un problema.');
+        $this->assertSame([], $fees->getChargeable());
+        $this->assertSame(0, $fees->getBasketTotals()->vegCents, 'Lo regalado no es ingreso.');
+    }
+
+    /** Quien entra a trabajar a mitad de mes paga las semanas de antes, y el desglose lo explica. */
+    public function testQuienEntraAMitadDeMesPagaLasSemanasDeAntes(): void
+    {
+        $alba = self::withMandate(self::partner('Alba'));
+        $statement = self::of(self::fees([self::share($alba, BasketShare::ID_WEEKLY)], [self::worker($alba, '2026-08-12')]), $alba);
+
+        $this->assertSame('25.00', $statement->getTotal(), 'Sólo la semana del 7.');
+        $this->assertSame(3, $statement->getLines()[0]->freeWeeks);
+        $this->assertTrue($statement->needsBreakdown());
+        $this->assertTrue($statement->isChargeable());
+    }
+
+    /**
+     * Quien se va y nadie decide qué pasa con su cesta: las semanas que trabajó son
+     * gratis, las de después se calculan, pero la cuota no se cobra hasta decidirlo.
+     */
+    public function testUnaBajaSinDecidirNoSeCobra(): void
+    {
+        $alba = self::withMandate(self::partner('Alba'));
+        $statement = self::of(self::fees([self::share($alba, BasketShare::ID_WEEKLY)], [self::worker($alba, '2020-01-01', '2026-08-17')]), $alba);
+
+        $this->assertSame('50.00', $statement->getTotal(), 'Gratis el 7 y el 14; el 21 y el 28, sin decidir.');
+        $this->assertSame(2, $statement->getLines()[0]->undecidedWeeks);
+        $this->assertFalse($statement->isChargeable());
+        $this->assertStringContainsString('decidir', $statement->getProblems()[0]);
+    }
+
+    /** Tras la baja, o la paga como cualquiera o se le regala, sin fin o hasta un día. */
+    public function testTrasLaBajaLaPagaOSeLeRegala(): void
+    {
+        $paga = self::withMandate(self::partner('Paga'));
+        $hasta = self::withMandate(self::partner('Hasta'));
+        $siempre = self::partner('Siempre');
+        $statements = self::fees(
+            [self::share($paga, BasketShare::ID_WEEKLY), self::share($hasta, BasketShare::ID_WEEKLY), self::share($siempre, BasketShare::ID_WEEKLY)],
+            [
+                self::worker($paga, '2020-01-01', '2026-08-17', WorkerLeaveBasket::Paid),
+                self::worker($hasta, '2020-01-01', '2026-08-17', WorkerLeaveBasket::Gift, '2026-08-24'),
+                self::worker($siempre, '2020-01-01', '2026-08-17', WorkerLeaveBasket::Gift),
+            ],
+        );
+
+        $this->assertSame('50.00', self::of($statements, $paga)->getTotal());
+        $this->assertTrue(self::of($statements, $paga)->isChargeable());
+        $this->assertSame('25.00', self::of($statements, $hasta)->getTotal(), 'Regalo hasta el 24: sólo paga el 28.');
+        $this->assertTrue(self::of($statements, $hasta)->isChargeable());
+        $this->assertTrue(self::of($statements, $siempre)->isFree());
+    }
+
+    /** Un ajuste que suma convierte la cuota gratis en un recibo normal: lo de más sí se cobra. */
+    public function testUnaAportacionSobreLaCestaGratisSeCobra(): void
+    {
+        $alba = self::withMandate(self::partner('Alba'));
+        $statement = self::of(MonthlyFeeCalculator::compute(
+            new \DateTimeImmutable('2026-08-01'), self::weeks(), [self::share($alba, BasketShare::ID_WEEKLY)], self::schedule(),
+            [new FeeAdjustment($alba, '10', 'aporta a la RSP', new \DateTimeImmutable('2026-08-01'), null)], [], [], [self::worker($alba, '2017-06-09')],
+        )->getStatements(), $alba);
+
+        $this->assertFalse($statement->isFree());
+        $this->assertSame('10.00', $statement->getTotal());
+        $this->assertTrue($statement->isChargeable());
+    }
+
+    /** Pagarla no tiene «hasta»: elegirlo borra la fecha del regalo, y sin regalo no se guarda. */
+    public function testPagarlaNoTieneFechaDeRegalo(): void
+    {
+        $worker = self::worker(self::partner('Alba'), '2020-01-01', '2026-08-17', WorkerLeaveBasket::Gift, '2026-12-31');
+        $worker->setBasketAfterLeave(WorkerLeaveBasket::Paid);
+        $this->assertNull($worker->getBasketGiftUntil());
+
+        $worker->setBasketGiftUntil(new \DateTimeImmutable('2026-12-31'));
+        $this->assertNull($worker->getBasketGiftUntil());
     }
 }

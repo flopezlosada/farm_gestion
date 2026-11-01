@@ -16,7 +16,7 @@
     .fee-bd__to { color: var(--csa-ink-soft, #6b6b6b); font-size: 11.5px; white-space: nowrap; }
 {% endmacro %}
 
-{# Cada cesta: modalidad, importe, de quién es y, si la tuvo parte del mes, cuántas semanas. #}
+{# Cada cesta: modalidad, importe, de quién es, si la tuvo parte del mes cuántas semanas, y si es de trabajador cuántas no se cobran. #}
 {% macro lines(statement) %}
     {% import 'accounting/_money.html.twig' as fmt %}
     <ul class="fee-bd">
@@ -30,6 +30,8 @@
                 {{ l.label }} · <b>{{ fmt.money(l.total) }}</b>
                 {% if l.share.partner != statement.payer %}<span class="fee-bd__soft">(de {{ l.share.partner.legalName }})</span>{% endif %}
                 {% if l.partial %}<span class="fee-bd__part">{{ l.weeks }} de {{ l.monthWeeks }} semanas</span>{% endif %}
+                {% if l.free %}<span class="fee-bd__part">gratis: cesta de trabajador</span>
+                {% elseif l.freeWeeks > 0 %}<span class="fee-bd__part">{{ l.freeWeeks }} {{ l.freeWeeks == 1 ? 'semana gratis' : 'semanas gratis' }} (cesta de trabajador)</span>{% endif %}
                 {% if parts|length > 1 %}<span class="fee-bd__soft">— {{ parts|join(' + ') }}</span>{% endif %}
             </li>
         {% endfor %}

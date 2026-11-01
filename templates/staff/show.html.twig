@@ -21,7 +21,7 @@
 {% block csa_main %}
     {% set madrid = 'Europe/Madrid' %}
 
-    {{ csa.page_header('Personal', worker.name, worker.active ? 'Trabajador activo' : 'Trabajador inactivo') }}
+    {{ csa.page_header('Personal', worker.name, worker.active ? 'Trabajador activo' : 'De baja desde el ' ~ worker.leaveDate|date_modify('+1 day')|date('d/m/Y')) }}
 
     <div class="csa-kpi-row" style="margin-bottom: 1.4rem;">
         {{ csa.kpi('Alta', worker.hireDate ? worker.hireDate|date('d/m/Y') : '—', null, null, null, 'sky', 'fa-calendar') }}
@@ -38,6 +38,24 @@
             cada mes el resumen de sus horas, y sin este dato no se le manda.
             {{ csa.btn('Completar la ficha', { variant: 'secondary', icon: 'fa-pencil', href: path('staff_edit', { id: worker.id }) }) }}
         </div>
+    {% endif %}
+
+    {% if worker.leaveDate and worker.partner and worker.basketAfterLeave is null %}
+        {# Sin decidir, su cuota sale como pendiente en «Cuotas del mes» y no se cobra. #}
+        <div class="csa-callout csa-callout--warning" style="margin-bottom: 1.4rem;">
+            Deja de trabajar el {{ worker.leaveDate|date('d/m/Y') }} y recibe cesta: falta decidir si <strong>la paga o se le sigue regalando</strong>.
+            Mientras no se decida, su cuota no se cobra.
+            {{ csa.btn('Decidirlo', { variant: 'secondary', icon: 'fa-pencil', href: path('staff_edit', { id: worker.id }) }) }}
+        </div>
+    {% elseif worker.partner %}
+        <p style="margin: 0 0 1.4rem; color: #374151;">
+            <i class="fa fa-shopping-basket"></i>
+            Cesta de <a href="{{ path('partner_show', { id: worker.partner.id }) }}#cuota">{{ worker.partner.legalName }}</a>:
+            {% if worker.leaveDate is null %}gratis mientras trabaja.
+            {% elseif worker.basketAfterLeave.value == 'paid' %}gratis hasta el {{ worker.leaveDate|date('d/m/Y') }}; desde entonces la paga.
+            {% else %}se le regala{{ worker.basketGiftUntil ? ' hasta el ' ~ worker.basketGiftUntil|date('d/m/Y') : ' sin fecha de fin' }}.
+            {% endif %}
+        </p>
     {% endif %}
 
     <p style="margin: 0 0 1.4rem;">

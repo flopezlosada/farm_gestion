@@ -18,7 +18,18 @@
                     {{ csa.field(form.recordingStartDate, 'Registro en la app desde') }}
                     {{ csa.field(form.workdayType, 'Tipo de jornada') }}
                     {{ csa.field(form.annualVacationDays, 'Días de vacaciones al año') }}
-                    {{ csa.field(form.active, 'Activo', { full: true }) }}
+                    {{ csa.field(form.leaveDate, 'Fecha de baja') }}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Cesta', subtitle: 'Mientras trabaja su cesta es gratis. Cuando se va, se decide si la paga o se le sigue regalando.' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.partner, 'Su ficha de socix', { full: true }) }}
+                    {{ csa.field(form.basketAfterLeave, 'Su cesta tras la baja') }}
+                    {{ csa.field(form.basketGiftUntil, 'Se le regala hasta') }}
                 </div>
             {% endblock %}
         {% endembed %}

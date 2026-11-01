@@ -76,7 +76,6 @@ class StaffMonthCloseCommandsTest extends KernelTestCase
             ->setName($name)
             ->setHireDate(new \DateTimeImmutable('2020-01-01'))
             ->setWorkdayType($workdayType)
-            ->setActive(true)
             ->setAnnualVacationDays(22);
         $this->em->persist($worker);
 

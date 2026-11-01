@@ -39,7 +39,6 @@ class WorkControllerTest extends WebTestCase
         $this->worker = (new Worker())
             ->setName('Trabajadora de prueba')
             ->setHireDate(new \DateTimeImmutable('2026-01-01'))
-            ->setActive(true)
             ->setAnnualVacationDays(22);
         $this->em->persist($this->worker);
 

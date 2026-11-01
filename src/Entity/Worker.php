@@ -6,7 +6,9 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Gedmo\Mapping\Annotation as Gedmo;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 /**
  * Trabajador de la asociación: persona con relación laboral, sujeta a registro
@@ -32,6 +34,7 @@ use Symfony\Component\Validator\Constraints as Assert;
  * @ORM\Table(name="worker")
  * @ORM\Entity(repositoryClass="App\Repository\WorkerRepository")
  */
+#[UniqueEntity(fields: ['partner'], message: 'Esa ficha de socix ya es de otro trabajador.')]
 class Worker
 {
     /** Jornada completa. */
@@ -121,15 +124,52 @@ class Worker
     private $workdayType;
 
     /**
-     * ¿Sigue empleado? Un trabajador que se va se marca inactivo, NUNCA se borra:
-     * su registro de jornada debe conservarse 4 años aunque ya no esté (por eso
-     * tampoco hay borrado en cascada hacia {@see TimeEntry}). Inactivo = conserva
-     * histórico pero no puede fichar.
+     * Último día que trabaja en la asociación (incluido), o null mientras sigue.
+     * Un trabajador que se va NUNCA se borra: su registro de jornada debe
+     * conservarse 4 años (por eso tampoco hay borrado en cascada hacia
+     * {@see TimeEntry}). De baja = conserva histórico pero no puede fichar.
      *
-     * @var bool
-     * @ORM\Column(name="active", type="boolean", options={"default": true})
+     * Es la única verdad de si sigue empleado ({@see self::isActive()} se deriva
+     * de aquí): un «activo» guardado aparte podría decir otra cosa que la fecha.
+     *
+     * @var \DateTimeImmutable|null
+     * @ORM\Column(name="leave_date", type="date_immutable", nullable=true)
      */
-    private $active = true;
+    private $leaveDate;
+
+    /**
+     * Su ficha de socix, si recibe cesta. Mientras trabaja su cesta es gratis; tras
+     * la baja, según {@see self::$basketAfterLeave}.
+     *
+     * Va aparte del {@see User} aunque la misma persona pueda tener las dos facetas
+     * en su cuenta: esa cuenta es el ACCESO para fichar, y se retira al irse
+     * ({@see \App\Security\WorkerUserProvisioner::revokeAccess()}), justo cuando
+     * más falta hace saber de quién es la cesta. Tampoco todo trabajador con cesta
+     * tiene cuenta.
+     *
+     * @var Partner|null
+     * @ORM\OneToOne(targetEntity="Partner")
+     * @ORM\JoinColumn(name="partner_id", referencedColumnName="id", nullable=true, unique=true)
+     */
+    private $partner;
+
+    /**
+     * Qué se hace con su cesta tras la baja. Null = nadie lo ha decidido todavía (o
+     * sigue trabajando): con baja y cesta, la cuota avisa y no se cobra.
+     *
+     * @var WorkerLeaveBasket|null
+     * @ORM\Column(name="basket_after_leave", type="string", length=10, nullable=true, enumType=WorkerLeaveBasket::class)
+     */
+    private $basketAfterLeave;
+
+    /**
+     * Si se le regala la cesta tras la baja, hasta qué día (incluido). Null = sin
+     * fin. Sólo tiene sentido con {@see WorkerLeaveBasket::Gift}.
+     *
+     * @var \DateTimeImmutable|null
+     * @ORM\Column(name="basket_gift_until", type="date_immutable", nullable=true)
+     */
+    private $basketGiftUntil;
 
     /**
      * @var \DateTime
@@ -310,22 +350,155 @@ class Worker
     }
 
     /**
+     * ¿Sigue empleado hoy?
+     *
      * @return bool
      */
     public function isActive(): bool
     {
-        return $this->active;
+        return $this->isActiveOn(new \DateTimeImmutable('today'));
     }
 
     /**
-     * @param bool $active
+     * ¿Seguía en la asociación ese día, es decir, aún no se había ido? Sólo mira la
+     * baja, como siempre hizo «activo»: alguien con el alta la semana que viene ya está
+     * activo (y el registro de jornada lo corta por su cuenta en el alta).
+     *
+     * @param \DateTimeInterface $day
+     * @return bool
+     */
+    public function isActiveOn(\DateTimeInterface $day): bool
+    {
+        return $this->leaveDate === null || $day->format('Y-m-d') <= $this->leaveDate->format('Y-m-d');
+    }
+
+    /**
+     * @return \DateTimeImmutable|null Último día que trabaja; null mientras sigue.
+     */
+    public function getLeaveDate(): ?\DateTimeImmutable
+    {
+        return $this->leaveDate;
+    }
+
+    /**
+     * @param \DateTimeImmutable|null $leaveDate Último día que trabaja, incluido.
      * @return self
      */
-    public function setActive(bool $active): self
+    public function setLeaveDate(?\DateTimeImmutable $leaveDate): self
     {
-        $this->active = $active;
+        $this->leaveDate = $leaveDate;
 
         return $this;
+    }
+
+    /**
+     * @return Partner|null Su ficha de socix, si recibe cesta.
+     */
+    public function getPartner(): ?Partner
+    {
+        return $this->partner;
+    }
+
+    /**
+     * @param Partner|null $partner
+     * @return self
+     */
+    public function setPartner(?Partner $partner): self
+    {
+        $this->partner = $partner;
+
+        return $this;
+    }
+
+    /**
+     * @return WorkerLeaveBasket|null Null = sin decidir.
+     */
+    public function getBasketAfterLeave(): ?WorkerLeaveBasket
+    {
+        return $this->basketAfterLeave;
+    }
+
+    /**
+     * Decide qué pasa con su cesta tras la baja. Pagarla no tiene «hasta»: si se
+     * elige, la fecha del regalo se borra para que no quede un regalo a medias.
+     *
+     * @param WorkerLeaveBasket|null $basketAfterLeave Null = sin decidir.
+     * @return self
+     */
+    public function setBasketAfterLeave(?WorkerLeaveBasket $basketAfterLeave): self
+    {
+        $this->basketAfterLeave = $basketAfterLeave;
+        if ($basketAfterLeave !== WorkerLeaveBasket::Gift) {
+            $this->basketGiftUntil = null;
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return \DateTimeImmutable|null Último día del regalo; null = sin fin (o no hay regalo).
+     */
+    public function getBasketGiftUntil(): ?\DateTimeImmutable
+    {
+        return $this->basketGiftUntil;
+    }
+
+    /**
+     * @param \DateTimeImmutable|null $basketGiftUntil Último día del regalo, incluido; null = sin fin.
+     * @return self
+     */
+    public function setBasketGiftUntil(?\DateTimeImmutable $basketGiftUntil): self
+    {
+        $this->basketGiftUntil = $this->basketAfterLeave === WorkerLeaveBasket::Gift ? $basketGiftUntil : null;
+
+        return $this;
+    }
+
+    /**
+     * Cómo va su cesta la semana de ese día: gratis (trabajaba, o se le regala tras la
+     * baja), sin decidir (de baja y nadie ha dicho qué hacer) o null = la paga como
+     * cualquiera (antes del alta, o tras la baja si se decidió así o acabó el regalo).
+     *
+     * @param \DateTimeInterface $day
+     * @return WorkerBasketWeek|null
+     */
+    public function basketWeek(\DateTimeInterface $day): ?WorkerBasketWeek
+    {
+        if ($this->hireDate === null || $day->format('Y-m-d') < $this->hireDate->format('Y-m-d')) {
+            return null;
+        }
+        if ($this->isActiveOn($day)) {
+            return WorkerBasketWeek::Free;
+        }
+
+        return match ($this->basketAfterLeave) {
+            null => WorkerBasketWeek::Undecided,
+            WorkerLeaveBasket::Paid => null,
+            WorkerLeaveBasket::Gift => $this->basketGiftUntil === null || $day->format('Y-m-d') <= $this->basketGiftUntil->format('Y-m-d')
+                ? WorkerBasketWeek::Free
+                : null,
+        };
+    }
+
+    /**
+     * Las fechas tienen que encajar: la baja no antes del alta, y el regalo no acaba
+     * antes de la baja. Sin baja no hay nada que decidir sobre la cesta.
+     *
+     * @param ExecutionContextInterface $context
+     * @return void
+     */
+    #[Assert\Callback]
+    public function validateLeave(ExecutionContextInterface $context): void
+    {
+        if ($this->leaveDate !== null && $this->hireDate !== null && $this->leaveDate < $this->hireDate) {
+            $context->buildViolation('La baja no puede ser anterior al alta.')->atPath('leaveDate')->addViolation();
+        }
+        if ($this->leaveDate === null && $this->basketAfterLeave !== null) {
+            $context->buildViolation('Sólo se decide qué pasa con la cesta cuando hay fecha de baja.')->atPath('basketAfterLeave')->addViolation();
+        }
+        if ($this->leaveDate !== null && $this->basketGiftUntil !== null && $this->basketGiftUntil < $this->leaveDate) {
+            $context->buildViolation('El regalo no puede acabar antes de la baja.')->atPath('basketGiftUntil')->addViolation();
+        }
     }
 
     /**

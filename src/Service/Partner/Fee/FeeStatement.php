@@ -12,7 +12,10 @@ use App\Entity\Partner;
  * de otrxs), más sus ajustes. Es lo que será un recibo de la remesa.
  *
  * Dice también por qué no se le puede cobrar todavía: falta el precio de algo que
- * tiene, no tiene mandato de domiciliación, o el total no sale positivo.
+ * tiene, no tiene mandato de domiciliación, el total no sale positivo, o su cesta es
+ * de alguien que dejó de trabajar en la asociación y nadie ha decidido si la paga.
+ * Si todo lo suyo es cesta de trabajador, gratis, no hay recibo ni problema
+ * ({@see self::isFree()}).
  */
 final class FeeStatement
 {
@@ -76,7 +79,18 @@ final class FeeStatement
     {
         return count($this->lines) > 1
             || $this->adjustments !== []
-            || array_filter($this->lines, static fn (FeeLine $l): bool => $l->isPartial()) !== [];
+            || array_filter($this->lines, static fn (FeeLine $l): bool => $l->isPartial() || $l->freeWeeks > 0) !== [];
+    }
+
+    /**
+     * Si no se le cobra nada porque todas sus cestas son de trabajador, gratis, y no
+     * tiene ajustes que sumen. No es un recibo que falle: es que no hay recibo.
+     */
+    public function isFree(): bool
+    {
+        return $this->lines !== []
+            && array_filter($this->lines, static fn (FeeLine $l): bool => !$l->isFree()) === []
+            && $this->getAdjustmentsCents() <= 0;
     }
 
     /**
@@ -103,9 +117,14 @@ final class FeeStatement
      */
     public function getProblems(): array
     {
+        if ($this->isFree()) {
+            return [];
+        }
         $missing = $this->getMissingConcepts();
+        $undecided = array_filter($this->lines, static fn (FeeLine $l): bool => $l->undecidedWeeks > 0) !== [];
 
         return array_values(array_filter([
+            $undecided ? 'Dejó de trabajar en la asociación y nadie ha decidido si paga su cesta o se le regala: hay que decidirlo en su ficha de trabajador.' : null,
             $missing !== [] ? 'Falta el precio de ' . $this->describeMissing() . '.' : null,
             !$this->payer->hasDirectDebit() ? 'No tiene mandato de domiciliación completo (cuenta, referencia y fecha).' : null,
             $missing === [] && $this->getCents() <= 0 ? 'Le sale ' . number_format($this->getCents() / 100, 2, ',', '.') . ' €: no hay nada que cobrarle.' : null,
@@ -126,7 +145,7 @@ final class FeeStatement
     /** Si se le puede pasar el recibo: tiene todo y algo que cobrar. */
     public function isChargeable(): bool
     {
-        return $this->getProblems() === [];
+        return !$this->isFree() && $this->getProblems() === [];
     }
 
     /**

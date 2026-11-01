@@ -73,7 +73,6 @@ class PostLoginDispatchTest extends WebTestCase
             $worker = (new Worker())
                 ->setName('Trabajadora no socia')
                 ->setHireDate(new \DateTimeImmutable('2026-01-01'))
-                ->setActive(true)
                 ->setAnnualVacationDays(22);
             $this->em->persist($worker);
             $user->setWorker($worker);

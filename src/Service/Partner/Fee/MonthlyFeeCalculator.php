@@ -10,6 +10,8 @@ use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerEvent;
 use App\Entity\PartnerPause;
+use App\Entity\Worker;
+use App\Entity\WorkerBasketWeek;
 use App\Repository\FeeAdjustmentRepository;
 use App\Repository\FeeRateRepository;
 use App\Repository\PartnerPauseRepository;
@@ -26,11 +28,14 @@ use Doctrine\ORM\EntityManagerInterface;
  * bajas de los eventos de baja y vuelta de su ficha. Si una tarifa cambia a mitad de
  * mes, cada semana usa la que valía ese día.
  *
+ * La cesta de quien trabaja en la asociación no se cobra las semanas que trabajaba, ni
+ * tras su baja si se decidió regalársela ({@see Worker::basketWeek()}).
+ *
  * Las semanas cerradas por un festivo o los cambios puntuales de una semana NO
  * descuentan: la cuota es mensual y se paga por la cesta, no por cada reparto.
  *
  * Todo en unas pocas consultas, sea cual sea el número de socixs: semanas del mes,
- * cestas, tarifas, ajustes, pausas y eventos.
+ * cestas, tarifas, ajustes, pausas, eventos y trabajadorxs.
  *
  * No es final para poder sustituirlo en las pruebas de quien sólo usa sus totales.
  */
@@ -66,6 +71,7 @@ class MonthlyFeeCalculator
             $this->adjustments->findApplyingTo($month),
             $this->stopEvents($end),
             $this->pauses->findTouching($month, $end),
+            $this->workers(),
         );
     }
 
@@ -87,9 +93,16 @@ class MonthlyFeeCalculator
      * @param list<FeeAdjustment>       $adjustments
      * @param list<PartnerEvent>        $events      Bajas y vueltas, en orden.
      * @param list<PartnerPause>        $pauses      Pausas que tocan el mes.
+     * @param list<Worker>              $workers     Trabajadorxs con ficha de socix.
      */
-    public static function compute(\DateTimeImmutable $month, array $weeks, array $shares, FeeSchedule $schedule, array $adjustments, array $events, array $pauses = []): MonthlyFees
+    public static function compute(\DateTimeImmutable $month, array $weeks, array $shares, FeeSchedule $schedule, array $adjustments, array $events, array $pauses = [], array $workers = []): MonthlyFees
     {
+        $workerOf = [];
+        foreach ($workers as $worker) {
+            if ($worker->getPartner() !== null) {
+                $workerOf[MonthlyFees::keyOf($worker->getPartner())] = $worker;
+            }
+        }
         $stops = self::stopPeriods($events);
         foreach ($pauses as $pause) {
             $stops[MonthlyFees::keyOf($pause->getPartner())][] = [$pause->getStartsOn(), $pause->getResumesOn()];
@@ -101,7 +114,8 @@ class MonthlyFeeCalculator
 
         foreach ($shares as $share) {
             $partner = $share->getPartner();
-            $line = self::line($share, $weeks, $schedule, $stops[MonthlyFees::keyOf($partner)] ?? []);
+            $key = MonthlyFees::keyOf($partner);
+            $line = self::line($share, $weeks, $schedule, $stops[$key] ?? [], $workerOf[$key] ?? null);
             if ($line !== null) {
                 $statementFor($share->getEffectivePayer()->getFamilyHead())->addLine($line);
             }
@@ -120,20 +134,25 @@ class MonthlyFeeCalculator
      *
      * @param list<\DateTimeImmutable>                          $weeks
      * @param list<array{0: \DateTimeImmutable, 1: ?\DateTimeImmutable}> $stops Periodos sin cobrar [desde, hasta).
+     * @param Worker|null $worker Si la cesta es de alguien que trabaja o trabajó en la asociación.
      */
-    private static function line(PartnerBasketShare $share, array $weeks, FeeSchedule $schedule, array $stops): ?FeeLine
+    private static function line(PartnerBasketShare $share, array $weeks, FeeSchedule $schedule, array $stops, ?Worker $worker = null): ?FeeLine
     {
         $active = array_values(array_filter($weeks, static fn (\DateTimeImmutable $w): bool => self::holds($share, $w) && !self::stopped($stops, $w)));
         if ($active === [] || $weeks === []) {
             return null;
         }
 
+        // Las semanas gratis cuentan como suyas, pero no se cobran.
+        $kinds = array_map(static fn (\DateTimeImmutable $w): ?WorkerBasketWeek => $worker?->basketWeek($w), $active);
+        $charged = array_values(array_filter($active, static fn (\DateTimeImmutable $w, int $i): bool => $kinds[$i] !== WorkerBasketWeek::Free, \ARRAY_FILTER_USE_BOTH));
+
         $missing = [];
         $veg = $egg = 0;
         $basketShare = $share->getBasketShare();
         $eggAmount = $share->getEggAmount();
         $eggPeriod = $share->getEggPeriod();
-        foreach ($active as $week) {
+        foreach ($charged as $week) {
             $vegPrice = $basketShare !== null ? $schedule->vegMonthPrice($basketShare, $week) : '0.00';
             if ($vegPrice === null) {
                 $missing[] = FeeConcept::forBasketShare($basketShare);
@@ -153,7 +172,7 @@ class MonthlyFeeCalculator
         // Cada semana es una parte igual del mes: la suma de las cuotas mensuales de
         // las semanas que la tuvo, entre las semanas del mes. Se redondea una vez.
         $n = \count($weeks);
-        $transport = IssuedInvoice::toCents((string) ($share->getTransportPrice() ?? '0')) * \count($active);
+        $transport = IssuedInvoice::toCents((string) ($share->getTransportPrice() ?? '0')) * \count($charged);
 
         return new FeeLine(
             $share,
@@ -163,6 +182,8 @@ class MonthlyFeeCalculator
             \count($active),
             $n,
             array_values(array_unique(array_filter($missing), \SORT_REGULAR)),
+            \count($active) - \count($charged),
+            \count(array_keys($kinds, WorkerBasketWeek::Undecided, true)),
         );
     }
 
@@ -235,6 +256,19 @@ class MonthlyFeeCalculator
             ->andWhere('s.end_date >= :start OR (s.end_date IS NULL AND s.is_active = true)')
             ->setParameter('start', $start->format('Y-m-d'))
             ->setParameter('end', $end->format('Y-m-d'))
+            ->getQuery()->getResult();
+    }
+
+    /**
+     * Quienes trabajan o trabajaron en la asociación y tienen ficha de socix, con ella.
+     *
+     * @return list<Worker>
+     */
+    private function workers(): array
+    {
+        return $this->em->createQueryBuilder()
+            ->select('w', 'p')->from(Worker::class, 'w')
+            ->join('w.partner', 'p')
             ->getQuery()->getResult();
     }
 
