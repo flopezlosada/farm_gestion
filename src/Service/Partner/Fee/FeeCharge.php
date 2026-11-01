@@ -11,22 +11,27 @@ use App\Entity\Partner;
  * primera cesta, o la de mantenimiento en junio y diciembre. Va en el recibo de quien
  * paga la cesta de ese hogar.
  *
- * Sin precio ese día, el importe es cero y {@see $missing} lo dice: la cuota no se
- * puede dar por buena, igual que una cesta sin tarifa.
+ * Sin precio ese día no hay importe (null, no cero): la cuota no se puede dar por
+ * buena, igual que una cesta sin tarifa.
  */
 final class FeeCharge
 {
     public function __construct(
         public readonly FeeConcept $concept,
         public readonly Partner $household,
-        public readonly int $cents,
-        public readonly bool $missing,
+        public readonly ?int $cents,
     ) {
     }
 
-    /** El importe en euros, «25.00». */
-    public function getTotal(): string
+    /** Si falta su precio. */
+    public function isMissing(): bool
     {
-        return IssuedInvoice::fromCents($this->cents);
+        return $this->cents === null;
+    }
+
+    /** El importe en euros, «25.00»; null si falta el precio. */
+    public function getTotal(): ?string
+    {
+        return $this->cents === null ? null : IssuedInvoice::fromCents($this->cents);
     }
 }

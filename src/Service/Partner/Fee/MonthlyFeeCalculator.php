@@ -27,11 +27,14 @@ use Doctrine\ORM\EntityManagerInterface;
  * mes, cada semana usa la que valía ese día.
  *
  * Además, cada hogar paga sus cuotas de socix ({@see FeeCharge}): la de inscripción el
- * mes en que empieza su primera cesta (la de cualquiera de su familia; quien vuelve
- * tras años sin cesta también la paga, como se ha cobrado siempre) y la de
- * mantenimiento en junio y diciembre, si ese mes tiene alguna cesta que cobrar. Van en
- * el recibo de quien paga la cesta del hogar. Las cestas importadas sin fecha de inicio
- * son de hogares de antes: nunca pagan inscripción.
+ * mes en que empieza su primera cesta (la más antigua de las que tiene su familia: quien
+ * vuelve y conserva una cesta antigua no la paga otra vez) y la de mantenimiento en
+ * junio y diciembre, si ese mes tiene alguna cesta que cobrar. Van en el recibo de quien
+ * paga la primera cesta del hogar (por id, para que no dependa del orden de la base).
+ * Las cestas importadas sin fecha de inicio son de hogares de antes: nunca pagan
+ * inscripción. Límite conocido: si el mes de la primera cesta no tiene ningún reparto
+ * que cobrar (empieza tras el último viernes, o en pausa), la inscripción no se cobra
+ * nunca; no se guarda quién la pagó.
  *
  * Las semanas cerradas por un festivo o los cambios puntuales de una semana NO
  * descuentan: la cuota es mensual y se paga por la cesta, no por cada reparto.
@@ -125,7 +128,7 @@ class MonthlyFeeCalculator
                 $charged[$key] = true;
                 foreach (self::membershipConcepts($month, \in_array($household->getId(), $newHouseholds, true)) as $concept) {
                     $price = $schedule->rateOn($concept, $month)?->getPrice();
-                    $statement->addCharge(new FeeCharge($concept, $household, $price !== null ? IssuedInvoice::toCents($price) : 0, $price === null));
+                    $statement->addCharge(new FeeCharge($concept, $household, $price !== null ? IssuedInvoice::toCents($price) : null));
                 }
             }
         }
@@ -272,6 +275,7 @@ class MonthlyFeeCalculator
             ->andWhere('s.end_date >= :start OR (s.end_date IS NULL AND s.is_active = true)')
             ->setParameter('start', $start->format('Y-m-d'))
             ->setParameter('end', $end->format('Y-m-d'))
+            ->orderBy('s.id', 'ASC')
             ->getQuery()->getResult();
     }
 

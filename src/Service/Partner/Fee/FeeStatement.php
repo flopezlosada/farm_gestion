@@ -55,7 +55,7 @@ final class FeeStatement
     /** Lo que suman las cuotas de socix, en céntimos. */
     public function getChargesCents(): int
     {
-        return array_sum(array_map(static fn (FeeCharge $c): int => $c->cents, $this->charges));
+        return array_sum(array_map(static fn (FeeCharge $c): int => $c->cents ?? 0, $this->charges));
     }
 
     /** @return list<FeeLine> */
@@ -117,7 +117,7 @@ final class FeeStatement
             }
         }
         foreach ($this->charges as $charge) {
-            if ($charge->missing) {
+            if ($charge->isMissing()) {
                 $missing[$charge->concept->value] = $charge->concept;
             }
         }

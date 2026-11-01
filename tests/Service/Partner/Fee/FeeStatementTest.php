@@ -93,14 +93,14 @@ class FeeStatementTest extends TestCase
     {
         $payer = new Partner();
         $statement = self::statement($payer, [self::line($payer)]);
-        $statement->addCharge(new FeeCharge(FeeConcept::MembershipSignup, $payer, 2500, false));
+        $statement->addCharge(new FeeCharge(FeeConcept::MembershipSignup, $payer, 2500));
 
         $this->assertSame('97.00', $statement->getTotal(), '55 + 12 + 5 de la cesta y 25 de inscripción.');
         $this->assertSame(2500, $statement->getChargesCents());
         $this->assertTrue($statement->needsBreakdown());
         $this->assertSame([], $statement->getMissingConcepts());
 
-        $statement->addCharge(new FeeCharge(FeeConcept::MembershipUpkeep, $payer, 0, true));
+        $statement->addCharge(new FeeCharge(FeeConcept::MembershipUpkeep, $payer, null));
         $this->assertSame([FeeConcept::MembershipUpkeep], $statement->getMissingConcepts());
         $this->assertStringContainsString('cuota de mantenimiento', $statement->getProblems()[0]);
     }
