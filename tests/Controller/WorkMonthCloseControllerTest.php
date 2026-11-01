@@ -232,6 +232,9 @@ class WorkMonthCloseControllerTest extends WebTestCase
         $this->assertResponseIsSuccessful();
         $this->assertCount(0, $crawler->filter(sprintf('form[action$="/gestion/staff/close/approve/%d"]', $worker->getId())), 'No debe ofrecerse aprobar.');
         $this->assertStringContainsString('A corregir', $crawler->filter('.prl-table')->text());
+        // El contador cuenta trabajadores, no días: una jornada a medias = 1 trabajador.
+        $this->assertSame('1', trim($crawler->filter('.prl-stat--leave .v')->text()));
+        $this->assertStringContainsString('trabajadores con días a corregir', $crawler->filter('.prl-stat--leave .l')->text());
 
         // Y el POST fabricado tampoco aprueba.
         $token = $crawler->filter('form[action*="/gestion/staff/close/approve/"] input[name="_token"]')->attr('value');
