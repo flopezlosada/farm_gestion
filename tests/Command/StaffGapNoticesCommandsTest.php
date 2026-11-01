@@ -65,7 +65,6 @@ class StaffGapNoticesCommandsTest extends KernelTestCase
         $worker = (new Worker())
             ->setName($name)
             ->setHireDate(new \DateTimeImmutable('2020-01-01'))
-            ->setActive(true)
             ->setAnnualVacationDays(22);
         $this->em->persist($worker);
 

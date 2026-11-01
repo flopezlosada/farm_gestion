@@ -15,6 +15,9 @@ use Doctrine\Persistence\ManagerRegistry;
  */
 class WorkerRepository extends ServiceEntityRepository
 {
+    /** Sigue trabajando hoy: sin baja, o con la baja hoy o más adelante (parámetro `today`). */
+    private const ACTIVE_TODAY = '(w.leaveDate IS NULL OR w.leaveDate >= :today)';
+
     public function __construct(ManagerRegistry $registry)
     {
         parent::__construct($registry, Worker::class);
@@ -29,17 +32,18 @@ class WorkerRepository extends ServiceEntityRepository
     public function findActive(): array
     {
         return $this->createQueryBuilder('w')
-            ->andWhere('w.active = true')
+            ->andWhere(self::ACTIVE_TODAY)
+            ->setParameter('today', self::today())
             ->orderBy('w.name', 'ASC')
             ->getQuery()
             ->getResult();
     }
 
     /**
-     * Quién entra en un registro de jornada de un periodo: los activos dados de
-     * alta antes de que acabe, y los ya inactivos que fichasen dentro. Un
-     * inactivo sin fichajes en el periodo no se incluye: no hay fecha de baja con
-     * la que saber si aún trabajaba, y pintaría todo el periodo como huecos.
+     * Quién entra en un registro de jornada de un periodo: los activos hoy dados
+     * de alta antes de que acabe, y los ya de baja que fichasen dentro. Uno de baja
+     * sin fichajes en el periodo no se incluye: los huecos aún no se cortan en la
+     * fecha de baja, y pintaría todo el periodo como sin fichar.
      *
      * @param \DateTimeImmutable $from Inicio del periodo, incluido.
      * @param \DateTimeImmutable $to   Fin del periodo, excluido.
@@ -49,13 +53,24 @@ class WorkerRepository extends ServiceEntityRepository
     {
         return $this->createQueryBuilder('w')
             ->andWhere(sprintf(
-                '(w.active = true AND w.hireDate < :to) OR EXISTS (SELECT t.id FROM %s t WHERE t.worker = w AND t.occurredAt >= :from AND t.occurredAt < :to)',
+                '(' . self::ACTIVE_TODAY . ' AND w.hireDate < :to) OR EXISTS (SELECT t.id FROM %s t WHERE t.worker = w AND t.occurredAt >= :from AND t.occurredAt < :to)',
                 TimeEntry::class,
             ))
             ->setParameter('from', $from)
             ->setParameter('to', $to)
+            ->setParameter('today', self::today())
             ->orderBy('w.name', 'ASC')
             ->getQuery()
             ->getResult();
+    }
+
+    /**
+     * Hoy, como fecha: el corte de quién sigue trabajando, igual que {@see Worker::isActive()}.
+     *
+     * @return string
+     */
+    private static function today(): string
+    {
+        return Worker::today()->format('Y-m-d');
     }
 }

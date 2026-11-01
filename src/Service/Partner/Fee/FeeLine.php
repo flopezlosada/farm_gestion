@@ -14,6 +14,11 @@ use App\Entity\PartnerBasketShare;
  * Los importes ya van prorrateados y en céntimos. Si algún concepto no tenía precio,
  * el importe de esa parte es cero y el concepto sale en {@see $missing}: la cuota no
  * se puede dar por buena.
+ *
+ * Las semanas en que la cesta es de quien trabaja en la asociación cuentan en
+ * {@see $weeks} pero no se cobran ({@see $freeWeeks}); las de quien ya se fue sin que
+ * nadie decidiera qué hacer se cobran, pero dejan la cuota sin poder pasar
+ * ({@see $undecidedWeeks}).
  */
 final class FeeLine
 {
@@ -28,6 +33,8 @@ final class FeeLine
         public readonly int $weeks,
         public readonly int $monthWeeks,
         public readonly array $missing,
+        public readonly int $freeWeeks = 0,
+        public readonly int $undecidedWeeks = 0,
     ) {
     }
 
@@ -45,6 +52,12 @@ final class FeeLine
     public function isPartial(): bool
     {
         return $this->weeks < $this->monthWeeks;
+    }
+
+    /** Si no se cobra nada: todas las semanas que la tuvo era cesta de trabajador. */
+    public function isFree(): bool
+    {
+        return $this->weeks > 0 && $this->freeWeeks === $this->weeks;
     }
 
     /** «Quincenal compartida · Una docena», para listados. */

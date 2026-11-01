@@ -87,7 +87,6 @@ class StaffControllerTest extends WebTestCase
         $worker = (new Worker())
             ->setName($name)
             ->setHireDate(new \DateTimeImmutable('2026-01-01'))
-            ->setActive(true)
             ->setAnnualVacationDays(22);
         $this->em->persist($worker);
         $this->em->flush();

@@ -10,6 +10,8 @@ use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerEvent;
 use App\Entity\PartnerPause;
+use App\Entity\Worker;
+use App\Entity\WorkerBasketWeek;
 use App\Repository\FeeAdjustmentRepository;
 use App\Repository\FeeRateRepository;
 use App\Repository\PartnerPauseRepository;
@@ -26,6 +28,13 @@ use Doctrine\ORM\EntityManagerInterface;
  * bajas de los eventos de baja y vuelta de su ficha. Si una tarifa cambia a mitad de
  * mes, cada semana usa la que valía ese día.
  *
+ * El transporte lo pone el grupo de recogida de quien recoge la cesta (no el de quien
+ * la paga), con el precio que tenga cada semana: {@see FeeSchedule::transportMonthPrice}.
+ * Va por cada cesta: dos cestas, dos transportes. El grupo es el que tiene HOY: la
+ * ficha no guarda en qué grupo estuvo antes, así que recalcular un mes pasado de quien
+ * ha cambiado de grupo da el transporte del grupo nuevo. Lo cobrado de verdad queda en
+ * cada remesa enviada.
+ *
  * Además, cada hogar paga sus cuotas de socix ({@see FeeCharge}): la de inscripción el
  * mes en que empieza su primera cesta (la más antigua de las que tiene su familia: quien
  * vuelve y conserva una cesta antigua no la paga otra vez) y la de mantenimiento en
@@ -36,18 +45,14 @@ use Doctrine\ORM\EntityManagerInterface;
  * que cobrar (empieza tras el último viernes, o en pausa), la inscripción no se cobra
  * nunca; no se guarda quién la pagó.
  *
- * El transporte lo pone el grupo de recogida de quien recoge la cesta (no el de quien
- * la paga), con el precio que tenga cada semana: {@see FeeSchedule::transportMonthPrice}.
- * Va por cada cesta: dos cestas, dos transportes. El grupo es el que tiene HOY: la
- * ficha no guarda en qué grupo estuvo antes, así que recalcular un mes pasado de quien
- * ha cambiado de grupo da el transporte del grupo nuevo. Lo cobrado de verdad queda en
- * cada remesa enviada.
+ * La cesta de quien trabaja en la asociación no se cobra las semanas que trabajaba, ni
+ * tras su baja si se decidió regalársela ({@see Worker::basketWeek()}).
  *
  * Las semanas cerradas por un festivo o los cambios puntuales de una semana NO
  * descuentan: la cuota es mensual y se paga por la cesta, no por cada reparto.
  *
  * Todo en unas pocas consultas, sea cual sea el número de socixs: semanas del mes,
- * cestas, tarifas, ajustes, pausas y eventos.
+ * cestas, tarifas, ajustes, pausas, eventos y trabajadorxs.
  *
  * No es final para poder sustituirlo en las pruebas de quien sólo usa sus totales.
  */
@@ -84,6 +89,7 @@ class MonthlyFeeCalculator
             $this->stopEvents($end),
             $this->pauses->findTouching($month, $end),
             $this->newHouseholds($month, $end),
+            $this->workers(),
         );
     }
 
@@ -106,9 +112,16 @@ class MonthlyFeeCalculator
      * @param list<PartnerEvent>        $events      Bajas y vueltas, en orden.
      * @param list<PartnerPause>        $pauses      Pausas que tocan el mes.
      * @param list<int>                 $newHouseholds Ids de los hogares (quien encabeza la familia) cuya primera cesta empieza este mes.
+     * @param list<Worker>              $workers     Trabajadorxs con ficha de socix.
      */
-    public static function compute(\DateTimeImmutable $month, array $weeks, array $shares, FeeSchedule $schedule, array $adjustments, array $events, array $pauses = [], array $newHouseholds = []): MonthlyFees
+    public static function compute(\DateTimeImmutable $month, array $weeks, array $shares, FeeSchedule $schedule, array $adjustments, array $events, array $pauses = [], array $newHouseholds = [], array $workers = []): MonthlyFees
     {
+        $workerOf = [];
+        foreach ($workers as $worker) {
+            if ($worker->getPartner() !== null) {
+                $workerOf[MonthlyFees::keyOf($worker->getPartner())] = $worker;
+            }
+        }
         $stops = self::stopPeriods($events);
         foreach ($pauses as $pause) {
             $stops[MonthlyFees::keyOf($pause->getPartner())][] = [$pause->getStartsOn(), $pause->getResumesOn()];
@@ -121,7 +134,8 @@ class MonthlyFeeCalculator
         $charged = [];
         foreach ($shares as $share) {
             $partner = $share->getPartner();
-            $line = self::line($share, $weeks, $schedule, $stops[MonthlyFees::keyOf($partner)] ?? []);
+            $own = MonthlyFees::keyOf($partner);
+            $line = self::line($share, $weeks, $schedule, $stops[$own] ?? [], $workerOf[$own] ?? null);
             if ($line === null) {
                 continue;
             }
@@ -167,13 +181,18 @@ class MonthlyFeeCalculator
      *
      * @param list<\DateTimeImmutable>                          $weeks
      * @param list<array{0: \DateTimeImmutable, 1: ?\DateTimeImmutable}> $stops Periodos sin cobrar [desde, hasta).
+     * @param Worker|null $worker Si la cesta es de alguien que trabaja o trabajó en la asociación.
      */
-    private static function line(PartnerBasketShare $share, array $weeks, FeeSchedule $schedule, array $stops): ?FeeLine
+    private static function line(PartnerBasketShare $share, array $weeks, FeeSchedule $schedule, array $stops, ?Worker $worker = null): ?FeeLine
     {
         $active = array_values(array_filter($weeks, static fn (\DateTimeImmutable $w): bool => self::holds($share, $w) && !self::stopped($stops, $w)));
         if ($active === [] || $weeks === []) {
             return null;
         }
+
+        // Las semanas gratis cuentan como suyas, pero no se cobran.
+        $kinds = array_map(static fn (\DateTimeImmutable $w): ?WorkerBasketWeek => $worker?->basketWeek($w), $active);
+        $charged = array_values(array_filter($active, static fn (\DateTimeImmutable $w, int $i): bool => $kinds[$i] !== WorkerBasketWeek::Free, \ARRAY_FILTER_USE_BOTH));
 
         $missing = [];
         $veg = $egg = $transport = 0;
@@ -181,7 +200,7 @@ class MonthlyFeeCalculator
         $group = $share->getPartner()?->getWeeklyBasketGroup();
         $eggAmount = $share->getEggAmount();
         $eggPeriod = $share->getEggPeriod();
-        foreach ($active as $week) {
+        foreach ($charged as $week) {
             $vegPrice = $basketShare !== null ? $schedule->vegMonthPrice($basketShare, $week) : '0.00';
             if ($vegPrice === null) {
                 $missing[] = FeeConcept::forBasketShare($basketShare);
@@ -211,6 +230,8 @@ class MonthlyFeeCalculator
             \count($active),
             $n,
             array_values(array_unique(array_filter($missing), \SORT_REGULAR)),
+            \count($active) - \count($charged),
+            \count(array_keys($kinds, WorkerBasketWeek::Undecided, true)),
         );
     }
 
@@ -304,6 +325,19 @@ class MonthlyFeeCalculator
              HAVING SUM(s.start_date IS NULL) = 0 AND MIN(s.start_date) BETWEEN :start AND :end',
             ['start' => $start->format('Y-m-d'), 'end' => $end->format('Y-m-d')],
         ));
+    }
+
+    /**
+     * Quienes trabajan o trabajaron en la asociación y tienen ficha de socix, con ella.
+     *
+     * @return list<Worker>
+     */
+    private function workers(): array
+    {
+        return $this->em->createQueryBuilder()
+            ->select('w', 'p')->from(Worker::class, 'w')
+            ->join('w.partner', 'p')
+            ->getQuery()->getResult();
     }
 
     /**

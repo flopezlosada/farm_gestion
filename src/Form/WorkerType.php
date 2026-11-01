@@ -2,11 +2,15 @@
 
 namespace App\Form;
 
+use App\Entity\Partner;
 use App\Entity\Worker;
+use App\Entity\WorkerLeaveBasket;
+use Doctrine\ORM\EntityRepository;
+use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
-use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
+use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
@@ -14,8 +18,9 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 
 /**
  * Form para crear/editar un {@see Worker} (ficha laboral). Datos mínimos: nombre,
- * alta, tipo de jornada, días de vacaciones al año y si sigue activo. El acceso de login se
- * gestiona aparte (vinculación a User), no desde aquí.
+ * alta, tipo de jornada, días de vacaciones al año y baja. También su ficha de socix,
+ * si recibe cesta, y qué pasa con ella tras la baja. El acceso de login se gestiona
+ * aparte (vinculación a User), no desde aquí.
  */
 class WorkerType extends AbstractType
 {
@@ -47,10 +52,34 @@ class WorkerType extends AbstractType
                 'attr' => ['min' => 0],
                 'help' => 'En jornadas laborables (el convenio habitual son 22).',
             ])
-            ->add('active', CheckboxType::class, [
-                'label' => 'Activo',
+            ->add('leaveDate', DateType::class, [
+                'label' => 'Fecha de baja',
+                'widget' => 'single_text',
                 'required' => false,
-                'help' => 'Si se desmarca, conserva su histórico pero no puede fichar.',
+                'help' => 'Último día que trabaja. Desde el día siguiente conserva su histórico pero no puede fichar. Vacío = sigue trabajando.',
+            ])
+            ->add('partner', EntityType::class, [
+                'label' => 'Su ficha de socix',
+                'class' => Partner::class,
+                'query_builder' => static fn (EntityRepository $r) => $r->createQueryBuilder('p')->orderBy('p.name')->addOrderBy('p.surname'),
+                'choice_label' => static fn (Partner $p): string => $p->getLegalName(),
+                'required' => false,
+                'placeholder' => '— no recibe cesta —',
+                'help' => 'Si recibe cesta. Mientras trabaja no se le cobra.',
+            ])
+            ->add('basketAfterLeave', EnumType::class, [
+                'label' => 'Su cesta tras la baja',
+                'class' => WorkerLeaveBasket::class,
+                'choice_label' => static fn (WorkerLeaveBasket $c): string => $c->label(),
+                'required' => false,
+                'placeholder' => '— sin decidir —',
+                'help' => 'Mientras no se decida, su cuota sale como pendiente y no se cobra.',
+            ])
+            ->add('basketGiftUntil', DateType::class, [
+                'label' => 'Se le regala hasta',
+                'widget' => 'single_text',
+                'required' => false,
+                'help' => 'Último día del regalo. Vacío = sin fin.',
             ])
         ;
     }

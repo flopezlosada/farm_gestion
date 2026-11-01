@@ -127,7 +127,7 @@ class WorkerController extends AbstractController
         // propias: los eventos del equipo se pintan encima por día).
         $grid = $yearCalendar->build($year, $madrid, $today, $holidayDates, []);
 
-        $active = $workers->findBy(['active' => true], ['name' => 'ASC']);
+        $active = $workers->findActive();
         $teamWorkers = [];
         $byDay = [];
         foreach (array_values($active) as $index => $worker) {

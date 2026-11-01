@@ -33,12 +33,12 @@ class MonthlyFeeController extends AbstractController
         $filter = \in_array($request->query->get('show'), self::FILTERS, true) ? $request->query->get('show') : 'all';
         $fees = $calculator->forMonth($month);
         $statements = $fees->getStatements();
-        $problems = array_values(array_filter($statements, static fn (FeeStatement $s): bool => !$s->isChargeable()));
+        $problems = array_values(array_filter($statements, static fn (FeeStatement $s): bool => $s->getProblems() !== []));
 
         return $this->render('monthly_fee/index.html.twig', [
             'fees' => $fees,
             'statements' => $filter === 'problems' ? $problems : $statements,
-            'counts' => ['all' => \count($statements), 'problems' => \count($problems)],
+            'counts' => ['all' => \count($statements), 'problems' => \count($problems), 'paying' => \count(array_filter($statements, static fn (FeeStatement $s): bool => !$s->isFree()))],
             'filter' => $filter,
             // La remesa de cuotas de este mes, si ya se preparó: para ir a ella en vez de prepararla otra vez.
             'remittance' => $remittances->findOneBy(['kind' => Remittance::KIND_BASKET, 'period' => $fees->month]),

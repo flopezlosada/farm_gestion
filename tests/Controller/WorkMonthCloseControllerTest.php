@@ -81,7 +81,6 @@ class WorkMonthCloseControllerTest extends WebTestCase
             ->setName($name)
             ->setHireDate(new \DateTimeImmutable('2020-01-01'))
             ->setWorkdayType(Worker::WORKDAY_PART_TIME)
-            ->setActive(true)
             ->setAnnualVacationDays(22);
         $this->em->persist($worker);
         $this->em->flush();
@@ -312,7 +311,7 @@ class WorkMonthCloseControllerTest extends WebTestCase
         $worker = $this->makeWorker('Trabajadora que se fue');
         $this->punch($worker, TimeEntry::TYPE_IN, '09:00');
         $this->punch($worker, TimeEntry::TYPE_OUT, '14:00');
-        $worker->setActive(false);
+        $worker->setLeaveDate(new \DateTimeImmutable('yesterday'));
         $this->em->flush();
 
         $this->approve($worker);

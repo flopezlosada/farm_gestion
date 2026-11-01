@@ -64,7 +64,7 @@
     {% endif %}
 
     <div class="prl-stats">
-        <div class="prl-stat"><div class="v">{{ counts.all }}</div><div class="l">{{ counts.all == 1 ? 'persona paga' : 'personas pagan' }}</div></div>
+        <div class="prl-stat"><div class="v">{{ counts.paying }}</div><div class="l">{{ counts.paying == 1 ? 'persona paga' : 'personas pagan' }}</div></div>
         <div class="prl-stat prl-stat--active"><div class="v">{{ fmt.money(chargeable_cents / 100) }}</div><div class="l">a cobrar por domiciliación ({{ chargeable|length }})</div></div>
         <div class="prl-stat {{ counts.problems > 0 ? 'prl-stat--leave' }}"><div class="v">{{ counts.problems }}</div><div class="l">no se pueden cobrar aún</div></div>
         <div class="prl-stat"><div class="v">{{ fees.weeks|length }}</div><div class="l">semanas de reparto</div></div>
