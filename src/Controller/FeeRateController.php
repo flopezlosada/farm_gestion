@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\FeeConcept;
 use App\Entity\FeeRate;
 use App\Entity\User;
+use App\Entity\WeeklyBasketGroup;
 use App\Form\FeeRateType;
 use App\Repository\FeeRateRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -16,7 +17,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Los precios base de las cuotas: cuánto cuesta al mes cada cesta de verdura y cada
- * docena de huevos, para todo el mundo, y desde cuándo.
+ * docena de huevos, para todo el mundo, y desde cuándo. Aquí se ve también el
+ * transporte de los grupos que lo pagan; se pone en {@see TransportRateController}.
  *
  * Ver, el permiso de lectura de socixs; poner o quitar un precio, el de edición
  * (además del de la ruta: todo POST bajo /gestion/partner lo exige).
@@ -25,7 +27,10 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_GESTION_SOCIXS')]
 class FeeRateController extends AbstractController
 {
-    /** Lo que vale hoy cada concepto, lo que ya está programado y el historial. */
+    /**
+     * Lo que vale hoy cada concepto, lo que ya está programado y el historial; y lo
+     * mismo del transporte de cada grupo de recogida que lo paga.
+     */
     #[Route('', name: 'fee_rate_index', methods: ['GET'])]
     public function index(FeeRateRepository $rates): Response
     {
@@ -44,10 +49,19 @@ class FeeRateController extends AbstractController
         $history = array_merge(...array_map(static fn (FeeConcept $c): array => $schedule->history($c), FeeConcept::cases()));
         usort($history, static fn (FeeRate $a, FeeRate $b): int => [$b->getValidFrom(), $b->getId()] <=> [$a->getValidFrom(), $a->getId()]);
 
+        $transport = array_map(static fn (WeeklyBasketGroup $g): array => [
+            'group' => $g,
+            'current' => $schedule->transportRateOn($g, $today),
+            'next' => $schedule->transportNextAfter($g, $today),
+        ], $schedule->transportGroups());
+        usort($transport, static fn (array $a, array $b): int => [$a['group']->getNode()?->getName(), $a['group']->getName()] <=> [$b['group']->getNode()?->getName(), $b['group']->getName()]);
+
         return $this->render('fee_rate/index.html.twig', [
             'groups' => array_map(static fn (array $concepts): array => array_map($row, $concepts), FeeConcept::grouped()),
             'missing' => $schedule->missingOn($today),
             'history' => $history,
+            'transport' => $transport,
+            'transportHistory' => $schedule->transportHistory(),
             'today' => $today,
         ]);
     }

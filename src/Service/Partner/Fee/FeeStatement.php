@@ -9,7 +9,8 @@ use App\Entity\Partner;
 
 /**
  * Lo que se le cobra a quien paga en un mes: las cestas de su familia (y las que paga
- * de otrxs), más sus ajustes. Es lo que será un recibo de la remesa.
+ * de otrxs), las cuotas de socix que toquen a esos hogares, más sus ajustes. Es lo que
+ * será un recibo de la remesa.
  *
  * Dice también por qué no se le puede cobrar todavía: falta el precio de algo que
  * tiene, no tiene mandato de domiciliación, el total no sale positivo, o su cesta es
@@ -25,6 +26,9 @@ final class FeeStatement
     /** @var list<FeeAdjustment> */
     private array $adjustments = [];
 
+    /** @var list<FeeCharge> */
+    private array $charges = [];
+
     public function __construct(public readonly Partner $payer)
     {
     }
@@ -37,6 +41,24 @@ final class FeeStatement
     public function addAdjustment(FeeAdjustment $adjustment): void
     {
         $this->adjustments[] = $adjustment;
+    }
+
+    /** Una cuota de socix de uno de los hogares cuyas cestas paga. */
+    public function addCharge(FeeCharge $charge): void
+    {
+        $this->charges[] = $charge;
+    }
+
+    /** @return list<FeeCharge> */
+    public function getCharges(): array
+    {
+        return $this->charges;
+    }
+
+    /** Lo que suman las cuotas de socix, en céntimos. */
+    public function getChargesCents(): int
+    {
+        return array_sum(array_map(static fn (FeeCharge $c): int => $c->cents ?? 0, $this->charges));
     }
 
     /** @return list<FeeLine> */
@@ -63,7 +85,7 @@ final class FeeStatement
 
     public function getCents(): int
     {
-        return $this->getBasketsCents() + $this->getAdjustmentsCents();
+        return $this->getBasketsCents() + $this->getChargesCents() + $this->getAdjustmentsCents();
     }
 
     public function getTotal(): string
@@ -73,28 +95,33 @@ final class FeeStatement
 
     /**
      * Si el total necesita explicación: paga más de una cesta, alguna sólo parte del
-     * mes, o tiene ajustes. Con una sola cesta entera el total ES la tarifa.
+     * mes, una cuota de socix o tiene ajustes. Con una sola cesta entera el total ES la
+     * tarifa.
      */
     public function needsBreakdown(): bool
     {
         return count($this->lines) > 1
             || $this->adjustments !== []
+            || $this->charges !== []
             || array_filter($this->lines, static fn (FeeLine $l): bool => $l->isPartial() || $l->freeWeeks > 0) !== [];
     }
 
     /**
      * Si no se le cobra nada porque todas sus cestas son de trabajador, gratis, y no
-     * tiene ajustes que sumen. No es un recibo que falle: es que no hay recibo.
+     * tiene ajustes ni cuotas de socix que sumen. No es un recibo que falle: es que no
+     * hay recibo. Con mantenimiento o inscripción sí hay recibo: esas cuotas son del
+     * hogar, no de la cesta.
      */
     public function isFree(): bool
     {
         return $this->lines !== []
             && array_filter($this->lines, static fn (FeeLine $l): bool => !$l->isFree()) === []
+            && $this->charges === []
             && $this->getAdjustmentsCents() <= 0;
     }
 
     /**
-     * Los conceptos sin precio que tiene alguna de sus cestas.
+     * Los conceptos sin precio que tiene alguna de sus cestas o de sus cuotas de socix.
      *
      * @return list<FeeConcept>
      */
@@ -104,6 +131,11 @@ final class FeeStatement
         foreach ($this->lines as $line) {
             foreach ($line->missing as $concept) {
                 $missing[$concept->value] = $concept;
+            }
+        }
+        foreach ($this->charges as $charge) {
+            if ($charge->isMissing()) {
+                $missing[$charge->concept->value] = $charge->concept;
             }
         }
 

@@ -61,7 +61,7 @@ class WeeklyBasketItem
      * La etiqueta que ve el socio ("media docena") es cosa de la capa de vista,
      * no del almacén.
      *
-     * Doctrine mapea decimal a string en PHP (igual que transport_price).
+     * Doctrine mapea decimal a string en PHP (igual que el precio de FeeRate).
      *
      * @ORM\Column(type="decimal", precision=6, scale=2)
      */

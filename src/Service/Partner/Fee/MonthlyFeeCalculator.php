@@ -28,6 +28,23 @@ use Doctrine\ORM\EntityManagerInterface;
  * bajas de los eventos de baja y vuelta de su ficha. Si una tarifa cambia a mitad de
  * mes, cada semana usa la que valía ese día.
  *
+ * El transporte lo pone el grupo de recogida de quien recoge la cesta (no el de quien
+ * la paga), con el precio que tenga cada semana: {@see FeeSchedule::transportMonthPrice}.
+ * Va por cada cesta: dos cestas, dos transportes. El grupo es el que tiene HOY: la
+ * ficha no guarda en qué grupo estuvo antes, así que recalcular un mes pasado de quien
+ * ha cambiado de grupo da el transporte del grupo nuevo. Lo cobrado de verdad queda en
+ * cada remesa enviada.
+ *
+ * Además, cada hogar paga sus cuotas de socix ({@see FeeCharge}): la de inscripción el
+ * mes en que empieza su primera cesta (la más antigua de las que tiene su familia: quien
+ * vuelve y conserva una cesta antigua no la paga otra vez) y la de mantenimiento en
+ * junio y diciembre, si ese mes tiene alguna cesta que cobrar. Van en el recibo de quien
+ * paga la primera cesta del hogar (por id, para que no dependa del orden de la base).
+ * Las cestas importadas sin fecha de inicio son de hogares de antes: nunca pagan
+ * inscripción. Límite conocido: si el mes de la primera cesta no tiene ningún reparto
+ * que cobrar (empieza tras el último viernes, o en pausa), la inscripción no se cobra
+ * nunca; no se guarda quién la pagó.
+ *
  * La cesta de quien trabaja en la asociación no se cobra las semanas que trabajaba, ni
  * tras su baja si se decidió regalársela ({@see Worker::basketWeek()}).
  *
@@ -71,6 +88,7 @@ class MonthlyFeeCalculator
             $this->adjustments->findApplyingTo($month),
             $this->stopEvents($end),
             $this->pauses->findTouching($month, $end),
+            $this->newHouseholds($month, $end),
             $this->workers(),
         );
     }
@@ -93,9 +111,10 @@ class MonthlyFeeCalculator
      * @param list<FeeAdjustment>       $adjustments
      * @param list<PartnerEvent>        $events      Bajas y vueltas, en orden.
      * @param list<PartnerPause>        $pauses      Pausas que tocan el mes.
+     * @param list<int>                 $newHouseholds Ids de los hogares (quien encabeza la familia) cuya primera cesta empieza este mes.
      * @param list<Worker>              $workers     Trabajadorxs con ficha de socix.
      */
-    public static function compute(\DateTimeImmutable $month, array $weeks, array $shares, FeeSchedule $schedule, array $adjustments, array $events, array $pauses = [], array $workers = []): MonthlyFees
+    public static function compute(\DateTimeImmutable $month, array $weeks, array $shares, FeeSchedule $schedule, array $adjustments, array $events, array $pauses = [], array $newHouseholds = [], array $workers = []): MonthlyFees
     {
         $workerOf = [];
         foreach ($workers as $worker) {
@@ -112,12 +131,26 @@ class MonthlyFeeCalculator
             return $statements[MonthlyFees::keyOf($payer)] ??= new FeeStatement($payer);
         };
 
+        $charged = [];
         foreach ($shares as $share) {
             $partner = $share->getPartner();
-            $key = MonthlyFees::keyOf($partner);
-            $line = self::line($share, $weeks, $schedule, $stops[$key] ?? [], $workerOf[$key] ?? null);
-            if ($line !== null) {
-                $statementFor($share->getEffectivePayer()->getFamilyHead())->addLine($line);
+            $own = MonthlyFees::keyOf($partner);
+            $line = self::line($share, $weeks, $schedule, $stops[$own] ?? [], $workerOf[$own] ?? null);
+            if ($line === null) {
+                continue;
+            }
+            $statement = $statementFor($share->getEffectivePayer()->getFamilyHead());
+            $statement->addLine($line);
+
+            // Las cuotas de socix, una vez por hogar, en el recibo de su primera cesta del mes.
+            $household = $partner->getFamilyHead();
+            $key = MonthlyFees::keyOf($household);
+            if (!isset($charged[$key])) {
+                $charged[$key] = true;
+                foreach (self::membershipConcepts($month, \in_array($household->getId(), $newHouseholds, true)) as $concept) {
+                    $price = $schedule->rateOn($concept, $month)?->getPrice();
+                    $statement->addCharge(new FeeCharge($concept, $household, $price !== null ? IssuedInvoice::toCents($price) : null));
+                }
             }
         }
         foreach ($adjustments as $adjustment) {
@@ -127,6 +160,20 @@ class MonthlyFeeCalculator
         }
 
         return new MonthlyFees($month, $weeks, $statements);
+    }
+
+    /**
+     * Las cuotas de socix que tocan a un hogar con cesta este mes: la de inscripción si
+     * su primera cesta empieza este mes, la de mantenimiento si es junio o diciembre.
+     *
+     * @return list<FeeConcept>
+     */
+    private static function membershipConcepts(\DateTimeImmutable $month, bool $isNew): array
+    {
+        return array_values(array_filter([
+            $isNew ? FeeConcept::MembershipSignup : null,
+            \in_array((int) $month->format('n'), FeeConcept::UPKEEP_MONTHS, true) ? FeeConcept::MembershipUpkeep : null,
+        ]));
     }
 
     /**
@@ -148,8 +195,9 @@ class MonthlyFeeCalculator
         $charged = array_values(array_filter($active, static fn (\DateTimeImmutable $w, int $i): bool => $kinds[$i] !== WorkerBasketWeek::Free, \ARRAY_FILTER_USE_BOTH));
 
         $missing = [];
-        $veg = $egg = 0;
+        $veg = $egg = $transport = 0;
         $basketShare = $share->getBasketShare();
+        $group = $share->getPartner()?->getWeeklyBasketGroup();
         $eggAmount = $share->getEggAmount();
         $eggPeriod = $share->getEggPeriod();
         foreach ($charged as $week) {
@@ -159,6 +207,7 @@ class MonthlyFeeCalculator
             } else {
                 $veg += IssuedInvoice::toCents($vegPrice) * (int) $share->getAmount();
             }
+            $transport += IssuedInvoice::toCents($schedule->transportMonthPrice($group, $basketShare, $week)) * (int) $share->getAmount();
             if ($eggAmount !== null && $eggPeriod !== null) {
                 $dozenPrice = $schedule->eggDozenMonthPrice($eggPeriod, $week);
                 if ($dozenPrice === null) {
@@ -172,7 +221,6 @@ class MonthlyFeeCalculator
         // Cada semana es una parte igual del mes: la suma de las cuotas mensuales de
         // las semanas que la tuvo, entre las semanas del mes. Se redondea una vez.
         $n = \count($weeks);
-        $transport = IssuedInvoice::toCents((string) ($share->getTransportPrice() ?? '0')) * \count($charged);
 
         return new FeeLine(
             $share,
@@ -243,9 +291,10 @@ class MonthlyFeeCalculator
     private function shares(\DateTimeImmutable $start, \DateTimeImmutable $end): array
     {
         return $this->em->createQueryBuilder()
-            ->select('s', 'p', 'head', 'payer', 'payerHead', 'bs', 'ea', 'ep')
+            ->select('s', 'p', 'g', 'head', 'payer', 'payerHead', 'bs', 'ea', 'ep')
             ->from(PartnerBasketShare::class, 's')
             ->join('s.partner', 'p')
+            ->leftJoin('p.weekly_basket_group', 'g')
             ->leftJoin('p.parent', 'head')
             ->leftJoin('s.payer_partner', 'payer')
             ->leftJoin('payer.parent', 'payerHead')
@@ -256,7 +305,26 @@ class MonthlyFeeCalculator
             ->andWhere('s.end_date >= :start OR (s.end_date IS NULL AND s.is_active = true)')
             ->setParameter('start', $start->format('Y-m-d'))
             ->setParameter('end', $end->format('Y-m-d'))
+            ->orderBy('s.id', 'ASC')
             ->getQuery()->getResult();
+    }
+
+    /**
+     * Los hogares cuya primera cesta empieza este mes: la más antigua de todas las de su
+     * familia, en una consulta. Un hogar con alguna cesta sin fecha es de antes de que
+     * se guardaran: nunca es nuevo.
+     *
+     * @return list<int> Ids de quien encabeza cada familia.
+     */
+    private function newHouseholds(\DateTimeImmutable $start, \DateTimeImmutable $end): array
+    {
+        return array_map('intval', $this->em->getConnection()->fetchFirstColumn(
+            'SELECT COALESCE(p.parent_id, p.id) AS household
+               FROM partner_basket_share s JOIN partner p ON p.id = s.partner_id
+              GROUP BY household
+             HAVING SUM(s.start_date IS NULL) = 0 AND MIN(s.start_date) BETWEEN :start AND :end',
+            ['start' => $start->format('Y-m-d'), 'end' => $end->format('Y-m-d')],
+        ));
     }
 
     /**

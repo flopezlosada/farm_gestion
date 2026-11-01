@@ -19,7 +19,7 @@ use Doctrine\Migrations\AbstractMigration;
  * Recordatorio operativo: aplicar también a golden/staging/prod vía phpMyAdmin
  * al desplegar (NUNCA schema:update --force, por el drift de índices).
  */
-final class Version20261101120000 extends AbstractMigration
+final class Version20261101140000 extends AbstractMigration
 {
     public function getDescription(): string
     {
