@@ -132,13 +132,6 @@ class PartnerBasketShare
     private $egg_amount;
 
 
-    /**
-     * Aporte de transporte al mes. Algunos grupos cobran transporte aparte
-     * (importe_transp_eur en el CSV de COBROS). Nullable: la mayoría de
-     * socios no lo paga.
-     * @ORM\Column(name="transport_price", type="decimal", precision=8, scale=2, nullable=true)
-     */
-    private ?string $transport_price = null;
 
     /**
      * Período de recogida de huevos. Es para los que sólo tienen huevos
@@ -239,10 +232,10 @@ class PartnerBasketShare
 
     /**
      * La cesta que continúa a esta cuando cambia: el mismo socix con todo lo que la
-     * define y se cobra —modalidad, cantidad, huevos, turno, transporte y quién la
-     * paga—, sin fechas. Quien cambia algo lo sobrescribe después; lo que no toca
+     * define y se cobra —modalidad, cantidad, huevos, turno y quién la paga—, sin fechas. Quien cambia algo lo sobrescribe después; lo que no toca
      * sigue igual. Copiarlo campo a campo en cada sitio perdía lo que se olvidaba:
-     * cambiar la modalidad dejaba la cesta sin transporte y sin su pagador.
+     * cambiar la modalidad dejaba la cesta sin su pagador. El transporte no va en la
+     * cesta: lo pone su grupo de recogida ({@see TransportRate}).
      *
      * @return self La cesta nueva, sin persistir.
      */
@@ -258,7 +251,6 @@ class PartnerBasketShare
         $next->delivery_group = $this->delivery_group;
         $next->day_month_order = $this->day_month_order;
         $next->egg_day_month_order = $this->egg_day_month_order;
-        $next->transport_price = $this->transport_price;
         $next->payer_partner = $this->payer_partner;
 
         return $next;
@@ -463,18 +455,6 @@ class PartnerBasketShare
     public function setVegetablesBasketAmount(int $vegetables_basket_amount): self
     {
         $this->vegetables_basket_amount = $vegetables_basket_amount;
-
-        return $this;
-    }
-
-    public function getTransportPrice(): ?string
-    {
-        return $this->transport_price;
-    }
-
-    public function setTransportPrice(?string $transport_price): self
-    {
-        $this->transport_price = $transport_price;
 
         return $this;
     }

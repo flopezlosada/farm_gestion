@@ -47,6 +47,21 @@ enum FeeConcept: string
             : ($this->isShared() ? 'Al mes, lo que paga cada hogar.' : 'Al mes, por cesta.');
     }
 
+    /**
+     * Los repartos de un mes normal: cuatro la semanal, dos la quincenal y uno la
+     * mensual, también si es compartida. Es la cuenta con la que se acuerdan los precios
+     * por reparto (el transporte), igual en los meses de cinco viernes: la cuota es
+     * mensual.
+     */
+    public function deliveriesPerMonth(): int
+    {
+        return match ($this) {
+            self::VegWeekly, self::VegWeeklyShared, self::EggWeekly => 4,
+            self::VegBiweekly, self::VegBiweeklyShared, self::EggBiweekly => 2,
+            self::VegMonthly, self::VegMonthlyShared, self::EggMonthly => 1,
+        };
+    }
+
     /** Si es de huevos (si no, de verdura). */
     public function isEgg(): bool
     {

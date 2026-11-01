@@ -6,6 +6,8 @@ use App\Entity\BasketShare;
 use App\Entity\EggPeriod;
 use App\Entity\FeeConcept;
 use App\Entity\FeeRate;
+use App\Entity\TransportRate;
+use App\Entity\WeeklyBasketGroup;
 use App\Service\Partner\Fee\FeeSchedule;
 use PHPUnit\Framework\TestCase;
 
@@ -120,5 +122,42 @@ class FeeScheduleTest extends TestCase
 
         $this->assertSame('55.50', $rate->getPrice());
         $this->assertSame('2026-01-01 00:00:00', $rate->getValidFrom()->format('Y-m-d H:i:s'));
+    }
+
+    /**
+     * El transporte de una cesta al mes: el precio por reparto de su grupo por los
+     * repartos de su modalidad, el que valga ese día; cero sin grupo, sin precio o sin
+     * verdura. Los precios llegan desordenados, como de la base.
+     */
+    public function testElTransporteAlMesEsElPrecioPorRepartoPorLosRepartos(): void
+    {
+        $cascorro = $this->withId(WeeklyBasketGroup::class, 2);
+        $finca = $this->withId(WeeklyBasketGroup::class, 1);
+        $s = new FeeSchedule([], [
+            new TransportRate($cascorro, '6.00', new \DateTimeImmutable('2027-01-01'), null),
+            new TransportRate($cascorro, '5.00', new \DateTimeImmutable('2026-07-01'), null),
+        ]);
+        $share = fn (int $id): BasketShare => $this->withId(BasketShare::class, $id);
+        $oct = new \DateTimeImmutable('2026-10-14');
+
+        $this->assertSame('20.00', $s->transportMonthPrice($cascorro, $share(BasketShare::ID_WEEKLY), $oct));
+        $this->assertSame('20.00', $s->transportMonthPrice($cascorro, $share(BasketShare::ID_WEEKLY_SHARED), $oct), 'La compartida recoge en cada reparto de su modalidad.');
+        $this->assertSame('10.00', $s->transportMonthPrice($cascorro, $share(BasketShare::ID_BIWEEKLY), $oct));
+        $this->assertSame('5.00', $s->transportMonthPrice($cascorro, $share(BasketShare::ID_MONTHLY), $oct));
+        $this->assertSame('6.00', $s->transportMonthPrice($cascorro, $share(BasketShare::ID_MONTHLY), new \DateTimeImmutable('2027-01-01')));
+        $this->assertSame('0.00', $s->transportMonthPrice($cascorro, $share(BasketShare::ID_MONTHLY), new \DateTimeImmutable('2026-06-30')), 'Antes de tener precio no pagaba.');
+        $this->assertSame('0.00', $s->transportMonthPrice($cascorro, $share(BasketShare::ID_ONLY_EGG), $oct), 'Solo huevos no es una cesta.');
+        $this->assertSame('0.00', $s->transportMonthPrice($finca, $share(BasketShare::ID_WEEKLY), $oct), 'Un grupo sin precio no paga.');
+        $this->assertSame('0.00', $s->transportMonthPrice(null, $share(BasketShare::ID_WEEKLY), $oct), 'Sin grupo, tampoco.');
+
+        $this->assertSame([$cascorro], $s->transportGroups());
+        $this->assertSame('6.00', $s->transportNextAfter($cascorro, $oct)?->getPricePerDelivery());
+        $this->assertSame(['6.00', '5.00'], array_map(static fn (TransportRate $r): string => $r->getPricePerDelivery(), $s->transportHistory()));
+    }
+
+    public function testUnTransporteACeroNoExiste(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new TransportRate(new WeeklyBasketGroup(), '0', new \DateTimeImmutable('2026-07-01'), null);
     }
 }

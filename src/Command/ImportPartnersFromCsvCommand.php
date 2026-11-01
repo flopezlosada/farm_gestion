@@ -736,11 +736,6 @@ class ImportPartnersFromCsvCommand extends Command
             }
         }
 
-        $share->setTransportPrice(
-            $row['importe_transp_eur'] !== '' && (float) $row['importe_transp_eur'] > 0
-                ? number_format((float) $row['importe_transp_eur'], 2, '.', '')
-                : null
-        );
         // Si no hay fecha de alta conocida, usamos una fecha lejana del
         // pasado para que el socio aparezca en TODOS los Baskets actuales.
         // Las queries del WeeklyBasketGenerator filtran con

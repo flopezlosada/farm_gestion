@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\FeeConcept;
 use App\Entity\FeeRate;
+use App\Entity\TransportRate;
 use App\Service\Partner\Fee\FeeSchedule;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -18,10 +19,16 @@ class FeeRateRepository extends ServiceEntityRepository
         parent::__construct($registry, FeeRate::class);
     }
 
-    /** Todos los precios en una sola consulta, listos para preguntar por fechas. */
+    /**
+     * Todos los precios, los de las cestas y los del transporte, listos para preguntar
+     * por fechas: dos consultas de pocas filas.
+     */
     public function schedule(): FeeSchedule
     {
-        return new FeeSchedule($this->findAll());
+        /** @var TransportRateRepository $transport */
+        $transport = $this->getEntityManager()->getRepository(TransportRate::class);
+
+        return new FeeSchedule($this->findAll(), $transport->findAllWithGroup());
     }
 
     public function existsFor(FeeConcept $concept, \DateTimeInterface $validFrom): bool

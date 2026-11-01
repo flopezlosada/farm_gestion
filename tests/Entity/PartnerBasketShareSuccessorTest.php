@@ -35,7 +35,6 @@ class PartnerBasketShareSuccessorTest extends TestCase
         $old->setDeliveryGroup(PartnerBasketShare::DELIVERY_GROUP_B);
         $old->setDayMonthOrder(2);
         $old->setEggDayMonthOrder(2);
-        $old->setTransportPrice('10.00');
         $old->setPayerPartner($payer);
         $old->setStartDate(new \DateTime('2026-01-01'));
         $old->setIsActive(true);
@@ -51,7 +50,6 @@ class PartnerBasketShareSuccessorTest extends TestCase
         $this->assertSame('B', $next->getDeliveryGroup());
         $this->assertSame(2, $next->getDayMonthOrder());
         $this->assertSame(2, $next->getEggDayMonthOrder());
-        $this->assertSame('10.00', $next->getTransportPrice(), 'El cambio de modalidad perdía el transporte.');
         $this->assertSame($payer, $next->getPayerPartner(), 'El cambio de modalidad perdía a quien paga la cesta.');
     }
 
@@ -71,7 +69,7 @@ class PartnerBasketShareSuccessorTest extends TestCase
         $this->assertNull($next->getIsActive());
     }
 
-    /** Lo que la cesta vieja no tiene —sin huevos, sin transporte, la paga ella— sigue sin estar. */
+    /** Lo que la cesta vieja no tiene —sin huevos, la paga ella— sigue sin estar. */
     public function testLoVacioSigueVacio(): void
     {
         $old = new PartnerBasketShare();
@@ -83,7 +81,6 @@ class PartnerBasketShareSuccessorTest extends TestCase
 
         $this->assertNull($next->getEggAmount());
         $this->assertNull($next->getEggPeriod());
-        $this->assertNull($next->getTransportPrice());
         $this->assertNull($next->getPayerPartner());
         $this->assertNull($next->getDeliveryGroup());
     }
