@@ -1,0 +1,50 @@
+{# ============================================================
+ # El desglose de una cuota calculada (FeeStatement), igual en la ficha
+ # y en «Cuotas del mes»: qué cesta cuesta qué (y de quién es, si paga la
+ # de otra persona) y cada ajuste con su motivo y A DÓNDE VA lo de más.
+ #
+ #   {% import 'partner/_fee_breakdown.html.twig' as bd %}
+ #   {{ bd.styles() }}  una vez, dentro de <style>
+ #   {{ bd.lines(statement) }}  {{ bd.adjustments(statement) }}
+ # ============================================================ #}
+
+{% macro styles() %}
+    .fee-bd { margin: 0; padding: 0; list-style: none; font-size: 12.5px; line-height: 1.45; }
+    .fee-bd li + li { margin-top: 2px; }
+    .fee-bd__part { color: var(--prl-ochre-d, #8a6a1f); font-size: 11.5px; }
+    .fee-bd__soft { color: var(--csa-ink-soft, #6b6b6b); }
+    .fee-bd__to { color: var(--csa-ink-soft, #6b6b6b); font-size: 11.5px; white-space: nowrap; }
+{% endmacro %}
+
+{# Cada cesta: modalidad, importe, de quién es y, si la tuvo parte del mes, cuántas semanas. #}
+{% macro lines(statement) %}
+    {% import 'accounting/_money.html.twig' as fmt %}
+    <ul class="fee-bd">
+        {% for l in statement.lines %}
+            {% set parts = [
+                l.vegCents ? 'verdura ' ~ (l.vegCents / 100)|number_format(2, ',', '.') : null,
+                l.eggCents ? 'huevos ' ~ (l.eggCents / 100)|number_format(2, ',', '.') : null,
+                l.transportCents ? 'transporte ' ~ (l.transportCents / 100)|number_format(2, ',', '.') : null,
+            ]|filter(p => p) %}
+            <li>
+                {{ l.label }} · <b>{{ fmt.money(l.total) }}</b>
+                {% if l.share.partner != statement.payer %}<span class="fee-bd__soft">(de {{ l.share.partner.legalName }})</span>{% endif %}
+                {% if l.partial %}<span class="fee-bd__part">{{ l.weeks }} de {{ l.monthWeeks }} semanas</span>{% endif %}
+                {% if parts|length > 1 %}<span class="fee-bd__soft">— {{ parts|join(' + ') }}</span>{% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+{% endmacro %}
+
+{# Cada ajuste: importe con signo, motivo y, si paga de más, a qué iniciativa va o que es para la asociación. #}
+{% macro adjustments(statement) %}
+    {% import 'accounting/_money.html.twig' as fmt %}
+    <ul class="fee-bd">
+        {% for a in statement.adjustments %}
+            <li>
+                {{ fmt.money(a.amount, true) }} {{ a.reason }}
+                {% if a.increase %}<span class="fee-bd__to">→ {{ a.initiative ? a.initiative.name : 'para la asociación' }}</span>{% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+{% endmacro %}

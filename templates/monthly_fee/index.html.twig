@@ -10,6 +10,7 @@
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 {% import 'accounting/_money.html.twig' as fmt %}
+{% import 'partner/_fee_breakdown.html.twig' as bd %}
 
 {% set month = fees.month %}
 {% set prev = month|date_modify('-1 month') %}
@@ -35,10 +36,7 @@
     <style>
         .mf-month { display: inline-flex; align-items: center; gap: 8px; }
         .mf-month b { font-size: 15px; min-width: 150px; text-align: center; text-transform: capitalize; }
-        .mf-lines { margin: 0; padding: 0; list-style: none; font-size: 12.5px; line-height: 1.45; }
-        .mf-lines li + li { margin-top: 2px; }
-        .mf-part { color: var(--prl-ochre-d); font-size: 11.5px; }
-        .mf-who { color: var(--csa-ink-soft, #6b6b6b); }
+        {{ bd.styles() }}
         .mf-total { font-family: var(--csa-serif); font-variation-settings: "opsz" 30; font-weight: 500; font-size: 17px;
                     letter-spacing: -0.02em; font-variant-numeric: lining-nums tabular-nums; }
         .mf-problems { margin: 4px 0 0; padding-left: 16px; color: var(--prl-terra-d); font-size: 12px; }
@@ -110,7 +108,7 @@
                     <tr>
                         <th>Quién paga</th>
                         <th>Cestas</th>
-                        <th class="tight acc-num">Ajustes</th>
+                        <th>Ajustes</th>
                         <th class="tight acc-num">Total</th>
                     </tr>
                 </thead>
@@ -136,21 +134,11 @@
                                 {% if s.lines is empty %}
                                     <span class="acc-muted">—</span>
                                 {% else %}
-                                    <ul class="mf-lines">
-                                        {% for l in s.lines %}
-                                            <li>
-                                                {{ l.label }} · <b>{{ fmt.money(l.total) }}</b>
-                                                {% if l.share.partner != payer %}<span class="mf-who">({{ l.share.partner.legalName }})</span>{% endif %}
-                                                {% if l.partial %}<span class="mf-part">{{ l.weeks }} de {{ l.monthWeeks }} semanas</span>{% endif %}
-                                            </li>
-                                        {% endfor %}
-                                    </ul>
+                                    {{ bd.lines(s) }}
                                 {% endif %}
                             </td>
-                            <td class="acc-num mf-adj" data-label="Ajustes">
-                                {% if s.adjustments is empty %}—{% else %}
-                                    <span title="{{ s.adjustments|map(a => a.reason ~ (a.initiative ? ' → ' ~ a.initiative.name : ''))|join(' · ') }}">{{ fmt.money(s.adjustmentsCents / 100, true) }}</span>
-                                {% endif %}
+                            <td class="mf-adj" data-label="Ajustes">
+                                {% if s.adjustments is empty %}<span class="acc-muted">—</span>{% else %}{{ bd.adjustments(s) }}{% endif %}
                             </td>
                             <td class="acc-num" data-label="Total"><span class="mf-total">{{ fmt.money(s.total) }}</span></td>
                         </tr>

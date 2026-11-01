@@ -69,6 +69,17 @@ final class FeeStatement
     }
 
     /**
+     * Si el total necesita explicación: paga más de una cesta, alguna sólo parte del
+     * mes, o tiene ajustes. Con una sola cesta entera el total ES la tarifa.
+     */
+    public function needsBreakdown(): bool
+    {
+        return count($this->lines) > 1
+            || $this->adjustments !== []
+            || array_filter($this->lines, static fn (FeeLine $l): bool => $l->isPartial()) !== [];
+    }
+
+    /**
      * Los conceptos sin precio que tiene alguna de sus cestas.
      *
      * @return list<FeeConcept>

@@ -6,6 +6,7 @@
  # Recibe: partner, fee_adjustments (todos los suyos), this_month (día 1).
  # ============================================================ #}
 {% import 'accounting/_money.html.twig' as fmt %}
+{% import 'partner/_fee_breakdown.html.twig' as bd %}
 
 {% set can_edit_fee = is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
 {% set current = fee_adjustments|filter(a => a.appliesTo(this_month)) %}
@@ -20,7 +21,7 @@
             <span class="fee-adj__amount {{ a.increase ? 'is-up' : 'is-down' }}">{{ fmt.money(a.amount, true) }}</span>
             <span class="fee-adj__what">
                 {{ a.reason }}
-                {% if a.initiative %}<a class="prl-chip prl-chip--ok" href="{{ path('donation_initiative_show', { id: a.initiative.id }) }}"><span class="dot"></span>{{ a.initiative.name }}</a>{% endif %}
+                {% if a.initiative %}<a class="prl-chip prl-chip--ok" href="{{ path('donation_initiative_show', { id: a.initiative.id }) }}"><span class="dot"></span>{{ a.initiative.name }}</a>{% elseif a.increase %}<span class="prl-chip"><span class="dot"></span>para la asociación</span>{% endif %}
             </span>
         </div>
         <div class="fee-adj__when">
@@ -71,6 +72,8 @@
     .fee-month__total { font-family: var(--csa-serif); font-variation-settings: "opsz" 30; font-weight: 500; font-size: 24px;
                         letter-spacing: -0.02em; font-variant-numeric: lining-nums tabular-nums; }
     .fee-month__detail { font-size: 12px; color: var(--csa-ink-soft, #6b6b6b); }
+    .fee-month__breakdown { flex-basis: 100%; margin-top: 6px; }
+    {{ bd.styles() }}
     .fee-month__problem { flex-basis: 100%; font-size: 12px; color: var(--prl-terra-d, #a34a2a); }
     .fee-sub { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--csa-ink-faint, #999); margin: 16px 0 8px; }
     .fee-past summary { cursor: pointer; font-size: 12px; color: var(--csa-ink-soft, #6b6b6b); margin-top: 14px; }
@@ -92,9 +95,13 @@
                     <span class="fee-month__label">{{ this_month|format_date(pattern: 'MMMM', locale: 'es')|capitalize }}</span>
                     <span class="fee-month__total">{{ fmt.money(fee_statement.total) }}</span>
                     <span class="fee-month__detail">
-                        {% if fee_statement.adjustments is empty %}la tarifa de sus cestas{% else %}{{ fmt.money(fee_statement.basketsCents / 100) }} de cestas {{ fee_statement.adjustmentsCents >= 0 ? '+' : '−' }} {{ fmt.money((fee_statement.adjustmentsCents|abs) / 100) }} de ajustes{% endif %}
+                        {% if not fee_statement.needsBreakdown %}la tarifa de su cesta{% elseif fee_statement.adjustments is empty %}la tarifa de sus cestas{% else %}{{ fmt.money(fee_statement.basketsCents / 100) }} de cestas {{ fee_statement.adjustmentsCents >= 0 ? '+' : '−' }} {{ fmt.money((fee_statement.adjustmentsCents|abs) / 100) }} de ajustes{% endif %}
                         · <a href="{{ path('monthly_fee_index') }}">ver el mes</a>
                     </span>
+                    {# Los ajustes no se repiten aquí: van listados justo debajo, con a dónde va cada uno. #}
+                    {% if fee_statement.needsBreakdown and fee_statement.lines is not empty %}
+                        <div class="fee-month__breakdown">{{ bd.lines(fee_statement) }}</div>
+                    {% endif %}
                     {% for p in fee_statement.problems %}<span class="fee-month__problem">{{ p }}</span>{% endfor %}
                 {% else %}
                     <span class="fee-month__detail">Su cesta la paga <a href="{{ path('partner_show', { id: fee_statement.payer.id }) }}#cuota">{{ fee_statement.payer.legalName }}</a>: va en su recibo.</span>

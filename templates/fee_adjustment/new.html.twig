@@ -50,7 +50,7 @@
                     <div class="csa-form-grid">
                         {{ csa.field(form.direction, 'Paga', { full: true, attr: { class: 'fa-direction' } }) }}
                         {{ csa.field(form.amount, 'Euros al mes', { hint: 'sin signo' }) }}
-                        {{ csa.field(form.initiative, 'A qué va', { hint: 'si no va a ninguna iniciativa, es para la asociación', show_when: 'direction=more' }) }}
+                        {{ csa.field(form.initiative, 'A qué va', { show_when: 'direction=more' }) }}
                         {{ csa.field(form.reason, 'Motivo', { full: true, hint: 'por ejemplo, «amplía su cuota» o «se le cobró dos veces en septiembre»' }) }}
                     </div>
                 {% endblock %}

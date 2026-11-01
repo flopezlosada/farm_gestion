@@ -28,16 +28,19 @@ class FeeAdjustmentController extends AbstractController
 {
     /**
      * Poner un ajuste. Empieza por defecto el mes que viene, que es cuando suele
-     * entrar un cambio de cuota; desde una iniciativa llega ya elegida.
+     * entrar un cambio de cuota. Lo de más va por defecto a la iniciativa: la que
+     * viene en la URL (desde su ficha) o, si sólo hay una abierta, esa, porque todas
+     * las sobrecuotas van al mismo convenio. Quien no quiera, elige «para la asociación».
      */
     #[Route('/{id}/fee-adjustments/new', name: 'fee_adjustment_new', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     public function new(Request $request, Partner $partner, EntityManagerInterface $em): Response
     {
         $initiativeId = QueryId::from($request->query, 'initiative');
         $initiative = $initiativeId !== null ? $em->find(DonationInitiative::class, $initiativeId) : null;
+        $open = $em->getRepository(DonationInitiative::class)->findBy(['open' => true], null, 2);
         $form = $this->createForm(FeeAdjustmentType::class, [
             'direction' => $initiative !== null ? FeeAdjustmentType::MORE : null,
-            'initiative' => $initiative?->isOpen() ? $initiative : null,
+            'initiative' => $initiative?->isOpen() ? $initiative : (count($open) === 1 ? $open[0] : null),
             'fromMonth' => FeeAdjustment::month(new \DateTimeImmutable('first day of next month')),
         ]);
         $form->handleRequest($request);

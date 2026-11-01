@@ -166,6 +166,54 @@ class FeeAdjustmentControllerTest extends AbstractAuthenticatedTest
         $this->assertNull($this->em()->find(FeeAdjustment::class, $id));
     }
 
+    /** Lo de más va al convenio: si sólo hay una iniciativa abierta, el formulario ya la trae elegida. */
+    public function testLoDeMasVaPorDefectoALaUnicaIniciativaAbierta(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $partner = $this->partner();
+        $initiative = $this->initiative();
+        $this->assertCount(1, $this->em()->getRepository(DonationInitiative::class)->findBy(['open' => true]), 'db_test no debería traer iniciativas abiertas de serie.');
+
+        $crawler = $client->request('GET', sprintf('/gestion/partner/%d/fee-adjustments/new', $partner->getId()));
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSame((string) $initiative->getId(), $crawler->filter('select[name="fee_adjustment[initiative]"] option[selected]')->attr('value'));
+    }
+
+    /** Con varias abiertas no se adivina: se elige a mano. */
+    public function testConVariasIniciativasAbiertasNoSeEligeNinguna(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $partner = $this->partner();
+        $this->initiative('TEST Cestas RSP');
+        $this->initiative('TEST Huerta escolar');
+
+        $crawler = $client->request('GET', sprintf('/gestion/partner/%d/fee-adjustments/new', $partner->getId()));
+
+        $this->assertResponseIsSuccessful();
+        $this->assertCount(0, $crawler->filter('select[name="fee_adjustment[initiative]"] option[selected]'));
+    }
+
+    /** Lo de más que no va a ninguna iniciativa lo dice: es para la asociación. Una reducción no va a ningún sitio. */
+    public function testLaFichaDiceADondeVaLoDeMas(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $partner = $this->partner();
+        $thisMonth = new \DateTimeImmutable('first day of this month');
+        $this->em()->persist(new FeeAdjustment($partner, '12', 'TEST amplía su cuota', $thisMonth));
+        $this->em()->persist(new FeeAdjustment($partner, '-5', 'TEST no llega', $thisMonth));
+        $this->em()->flush();
+
+        $crawler = $client->request('GET', sprintf('/gestion/partner/%d', $partner->getId()));
+
+        $this->assertResponseIsSuccessful();
+        $rows = $crawler->filter('#cuota .fee-adj');
+        $more = $rows->reduce(static fn ($r): bool => str_contains($r->text(), 'TEST amplía su cuota'));
+        $less = $rows->reduce(static fn ($r): bool => str_contains($r->text(), 'TEST no llega'));
+        $this->assertStringContainsString('para la asociación', $more->text());
+        $this->assertStringNotContainsString('para la asociación', $less->text());
+    }
+
     public function testCrearUnaIniciativa(): void
     {
         $client = $this->createAuthenticatedClient();
