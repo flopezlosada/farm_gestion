@@ -88,7 +88,7 @@ class ScheduleAutofillTest extends TestCase
     public function testDiaLimpioSinFicharRellenaLosCuatroBordes(): void
     {
         $schedule = $this->schedule([['09:00', '14:00'], ['15:30', '18:00']]);
-        $created = $this->autofill($schedule)->fill($this->worker(), $this->monday(), new User());
+        $created = $this->autofill($schedule)->fill($this->worker(), $this->monday(), new User(), TimeEntry::SOURCE_SELF);
 
         $this->assertCount(4, $created);
         $this->assertSame(['09:00', '14:00', '15:30', '18:00'], array_map(
@@ -106,7 +106,7 @@ class ScheduleAutofillTest extends TestCase
         $schedule = $this->schedule([['09:00', '14:00']]);
         $already = $this->entry(TimeEntry::TYPE_IN, '2026-06-22 09:00:00');
 
-        $created = $this->autofill($schedule, [$already])->fill($this->worker(), $this->monday(), new User());
+        $created = $this->autofill($schedule, [$already])->fill($this->worker(), $this->monday(), new User(), TimeEntry::SOURCE_SELF);
 
         // La entrada ya estaba fichada: solo se añade la salida.
         $this->assertCount(1, $created);
@@ -120,7 +120,7 @@ class ScheduleAutofillTest extends TestCase
 
         // La salida de las 14:00 no encaja (p. ej. ya hay algo raro fichado a mano);
         // el resto de bordes se rellenan igual.
-        $created = $this->autofill($schedule, [], rejectedTimes: ['14:00'])->fill($this->worker(), $this->monday(), new User());
+        $created = $this->autofill($schedule, [], rejectedTimes: ['14:00'])->fill($this->worker(), $this->monday(), new User(), TimeEntry::SOURCE_SELF);
 
         $this->assertCount(3, $created);
         $this->assertSame(['09:00', '15:30', '18:00'], array_map(
@@ -131,7 +131,7 @@ class ScheduleAutofillTest extends TestCase
 
     public function testSinHorarioAplicableNoRellenaNada(): void
     {
-        $created = $this->autofill(null)->fill($this->worker(), $this->monday(), new User());
+        $created = $this->autofill(null)->fill($this->worker(), $this->monday(), new User(), TimeEntry::SOURCE_SELF);
 
         $this->assertSame([], $created);
     }
@@ -163,6 +163,21 @@ class ScheduleAutofillTest extends TestCase
         $autofill = $this->autofill($schedule, monthClosed: true);
 
         $this->assertFalse($autofill->isAvailableFor($this->worker(), $this->monday()));
-        $this->assertSame([], $autofill->fill($this->worker(), $this->monday(), new User()));
+        $this->assertSame([], $autofill->fill($this->worker(), $this->monday(), new User(), TimeEntry::SOURCE_SELF));
+    }
+
+    public function testElOrigenQueSeIndicaQuedaEnCadaFichaje(): void
+    {
+        $schedule = $this->schedule([['09:00', '14:00']]);
+        $supervisor = new User();
+
+        $created = $this->autofill($schedule)->fill($this->worker(), $this->monday(), $supervisor, TimeEntry::SOURCE_SUPERVISOR);
+
+        // Lo rellena el supervisor: la traza tiene que decirlo, no «fichado por ella».
+        $this->assertCount(2, $created);
+        foreach ($created as $entry) {
+            $this->assertSame(TimeEntry::SOURCE_SUPERVISOR, $entry->getSource());
+            $this->assertSame($supervisor, $entry->getAuthor());
+        }
     }
 }

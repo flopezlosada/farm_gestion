@@ -59,6 +59,20 @@
         </div>
     </div>
 
+    {# Día trabajado y sin fichar: el supervisor puede poner su horario habitual
+     # (queda en la traza como apuntado por él). Un día que NO se trabajó no se
+     # rellena: se explica con una ausencia, debajo. #}
+    {% if can_autofill and not absence_type and is_granted('ROLE_GESTION_LABORAL_EDIT') %}
+        <form method="post" action="{{ path('staff_day_autofill', { id: worker.id, date: ymd }) }}" class="csa-row" style="max-width:560px; margin-bottom: 1rem; align-items: center; gap: .8rem;">
+            <input type="hidden" name="_token" value="{{ csrf_token('staff_entry' ~ worker.id) }}">
+            <input type="hidden" name="back" value="{{ back }}">
+            <span style="color:#6b7280;">¿Trabajó su horario y no fichó?</span>
+            <button type="submit" class="csa-btn csa-btn--secondary">
+                <i class="fa fa-magic"></i> Rellenar con su horario habitual
+            </button>
+        </form>
+    {% endif %}
+
     {# Un día que no se trabajó no se rellena con el horario: se explica con una
      # ausencia (permiso, huelga…), que es lo que deja aprobar el mes. #}
     {% if absence_type %}
@@ -68,7 +82,7 @@
     {% elseif segments is empty and not closed and is_granted('ROLE_GESTION_LABORAL_EDIT') %}
         <div class="csa-row" style="max-width:560px; margin-bottom: 1rem; align-items: center; gap: .8rem;">
             <span style="color:#6b7280;">¿No vino a trabajar (un permiso, una huelga…)?</span>
-            {{ csa.btn('Registrar la ausencia', { variant: 'secondary', icon: 'fa-calendar-times-o', href: path('staff_absence_new', { id: worker.id, date: ymd, back: 'day' }) }) }}
+            {{ csa.btn('Registrar la ausencia', { variant: 'secondary', icon: 'fa-calendar-times-o', href: path('staff_absence_new', { id: worker.id, date: ymd, back: back }) }) }}
         </div>
     {% endif %}
 

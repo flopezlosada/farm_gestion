@@ -264,7 +264,7 @@ class WorkController extends AbstractController
             throw $this->createNotFoundException('Fecha no válida.');
         }
 
-        $created = $autofill->fill($this->worker(), $dayStart, $this->getUser());
+        $created = $autofill->fill($this->worker(), $dayStart, $this->getUser(), TimeEntry::SOURCE_SELF);
         $this->addFlash($created !== [] ? 'success' : 'notice', $created !== []
             ? sprintf('Se han añadido %d fichaje(s) con tu horario habitual.', count($created))
             : 'No había nada que rellenar: revisa que la hora encaje con lo ya fichado.');

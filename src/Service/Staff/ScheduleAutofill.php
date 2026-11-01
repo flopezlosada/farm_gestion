@@ -13,8 +13,9 @@ use Symfony\Component\Clock\ClockInterface;
 
 /**
  * Rellena con el horario habitual los fichajes que le falten a un trabajador un
- * día concreto (el botón "rellenar con mi horario" del panel del trabajador,
- * pensado para cuando se le pasó la hora de entrar o salir y no fichó). No
+ * día concreto. Lo usan el propio trabajador desde su panel (se le pasó la hora
+ * de entrar o salir y no fichó) y el supervisor desde la vista de día, para un
+ * día que sabe que se trabajó con el horario habitual. No
  * inventa datos por su cuenta: se apoya en {@see WorkScheduleRepository} para
  * saber qué tramos tocan ese día y en {@see TimeEntryCorrector} para insertarlos,
  * heredando gratis la validación de {@see PunchSequenceGuard} — una hora que no
@@ -76,10 +77,13 @@ class ScheduleAutofill
      *
      * @param Worker             $worker Trabajador.
      * @param \DateTimeImmutable $day    Día a rellenar (medianoche, hora de Madrid).
-     * @param User               $author Login que dispara el relleno (el propio trabajador).
+     * @param User               $author Login que dispara el relleno.
+     * @param string             $source Quién lo apunta ({@see TimeEntry::SOURCE_SELF} o
+     *                                   {@see TimeEntry::SOURCE_SUPERVISOR}): queda en la
+     *                                   traza de cada fichaje creado.
      * @return TimeEntry[] Los fichajes creados (vacío si no había nada que añadir o nada encajaba).
      */
-    public function fill(Worker $worker, \DateTimeImmutable $day, User $author): array
+    public function fill(Worker $worker, \DateTimeImmutable $day, User $author, string $source): array
     {
         // Mes aprobado: nada que rellenar (el corrector lo rechazaría entero).
         if ($this->closedMonths->isClosed($worker, $day)) {
@@ -110,7 +114,7 @@ class ScheduleAutofill
                     $type,
                     $day->setTime((int) substr($time, 0, 2), (int) substr($time, 3, 2)),
                     $author,
-                    TimeEntry::SOURCE_SELF,
+                    $source,
                     'Horario habitual',
                 );
             } catch (PunchSequenceException) {

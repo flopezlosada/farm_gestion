@@ -52,7 +52,7 @@
     {{ csa.page_header(
         'Personal · Cierre de mes',
         month.label|capitalize,
-        'Revisa el mes de cada trabajador y apruébalo. Para aprobarlo, cada día que le tocaba tiene que estar fichado o justificado con una ausencia (permiso, huelga…): pulsa el día sin fichar para registrarla. Un mes aprobado ya no se puede cambiar; si hay que corregir algo, se reabre.'
+        'Revisa el mes de cada trabajador y apruébalo. Para aprobarlo, cada día que le tocaba tiene que estar fichado o justificado con una ausencia (permiso, huelga…): pulsa el día sin fichar para rellenarlo con su horario, si lo trabajó, o registrar la ausencia. Un mes aprobado ya no se puede cambiar; si hay que corregir algo, se reabre.'
     ) }}
 
     <div class="prl-stats">
@@ -139,7 +139,7 @@
                                                     {% for g in gaps %}
                                                         {% set label = g.date|format_date(pattern='EEE d', locale='es', timezone='Europe/Madrid') %}
                                                         {% if is_granted('ROLE_GESTION_LABORAL_EDIT') %}
-                                                            <a class="mc-gap" href="{{ path('staff_absence_new', { id: w.id, date: g.date|date('Y-m-d', 'Europe/Madrid'), back: 'close' }) }}" title="Registrar una ausencia (permiso, huelga…) para este día">{{ label }}</a>
+                                                            <a class="mc-gap" href="{{ path('staff_day', { id: w.id, date: g.date|date('Y-m-d', 'Europe/Madrid'), back: 'close' }) }}" title="Abrir el día: rellenarlo con su horario o registrar una ausencia">{{ label }}</a>
                                                         {% else %}
                                                             <span class="mc-gap">{{ label }}</span>
                                                         {% endif %}
