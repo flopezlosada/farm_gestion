@@ -659,7 +659,8 @@ class RemittanceController extends AbstractController
         $line->setPartner($partner)
             ->setDebtorName(mb_strtoupper($partner->getLegalName()))
             ->setIban($partner->getIban())
-            ->setAmount($fee?->getTotal() ?? '0');
+            // Sin algún precio la cuota sale corta: mejor que lo teclee quien revisa.
+            ->setAmount($fee !== null && $fee->describeMissing() === null ? $fee->getTotal() : '0');
     }
 
     /**

@@ -136,7 +136,7 @@
                 </p>
                 <p style="margin: 0 0 10px; font-size: 13px;">
                     Hoy hay <b>{{ baskets|number_format(2, ',', '.') }}</b> cestas completas equivalentes
-                    activas, que comprometen <b>{{ committedMonthlyFees|number_format(2, ',', '.') }} €</b> al mes.
+                    activas. Su cuota calculada de este mes (cesta, huevos y transporte, sin ajustes) suma <b>{{ committedMonthlyFees|number_format(2, ',', '.') }} €</b>.
                 </p>
                 {% if basketCost.pricePerBasketNeeded %}
                     <p style="margin: 0; font-size: 15px;">
