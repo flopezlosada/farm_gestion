@@ -316,6 +316,32 @@ class WorkMonthCloseControllerTest extends WebTestCase
         $this->assertNotNull($this->standingClose($worker));
     }
 
+    /**
+     * Quien ya trabajaba cuando se empezó a fichar en la app: los días entre su
+     * alta y el inicio del registro no son huecos, y el mes se aprueba con lo que
+     * hay desde ese día.
+     */
+    public function testLosDiasAntesDeIniciarElRegistroNoImpidenAprobar(): void
+    {
+        $worker = $this->makeWorker('Trabajadora que empezó a fichar a mitad de mes');
+        $worker->setRecordingStartDate(new \DateTimeImmutable($this->month->key() . '-15'));
+        // Del 15 al final, justificado; del 1 al 14, nada de nada.
+        $this->em->persist((new Absence())
+            ->setWorker($worker)
+            ->setType(Absence::TYPE_PERMIT)
+            ->setStartDate(new \DateTimeImmutable($this->month->key() . '-15'))
+            ->setEndDate($this->month->end()->modify('-1 day'))
+            ->setStatus(Absence::STATUS_APPROVED));
+        $this->em->flush();
+
+        $crawler = $this->client->request('GET', $this->closeUrl());
+        $this->assertResponseIsSuccessful();
+        $this->assertCount(0, $crawler->filter('a.mc-gap'), 'Antes del inicio del registro no hay huecos.');
+
+        $this->approve($worker);
+        $this->assertNotNull($this->standingClose($worker));
+    }
+
     public function testElMesEnCursoNoSeAprueba(): void
     {
         $worker = $this->makeWorker();

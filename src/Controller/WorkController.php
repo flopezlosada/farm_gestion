@@ -156,7 +156,7 @@ class WorkController extends AbstractController
 
         return $this->render('work/calendar.html.twig', [
             'worker' => $worker,
-            'weeks' => $gridBuilder->build($year, $month, $madrid, $totals, $covered, $today, $worker->getHireDate(), $holidayDates, $schedules->workingWeekFor($worker)),
+            'weeks' => $gridBuilder->build($year, $month, $madrid, $totals, $covered, $today, $worker->getRecordFloor(), $holidayDates, $schedules->workingWeekFor($worker)),
             'month_label' => $monthStart,
             'prev' => $monthStart->modify('-1 month'),
             'next' => $monthStart->modify('+1 month'),

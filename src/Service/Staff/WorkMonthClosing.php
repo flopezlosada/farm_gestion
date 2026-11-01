@@ -43,8 +43,7 @@ class WorkMonthClosing
         $rows = [];
 
         foreach ($this->workers->findBy([], ['name' => 'ASC']) as $worker) {
-            $hire = $worker->getHireDate();
-            if ($hire === null || $hire->format('Y-m-d') >= $month->end()->format('Y-m-d')) {
+            if (!$this->hasRecordIn($worker, $month)) {
                 continue;
             }
 
@@ -101,9 +100,8 @@ class WorkMonthClosing
             throw new \DomainException(sprintf('%s aún no ha terminado: se aprueba a partir del día 1 del mes siguiente.', ucfirst($month->label())));
         }
 
-        $hire = $worker->getHireDate();
-        if ($hire === null || $hire->format('Y-m-d') >= $month->end()->format('Y-m-d')) {
-            throw new \DomainException(sprintf('%s no trabajaba aún en %s.', $worker->getName(), $month->label()));
+        if (!$this->hasRecordIn($worker, $month)) {
+            throw new \DomainException(sprintf('%s aún no tenía registro de jornada en %s.', $worker->getName(), $month->label()));
         }
 
         $sheet = $this->report->forMonth($worker, $month->year, $month->month, new \DateTimeZone('Europe/Madrid'), $now);
@@ -156,5 +154,21 @@ class WorkMonthClosing
     {
         $close->reopen($by, $now);
         $this->em->flush();
+    }
+
+    /**
+     * ¿Tiene ese mes algún día con registro exigible? No, si el suelo del
+     * registro (alta o inicio del registro en la app) cae después del mes, o si
+     * la ficha no tiene alta.
+     *
+     * @param Worker    $worker Trabajador.
+     * @param WorkMonth $month  Mes.
+     * @return bool
+     */
+    private function hasRecordIn(Worker $worker, WorkMonth $month): bool
+    {
+        $floor = $worker->getRecordFloor();
+
+        return $floor !== null && $floor->format('Y-m-d') < $month->end()->format('Y-m-d');
     }
 }

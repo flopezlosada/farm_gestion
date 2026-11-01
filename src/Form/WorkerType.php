@@ -28,7 +28,13 @@ class WorkerType extends AbstractType
             ->add('hireDate', DateType::class, [
                 'label' => 'Fecha de alta',
                 'widget' => 'single_text',
-                'help' => 'Desde cuándo trabaja. Marca el inicio de su registro de jornada.',
+                'help' => 'Desde cuándo trabaja, según el contrato.',
+            ])
+            ->add('recordingStartDate', DateType::class, [
+                'label' => 'Registro en la app desde',
+                'widget' => 'single_text',
+                'required' => false,
+                'help' => 'Sólo si ya trabajaba cuando se empezó a fichar aquí. Los días anteriores no cuentan como «sin fichar». Vacío = desde el alta.',
             ])
             ->add('workdayType', ChoiceType::class, [
                 'label' => 'Tipo de jornada',

@@ -53,7 +53,7 @@ class GapReport
 
             $covered = $this->absences->coveredDaysForWorkerBetween($worker, $from, $today);
 
-            $gaps = $this->gapFinder->gapsFor($from, $today, $worker->getHireDate(), $worked, $covered, $holidayDates, $this->schedules->workingWeekFor($worker));
+            $gaps = $this->gapFinder->gapsFor($from, $today, $worker->getRecordFloor(), $worked, $covered, $holidayDates, $this->schedules->workingWeekFor($worker));
             if ($gaps !== []) {
                 $rows[] = ['worker' => $worker, 'gaps' => $gaps];
             }

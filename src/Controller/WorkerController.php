@@ -870,7 +870,7 @@ class WorkerController extends AbstractController
         $covered = $absences->coveredDaysForWorkerBetween($worker, $monthStart, $monthEnd);
 
         $holidayDates = $holidays->findNamesBetween($monthStart, $monthEnd->modify('-1 day'));
-        $weeks = $gridBuilder->build($year, $month, $madrid, $totals, $covered, $today, $worker->getHireDate(), $holidayDates, $schedules->workingWeekFor($worker));
+        $weeks = $gridBuilder->build($year, $month, $madrid, $totals, $covered, $today, $worker->getRecordFloor(), $holidayDates, $schedules->workingWeekFor($worker));
 
         return $this->render('staff/calendar.html.twig', [
             'worker' => $worker,
