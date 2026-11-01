@@ -88,14 +88,14 @@
         {% endif %}
     </header>
     <div class="prt-card__body">
-        {# Lo que paga este mes, calculado: tarifa de sus cestas + ajustes. #}
+        {# Lo que paga este mes, calculado: tarifa de sus cestas + cuotas de socix + ajustes. #}
         {% if fee_statement %}
             <div class="fee-month">
                 {% if fee_statement.payer == partner %}
                     <span class="fee-month__label">{{ this_month|format_date(pattern: 'MMMM', locale: 'es')|capitalize }}</span>
                     <span class="fee-month__total">{{ fmt.money(fee_statement.total) }}</span>
                     <span class="fee-month__detail">
-                        {% if not fee_statement.needsBreakdown %}la tarifa de su cesta{% elseif fee_statement.adjustments is empty %}la tarifa de sus cestas{% else %}{{ fmt.money(fee_statement.basketsCents / 100) }} de cestas {{ fee_statement.adjustmentsCents >= 0 ? '+' : '−' }} {{ fmt.money((fee_statement.adjustmentsCents|abs) / 100) }} de ajustes{% endif %}
+                        {% if not fee_statement.needsBreakdown %}la tarifa de su cesta{% elseif fee_statement.adjustments is empty and fee_statement.charges is empty %}la tarifa de sus cestas{% else %}{{ fmt.money(fee_statement.basketsCents / 100) }} de cestas{% if fee_statement.charges is not empty %} + {{ fmt.money(fee_statement.chargesCents / 100) }} de cuota de socix{% endif %}{% if fee_statement.adjustments is not empty %} {{ fee_statement.adjustmentsCents >= 0 ? '+' : '−' }} {{ fmt.money((fee_statement.adjustmentsCents|abs) / 100) }} de ajustes{% endif %}{% endif %}
                         · <a href="{{ path('monthly_fee_index') }}">ver el mes</a>
                     </span>
                     {# Los ajustes no se repiten aquí: van listados justo debajo, con a dónde va cada uno. #}

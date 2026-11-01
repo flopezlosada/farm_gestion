@@ -2,7 +2,7 @@
  # Las tarifas: lo que cuesta al mes cada cesta de verdura y cada docena
  # de huevos, desde cuándo, lo que ya está programado y el historial.
  #
- # El controller pasa: groups (veg, egg: concept, current, next),
+ # El controller pasa: groups (veg, egg, membership: concept, current, next),
  # missing (conceptos sin precio hoy), history (todos, el más reciente
  # primero), today.
  # ============================================================ #}
@@ -12,9 +12,9 @@
 {% import 'accounting/_money.html.twig' as fmt %}
 
 {% set can_edit = is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
-{% set group_titles = { veg: 'Verdura', egg: 'Huevos' } %}
-{% set group_icons = { veg: 'fa-leaf', egg: 'fa-circle-o' } %}
-{% set concept_count = groups.veg|length + groups.egg|length %}
+{% set group_titles = { veg: 'Verdura', egg: 'Huevos', membership: 'Cuotas de socix' } %}
+{% set group_icons = { veg: 'fa-leaf', egg: 'fa-circle-o', membership: 'fa-id-card-o' } %}
+{% set concept_count = groups|reduce((n, rows) => n + rows|length, 0) %}
 
 {% block title %}Socios · Tarifas{% endblock %}
 
@@ -51,7 +51,7 @@
 {% block csa_main %}
 <div class="prl">
 
-    {{ csa.page_header('Socios', 'Tarifas', 'Lo que cuesta al mes cada cesta y cada docena de huevos, igual para todo el mundo. Lo que cada socix paga de más o de menos va aparte, en su ficha.') }}
+    {{ csa.page_header('Socios', 'Tarifas', 'Lo que cuesta al mes cada cesta y cada docena de huevos, y las cuotas de inscripción y de mantenimiento de cada hogar, igual para todo el mundo. Lo que cada socix paga de más o de menos va aparte, en su ficha.') }}
 
     {% if missing is not empty %}
         {{ csa.callout(

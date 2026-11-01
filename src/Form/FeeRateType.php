@@ -22,7 +22,11 @@ class FeeRateType extends AbstractType
             ->add('concept', EnumType::class, [
                 'class' => FeeConcept::class,
                 'choice_label' => static fn (FeeConcept $c): string => $c->label(),
-                'group_by' => static fn (FeeConcept $c): string => $c->isEgg() ? 'Huevos' : 'Verdura',
+                'group_by' => static fn (FeeConcept $c): string => match ($c->group()) {
+                    'egg' => 'Huevos',
+                    'membership' => 'Socix',
+                    default => 'Verdura',
+                },
                 'constraints' => [new Assert\NotNull(message: 'Elige qué cambia de precio.')],
             ])
             ->add('price', NumberType::class, [

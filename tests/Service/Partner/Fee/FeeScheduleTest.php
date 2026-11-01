@@ -78,7 +78,7 @@ class FeeScheduleTest extends TestCase
             [FeeConcept::VegBiweeklyShared, FeeConcept::VegMonthlyShared, FeeConcept::EggBiweekly, FeeConcept::EggMonthly],
             $this->schedule()->missingOn(new \DateTimeImmutable('2026-10-14')),
         );
-        $this->assertCount(9, (new FeeSchedule([]))->missingOn(new \DateTimeImmutable('2026-10-14')), 'Sin tarifas, falta todo.');
+        $this->assertCount(\count(FeeConcept::cases()), (new FeeSchedule([]))->missingOn(new \DateTimeImmutable('2026-10-14')), 'Sin tarifas, falta todo.');
     }
 
     /**
