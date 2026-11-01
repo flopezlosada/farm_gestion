@@ -11,6 +11,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Knp\Component\Pager\PaginatorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use WhiteOctober\BreadcrumbsBundle\Model\Breadcrumbs;
@@ -27,6 +28,9 @@ use WhiteOctober\BreadcrumbsBundle\Model\Breadcrumbs;
  */
 class BlogController extends AbstractController
 {
+    /** Medios que cuelgan de una noticia (ver {@see self::delete()}). */
+    private const MEDIA_TYPES = ['Image', 'Audio', 'Video', 'Document'];
+
     /**
      * Id de la categoría "Recetas". Las recetas tienen su propia sección
      * (/blog/category/4) y NO deben aparecer mezcladas en el listado general
@@ -366,25 +370,42 @@ class BlogController extends AbstractController
     }
 
     /**
-     * Deletes a Blog entity.
+     * Borra una noticia junto con sus medios. Los medios (imagen, audio, vídeo,
+     * documento) cuelgan del post por foreign_key + object_class, sin clave
+     * foránea: si no se borran aquí quedan huérfanos, con su fichero en disco.
+     * Al quitarlos por Doctrine, su PostRemove borra también el fichero.
      *
+     * @param Request                $request
+     * @param int|string             $id
+     * @param EntityManagerInterface $em
+     * @return RedirectResponse
      */
     #[IsGranted('ROLE_BLOG')]
-    public function delete(Request $request, $id, EntityManagerInterface $em)
+    public function delete(Request $request, $id, EntityManagerInterface $em): RedirectResponse
     {
         $form = $this->createDeleteForm($id);
         $form->handleRequest($request);
 
-        if ($form->isSubmitted() && $form->isValid()) {
-            $entity = $em->getRepository(\App\Entity\Blog::class)->find($id);
+        if (!$form->isSubmitted() || !$form->isValid()) {
+            $this->addFlash('error', 'No se ha podido eliminar la noticia: vuelve a intentarlo.');
 
-            if (!$entity) {
-                throw $this->createNotFoundException('Unable to find Blog entity.');
-            }
-
-            $em->remove($entity);
-            $em->flush();
+            return $this->redirect($this->generateUrl('blog_edit', ['id' => $id]));
         }
+
+        $entity = $em->getRepository(Blog::class)->find($id);
+        if (!$entity) {
+            throw $this->createNotFoundException('Unable to find Blog entity.');
+        }
+
+        $blogs = $em->getRepository(Blog::class);
+        $objectClass = strtolower($entity->getClass());
+        foreach (self::MEDIA_TYPES as $mediaType) {
+            array_map([$em, 'remove'], $blogs->findMedia($mediaType, $entity->getId(), $objectClass));
+        }
+        $em->remove($entity);
+        $em->flush();
+
+        $this->addFlash('success', sprintf('Noticia «%s» eliminada.', $entity->getTitle()));
 
         return $this->redirect($this->generateUrl('blog'));
     }
