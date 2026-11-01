@@ -170,14 +170,11 @@ class BasketModalityChangerTest extends TestCase
         $mateOld = $this->share($mate, BasketShare::ID_BIWEEKLY_SHARED);
         $mateOld->setStartDate(new \DateTime('2023-01-12'));
         $mateOld->setDeliveryGroup('B');
-        $mateOld->setMonthPrice('42.00');
-        $mateOld->setEggMonthPrice('7.00');
         $mateOld->setTransportPrice('5.00');
         $mateOld->setPayerPartner($one);
 
         $new = $this->share($one, BasketShare::ID_MONTHLY_SHARED);
         $new->setDayMonthOrder(3);
-        $new->setMonthPrice('55.00');
         $effective = new \DateTime('2026-10-01');
 
         $this->shareRepository->method('findLatestActiveForPartner')
@@ -196,8 +193,6 @@ class BasketModalityChangerTest extends TestCase
         $this->assertSame('2026-10-01', $outcome->mate->getStartDate()->format('Y-m-d'));
 
         // ...y lo de su casa se queda en su casa: compartir cesta no es compartir cuota.
-        $this->assertSame('42.00', $outcome->mate->getMonthPrice());
-        $this->assertSame('7.00', $outcome->mate->getEggMonthPrice());
         $this->assertSame('5.00', $outcome->mate->getTransportPrice());
         $this->assertSame($one, $outcome->mate->getPayerPartner(), 'Quien paga la cesta del otro hogar sigue pagándola.');
 
@@ -272,7 +267,6 @@ class BasketModalityChangerTest extends TestCase
         // Columnas NOT NULL en BBDD, y sus setters no aceptan null: una cesta de mentira
         // sin ellas revienta en cuanto algo la copia (la cascada al otro hogar lo hace).
         $share->setVegetablesBasketAmount(1);
-        $share->setEggMonthPrice('0.00');
 
         return $share;
     }

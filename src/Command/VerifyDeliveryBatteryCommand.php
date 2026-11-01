@@ -32,7 +32,6 @@ use App\Service\Delivery\PickupRelocator;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeekRematerializer;
 use App\Service\Partner\BasketModalityChanger;
-use App\Service\Partner\BasketPricing;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -96,7 +95,6 @@ class VerifyDeliveryBatteryCommand extends Command
         private readonly DeliveryCalendarProjector $calendarProjector,
         private readonly InvariantSuite $invariantSuite,
         private readonly WeekRematerializer $weekRematerializer,
-        private readonly BasketPricing $basketPricing,
         private readonly AccumulatingMove $accumulatingMove,
         private readonly DeliveryShiftApplier $shiftApplier,
     ) {
@@ -1742,7 +1740,6 @@ class VerifyDeliveryBatteryCommand extends Command
             ? $this->cohortResolver->cohortForBasket($month['first'])
             : null;
         $new->setDeliveryGroup($cohort);
-        $this->basketPricing->applyTo($new);
 
         return $new;
     }

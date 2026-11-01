@@ -57,8 +57,6 @@ class PartnerPauserTest extends KernelTestCase
         $share->setBasketShare($em->getRepository(BasketShare::class)->find(BasketShare::ID_WEEKLY));
         $share->setIsActive(true);
         $share->setAmount(1);
-        $share->setMonthPrice('0.00');
-        $share->setEggMonthPrice('0.00');
         $share->setStartDate(new \DateTime('2090-01-01'));
         $em->persist($share);
         $em->flush();

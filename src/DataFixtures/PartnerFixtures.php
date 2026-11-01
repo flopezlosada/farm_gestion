@@ -8,7 +8,6 @@ use App\Entity\EggAmount;
 use App\Entity\EggPeriod;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
-use App\Service\Partner\BasketPricing;
 use App\Entity\SharePayment;
 use App\Entity\State;
 use App\Entity\WeeklyBasketGroup;
@@ -65,10 +64,6 @@ class PartnerFixtures extends Fixture implements DependentFixtureInterface
     ];
 
     private const EGG_PERIOD_NAMES = ['Semanal', 'Quincenal', 'Mensual'];
-
-    public function __construct(private readonly BasketPricing $basketPricing)
-    {
-    }
 
     /**
      * Carga los socixs sintéticos junto con su cesta activa.
@@ -186,9 +181,6 @@ class PartnerFixtures extends Fixture implements DependentFixtureInterface
             $eggPeriod = $this->getReference(CatalogFixtures::REF_EGG_PERIOD_PREFIX . $eggPeriodName, EggPeriod::class);
             $partnerBasketShare->setEggPeriod($eggPeriod);
         }
-
-        // Cuota con la fórmula real (verdura × cestas + huevos por frecuencia × docenas).
-        $this->basketPricing->applyTo($partnerBasketShare);
 
         if ($basketShare->getName() === 'Mensual') {
             // -1 en vez de 4: la última semana del mes es una opción de primera

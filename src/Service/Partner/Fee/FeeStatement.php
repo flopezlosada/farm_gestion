@@ -106,10 +106,21 @@ final class FeeStatement
         $missing = $this->getMissingConcepts();
 
         return array_values(array_filter([
-            $missing !== [] ? 'Falta el precio de ' . implode(', ', array_map(static fn (FeeConcept $c): string => mb_strtolower($c->label()), $missing)) . '.' : null,
+            $missing !== [] ? 'Falta el precio de ' . $this->describeMissing() . '.' : null,
             !$this->payer->hasDirectDebit() ? 'No tiene mandato de domiciliación completo (cuenta, referencia y fecha).' : null,
             $missing === [] && $this->getCents() <= 0 ? 'Le sale ' . number_format($this->getCents() / 100, 2, ',', '.') . ' €: no hay nada que cobrarle.' : null,
         ]));
+    }
+
+    /**
+     * Los conceptos sin precio en palabras, «quincenal, docena semanal», o null si no
+     * falta ninguno.
+     */
+    public function describeMissing(): ?string
+    {
+        $missing = $this->getMissingConcepts();
+
+        return $missing === [] ? null : implode(', ', array_map(static fn (FeeConcept $c): string => mb_strtolower($c->label()), $missing));
     }
 
     /** Si se le puede pasar el recibo: tiene todo y algo que cobrar. */

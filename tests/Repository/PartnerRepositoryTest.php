@@ -132,8 +132,6 @@ class PartnerRepositoryTest extends KernelTestCase
         $share->setBasketShare($weekly);
         $share->setIsActive(true);
         $share->setAmount(1);
-        $share->setMonthPrice('0.00');
-        $share->setEggMonthPrice('0.00');
         $share->setStartDate(new \DateTime('2099-01-01'));
         $share->setEndDate(null);
         $em->persist($share);

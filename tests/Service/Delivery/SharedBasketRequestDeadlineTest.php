@@ -200,8 +200,6 @@ class SharedBasketRequestDeadlineTest extends KernelTestCase
             $share->setDayMonthOrder(1);
             $share->setAmount(1);
             $share->setVegetablesBasketAmount(1);
-            $share->setMonthPrice('0.00');
-            $share->setEggMonthPrice('0.00');
             $this->em->persist($share);
 
             $households[] = $partner;

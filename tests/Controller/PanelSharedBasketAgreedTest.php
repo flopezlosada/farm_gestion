@@ -133,8 +133,6 @@ class PanelSharedBasketAgreedTest extends AbstractPartnerAuthenticatedTest
             $new->setIsActive(true);
             $new->setAmount(1);
             $new->setVegetablesBasketAmount(1);
-            $new->setMonthPrice($monthly->getMonthPrice());
-            $new->setEggMonthPrice('0.00');
             $new->setDayMonthOrder(1);
             $new->setStartDate(\DateTime::createFromInterface($from));
             $em->persist($new);

@@ -152,8 +152,6 @@ class ShareFitsNodeOfferInvariantTest extends KernelTestCase
         $share->setBasketShare($em->getRepository(BasketShare::class)->find($basketShareId));
         $share->setIsActive(true);
         $share->setAmount(1);
-        $share->setMonthPrice('0.00');
-        $share->setEggMonthPrice('0.00');
         $share->setStartDate(new \DateTime('2099-01-01'));
 
         $em->persist($node);

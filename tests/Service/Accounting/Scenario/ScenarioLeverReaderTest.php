@@ -11,6 +11,8 @@ use App\Repository\BudgetCategoryRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Repository\WorkerSalaryRepository;
 use App\Service\Accounting\Scenario\ScenarioLeverReader;
+use App\Service\Partner\Fee\FeeTotals;
+use App\Service\Partner\Fee\MonthlyFeeCalculator;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -215,8 +217,9 @@ class ScenarioLeverReaderTest extends TestCase
     private function reader(?WorkerSalaryRepository $salaries = null): ScenarioLeverReader
     {
         $shares = $this->createMock(PartnerBasketShareRepository::class);
-        $shares->method('activeMonthlyFees')->willReturn(['baskets' => 5740.0, 'eggs' => 1110.0, 'eggShares' => 78, 'transport' => 45.0]);
         $shares->method('countActiveBasketEquivalents')->willReturn(61.0);
+        $fees = $this->createMock(MonthlyFeeCalculator::class);
+        $fees->method('basketTotalsFor')->willReturn(new FeeTotals(574000, 111000, 78, 4500));
 
         if ($salaries === null) {
             $salaries = $this->createMock(WorkerSalaryRepository::class);
@@ -226,7 +229,7 @@ class ScenarioLeverReaderTest extends TestCase
         $categories = $this->createMock(BudgetCategoryRepository::class);
         $categories->method('findActive')->willReturn($this->categories);
 
-        return new ScenarioLeverReader($shares, $salaries, $categories);
+        return new ScenarioLeverReader($shares, $fees, $salaries, $categories);
     }
 
     /** Un tramo guardado de un trabajador, con sus ids como si vinieran de la base. */

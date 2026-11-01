@@ -41,7 +41,6 @@
                     <th class="csa-table__col-tight">Id</th>
                     <th class="csa-table__col-tight">Inicio</th>
                     <th class="csa-table__col-tight">Fin</th>
-                    <th class="csa-table__col-tight">€ / mes</th>
                     <th class="csa-table__col-tight">Estado</th>
                     <th class="csa-table__actions">Acciones</th>
                 </tr>
@@ -58,7 +57,6 @@
                         <td class="csa-table__col-tight">
                             {% if pbs.endDate %}{{ pbs.endDate|format_date('medium', locale='es') }}{% else %}—{% endif %}
                         </td>
-                        <td class="csa-table__col-tight">{{ pbs.monthPrice }} €</td>
                         <td class="csa-table__col-tight">
                             {% if pbs.isActive %}
                                 <span class="csa-badge csa-badge--green">Activa</span>
@@ -75,7 +73,7 @@
                     </tr>
                 {% else %}
                     <tr>
-                        <td colspan="6" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
+                        <td colspan="5" class="csa-muted" style="text-align: center; padding: var(--csa-sp-8);">
                             No hay registros.
                         </td>
                     </tr>

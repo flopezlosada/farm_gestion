@@ -479,7 +479,7 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
 
     /**
      * GET del formulario de añadir cesta devuelve 200. Cubre en runtime el render
-     * del form (campos condicionales de huevos, dropdowns csa, toggle gratuita) y
+     * del form (campos condicionales de huevos, dropdowns csa) y
      * el cálculo del turno con fechas reales vía CohortChoiceBuilder: un 500 en ese
      * camino (campo huérfano, opción inexistente, etc.) lo delata aquí.
      */
@@ -898,8 +898,6 @@ class PartnerControllerTest extends AbstractAuthenticatedTest
         $share->setBasketShare($em->getRepository(BasketShare::class)->find(BasketShare::IDS_WEEKLY[0]));
         $share->setIsActive(true);
         $share->setAmount(1);
-        $share->setMonthPrice('0.00');
-        $share->setEggMonthPrice('0.00');
         $share->setStartDate(new \DateTime('2099-01-01'));
 
         foreach ([$node, $target, $origin, $partner, $share] as $entity) {

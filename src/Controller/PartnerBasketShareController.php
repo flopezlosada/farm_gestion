@@ -14,7 +14,6 @@ use App\Service\Delivery\CohortChoiceBuilder;
 use App\Service\Delivery\SharedBasketChangeNotifier;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Partner\BasketModalityChanger;
-use App\Service\Partner\BasketPricing;
 use App\Service\Partner\PartnerShareEventRecorder;
 use App\Service\Partner\SharedBasketCohortSync;
 use Doctrine\ORM\EntityManagerInterface;
@@ -72,7 +71,7 @@ class PartnerBasketShareController extends AbstractController
      * L11/L17 sobre el clon de la batería (caso JOSE del escenario MIRIAM).
      */
     #[Route("/{id}/edit", name: "partner_basket_share_edit", methods: ["GET","POST"])]
-    public function edit(Request $request, PartnerBasketShare $partnerBasketShare, EntityManagerInterface $entityManager, CohortChoiceBuilder $cohortChoiceBuilder, WeeklyBasketGenerator $generator, BasketPricing $basketPricing, SharedBasketCohortSync $cohortSync): Response
+    public function edit(Request $request, PartnerBasketShare $partnerBasketShare, EntityManagerInterface $entityManager, CohortChoiceBuilder $cohortChoiceBuilder, WeeklyBasketGenerator $generator, SharedBasketCohortSync $cohortSync): Response
     {
         if ($partnerBasketShare->getStartDate()) {
             $partnerBasketShare->setStartDate($partnerBasketShare->getStartDate()->format('Y-m-d'));
@@ -89,13 +88,6 @@ class PartnerBasketShareController extends AbstractController
 
         if ($form->isSubmitted() && $form->isValid()) {
             $partnerBasketShare->setStartDate(new \DateTime($partnerBasketShare->getStartDate()));
-            $values = $request->get('partner_basket_share');
-            if (isset($values['isFreeBasket'])) {
-                $partnerBasketShare->setMonthPrice(0);
-                $partnerBasketShare->setEggMonthPrice(0);
-            } else {
-                $basketPricing->applyTo($partnerBasketShare);
-            }
             $entityManager->flush();
 
             // Cascada sobre el listado YA generado: la corrección debe verse también
@@ -155,7 +147,6 @@ class PartnerBasketShareController extends AbstractController
      * @param BasketModalityChanger     $modalityChanger    Parte el histórico y arrastra a la pareja.
      * @param WeeklyBasketGenerator     $generator          Reconcilia las semanas ya generadas.
      * @param CohortChoiceBuilder       $cohortChoiceBuilder Turnos que caben en su punto.
-     * @param BasketPricing             $basketPricing      Precio según modalidad y huevos.
      * @param SharedBasketChangeNotifier $notifier          Avisa a los dos hogares.
      *
      * @return Response El formulario, o la vuelta a la ficha del socix.
@@ -167,7 +158,6 @@ class PartnerBasketShareController extends AbstractController
         BasketModalityChanger $modalityChanger,
         WeeklyBasketGenerator $generator,
         CohortChoiceBuilder $cohortChoiceBuilder,
-        BasketPricing $basketPricing,
         SharedBasketChangeNotifier $notifier,
     ): Response {
         // start_date queda vacío: admin introduce la fecha EFECTIVA del cambio.
@@ -218,14 +208,6 @@ class PartnerBasketShareController extends AbstractController
             }
 
             $effective = new \DateTime($new->getStartDate());
-
-            $values = $request->get('partner_basket_share');
-            if (isset($values['isFreeBasket'])) {
-                $new->setMonthPrice(0);
-                $new->setEggMonthPrice(0);
-            } else {
-                $basketPricing->applyTo($new);
-            }
 
             try {
                 $outcome = $modalityChanger->applyChange($new, $effective);

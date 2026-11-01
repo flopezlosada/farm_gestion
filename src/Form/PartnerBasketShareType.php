@@ -170,7 +170,6 @@ class PartnerBasketShareType extends AbstractType
                 'required' => false,
                 'choice_value' => self::CHOICE_VALUE,
             ])
-            ->add('isFreeBasket', CheckboxType::class, array('label'=>'Marca esta casilla si es una cesta gratuita', 'required'=>false))
             ->add('amount',ChoiceType::class,array(
                 'choices'  => [
                     '1' => 1,

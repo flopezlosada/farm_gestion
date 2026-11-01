@@ -38,6 +38,33 @@ final class MonthlyFees
     }
 
     /**
+     * Todas, por el id de quien paga (quien encabeza su familia).
+     *
+     * @return array<int, FeeStatement>
+     */
+    public function getStatementsByPayerId(): array
+    {
+        return $this->statements;
+    }
+
+    /**
+     * Lo que suman las cestas de todo el mundo este mes, por concepto, sin los ajustes:
+     * verdura, huevos y transporte, y cuántas cestas llevan huevos. Lo que no tiene
+     * precio cuenta cero.
+     */
+    public function getBasketTotals(): FeeTotals
+    {
+        $lines = array_merge(...array_map(static fn (FeeStatement $s): array => $s->getLines(), array_values($this->statements)));
+
+        return new FeeTotals(
+            array_sum(array_map(static fn (FeeLine $l): int => $l->vegCents, $lines)),
+            array_sum(array_map(static fn (FeeLine $l): int => $l->eggCents, $lines)),
+            \count(array_filter($lines, static fn (FeeLine $l): bool => $l->eggCents > 0)),
+            array_sum(array_map(static fn (FeeLine $l): int => $l->transportCents, $lines)),
+        );
+    }
+
+    /**
      * El recibo en que va lo de una persona este mes: el de su familia (lo paga quien
      * la encabeza) o, si su cesta la paga alguien de fuera, el de esa persona. Null si
      * no tiene nada que pagar.
