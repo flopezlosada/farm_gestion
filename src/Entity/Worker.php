@@ -356,7 +356,19 @@ class Worker
      */
     public function isActive(): bool
     {
-        return $this->isActiveOn(new \DateTimeImmutable('today'));
+        return $this->isActiveOn(self::today());
+    }
+
+    /**
+     * Hoy en Madrid, explícito como en {@see TimeEntry}: el corte de la baja no debe
+     * depender de la zona horaria con que arranque PHP (en UTC, de 00:00 a 02:00
+     * seguiría siendo ayer y quien ya se fue podría fichar).
+     *
+     * @return \DateTimeImmutable
+     */
+    public static function today(): \DateTimeImmutable
+    {
+        return new \DateTimeImmutable('today', new \DateTimeZone('Europe/Madrid'));
     }
 
     /**
@@ -458,6 +470,10 @@ class Worker
      * Cómo va su cesta la semana de ese día: gratis (trabajaba, o se le regala tras la
      * baja), sin decidir (de baja y nadie ha dicho qué hacer) o null = la paga como
      * cualquiera (antes del alta, o tras la baja si se decidió así o acabó el regalo).
+     *
+     * Se mira el día del reparto (el viernes del ciclo semanal): quien entra el
+     * miércoles ya tiene gratis la cesta de ese viernes, y quien se va el miércoles
+     * ya no.
      *
      * @param \DateTimeInterface $day
      * @return WorkerBasketWeek|null

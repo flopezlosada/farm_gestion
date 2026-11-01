@@ -38,7 +38,7 @@ class MonthlyFeeController extends AbstractController
         return $this->render('monthly_fee/index.html.twig', [
             'fees' => $fees,
             'statements' => $filter === 'problems' ? $problems : $statements,
-            'counts' => ['all' => \count($statements), 'problems' => \count($problems)],
+            'counts' => ['all' => \count($statements), 'problems' => \count($problems), 'paying' => \count(array_filter($statements, static fn (FeeStatement $s): bool => !$s->isFree()))],
             'filter' => $filter,
             // La remesa de cuotas de este mes, si ya se preparó: para ir a ella en vez de prepararla otra vez.
             'remittance' => $remittances->findOneBy(['kind' => Remittance::KIND_BASKET, 'period' => $fees->month]),

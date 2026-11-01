@@ -71,6 +71,6 @@ class WorkerRepository extends ServiceEntityRepository
      */
     private static function today(): string
     {
-        return (new \DateTimeImmutable('today'))->format('Y-m-d');
+        return Worker::today()->format('Y-m-d');
     }
 }
