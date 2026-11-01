@@ -165,8 +165,6 @@ class PartnerBasketShareRepositoryTest extends KernelTestCase
         $share->setBasketShare($monthly);
         $share->setIsActive(true);
         $share->setAmount(1);
-        $share->setMonthPrice('0.00');
-        $share->setEggMonthPrice('0.00');
         $share->setStartDate(new \DateTime('2099-01-01'));
         $share->setDayMonthOrder($dayMonthOrder);
         $share->setDeliveryGroup($deliveryGroup);
@@ -190,8 +188,6 @@ class PartnerBasketShareRepositoryTest extends KernelTestCase
         $share->setBasketShare($weekly);
         $share->setIsActive(true);
         $share->setAmount(1);
-        $share->setMonthPrice('0.00');
-        $share->setEggMonthPrice('0.00');
         $share->setStartDate(new \DateTime('2099-01-01'));
         $share->setEndDate($endDate);
         $em->persist($share);

@@ -707,8 +707,6 @@ class ImportPartnersFromCsvCommand extends Command
         $share = new PartnerBasketShare();
         $share->setPartner($partner);
         $share->setBasketShare($basket);
-        $share->setMonthPrice($this->decimalOrZero($row['importe_cesta_eur']));
-        $share->setEggMonthPrice($this->decimalOrZero($row['importe_huevos_eur']));
 
         // Egg amount + period a partir del patrón temporal extraído del PDF.
         // huevos_por_viernes p.ej. "1D,0,0,0" (1 entrega → Mensual) o
@@ -1052,12 +1050,6 @@ class ImportPartnersFromCsvCommand extends Command
             return null;
         }
         return [$eggAmountsById[$amountId], $eggPeriodsById[$periodId]];
-    }
-
-    private function decimalOrZero(string $s): string
-    {
-        $f = (float) str_replace(',', '.', $s ?: '0');
-        return number_format($f, 2, '.', '');
     }
 
 }

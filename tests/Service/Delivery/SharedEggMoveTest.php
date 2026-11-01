@@ -67,8 +67,6 @@ class SharedEggMoveTest extends KernelTestCase
         $share->setIsActive(true);
         $share->setAmount(1);
         $share->setVegetablesBasketAmount(1);
-        $share->setMonthPrice('0.00');
-        $share->setEggMonthPrice('0.00');
         $share->setEggAmount($eggAmount);
         $share->setEggPeriod($eggPeriod);
         $share->setDeliveryGroup('B');

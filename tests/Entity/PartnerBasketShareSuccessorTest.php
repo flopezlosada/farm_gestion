@@ -35,8 +35,6 @@ class PartnerBasketShareSuccessorTest extends TestCase
         $old->setDeliveryGroup(PartnerBasketShare::DELIVERY_GROUP_B);
         $old->setDayMonthOrder(2);
         $old->setEggDayMonthOrder(2);
-        $old->setMonthPrice('55.00');
-        $old->setEggMonthPrice('10.00');
         $old->setTransportPrice('10.00');
         $old->setPayerPartner($payer);
         $old->setStartDate(new \DateTime('2026-01-01'));
@@ -53,8 +51,6 @@ class PartnerBasketShareSuccessorTest extends TestCase
         $this->assertSame('B', $next->getDeliveryGroup());
         $this->assertSame(2, $next->getDayMonthOrder());
         $this->assertSame(2, $next->getEggDayMonthOrder());
-        $this->assertSame('55.00', $next->getMonthPrice());
-        $this->assertSame('10.00', $next->getEggMonthPrice());
         $this->assertSame('10.00', $next->getTransportPrice(), 'El cambio de modalidad perdía el transporte.');
         $this->assertSame($payer, $next->getPayerPartner(), 'El cambio de modalidad perdía a quien paga la cesta.');
     }

@@ -124,13 +124,6 @@ class PartnerBasketShare
      */
     private $end_date;
 
-    /**
-     * Precio de cesta de verduras al mes
-     * @var smallint $month_price
-     * @ORM\Column(name="month_price",type="decimal", precision=8, scale=2)
-     */
-    private $month_price;
-
 
     /**
      * Devuelve una lista de cestas a las que se asocia
@@ -138,13 +131,6 @@ class PartnerBasketShare
      */
     private $egg_amount;
 
-
-    /**
-     * Precio de cesta de huevos al mes. Se calcula
-     * @var smallint $egg_month_price
-     * @ORM\Column(name="egg_month_price",type="decimal", precision=8, scale=2)
-     */
-    private $egg_month_price;
 
     /**
      * Aporte de transporte al mes. Algunos grupos cobran transporte aparte
@@ -173,12 +159,6 @@ class PartnerBasketShare
      * @Orm\OrderBy({"id"="DESC"})
      */
     private $weekly_baskets;
-
-    /**
-     * @var esto es un control para las cestas gratuitas. Si está en 1 pone el precio egg_month_price a 0 €
-     * No pasa a la bbdd
-     */
-    private $isFreeBasket=false;
 
     /**
      * Cantidad cestas asociadas a este socio. Si hay más de una cesta, se entiende que todas son iguales en
@@ -278,8 +258,6 @@ class PartnerBasketShare
         $next->delivery_group = $this->delivery_group;
         $next->day_month_order = $this->day_month_order;
         $next->egg_day_month_order = $this->egg_day_month_order;
-        $next->month_price = $this->month_price;
-        $next->egg_month_price = $this->egg_month_price;
         $next->transport_price = $this->transport_price;
         $next->payer_partner = $this->payer_partner;
 
@@ -405,22 +383,6 @@ class PartnerBasketShare
     }
 
 
-    /**
-     * @return smallint
-     */
-    public function getMonthPrice()
-    {
-        return $this->month_price;
-    }
-
-    /**
-     * @param smallint $month_price
-     */
-    public function setMonthPrice($month_price): void
-    {
-        $this->month_price = $month_price;
-    }
-
     public function getIsActive(): ?bool
     {
         return $this->is_active;
@@ -505,18 +467,6 @@ class PartnerBasketShare
         return $this;
     }
 
-    public function getEggMonthPrice(): ?string
-    {
-        return $this->egg_month_price;
-    }
-
-    public function setEggMonthPrice(string $egg_month_price): self
-    {
-        $this->egg_month_price = $egg_month_price;
-
-        return $this;
-    }
-
     public function getTransportPrice(): ?string
     {
         return $this->transport_price;
@@ -551,22 +501,6 @@ class PartnerBasketShare
         $this->egg_period = $egg_period;
 
         return $this;
-    }
-
-    /**
-     * @return $this
-     */
-    public function getisFreeBasket()
-    {
-        return $this->isFreeBasket;
-    }
-
-    /**
-     * @param $this $isFreeBasket
-     */
-    public function setIsFreeBasket( $isFreeBasket)
-    {
-        $this->isFreeBasket = $isFreeBasket;
     }
 
     public function getAmount(): ?int

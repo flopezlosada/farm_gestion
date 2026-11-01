@@ -79,8 +79,6 @@ class PartnerUserFixtures extends Fixture implements DependentFixtureInterface
         $share->setIsActive(true);
         $share->setAmount(1);
         $share->setVegetablesBasketAmount(1);
-        $share->setMonthPrice($quincenal->getMonthPrice());
-        $share->setEggMonthPrice('0.00');
         $share->setStartDate(new \DateTime('-6 months'));
         $share->setDeliveryGroup(PartnerBasketShare::DELIVERY_GROUP_A);
 
@@ -118,8 +116,6 @@ class PartnerUserFixtures extends Fixture implements DependentFixtureInterface
         $peerShare->setIsActive(true);
         $peerShare->setAmount(1);
         $peerShare->setVegetablesBasketAmount(1);
-        $peerShare->setMonthPrice($quincenal->getMonthPrice());
-        $peerShare->setEggMonthPrice('0.00');
         $peerShare->setStartDate(new \DateTime('-6 months'));
         $peerShare->setDeliveryGroup(PartnerBasketShare::DELIVERY_GROUP_B);
 

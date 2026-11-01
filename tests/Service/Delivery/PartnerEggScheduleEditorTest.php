@@ -115,8 +115,6 @@ class PartnerEggScheduleEditorTest extends KernelTestCase
         $share->setIsActive(true);
         $share->setAmount(1);
         $share->setVegetablesBasketAmount(1);
-        $share->setMonthPrice('0.00');
-        $share->setEggMonthPrice('0.00');
         $share->setStartDate(new \DateTime('2020-01-01'));
         $this->em->persist($share);
 

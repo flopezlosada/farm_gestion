@@ -287,8 +287,6 @@ class NodeEggReschedulerTest extends KernelTestCase
         $pbs->setIsActive(true);
         $pbs->setAmount(1);
         $pbs->setVegetablesBasketAmount(1);
-        $pbs->setMonthPrice('0.00');
-        $pbs->setEggMonthPrice('0.00');
         $pbs->setStartDate(new \DateTime('2020-01-01'));
         $this->em->persist($pbs);
 

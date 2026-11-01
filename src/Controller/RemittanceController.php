@@ -15,7 +15,6 @@ use App\Repository\RemittanceRepository;
 use App\Repository\RemittanceReturnRepository;
 use App\Service\Accounting\Invoice\LedgerSheet;
 use App\Service\Accounting\Remittance\BankReturns;
-use App\Service\Accounting\Remittance\BasketFeeExpectations;
 use App\Service\Accounting\Remittance\CaseAction;
 use App\Service\Accounting\Remittance\FlatRemittance;
 use App\Service\Accounting\Remittance\MandatesToPartners;
@@ -308,13 +307,13 @@ class RemittanceController extends AbstractController
 
     /** Una remesa: sus recibos, y en un borrador lo que hay que revisar antes de enviarla. */
     #[Route('/{id}', name: 'accounting_remittance_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(Remittance $remittance, RemittanceRepository $remittances, RemittanceReview $review, BasketFeeExpectations $fees, ValidatorInterface $validator, RemittanceCases $cases, PartnerRepository $partners, RemittanceReturnRepository $returnRepository, BankReturns $bankReturns, RemittanceChargeWatch $chargeWatch): Response
+    public function show(Remittance $remittance, RemittanceRepository $remittances, RemittanceReview $review, MonthlyFeeCalculator $fees, ValidatorInterface $validator, RemittanceCases $cases, PartnerRepository $partners, RemittanceReturnRepository $returnRepository, BankReturns $bankReturns, RemittanceChargeWatch $chargeWatch): Response
     {
         $everyone = $remittance->isSent() ? $partners->findBy([], ['surname' => 'ASC', 'name' => 'ASC']) : [];
 
         $previous = $remittances->findLatestOfKind($remittance->getKind(), $remittance->getPeriod());
         $remittances->loadLinesWithPartners($remittance, $previous);
-        $expected = $remittance->isDraft() && $remittance->isBasketFees() ? $fees->forMonth($remittance->getPeriod()) : [];
+        $expected = $remittance->isDraft() && $remittance->isBasketFees() ? $fees->forMonth($remittance->getPeriod())->getStatementsByPayerId() : [];
         $returns = $remittance->isSent() ? $returnRepository->findByRemittance($remittance) : [];
 
         return $this->render('accounting/remittance_show.html.twig', [
@@ -551,7 +550,7 @@ class RemittanceController extends AbstractController
      */
     #[Route('/{id}/lines/new', name: 'accounting_remittance_line_new', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
-    public function lineNew(Request $request, Remittance $remittance, RemittanceRepository $remittances, BasketFeeExpectations $fees, EntityManagerInterface $em): Response
+    public function lineNew(Request $request, Remittance $remittance, RemittanceRepository $remittances, MonthlyFeeCalculator $fees, EntityManagerInterface $em): Response
     {
         if (!$remittance->isDraft()) {
             return $this->sentRedirect($remittance);
@@ -639,9 +638,9 @@ class RemittanceController extends AbstractController
     /**
      * Rellena un recibo nuevo: el mandato nuevo lleva el siguiente número libre con el
      * prefijo de la remesa, y es su primer adeudo (FRST). Con socix, además su nombre,
-     * su cuenta y lo que suman sus cestas.
+     * su cuenta y su cuota calculada.
      */
-    private function prefill(RemittanceLine $line, Remittance $remittance, int $partnerId, RemittanceRepository $remittances, BasketFeeExpectations $fees, EntityManagerInterface $em): void
+    private function prefill(RemittanceLine $line, Remittance $remittance, int $partnerId, RemittanceRepository $remittances, MonthlyFeeCalculator $fees, EntityManagerInterface $em): void
     {
         $sample = $remittance->getLines()->first() ?: null;
         $prefix = $sample !== null ? rtrim((string) preg_replace('/\d+\s*$/', '', $sample->getMandateReference())) : '';
@@ -656,11 +655,11 @@ class RemittanceController extends AbstractController
         if ($partner === null) {
             return;
         }
-        $fee = $fees->forMonth($remittance->getPeriod())[$partner->getFamilyHead()->getId()] ?? null;
+        $fee = $fees->forMonth($remittance->getPeriod())->getStatementsByPayerId()[$partner->getFamilyHead()->getId()] ?? null;
         $line->setPartner($partner)
             ->setDebtorName(mb_strtoupper($partner->getLegalName()))
             ->setIban($partner->getIban())
-            ->setAmount($fee !== null ? IssuedInvoice::fromCents($fee['cents']) : '0');
+            ->setAmount($fee?->getTotal() ?? '0');
     }
 
     /**

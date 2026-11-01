@@ -15,6 +15,7 @@ use App\Service\Accounting\BudgetTracker;
 use App\Service\Accounting\MonthNames;
 use App\Service\Accounting\Scenario\ScenarioLeverReader;
 use App\Service\Accounting\Scenario\ScenarioSimulator;
+use App\Service\Partner\Fee\MonthlyFeeCalculator;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -45,7 +46,7 @@ class BudgetController extends AbstractController
      * año: es una cuenta de hacer el presupuesto, por eso vive aquí.
      */
     #[Route('/', name: 'accounting_budgets', methods: ['GET'])]
-    public function index(BudgetRepository $budgets, BudgetTracker $tracker, PartnerBasketShareRepository $shares): Response
+    public function index(BudgetRepository $budgets, BudgetTracker $tracker, PartnerBasketShareRepository $shares, MonthlyFeeCalculator $fees): Response
     {
         $totals = $budgets->totals();
 
@@ -76,7 +77,7 @@ class BudgetController extends AbstractController
             'year' => $year,
             'basketCost' => $tracker->basketCost($year, $budgets->findReferenceForYear($year), $baskets, 100.0),
             'baskets' => $baskets,
-            'committedMonthlyFees' => $shares->sumActiveMonthlyFees(),
+            'committedMonthlyFees' => (float) $fees->basketTotalsFor(new \DateTimeImmutable('today'))->getTotal(),
         ]);
     }
 

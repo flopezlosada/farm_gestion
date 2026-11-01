@@ -64,11 +64,6 @@
                         {{ csa.field(form.basket_share, 'Tipo de cesta', { full: true }) }}
                         {{ csa.field(form.amount, 'Cantidad de cestas', { hint: 'normalmente 1' }) }}
                     </div>
-                    <label class="csa-toggle" style="margin-top: var(--csa-sp-4);">
-                        {{ form_widget(form.isFreeBasket, { attr: { class: 'csa-toggle__input' } }) }}
-                        <span class="csa-toggle__track"><span class="csa-toggle__thumb"></span></span>
-                        <span class="csa-toggle__text">Cesta gratuita <small>Donada o solidaria · se factura a 0&nbsp;€</small></span>
-                    </label>
                 {% endblock %}
             {% endembed %}
 

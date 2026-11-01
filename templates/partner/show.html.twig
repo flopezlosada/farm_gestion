@@ -902,15 +902,19 @@
                                 {% endif %}
                             </div>
 
+                            {# Lo que cuesta ESTA cesta en la cuota calculada del mes (la
+                             # misma cifra que el desglose). Se compara por id: el == de Twig
+                             # entre entidades compara campo a campo. #}
+                            {% set basket_line = fee_statement ? fee_statement.lines|filter(l => l.share.id == partner.activeBasket.id)|first : null %}
                             <div class="prt-mini__cell">
-                                <div class="prt-mini__label">Precio mensual</div>
-                                <div class="prt-mini__value prt-mini__value--sage">
-                                    {% if partner.activeBasket.eggAmount %}
-                                        {{ (partner.getActiveBasket.monthPrice + partner.activeBasket.eggMonthPrice)|number_format(2, ',', '.') }}<small>€</small>
-                                    {% else %}
-                                        {{ partner.getActiveBasket.monthPrice|number_format(2, ',', '.') }}<small>€</small>
-                                    {% endif %}
-                                </div>
+                                <div class="prt-mini__label">Cuesta al mes</div>
+                                {% if basket_line and basket_line.missing is empty %}
+                                    <div class="prt-mini__value prt-mini__value--sage">{{ basket_line.total|number_format(2, ',', '.') }}<small>€</small></div>
+                                {% elseif basket_line %}
+                                    <div class="prt-mini__value prt-mini__value--muted">Sin precio</div>
+                                {% else %}
+                                    <div class="prt-mini__value prt-mini__value--muted">—</div>
+                                {% endif %}
                             </div>
 
                             <div class="prt-mini__cell">

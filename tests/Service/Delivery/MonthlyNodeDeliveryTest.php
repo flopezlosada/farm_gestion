@@ -160,8 +160,6 @@ class MonthlyNodeDeliveryTest extends KernelTestCase
         $share->setAmount(1);
         $share->setDayMonthOrder($dayMonthOrder);
         // Precios a cero: la tabla los exige NOT NULL y aquí no se prueba tarifa.
-        $share->setMonthPrice('0');
-        $share->setEggMonthPrice('0');
         // Sin turno: en un punto con calendario propio el turno A/B no pinta nada.
         $share->setDeliveryGroup(null);
         $em->persist($share);

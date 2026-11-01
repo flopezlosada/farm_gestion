@@ -43,6 +43,7 @@ use App\Service\Delivery\SharedPairException;
 use App\Service\Delivery\WeeklyBasketGenerator;
 use App\Service\Delivery\WeeklyBasketSkipper;
 use App\Service\Notification\NotificationPreferences;
+use App\Service\Partner\Fee\MonthlyFeeCalculator;
 use App\Service\Volunteering\VolunteerContributions;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -384,7 +385,7 @@ class PanelController extends AbstractController
      * de nodo (mismo atajo que ya vivía en la home).
      */
     #[Route('/cesta', name: 'panel_basket', methods: ['GET'])]
-    public function basket(PickupRelocationOptions $relocationOptions): Response
+    public function basket(PickupRelocationOptions $relocationOptions, MonthlyFeeCalculator $feeCalculator): Response
     {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
@@ -402,6 +403,9 @@ class PanelController extends AbstractController
             'partner' => $partner,
             'active_share' => $this->activeShare($owner),
             'basket_owner' => $owner,
+            // La cuota calculada de este mes, la misma que se domicilia: la de su
+            // familia, o la de quien le paga la cesta.
+            'fee_statement' => $feeCalculator->forMonth(new \DateTimeImmutable('today'))->forPartner($partner),
             'relocate_weeks' => $canRelocate ? $relocationOptions->weeksForPartner($owner) : [],
             'relocate_groups' => $canRelocate ? $relocationOptions->groupsForPartner($owner) : [],
         ]);

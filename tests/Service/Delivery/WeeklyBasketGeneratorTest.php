@@ -243,8 +243,6 @@ class WeeklyBasketGeneratorTest extends KernelTestCase
         $share->setBasketShare($half);
         $share->setIsActive(true);
         $share->setAmount(1);
-        $share->setMonthPrice('0.00');
-        $share->setEggMonthPrice('0.00');
         $share->setStartDate(new \DateTime('2019-01-01'));
         $share->setEndDate($endDate);
         $em->persist($share);
@@ -267,8 +265,6 @@ class WeeklyBasketGeneratorTest extends KernelTestCase
         $share->setBasketShare($quincenalShared);
         $share->setIsActive(true);
         $share->setAmount(1);
-        $share->setMonthPrice('0.00');
-        $share->setEggMonthPrice('0.00');
         $share->setStartDate(new \DateTime('2099-01-01'));
         $share->setDeliveryGroup($cohort);
         $em->persist($share);

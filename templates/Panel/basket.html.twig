@@ -71,11 +71,15 @@
                         <div class="pnl-rows__row">
                             <dt class="pnl-rows__label">Cuota mensual</dt>
                             <dd class="pnl-rows__value">
-                                {% if active_share.eggAmount and active_share.eggMonthPrice %}
-                                    {{ (active_share.monthPrice + active_share.eggMonthPrice)|number_format(2, ',', '.') }} €
-                                    <span class="pnl-rows__sub">cesta y huevos</span>
-                                {% elseif active_share.monthPrice %}
-                                    {{ active_share.monthPrice|number_format(2, ',', '.') }} €
+                                {# La cuota calculada del mes, la que se domicilia. Si le falta
+                                 # algún precio la cifra saldría corta: mejor no darla. #}
+                                {% if fee_statement and fee_statement.missingConcepts is empty %}
+                                    {{ fee_statement.total|number_format(2, ',', '.') }} €
+                                    {% if fee_statement.payer.familyHead.id != partner.familyHead.id %}
+                                        <span class="pnl-rows__sub">la paga {{ fee_statement.payer.legalName }}</span>
+                                    {% elseif fee_statement.lines|length > 1 %}
+                                        <span class="pnl-rows__sub">por {{ fee_statement.lines|length }} cestas</span>
+                                    {% endif %}
                                 {% else %}
                                     <span class="pnl-rows__value--muted">—</span>
                                 {% endif %}

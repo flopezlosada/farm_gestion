@@ -285,8 +285,6 @@ class NodeControllerTest extends AbstractAuthenticatedTest
         $share->setBasketShare($em->getRepository(BasketShare::class)->find(BasketShare::IDS_WEEKLY[0]));
         $share->setIsActive(true);
         $share->setAmount(1);
-        $share->setMonthPrice('0.00');
-        $share->setEggMonthPrice('0.00');
         $share->setStartDate(new \DateTime('2099-01-01'));
 
         $em->persist($node);
@@ -351,8 +349,6 @@ class NodeControllerTest extends AbstractAuthenticatedTest
         $share->setBasketShare($em->getRepository(BasketShare::class)->find($basketShareId));
         $share->setIsActive(true);
         $share->setAmount(1);
-        $share->setMonthPrice('0.00');
-        $share->setEggMonthPrice('0.00');
         // Fecha lejana: el reconcile posterior no tiene semanas que materializar.
         $share->setStartDate(new \DateTime('2099-01-01'));
         $share->setDayMonthOrder($dayMonthOrder);

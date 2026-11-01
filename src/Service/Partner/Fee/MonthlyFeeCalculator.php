@@ -31,8 +31,10 @@ use Doctrine\ORM\EntityManagerInterface;
  *
  * Todo en unas pocas consultas, sea cual sea el número de socixs: semanas del mes,
  * cestas, tarifas, ajustes, pausas y eventos.
+ *
+ * No es final para poder sustituirlo en las pruebas de quien sólo usa sus totales.
  */
-final class MonthlyFeeCalculator
+class MonthlyFeeCalculator
 {
     /**
      * Lo que deja de cobrarse desde que pasa y vuelve a cobrarse desde que pasa. Las
@@ -65,6 +67,15 @@ final class MonthlyFeeCalculator
             $this->stopEvents($end),
             $this->pauses->findTouching($month, $end),
         );
+    }
+
+    /**
+     * Lo que suman las cestas de todo el mundo en un mes, por concepto: verdura,
+     * huevos y transporte, sin ajustes.
+     */
+    public function basketTotalsFor(\DateTimeInterface $month): FeeTotals
+    {
+        return $this->forMonth($month)->getBasketTotals();
     }
 
     /**

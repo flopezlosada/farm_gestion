@@ -10,6 +10,7 @@ use App\Repository\BudgetCategoryRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Repository\WorkerSalaryRepository;
 use App\Service\Accounting\Amount;
+use App\Service\Partner\Fee\MonthlyFeeCalculator;
 
 /**
  * Lee las palancas de un escenario del enlace. El escenario no se guarda: vive en la
@@ -30,6 +31,7 @@ class ScenarioLeverReader
 
     public function __construct(
         private readonly PartnerBasketShareRepository $shares,
+        private readonly MonthlyFeeCalculator $fees,
         private readonly WorkerSalaryRepository $salaries,
         private readonly BudgetCategoryRepository $categories,
     ) {
@@ -80,22 +82,23 @@ class ScenarioLeverReader
     }
 
     /**
-     * Lo que pagan hoy los contratos activos, en las mismas unidades que la palanca:
-     * los precios son la media de lo que paga cada cesta y cada contrato con huevos.
+     * Lo que pagan este mes las cestas según su cuota calculada, en las mismas unidades
+     * que la palanca: los precios son la media de lo que paga cada cesta y cada
+     * contrato con huevos.
      *
      * @return array{baskets: float, basketPrice: float, eggShares: float, eggPrice: float, transport: float}
      */
     private function hints(): array
     {
-        $fees = $this->shares->activeMonthlyFees();
+        $fees = $this->fees->basketTotalsFor(new \DateTimeImmutable('today'));
         $baskets = $this->shares->countActiveBasketEquivalents();
 
         return [
             'baskets' => $baskets,
-            'basketPrice' => $baskets > 0 ? round($fees['baskets'] / $baskets, 2) : 0.0,
-            'eggShares' => (float) $fees['eggShares'],
-            'eggPrice' => $fees['eggShares'] > 0 ? round($fees['eggs'] / $fees['eggShares'], 2) : 0.0,
-            'transport' => $fees['transport'],
+            'basketPrice' => $baskets > 0 ? round($fees->vegCents / 100 / $baskets, 2) : 0.0,
+            'eggShares' => (float) $fees->eggLines,
+            'eggPrice' => $fees->eggLines > 0 ? round($fees->eggCents / 100 / $fees->eggLines, 2) : 0.0,
+            'transport' => $fees->transportCents / 100.0,
         ];
     }
 

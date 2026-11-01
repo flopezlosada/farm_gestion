@@ -3,10 +3,14 @@
 namespace App\Tests\Service\Accounting\Remittance;
 
 use App\Entity\Partner;
+use App\Entity\PartnerBasketShare;
 use App\Entity\Remittance;
+use App\Entity\FeeConcept;
 use App\Entity\RemittanceLine;
 use App\Service\Accounting\Remittance\RemittancePartnerMatcher;
 use App\Service\Accounting\Remittance\RemittanceReview;
+use App\Service\Partner\Fee\FeeLine;
+use App\Service\Partner\Fee\FeeStatement;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -51,10 +55,18 @@ class RemittanceReviewTest extends TestCase
         return $remittance;
     }
 
-    /** @return array{partner: Partner, cents: int} */
-    private static function fee(Partner $head, int $cents): array
+    /**
+     * La cuota calculada de quien encabeza la familia: una cesta del mes entero que
+     * cuesta lo dicho, y los conceptos a los que les falta precio.
+     *
+     * @param list<FeeConcept> $missing
+     */
+    private static function fee(Partner $head, int $cents, array $missing = []): FeeStatement
     {
-        return ['partner' => $head, 'cents' => $cents];
+        $statement = new FeeStatement($head);
+        $statement->addLine(new FeeLine(new PartnerBasketShare(), $cents, 0, 0, 4, 4, $missing));
+
+        return $statement;
     }
 
     public function testAvisaDeLoQueNoCasaConLasCestas(): void
@@ -78,8 +90,22 @@ class RemittanceReviewTest extends TestCase
         $this->assertSame([], $warnings[1], 'La familia paga lo que suman sus cestas aunque sea en dos recibos y a nombre de la hija.');
         $this->assertSame([], $warnings[2]);
         $this->assertSame(['Está de baja.', 'No tiene ninguna cesta activa este mes.'], $warnings[3]);
-        $this->assertSame(['Sus cestas suman 65,00 € al mes y en esta remesa se le cobran 70,00 €.'], $warnings[4]);
+        $this->assertSame(['Su cuota calculada es 65,00 € al mes y en esta remesa se le cobran 70,00 €.'], $warnings[4]);
         $this->assertSame(['Sin socix: no se puede contrastar con sus cestas.'], $warnings[5]);
+    }
+
+    /**
+     * Si a la cuota le falta un precio la cifra sale corta: no se compara con lo que se
+     * cobra, se dice qué precio falta.
+     */
+    public function testSinPrecioNoSeContrastaElImporte(): void
+    {
+        $ana = self::partner(1, 'ANA', 'LOPEZ');
+        $remittance = self::draft([self::line($ana, 'ANA LOPEZ', '55.00', 'CUOTA MENSUAL 1')]);
+
+        $warnings = (new RemittanceReview())->lineWarnings($remittance, [1 => self::fee($ana, 0, [FeeConcept::VegBiweekly])]);
+
+        $this->assertSame(['Falta el precio de cesta quincenal: no se puede contrastar su cuota.'], $warnings[1]);
     }
 
     /** La cuota de socix no tiene que ver con las cestas: no se contrasta. */

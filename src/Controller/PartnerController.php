@@ -40,7 +40,6 @@ use App\Service\Delivery\SharedBasketChangeNotifier;
 use App\Service\Delivery\SharedPairDeliveryEditor;
 use App\Service\Delivery\SharedPairException;
 use App\Service\Delivery\WeeklyBasketGenerator;
-use App\Service\Partner\BasketPricing;
 use App\Service\Partner\PartnerPauser;
 use App\Service\Partner\PartnerShareEventRecorder;
 use App\Service\Notification\NotificationPreferences;
@@ -1191,7 +1190,6 @@ class PartnerController extends AbstractController
         PartnerShareEventRecorder $shareEventRecorder,
         CohortChoiceBuilder $cohortChoiceBuilder,
         WeeklyBasketGenerator $generator,
-        BasketPricing $basketPricing,
     ): Response {
         $partnerBasketShare = new PartnerBasketShare();
         $partnerBasketShare->setPartner($partner);
@@ -1233,13 +1231,6 @@ class PartnerController extends AbstractController
             }
             $partnerBasketShare->setStartDate(new \DateTime($partnerBasketShare->getStartDate()));
             $partnerBasketShare->setIsActive(true);
-            $values = $request->get('partner_basket_share');
-            if (isset($values['isFreeBasket'])) {
-                $partnerBasketShare->setMonthPrice(0);
-                $partnerBasketShare->setEggMonthPrice(0);
-            } else {
-                $basketPricing->applyTo($partnerBasketShare);
-            }
 
             // El orden mensual sólo lo usan las modalidades mensuales (3 y 7);
             // en el resto es ruido. El literal `== 3` de antes dejaba fuera la

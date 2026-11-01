@@ -6,12 +6,14 @@ use App\Entity\IssuedInvoice;
 use App\Entity\Partner;
 use App\Entity\Remittance;
 use App\Entity\RemittanceLine;
+use App\Service\Partner\Fee\FeeStatement;
+use App\Service\Partner\Fee\MonthlyFees;
 
 /**
  * Lo que hay que mirar de una remesa antes de enviarla, y lo que ha cambiado respecto
  * a la anterior.
  *
- * Contrasta los recibos con las cestas, pero sólo para AVISAR: lo que se cobra lo
+ * Contrasta los recibos con la cuota calculada, pero sólo para AVISAR: lo que se cobra lo
  * decide quien revisa. Se compara por FAMILIA (quien la encabeza), porque la cesta
  * cuelga de un miembro y el recibo puede ir a nombre de otro, y por la suma, porque
  * hay quien tiene dos recibos (cuota normal y adicional).
@@ -19,8 +21,8 @@ use App\Entity\RemittanceLine;
  * La lista de cambios es lo que contabilidad pidió primero: quién sube, quién baja,
  * quién entra y quién sale de un mes a otro, para no repasar la remesa entera.
  *
- * No consulta la base: lo que suman las cestas se lo da {@see BasketFeeExpectations},
- * con la forma `[id de quien encabeza la familia => ['partner' => …, 'cents' => …]]`.
+ * No consulta la base: las cuotas del mes, por quien paga, se las da
+ * {@see MonthlyFees::getStatementsByPayerId()}.
  */
 class RemittanceReview
 {
@@ -32,7 +34,7 @@ class RemittanceReview
      * Avisos de cada recibo de un borrador, por id de recibo. Una remesa enviada no se
      * revisa: las cestas de hoy no dicen nada de lo que se cobró hace meses.
      *
-     * @param array<int, array{partner: Partner, cents: int}> $expected Lo que suman las cestas del mes, por familia.
+     * @param array<int, FeeStatement> $expected La cuota calculada del mes, por quien encabeza la familia.
      *
      * @return array<int, list<string>>
      */
@@ -65,7 +67,7 @@ class RemittanceReview
      * cuotas. No es un error (hay quien paga por transferencia), pero un alta nueva
      * aparece aquí hasta que se le añade su recibo.
      *
-     * @param array<int, array{partner: Partner, cents: int}> $expected Lo que suman las cestas del mes, por familia.
+     * @param array<int, FeeStatement> $expected La cuota calculada del mes, por quien encabeza la familia.
      *
      * @return list<array{partner: Partner, amount: string}>
      */
@@ -78,11 +80,11 @@ class RemittanceReview
         $charged = $this->chargedByFamily($remittance);
         $missing = array_filter(
             $expected,
-            static fn (array $fee, int $rootId): bool => $fee['cents'] > 0 && !isset($charged[$rootId]),
+            static fn (FeeStatement $fee, int $rootId): bool => $fee->getCents() > 0 && !isset($charged[$rootId]),
             ARRAY_FILTER_USE_BOTH,
         );
         $rows = array_map(
-            static fn (array $fee): array => ['partner' => $fee['partner'], 'amount' => IssuedInvoice::fromCents($fee['cents'])],
+            static fn (FeeStatement $fee): array => ['partner' => $fee->payer, 'amount' => $fee->getTotal()],
             array_values($missing),
         );
         usort($rows, static fn (array $a, array $b): int => strcmp($a['partner']->getLegalName(), $b['partner']->getLegalName()));
@@ -130,22 +132,24 @@ class RemittanceReview
 
 
     /**
-     * El aviso cuando lo que se cobra a una familia no es lo que suman sus cestas.
-     *
-     * @param array{partner: Partner, cents: int}|null $expected
+     * El aviso cuando lo que se cobra a una familia no es su cuota calculada. Si a la
+     * cuota le falta algún precio no se puede contrastar: la cifra saldría corta.
      */
-    private static function feeWarning(?array $expected, int $chargedCents): ?string
+    private static function feeWarning(?FeeStatement $expected, int $chargedCents): ?string
     {
         if ($expected === null) {
             return 'No tiene ninguna cesta activa este mes.';
         }
-        if ($expected['cents'] === $chargedCents) {
+        if (($missing = $expected->describeMissing()) !== null) {
+            return sprintf('Falta el precio de %s: no se puede contrastar su cuota.', $missing);
+        }
+        if ($expected->getCents() === $chargedCents) {
             return null;
         }
 
         return sprintf(
-            'Sus cestas suman %s € al mes y en esta remesa se le cobran %s €.',
-            self::euros($expected['cents']),
+            'Su cuota calculada es %s € al mes y en esta remesa se le cobran %s €.',
+            self::euros($expected->getCents()),
             self::euros($chargedCents),
         );
     }
