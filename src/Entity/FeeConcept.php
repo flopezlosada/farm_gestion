@@ -6,15 +6,19 @@ namespace App\Entity;
  * Lo que tiene un precio base en las cuotas: la cesta de verdura de cada modalidad
  * y la docena de huevos de cada frecuencia.
  *
- * Las modalidades compartidas no tienen concepto propio: pagan la mitad de su
- * modalidad, así que no hay un segundo precio que pueda quedarse desfasado. Tampoco
- * «solo huevos», que no lleva verdura.
+ * Cada compartida tiene su propio precio y no la mitad de su modalidad: la semanal
+ * compartida se cobra 55 €, no 50, y la quincenal compartida no se cobra igual en
+ * todas partes. Con un precio propio, lo que se cobra es lo que pone la tarifa, sin
+ * una regla escondida. «Solo huevos» no tiene concepto: no lleva verdura.
  */
 enum FeeConcept: string
 {
     case VegWeekly = 'veg_weekly';
+    case VegWeeklyShared = 'veg_weekly_shared';
     case VegBiweekly = 'veg_biweekly';
+    case VegBiweeklyShared = 'veg_biweekly_shared';
     case VegMonthly = 'veg_monthly';
+    case VegMonthlyShared = 'veg_monthly_shared';
     case EggWeekly = 'egg_weekly';
     case EggBiweekly = 'egg_biweekly';
     case EggMonthly = 'egg_monthly';
@@ -24,8 +28,11 @@ enum FeeConcept: string
     {
         return match ($this) {
             self::VegWeekly => 'Cesta semanal',
+            self::VegWeeklyShared => 'Cesta semanal compartida',
             self::VegBiweekly => 'Cesta quincenal',
+            self::VegBiweeklyShared => 'Cesta quincenal compartida',
             self::VegMonthly => 'Cesta mensual',
+            self::VegMonthlyShared => 'Cesta mensual compartida',
             self::EggWeekly => 'Docena semanal',
             self::EggBiweekly => 'Docena quincenal',
             self::EggMonthly => 'Docena mensual',
@@ -37,13 +44,19 @@ enum FeeConcept: string
     {
         return $this->isEgg()
             ? 'Al mes, por cada docena.'
-            : 'Al mes, por cesta. La compartida paga la mitad.';
+            : ($this->isShared() ? 'Al mes, lo que paga cada hogar.' : 'Al mes, por cesta.');
     }
 
     /** Si es de huevos (si no, de verdura). */
     public function isEgg(): bool
     {
         return \in_array($this, [self::EggWeekly, self::EggBiweekly, self::EggMonthly], true);
+    }
+
+    /** Si es la verdura de una modalidad compartida (cada hogar paga este precio). */
+    public function isShared(): bool
+    {
+        return \in_array($this, [self::VegWeeklyShared, self::VegBiweeklyShared, self::VegMonthlyShared], true);
     }
 
     /**
@@ -54,21 +67,21 @@ enum FeeConcept: string
     public static function grouped(): array
     {
         return [
-            'veg' => [self::VegWeekly, self::VegBiweekly, self::VegMonthly],
+            'veg' => [self::VegWeekly, self::VegWeeklyShared, self::VegBiweekly, self::VegBiweeklyShared, self::VegMonthly, self::VegMonthlyShared],
             'egg' => [self::EggWeekly, self::EggBiweekly, self::EggMonthly],
         ];
     }
 
-    /**
-     * El concepto de la verdura de una modalidad: la compartida, el de su modalidad
-     * completa. Null para «solo huevos», que no lleva verdura.
-     */
+    /** El concepto de la verdura de una modalidad. Null para «solo huevos», que no lleva verdura. */
     public static function forBasketShare(BasketShare $basketShare): ?self
     {
         return match ($basketShare->getId()) {
-            BasketShare::ID_WEEKLY, BasketShare::ID_WEEKLY_SHARED => self::VegWeekly,
-            BasketShare::ID_BIWEEKLY, BasketShare::ID_BIWEEKLY_SHARED => self::VegBiweekly,
-            BasketShare::ID_MONTHLY, BasketShare::ID_MONTHLY_SHARED => self::VegMonthly,
+            BasketShare::ID_WEEKLY => self::VegWeekly,
+            BasketShare::ID_WEEKLY_SHARED => self::VegWeeklyShared,
+            BasketShare::ID_BIWEEKLY => self::VegBiweekly,
+            BasketShare::ID_BIWEEKLY_SHARED => self::VegBiweeklyShared,
+            BasketShare::ID_MONTHLY => self::VegMonthly,
+            BasketShare::ID_MONTHLY_SHARED => self::VegMonthlyShared,
             default => null,
         };
     }

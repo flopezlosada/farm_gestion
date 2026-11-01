@@ -38,7 +38,8 @@ class FeeScheduleTest extends TestCase
             $this->rate(FeeConcept::VegBiweekly, '55.00', '2026-01-01'),
             $this->rate(FeeConcept::VegBiweekly, '50.00', '2025-01-01'),
             $this->rate(FeeConcept::VegWeekly, '100.00', '2026-01-01'),
-            $this->rate(FeeConcept::VegMonthly, '30.05', '2026-01-01'),
+            $this->rate(FeeConcept::VegMonthly, '30.00', '2026-01-01'),
+            $this->rate(FeeConcept::VegWeeklyShared, '55.00', '2026-01-01'),
             $this->rate(FeeConcept::EggWeekly, '20.00', '2026-01-01'),
         ]);
     }
@@ -74,13 +75,16 @@ class FeeScheduleTest extends TestCase
     public function testDiceQueConceptosNoTienenPrecio(): void
     {
         $this->assertSame(
-            [FeeConcept::EggBiweekly, FeeConcept::EggMonthly],
+            [FeeConcept::VegBiweeklyShared, FeeConcept::VegMonthlyShared, FeeConcept::EggBiweekly, FeeConcept::EggMonthly],
             $this->schedule()->missingOn(new \DateTimeImmutable('2026-10-14')),
         );
-        $this->assertCount(6, (new FeeSchedule([]))->missingOn(new \DateTimeImmutable('2026-10-14')), 'Sin tarifas, falta todo.');
+        $this->assertCount(9, (new FeeSchedule([]))->missingOn(new \DateTimeImmutable('2026-10-14')), 'Sin tarifas, falta todo.');
     }
 
-    /** La compartida paga la mitad de su modalidad, redondeada al céntimo; «solo huevos», cero. */
+    /**
+     * Cada compartida paga su propio precio, no la mitad de su modalidad: la semanal
+     * compartida vale 55, no 50. Sin precio propio no se calcula; «solo huevos», cero.
+     */
     public function testLaVerduraDeCadaModalidad(): void
     {
         $s = $this->schedule();
@@ -88,9 +92,9 @@ class FeeScheduleTest extends TestCase
         $price = fn (int $id): ?string => $s->vegMonthPrice($this->withId(BasketShare::class, $id), $day);
 
         $this->assertSame('100.00', $price(BasketShare::ID_WEEKLY));
-        $this->assertSame('50.00', $price(BasketShare::ID_WEEKLY_SHARED));
-        $this->assertSame('27.50', $price(BasketShare::ID_BIWEEKLY_SHARED));
-        $this->assertSame('15.03', $price(BasketShare::ID_MONTHLY_SHARED), '30,05 / 2 = 15,025: se redondea hacia arriba.');
+        $this->assertSame('55.00', $price(BasketShare::ID_WEEKLY_SHARED), 'Su precio, no la mitad de la semanal.');
+        $this->assertSame('30.00', $price(BasketShare::ID_MONTHLY));
+        $this->assertNull($price(BasketShare::ID_BIWEEKLY_SHARED), 'La quincenal tiene precio, su compartida no: no se saca de la mitad.');
         $this->assertSame('0.00', $price(BasketShare::ID_ONLY_EGG), 'Solo huevos no lleva verdura.');
         $this->assertNull($s->vegMonthPrice($this->withId(BasketShare::class, BasketShare::ID_WEEKLY), new \DateTimeImmutable('2025-06-01')), 'Sin precio ese día: null, nunca cero.');
     }

@@ -7,7 +7,6 @@ use App\Entity\FeeRate;
 use App\Entity\User;
 use App\Form\FeeRateType;
 use App\Repository\FeeRateRepository;
-use App\Service\Partner\Fee\FeeSchedule;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -26,9 +25,6 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_GESTION_SOCIXS')]
 class FeeRateController extends AbstractController
 {
-    /** La cesta física que se lleva una modalidad compartida: media. */
-    private const SHARED_WEIGHT = 0.5;
-
     /** Lo que vale hoy cada concepto, lo que ya está programado y el historial. */
     #[Route('', name: 'fee_rate_index', methods: ['GET'])]
     public function index(FeeRateRepository $rates): Response
@@ -42,7 +38,6 @@ class FeeRateController extends AbstractController
                 'concept' => $c,
                 'current' => $current,
                 'next' => $schedule->nextAfter($c, $today),
-                'shared' => $current !== null && !$c->isEgg() ? FeeSchedule::portion($current->getPrice(), self::SHARED_WEIGHT) : null,
             ];
         };
 

@@ -6,7 +6,6 @@ use App\Entity\BasketShare;
 use App\Entity\EggPeriod;
 use App\Entity\FeeConcept;
 use App\Entity\FeeRate;
-use App\Entity\IssuedInvoice;
 
 /**
  * Todos los precios base con sus fechas, para preguntar qué valía cada cosa un día
@@ -81,7 +80,7 @@ final class FeeSchedule
 
     /**
      * Lo que cuesta al mes una cesta de verdura de una modalidad un día: el precio de
-     * su modalidad, la mitad si es compartida. «Solo huevos» no lleva verdura: cero.
+     * su modalidad (la compartida tiene el suyo). «Solo huevos» no lleva verdura: cero.
      *
      * @return string|null Euros, «27.50»; null si su modalidad no tiene precio ese día.
      */
@@ -91,18 +90,8 @@ final class FeeSchedule
         if ($concept === null) {
             return '0.00';
         }
-        $rate = $this->rateOn($concept, $day);
 
-        return $rate === null ? null : self::portion($rate->getPrice(), $basketShare->getDeliveredBasketWeight());
-    }
-
-    /**
-     * La parte de un precio que paga una modalidad según la cesta física que se lleva:
-     * la compartida (½) paga la mitad, redondeada al céntimo.
-     */
-    public static function portion(string $price, float $weight): string
-    {
-        return IssuedInvoice::fromCents((int) round(IssuedInvoice::toCents($price) * $weight));
+        return $this->rateOn($concept, $day)?->getPrice();
     }
 
     /**
