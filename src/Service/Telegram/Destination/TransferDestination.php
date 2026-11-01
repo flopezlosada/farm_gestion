@@ -56,7 +56,7 @@ class TransferDestination implements TelegramDestination
 
     public function description(): string
     {
-        return 'Dinero que ha pasado de una caja o cuenta de la asociación a otra (de la caja del local a la caja de la huerta, del banco a la caja…), dicho por voz o escrito: cuánto y de dónde a dónde. No es un gasto, ni un cobro, ni una factura.';
+        return 'Dinero que ha pasado de una caja o cuenta de la asociación a otra (de la caja del local a la caja de la huerta, del banco a la caja…), dicho por voz o escrito: cuánto y de dónde a dónde. No es un gasto, ni un cobro, ni una factura, ni el recuento de lo que hay en una caja.';
     }
 
     public function accepts(TelegramInput $input, User $user): bool

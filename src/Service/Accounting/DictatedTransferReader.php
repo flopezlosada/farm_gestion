@@ -65,7 +65,7 @@ class DictatedTransferReader
         ]);
         $data = $result['data'];
 
-        $transfer = new PendingTransfer($by, self::date($data['fecha'] ?? null) ?? $today);
+        $transfer = new PendingTransfer($by, GeminiClient::isoDate($data['fecha'] ?? null) ?? $today);
         $transfer->setAccounts($byKey[(string) ($data['desde'] ?? '')] ?? null, $byKey[(string) ($data['hasta'] ?? '')] ?? null);
         $transfer->setAmount(is_numeric($data['importe'] ?? null) ? (string) $data['importe'] : null);
         $transfer->setConcept(\is_string($data['concepto'] ?? null) ? $data['concepto'] : null);
@@ -92,13 +92,5 @@ class DictatedTransferReader
             . 'En "importe", los euros como número (1.200 € es 1200, 50,5 € es 50.5). '
             . 'En "fecha", AAAA-MM-DD sólo si dice cuándo; si no, vacía. '
             . 'En "concepto", una frase corta con el porqué si lo dice («para gasoil del tractor»); si no, vacío.';
-    }
-
-    /** «2026-10-26» → fecha; cualquier otra cosa, null. */
-    private static function date(mixed $value): ?\DateTimeImmutable
-    {
-        $date = \is_string($value) ? \DateTimeImmutable::createFromFormat('!Y-m-d', $value) : false;
-
-        return $date !== false && $date->format('Y-m-d') === $value ? $date : null;
     }
 }
