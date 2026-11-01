@@ -4,7 +4,8 @@
  #
  # El controller pasa: groups (veg, egg: concept, current, next),
  # missing (conceptos sin precio hoy), history (todos, el más reciente
- # primero), today.
+ # primero), transport (group, current, next: los grupos que pagan o han
+ # pagado transporte), transportHistory, today.
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -51,7 +52,7 @@
 {% block csa_main %}
 <div class="prl">
 
-    {{ csa.page_header('Socios', 'Tarifas', 'Lo que cuesta al mes cada cesta y cada docena de huevos, igual para todo el mundo. Lo que cada socix paga de más o de menos va aparte, en su ficha.') }}
+    {{ csa.page_header('Socios', 'Tarifas', 'Lo que cuesta al mes cada cesta y cada docena de huevos, igual para todo el mundo, y el transporte de los grupos que lo pagan. Lo que cada socix paga de más o de menos va aparte, en su ficha.') }}
 
     {% if missing is not empty %}
         {{ csa.callout(
@@ -155,6 +156,99 @@
             </div>
         </details>
     {% endif %}
+
+
+    <section class="fee-group">
+        <h2 class="acc-subhead fee-group__title"><i class="fa fa-truck" aria-hidden="true"></i> Transporte</h2>
+        <p class="acc-muted">Por cesta y reparto, a los grupos de recogida que lo pagan. Al mes, la semanal paga cuatro repartos, la quincenal dos y la mensual uno. Los demás grupos no pagan transporte.</p>
+        {% if transport is not empty %}
+            <div class="prl-table-wrap">
+                <table class="prl-table">
+                    <thead>
+                        <tr>
+                            <th>Grupo de recogida</th>
+                            <th class="tight acc-num">Hoy</th>
+                            <th class="tight">Próximo cambio</th>
+                            {% if can_edit %}<th class="tight"></th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in transport %}
+                            <tr>
+                                <td data-label="Grupo de recogida">
+                                    <span class="fee-concept">{{ row.group.name }}</span>
+                                    {% if row.group.node %}<span class="fee-hint acc-muted">Nodo {{ row.group.node.name }}</span>{% endif %}
+                                </td>
+                                <td class="acc-num" data-label="Hoy">
+                                    {% if row.current %}
+                                        <span class="fee-price">{{ fmt.money(row.current.pricePerDelivery) }}</span>
+                                        <span class="fee-since acc-muted">por cesta, desde {{ row.current.validFrom|date('d/m/Y') }}</span>
+                                    {% else %}
+                                        <span class="acc-muted">No paga</span>
+                                    {% endif %}
+                                </td>
+                                <td data-label="Próximo cambio">
+                                    {% if row.next %}
+                                        <span class="prl-chip prl-chip--warn"><span class="dot"></span>{{ fmt.money(row.next.pricePerDelivery) }} desde {{ row.next.validFrom|date('d/m/Y') }}</span>
+                                    {% else %}
+                                        <span class="acc-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                {% if can_edit %}
+                                    <td class="tight">
+                                        <a href="{{ path('transport_rate_new', { group: row.group.id }) }}" class="prl-btn">Cambiar precio</a>
+                                    </td>
+                                {% endif %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="acc-muted">Ningún grupo paga transporte.</p>
+        {% endif %}
+        {% if can_edit %}
+            <p><a href="{{ path('transport_rate_new') }}" class="prl-btn"><i class="fa fa-plus"></i> Transporte a otro grupo</a></p>
+        {% endif %}
+
+        {% if transportHistory is not empty %}
+            <details class="fee-history">
+                <summary>Historial del transporte: {{ transportHistory|length }} {{ transportHistory|length == 1 ? 'precio' : 'precios' }}</summary>
+                <div class="prl-table-wrap">
+                    <table class="prl-table">
+                        <thead>
+                            <tr>
+                                <th class="tight">Desde</th>
+                                <th>Grupo de recogida</th>
+                                <th class="tight acc-num">Por cesta</th>
+                                <th class="tight">Puesto por</th>
+                                {% if can_edit %}<th class="tight"></th>{% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for rate in transportHistory %}
+                                <tr>
+                                    <td class="tight" data-label="Desde">{{ rate.validFrom|date('d/m/Y') }}{% if rate.validFrom > today %} <span class="acc-muted">(programado)</span>{% endif %}</td>
+                                    <td data-label="Grupo de recogida">{{ rate.pickupGroup.name }}</td>
+                                    <td class="acc-num" data-label="Por cesta">{{ fmt.money(rate.pricePerDelivery) }}</td>
+                                    <td class="tight acc-muted" data-label="Puesto por">{{ [rate.createdBy ? rate.createdBy.displayName : null, rate.createdAt ? rate.createdAt|date('d/m/Y') : null]|filter(v => v)|join(', ')|default('—') }}</td>
+                                    {% if can_edit %}
+                                        <td class="tight">
+                                            <form method="post" action="{{ path('transport_rate_delete', { id: rate.id }) }}"
+                                                  onsubmit="return confirm('¿Quitar este precio de transporte? Vuelve a valer el anterior desde su fecha. Hazlo sólo si se puso por error.');">
+                                                <input type="hidden" name="_token" value="{{ csrf_token('delete-transport-rate-' ~ rate.id) }}">
+                                                <button type="submit" class="fee-link-btn">Quitar</button>
+                                            </form>
+                                        </td>
+                                    {% endif %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        {% endif %}
+    </section>
 
 </div>
 {% endblock %}

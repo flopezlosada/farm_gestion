@@ -1,0 +1,62 @@
+{# ============================================================
+ # Un precio de transporte nuevo para un grupo de recogida, desde una fecha.
+ #
+ # El controller pasa: form, group (si se llega desde la tabla),
+ # current (su precio de hoy, si lo tiene).
+ # ============================================================ #}
+
+{% extends '_layouts/csa_shell.html.twig' %}
+{% import '_macros/csa.html.twig' as csa %}
+{% form_theme form 'form_div_layout.html.twig' %}
+
+{% set heading = group ? 'Transporte a ' ~ group.name : 'Nuevo transporte' %}
+
+{% block title %}{{ heading }} · Tarifas{% endblock %}
+
+{% block csa_crumbs %}
+    <a href="{{ path('dashboard') }}">Inicio</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('partner_index') }}">Socios</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <a href="{{ path('fee_rate_index') }}">Tarifas</a>
+    <span class="csa-topbar__crumbs-sep">/</span>
+    <span class="csa-topbar__crumb-active">Nuevo transporte</span>
+{% endblock %}
+
+{% block csa_main %}
+    {{ csa.page_header('Socios · Tarifas', heading,
+        current
+            ? 'Ahora cuesta ' ~ current.pricePerDelivery|number_format(2, ',', '.') ~ ' € por cesta desde el ' ~ current.validFrom|date('d/m/Y') ~ '. El precio nuevo no lo borra: lo sustituye a partir de la fecha que pongas.'
+            : 'Lo pagan las cestas de los grupos que tienen precio. Vale desde la fecha que pongas hasta que se ponga otro.'
+    ) }}
+
+    {{ form_start(form, { attr: { class: 'csa-form-narrow' } }) }}
+
+        {{ form_errors(form) }}
+
+        <div class="csa-stack-lg">
+
+            {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'El precio', subtitle: 'Por cesta y reparto. Al mes, la semanal paga cuatro repartos, la quincenal dos y la mensual uno; quien tiene dos cestas, dos veces. Solo huevos no paga transporte.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.pickupGroup, 'Grupo de recogida') }}
+                        {{ csa.field(form.pricePerDelivery, 'Euros por cesta y reparto') }}
+                        {{ csa.field(form.validFrom, 'Desde', { hint: 'normalmente el día 1 de un mes' }) }}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+
+            <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
+                <div></div>
+                <div class="csa-row">
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('fee_rate_index') }) }}
+                    <button type="submit" class="csa-btn csa-btn--primary">Guardar transporte</button>
+                </div>
+            </div>
+
+        </div>
+
+        {{ form_rest(form) }}
+    {{ form_end(form, { render_rest: false }) }}
+{% endblock %}
