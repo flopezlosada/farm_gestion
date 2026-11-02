@@ -530,6 +530,10 @@ class AccountingAgenda
             ['Entra en la banca, mira si está rechazada o pendiente y, si se rechazó entera, vuelve a subirla con fecha nueva y cámbiala en su ficha.'],
             'accounting_remittance_show',
             ['id' => $row['remittance']->getId()],
+            // Cada extracto importado mueve «el extracto ya llega al…»: sin esto, cada
+            // importación avisaría otra vez de la misma remesa. Un día de cargo nuevo
+            // (se volvió a subir) sí es otra tarea.
+            identity: sprintf('sin entrar, cargo del %s', $row['remittance']->getChargeDate()?->format('Y-m-d')),
         ), $this->chargeWatch->uncredited());
     }
 
