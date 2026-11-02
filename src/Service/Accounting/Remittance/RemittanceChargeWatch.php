@@ -39,6 +39,18 @@ class RemittanceChargeWatch
     }
 
     /**
+     * Hasta dónde llega el libro de la cuenta en que entran las remesas: la del último
+     * abono de remesa. Null si el libro no tiene ninguno con el que saber cuál es.
+     */
+    public function bookUpTo(): ?\DateTimeImmutable
+    {
+        $latest = self::credits($this->entries->findLatestByConceptPrefix(BankReturns::CREDIT_PREFIX, self::USUAL_DAY_SAMPLE));
+        $accountId = $latest !== [] ? $latest[0]->getAccount()?->getId() : null;
+
+        return $accountId !== null ? ($this->entries->lastDateByAccount()[$accountId] ?? null) : null;
+    }
+
+    /**
      * Las remesas enviadas que no han entrado en el banco, con hasta dónde llega el
      * libro de la cuenta en que entran las remesas. Vacío si no hay ninguna vigilada
      * o si el libro no tiene ningún abono de remesa con el que saber cuál es esa cuenta.
@@ -51,9 +63,7 @@ class RemittanceChargeWatch
         if ($watched === []) {
             return [];
         }
-        $latest = self::credits($this->entries->findLatestByConceptPrefix(BankReturns::CREDIT_PREFIX, self::USUAL_DAY_SAMPLE));
-        $accountId = $latest !== [] ? $latest[0]->getAccount()?->getId() : null;
-        $bookUpTo = $accountId !== null ? ($this->entries->lastDateByAccount()[$accountId] ?? null) : null;
+        $bookUpTo = $this->bookUpTo();
         if ($bookUpTo === null) {
             return [];
         }
