@@ -267,6 +267,26 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * El descuadre de un arqueo llega al alta con el importe y el concepto puestos; un
+     * importe que no se entiende se ignora en vez de romper.
+     */
+    public function testElAltaLlegaConImporteYConceptoPropuestos(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+
+        $crawler = $client->request('GET', '/gestion/accounting/entry/new?date=2026-10-30&amount=-12.40&concept=Descuadre%20del%20arqueo%20del%2030/10/2026');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSame('Descuadre del arqueo del 30/10/2026', $crawler->filter('#account_entry_concept')->attr('value'));
+        $this->assertSame(12.4, (float) $crawler->filter('#account_entry_magnitude')->attr('value'));
+        $this->assertSame('out', $crawler->filter('#account_entry_direction option[selected]')->attr('value'), 'Faltaba dinero: sale de la caja.');
+
+        $client->request('GET', '/gestion/accounting/entry/new?amount=doce');
+        $this->assertResponseIsSuccessful();
+    }
+
+    /**
      * Contabilidad es el trabajo diario del admin: sale justo debajo de «Día a día» y
      * es el único grupo que el admin recibe desplegado; el resto llega plegado.
      */

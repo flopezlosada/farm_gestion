@@ -217,12 +217,16 @@ class AccountingAgendaTest extends TestCase
         $paypal = $this->account('PayPal', FinancialAccount::KIND_BANK);
         $caixa = $this->account('La Caixa', FinancialAccount::KIND_BANK);
 
+        // Contada este mes, para que no salga el arqueo pendiente, que es otra tarea.
+        $counted = new CashCount($caja, new \DateTimeImmutable('2026-10-01'), 0, 0, null, new \DateTimeImmutable('2026-10-01 20:00'), 'caja huerta 0', null);
+
         $this->assertSame([], $this->agenda(
             accounts: [$caja, $paypal, $caixa],
             lastDates: [
                 $caja->getId() => new \DateTimeImmutable('2026-03-01'),
                 $caixa->getId() => new \DateTimeImmutable('2027-03-01'),
             ],
+            cashCounts: [$counted],
         )->items(new \DateTimeImmutable('2026-10-18')));
     }
 
@@ -508,6 +512,46 @@ class AccountingAgendaTest extends TestCase
             'Al anotar lo que falta con fecha del 30/10/2026 o anterior, este aviso desaparece solo. No se hace ningún apunte automático.',
         ], $count[0]->details);
         $this->assertSame(['account' => $garden->getId(), 'date' => '2026-10-30'], $count[0]->routeParams);
+    }
+
+    /** El arqueo que no cuadra ofrece anotar la diferencia, con el importe y el concepto puestos. */
+    public function testElArqueoQueNoCuadraOfreceAnotarElDescuadre(): void
+    {
+        $garden = $this->account('Caja de la huerta', FinancialAccount::KIND_CASH);
+        $count = new CashCount($garden, new \DateTimeImmutable('2026-10-30'), 40056, 41296, null, new \DateTimeImmutable('2026-10-30 20:15'), 'caja huerta 400,56', null);
+
+        $item = $this->only($this->agenda(cashCounts: [$count], dayBalances: [$garden->getId() => new DayBalances(41296, 41296)])
+            ->items(new \DateTimeImmutable('2026-11-15')));
+
+        $this->assertCount(1, $item->actions);
+        $action = $item->actions[0];
+        $this->assertFalse($action->isPost(), 'Lleva al alta, donde se elige la partida: no anota nada solo.');
+        $this->assertSame('accounting_entry_new', $action->route);
+        $this->assertSame([
+            'account' => $garden->getId(),
+            'date' => '2026-10-30',
+            'amount' => '-12.40',
+            'concept' => 'Descuadre del arqueo del 30/10/2026',
+        ], $action->routeParams);
+        $this->assertStringContainsString('-12,40 €', $action->consequence);
+    }
+
+    /**
+     * Una caja sin arqueo este mes sale desde el día 5 (antes es normal que falte); el
+     * recuento de la última semana del mes anterior ya cuenta como hecho.
+     */
+    public function testElArqueoQueFalta(): void
+    {
+        $garden = $this->account('Caja de la huerta', FinancialAccount::KIND_CASH);
+        $local = $this->account('Caja del local', FinancialAccount::KIND_CASH);
+        $fiare = $this->account('Fiare', FinancialAccount::KIND_BANK);
+        $lastWeek = new CashCount($local, new \DateTimeImmutable('2026-10-28'), 0, 0, null, new \DateTimeImmutable('2026-10-28 20:00'), 'caja local 0', null);
+        $agenda = $this->agenda(accounts: [$garden, $local, $fiare], cashCounts: [$lastWeek]);
+
+        $this->assertSame([], $agenda->items(new \DateTimeImmutable('2026-11-04')));
+        $item = $this->only($agenda->items(new \DateTimeImmutable('2026-11-05')));
+        $this->assertSame('Falta el arqueo de octubre: Caja de la huerta', $item->title);
+        $this->assertSame(['accounting_ledger', ['account' => $garden->getId()]], [$item->route, $item->routeParams]);
     }
 
     /** Si sobra dinero, el signo es positivo; con el libro en negativo, también lo dice. */

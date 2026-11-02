@@ -393,6 +393,9 @@ class AppSettings
      */
     public const CRON_INVOICE_MAIL = 'cron.invoice_mail';
 
+    /** Pide por el bot de Telegram el arqueo de las cajas sin contar este mes (app:send-cash-count-reminder). */
+    public const CRON_CASH_COUNT_REMINDER = 'cron.cash_count_reminder';
+
     /**
      * Copia de seguridad fuera del hosting: cifrada y bloqueada contra el borrado
      * en Backblaze B2: un volcado de la base y los documentos de var/documentos.
@@ -786,6 +789,20 @@ class AppSettings
         ],
         // Una vez al día basta: una factura no corre prisa por horas. A las 6, para
         // que la lectura horaria las tenga leídas cuando alguien abra la bandeja.
+        // A diario: la tarea decide sola si toca (cajas sin contar este mes) y pide una
+        // vez al mes a cada persona. Diario para que un reloj caído el día 1 no se coma
+        // el mes entero.
+        self::CRON_CASH_COUNT_REMINDER => [
+            'command' => 'app:send-cash-count-reminder',
+            'channels' => ['telegram'],
+            'needs_recipient' => false,
+            'confirm' => true,
+            'dry' => true,
+            'schedule' => ['freq' => 'daily', 'hour' => 9],
+            'max_delay_hours' => 36,
+            'requires' => [self::FEATURE_CONTABILIDAD],
+            'depends_on' => [],
+        ],
         self::CRON_INVOICE_MAIL => [
             'command' => 'app:fetch-invoice-mail',
             // Las facturas no avisan a nadie (se quedan en la bandeja de
@@ -1043,6 +1060,12 @@ class AppSettings
             'group' => 'Tareas programadas',
             'label' => 'Leer las facturas en cola',
             'help' => 'Cada hora vuelve a intentar leer las facturas recibidas que no se pudieron leer al subirlas, porque el servicio de lectura estaba saturado o sin cupo (app:read-received-invoices). No manda nada a nadie. Apagada, esas facturas se quedan en cola hasta que alguien suba otra. Requiere la contabilidad encendida.',
+            'default' => true,
+        ],
+        self::CRON_CASH_COUNT_REMINDER => [
+            'group' => 'Tareas programadas',
+            'label' => 'Pedir el arqueo de caja',
+            'help' => 'Si alguna caja de efectivo está sin contar desde la última semana del mes anterior, pide el arqueo por el bot de Telegram a quien tiene el permiso de arqueo y el bot vinculado, una vez al mes (app:send-cash-count-reminder). Requiere la contabilidad encendida y el bot configurado.',
             'default' => true,
         ],
         self::CRON_INVOICE_MAIL => [
