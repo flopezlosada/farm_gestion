@@ -179,7 +179,9 @@
         </div>
     </div>
 
-    {# Modal de solicitud (reusa el lenguaje visual .csa-modal). #}
+    {# Modal de solicitud (reusa el lenguaje visual .csa-modal). Quien ya no
+     # trabaja aquí no puede pedir ausencias: ni botón ni formulario. #}
+    {% if app.user.activeWorker %}
     <dialog id="vac-modal" class="csa-modal csa-modal--info" aria-labelledby="vac-modal-title">
         <form method="post" action="{{ path('work_vacation_request') }}">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token('work_vacation') }}">
@@ -214,6 +216,7 @@
             </footer>
         </form>
     </dialog>
+    {% endif %}
 
     {# Validación de fechas en cliente: "Hasta" nunca antes de "Desde" (validación
      # nativa antes del submit, sin ida y vuelta al servidor). #}
