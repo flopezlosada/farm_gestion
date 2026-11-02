@@ -22,8 +22,8 @@ class CashCountDueTest extends TestCase
         $local = $this->account('Caja del local');
         $old = $this->account('Caja vieja');
         $latest = [
-            $this->count($local, '2026-10-25'),
-            $this->count($old, '2026-10-24'),
+            $this->countOn($local, '2026-10-25'),
+            $this->countOn($old, '2026-10-24'),
         ];
 
         $pending = CashCountDue::pending([$garden, $local, $old], $latest, new \DateTimeImmutable('2026-11-01'));
@@ -36,7 +36,7 @@ class CashCountDueTest extends TestCase
     {
         $garden = $this->account('Caja de la huerta');
 
-        $this->assertSame([], CashCountDue::pending([$garden], [$this->count($garden, '2026-11-02')], new \DateTimeImmutable('2026-11-20')));
+        $this->assertSame([], CashCountDue::pending([$garden], [$this->countOn($garden, '2026-11-02')], new \DateTimeImmutable('2026-11-20')));
     }
 
     public function testElBotDiceQueCajasContarYComoContestar(): void
@@ -56,7 +56,7 @@ class CashCountDueTest extends TestCase
         return $account;
     }
 
-    private function count(FinancialAccount $account, string $date): CashCount
+    private function countOn(FinancialAccount $account, string $date): CashCount
     {
         return new CashCount($account, new \DateTimeImmutable($date), 0, 0, null, new \DateTimeImmutable($date . ' 20:00'), 'arqueo', null);
     }
