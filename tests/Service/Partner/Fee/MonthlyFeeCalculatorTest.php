@@ -477,6 +477,49 @@ class MonthlyFeeCalculatorTest extends TestCase
         $this->assertTrue($statement->isChargeable());
     }
 
+    /**
+     * En diciembre, con mantenimiento: quien trabaja y no paga ninguna cesta tampoco paga
+     * las cuotas de socix, aunque acabe de entrar; quien tras la baja la paga, sí; y si en
+     * su familia hay otra cesta que se paga, el hogar paga el mantenimiento una vez.
+     */
+    public function testQuienTrabajaNoPagaCuotasDeSocixSiNoPagaCesta(): void
+    {
+        $dec = ['2026-12-04', '2026-12-11', '2026-12-18', '2026-12-25'];
+        $weeks = array_map(static fn (string $d): \DateTimeImmutable => new \DateTimeImmutable($d), $dec);
+        $schedule = new FeeSchedule([
+            new FeeRate(FeeConcept::VegWeekly, '100', new \DateTimeImmutable('2026-01-01'), null),
+            new FeeRate(FeeConcept::MembershipSignup, '25', new \DateTimeImmutable('2026-01-01'), null),
+            new FeeRate(FeeConcept::MembershipUpkeep, '25', new \DateTimeImmutable('2026-01-01'), null),
+        ]);
+        $alba = self::withIdOn(self::partner('Alba'), 1);                      // trabaja; nueva, sin mandato
+        $paga = self::withIdOn(self::withMandate(self::partner('Paga')), 2);    // se fue y la paga
+        $hogar = self::withIdOn(self::withMandate(self::partner('Hogar')), 3);  // paga su semanal
+        $iris = self::withIdOn(self::partner('Iris', $hogar), 4);               // de la familia de Hogar; trabaja
+        $shares = [
+            self::share($alba, BasketShare::ID_WEEKLY, start: '2026-12-01'),
+            self::share($paga, BasketShare::ID_WEEKLY),
+            self::share($iris, BasketShare::ID_WEEKLY),
+            self::share($hogar, BasketShare::ID_WEEKLY),
+        ];
+        $workers = [
+            self::worker($alba, '2026-11-15'),
+            self::worker($paga, '2020-01-01', '2026-11-30', WorkerLeaveBasket::Paid),
+            self::worker($iris, '2019-03-01'),
+        ];
+        $fees = MonthlyFeeCalculator::compute(new \DateTimeImmutable('2026-12-01'), $weeks, $shares, $schedule, [], [], [], [1], $workers);
+        $concepts = static fn (FeeStatement $s): array => array_map(static fn (FeeCharge $c): string => $c->concept->value, $s->getCharges());
+
+        $albaFees = self::of($fees->getStatements(), $alba);
+        $this->assertSame([], $albaFees->getCharges(), 'Ni inscripción ni mantenimiento.');
+        $this->assertTrue($albaFees->isFree());
+        $this->assertSame([], $albaFees->getProblems(), 'Sin mandato, pero no hay nada que cobrar.');
+        $this->assertSame([FeeConcept::MembershipUpkeep->value], $concepts(self::of($fees->getStatements(), $paga)));
+        $this->assertSame('125.00', self::of($fees->getStatements(), $paga)->getTotal());
+        $household = self::of($fees->getStatements(), $hogar);
+        $this->assertSame([FeeConcept::MembershipUpkeep->value], $concepts($household), 'Un mantenimiento por hogar, aunque Iris no pague su cesta.');
+        $this->assertSame('125.00', $household->getTotal(), 'La semanal de Hogar y el mantenimiento; la de Iris, gratis.');
+    }
+
     /** Pagarla no tiene «hasta»: elegirlo borra la fecha del regalo, y sin regalo no se guarda. */
     public function testPagarlaNoTieneFechaDeRegalo(): void
     {
