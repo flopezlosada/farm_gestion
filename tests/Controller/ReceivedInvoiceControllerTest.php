@@ -575,6 +575,29 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $this->assertSame(403, $client->getResponse()->getStatusCode());
     }
 
+    /**
+     * El mismo fichero subido dos veces: la revisión de cualquiera de las dos avisa de
+     * la otra; descartada una, la otra ya no avisa.
+     */
+    public function testElMismoFicheroSubidoDosVecesAvisa(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $first = $this->uploadOne($client);
+        $second = $this->uploadOne($client);
+        $this->assertNotSame($first->getId(), $second->getId());
+        $this->assertNotNull($second->getFileHash());
+        $this->assertSame($first->getFileHash(), $second->getFileHash());
+
+        $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $second->getId()));
+        $this->assertSelectorTextContains('body', 'este mismo fichero ya entró como «factura-prueba.pdf»');
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $first->getId()));
+        $client->submit($crawler->filter(sprintf('form[action="/gestion/accounting/invoices/%d/discard"]', $first->getId()))->form());
+        $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $second->getId()));
+        $this->assertSelectorTextNotContains('body', 'este mismo fichero ya entró');
+    }
+
     private function uploadOne($client): ReceivedInvoice
     {
         $crawler = $client->request('GET', '/gestion/accounting/invoices');

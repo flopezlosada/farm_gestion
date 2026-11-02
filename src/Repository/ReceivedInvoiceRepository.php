@@ -247,6 +247,28 @@ class ReceivedInvoiceRepository extends ServiceEntityRepository
     }
 
     /**
+     * Otra factura con el mismo fichero, salvo las descartadas: el mismo documento
+     * subido dos veces (con otro nombre, o por la web y por el correo). La más antigua.
+     *
+     * @param ReceivedInvoice $invoice La que se está revisando.
+     */
+    public function findSameFile(ReceivedInvoice $invoice): ?ReceivedInvoice
+    {
+        if ($invoice->getFileHash() === null) {
+            return null;
+        }
+
+        return $this->createQueryBuilder('i')
+            ->andWhere('i.fileHash = :hash')->setParameter('hash', $invoice->getFileHash())
+            ->andWhere('i.id != :id')->setParameter('id', (int) $invoice->getId())
+            ->andWhere('i.status != :discarded')->setParameter('discarded', ReceivedInvoice::STATUS_DISCARDED)
+            ->orderBy('i.id', 'ASC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+    /**
      * Otra factura ya anotada con el mismo proveedor y número: casi seguro la misma,
      * entregada dos veces (el trabajador la manda y la tesorera la sube del correo).
      * Anotarla otra vez contaría el gasto doble.

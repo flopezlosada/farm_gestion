@@ -7,6 +7,7 @@
  # leer: en ésta los campos llegan vacíos.
  #
  # El controller pasa: invoice, twin (otra ya anotada con el mismo número, o null),
+ # sameFile (otra no descartada con el mismo fichero, o null),
  # form (la factura + su apunte en form.entry), suggestions, hasDocument (si el
  # fichero está en el servidor).
  #
@@ -85,6 +86,9 @@
             : 'Esta factura no se ha leído sola. Complétala mirando el documento y guarda.'
     ) }}
 
+    {% if sameFile %}
+        {{ csa.callout('Ojo: este mismo fichero ya entró como «' ~ sameFile.originalName ~ '»' ~ (sameFile.createdAt ? ' el ' ~ sameFile.createdAt|date('d/m/Y') : '') ~ (sameFile.status == 'confirmed' ? ', y ya está anotada' : ', y está en la bandeja') ~ '. Es el mismo documento: descarta una de las dos, o el gasto contará doble.', 'danger', 'files-o') }}
+    {% endif %}
     {% if twin %}
         {{ csa.callout('Ojo: ya hay una factura anotada de este proveedor con el número ' ~ twin.invoiceNumber ~ (twin.accountEntry ? ' (apunte del ' ~ twin.accountEntry.date|date('d/m/Y') ~ ', ' ~ twin.accountEntry.amount|number_format(2, ',', '.') ~ ' €)' : '') ~ '. Si es la misma, descártala: anotarla otra vez contaría el gasto doble.', 'danger', 'files-o') }}
     {% endif %}
