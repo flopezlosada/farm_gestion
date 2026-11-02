@@ -95,6 +95,13 @@ class AppSettings
     /** Envío a cada trabajador a tiempo parcial del resumen de su mes aprobado (app:send-staff-monthly-summaries). */
     public const EMAIL_STAFF_MONTHLY_SUMMARY = 'email.staff_monthly_summary';
 
+    /**
+     * Correo de la vigilancia de la contabilidad (app:send-accounting-watch), además
+     * del móvil y la bandeja. NO va en el `requires` de la tarea: apagado el correo,
+     * el móvil y la bandeja tienen que seguir avisando.
+     */
+    public const EMAIL_ACCOUNTING_WATCH = 'email.accounting_watch';
+
     /** Envío del listado de reparto en PDF al cerrarse el plazo de cada nodo (app:send-delivery-sheets). */
     public const EMAIL_DELIVERY_SHEET = 'email.delivery_sheet';
 
@@ -812,7 +819,11 @@ class AppSettings
         // va al móvil y no se puede des-enviar.
         self::CRON_ACCOUNTING_WATCH => [
             'command' => 'app:send-accounting-watch',
-            'channels' => ['push', 'inbox'],
+            // El correo es un canal más, con su interruptor propio
+            // (EMAIL_ACCOUNTING_WATCH) leído dentro de la tarea y no en `requires`:
+            // si se apagara la tarea con el correo, se irían también el móvil y la
+            // bandeja.
+            'channels' => ['push', 'inbox', 'email'],
             'needs_recipient' => false,
             'confirm' => true,
             'dry' => true,
@@ -992,6 +1003,12 @@ class AppSettings
             'help' => 'Cuando se aprueba el mes de un trabajador a tiempo parcial, le manda por correo el PDF con el resumen de sus horas. La ley obliga a entregárselo cada mes (art. 12.4.c del Estatuto); si no se hace, se presume que el contrato es a jornada completa. Apagado, habría que entregárselo a mano.',
             'default' => true,
         ],
+        self::EMAIL_ACCOUNTING_WATCH => [
+            'group' => 'Emails internos',
+            'label' => 'Avisos de la contabilidad por correo',
+            'help' => 'La vigilancia de la contabilidad manda también por correo lo que avisa al móvil: lo urgente (notificación oficial, plazo de la gestoría, remesa que no ha entrado) y el resumen semanal. Va a quien tenga el permiso de escribir en contabilidad. Apagado, los avisos siguen llegando al móvil y a la bandeja.',
+            'default' => true,
+        ],
         self::EMAIL_DELIVERY_SHEET => [
             'group' => 'Emails internos',
             'label' => 'Listado de reparto al cerrarse el plazo',
@@ -1091,7 +1108,7 @@ class AppSettings
         self::CRON_ACCOUNTING_WATCH => [
             'group' => 'Tareas programadas',
             'label' => 'Vigilar la contabilidad',
-            'help' => 'Cada mañana repasa la lista de «Por hacer» de la portada de contabilidad (app:send-accounting-watch). Lo urgente (una notificación oficial sin mirar, el plazo de la gestoría, una remesa que no ha entrado en el banco) avisa al móvil y a la bandeja de quien lleva la contabilidad el día que aparece y otra vez cada 3 días mientras siga sin resolver. El resto llega una vez por semana, en un resumen. Requiere la contabilidad encendida.',
+            'help' => 'Cada mañana repasa la lista de «Por hacer» de la portada de contabilidad (app:send-accounting-watch). Lo urgente (una notificación oficial sin mirar, el plazo de la gestoría, una remesa que no ha entrado en el banco) avisa al móvil, al correo y a la bandeja de quien lleva la contabilidad el día que aparece y otra vez cada 3 días mientras siga sin resolver. El resto llega una vez por semana, en un resumen. Quien lleva la contabilidad es quien tiene el permiso de escribir en ella (a un admin hay que dárselo aparte); si no lo tiene nadie, la tarea sale en rojo y no avisa. Requiere la contabilidad encendida.',
             'default' => true,
         ],
         self::CRON_INVOICE_MAIL => [
