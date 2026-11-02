@@ -108,6 +108,10 @@ class AccountEntryType extends AbstractType
                 'query_builder' => static fn (ProviderRepository $r) => $r->createQueryBuilder('p')->orderBy('p.name', 'ASC'),
                 'required' => false,
                 'placeholder' => '— Sin ficha de proveedor —',
+                // Que llame a setProvider también cuando la ficha no cambia: si no, al
+                // editar sólo el texto, el formulario ve el mismo objeto, se salta el
+                // setter y el nombre del apunte deja de ser el de su ficha.
+                'by_reference' => false,
             ]);
         }
 

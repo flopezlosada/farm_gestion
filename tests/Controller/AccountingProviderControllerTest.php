@@ -89,6 +89,42 @@ class AccountingProviderControllerTest extends AbstractAuthenticatedTest
         $this->assertSelectorTextContains('body', 'Suministros del local');
     }
 
+    /**
+     * Editar sólo el texto de un apunte que ya tiene ficha no los separa: el nombre
+     * sigue siendo el de la ficha. Quitar la ficha deja el texto que se escriba.
+     */
+    public function testEditarElTextoDeUnApunteConFichaNoLosSepara(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        [$bank, $category] = $this->catalog();
+        $provider = (new Provider())->setName(self::NAME);
+        $entry = (new AccountEntry())->setAccount($bank)->setCategory($category)->setDate(new \DateTimeImmutable('2089-03-02'))
+            ->setConcept('Suministros del local')->setAmount('-50.00')->setProvider($provider);
+        array_map([$em, 'persist'], [$provider, $entry]);
+        $em->flush();
+
+        $edit = sprintf('/gestion/accounting/entry/%d/edit', $entry->getId());
+        $form = $client->request('GET', $edit)->filter('form[name="account_entry"]')->form();
+        $form['account_entry[providerName]'] = 'otro nombre';
+        $client->submit($form);
+        $this->assertResponseRedirects();
+
+        $em->clear();
+        $this->assertSame(self::NAME, $em->find(AccountEntry::class, $entry->getId())->getProviderName(), 'Con la misma ficha, manda la ficha.');
+
+        $form = $client->request('GET', $edit)->filter('form[name="account_entry"]')->form();
+        $form['account_entry[providerName]'] = 'sin ficha';
+        $form['account_entry[provider]']->select('');
+        $client->submit($form);
+
+        $em->clear();
+        $saved = $em->find(AccountEntry::class, $entry->getId());
+        $this->assertNull($saved->getProvider());
+        $this->assertSame('sin ficha', $saved->getProviderName());
+    }
+
     /** @return array{0: FinancialAccount, 1: BudgetCategory} */
     private function catalog(): array
     {
