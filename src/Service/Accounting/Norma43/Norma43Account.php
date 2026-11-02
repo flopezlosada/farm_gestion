@@ -53,7 +53,7 @@ final class Norma43Account
     }
 
     /** Si el fichero dice de qué cuenta es. */
-    private function isKnown(): bool
+    public function isKnown(): bool
     {
         return $this->bank.$this->branch.$this->number !== '';
     }

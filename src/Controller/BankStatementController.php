@@ -77,9 +77,12 @@ class BankStatementController extends AbstractController
             $chosen = array_map('intval', array_filter($request->request->all('account'), 'is_numeric'));
             ['resolved' => $resolved, 'unresolved' => $unresolved] = $importer->resolve($file, $chosen);
             if ($unresolved !== []) {
-                $choosable = $importer->choosableAccounts();
-                if ($choosable === []) {
-                    throw new Norma43Exception(sprintf('Ninguna cuenta del libro tiene el IBAN de la %s, y no hay cuentas de banco sin IBAN para elegir. Pon el IBAN en la ficha de su cuenta (Ajustes → Cuentas) y vuelve a subirlo.', $unresolved[0]->label()));
+                $choosable = [];
+                foreach ($unresolved as $read) {
+                    $choosable[$read->key()] = $importer->choosableAccounts($read)
+                        ?: throw new Norma43Exception($read->isKnown()
+                            ? sprintf('Ninguna cuenta del libro tiene el IBAN de la %s, y no hay cuentas de banco sin IBAN para elegir. Pon el IBAN en la ficha de su cuenta (Ajustes → Cuentas) y vuelve a subirlo.', $read->label())
+                            : 'El fichero no dice de qué cuenta es y no hay ninguna cuenta de banco activa para elegir (Ajustes → Cuentas).');
                 }
 
                 return $this->render('accounting/bank_statement_choose.html.twig', [

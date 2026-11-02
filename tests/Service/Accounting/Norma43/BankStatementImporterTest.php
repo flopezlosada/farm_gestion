@@ -192,12 +192,35 @@ class BankStatementImporterTest extends KernelTestCase
         $importer = static::getContainer()->get(BankStatementImporter::class);
 
         $this->assertCount(1, $importer->resolve($file)['unresolved']);
-        $this->assertContains($noIban, $importer->choosableAccounts());
-        $this->assertNotContains($withIban, $importer->choosableAccounts());
+        $this->assertContains($noIban, $importer->choosableAccounts($file->accounts[0]));
+        $this->assertNotContains($withIban, $importer->choosableAccounts($file->accounts[0]));
         $this->assertSame($noIban, $importer->resolve($file, [$key => $noIban->getId()])['resolved'][$key]);
 
         $this->expectException(Norma43Exception::class);
         $importer->resolve($file, [$key => $withIban->getId()]);
+    }
+
+    /**
+     * Si el fichero no dice de qué cuenta es (la hoja de Excel de Fiare), nada contradice
+     * a una cuenta que ya tiene su IBAN: se puede elegir. Una retirada, no.
+     */
+    public function testFicheroSinIbanDejaElegirUnaCuentaConIban(): void
+    {
+        [$withIban] = $this->bankAccount();
+        [$retired] = $this->bankAccount();
+        $retired->setActive(false);
+        $this->em->flush();
+        $file = static::getContainer()->get(BankStatementReader::class)->read(BankSheet::fiareLike(500.00, [['2091-03-05', -10.00, 'COMPRA INVENTADA']]));
+        $read = $file->accounts[0];
+        $importer = static::getContainer()->get(BankStatementImporter::class);
+
+        $this->assertFalse($read->isKnown());
+        $this->assertContains($withIban, $importer->choosableAccounts($read));
+        $this->assertNotContains($retired, $importer->choosableAccounts($read));
+        $this->assertSame($withIban, $importer->resolve($file, [$read->key() => $withIban->getId()])['resolved'][$read->key()]);
+
+        $this->expectException(Norma43Exception::class);
+        $importer->resolve($file, [$read->key() => $retired->getId()]);
     }
 
     private function import(string $raw): BankStatementImport

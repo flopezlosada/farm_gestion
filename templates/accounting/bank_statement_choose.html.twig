@@ -1,8 +1,8 @@
 {# ============================================================
  # Elegir la cuenta del libro de un extracto que no casa por IBAN.
  #
- # El controller pasa: unresolved (Norma43Account[]), accounts (cuentas de
- # banco activas sin IBAN), content (el fichero en base64), fileName, chosen.
+ # El controller pasa: unresolved (Norma43Account[]), accounts (las cuentas
+ # que se pueden elegir, por clave de la cuenta del fichero), content (el fichero en base64), fileName, chosen.
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -22,7 +22,7 @@
 {% endblock %}
 
 {% block csa_main %}
-    {{ csa.page_header('Contabilidad · Extractos', '¿De qué cuenta es este extracto?', 'Ninguna cuenta del libro tiene el IBAN de este extracto. Elige a cuál corresponde; sólo salen las cuentas de banco sin IBAN. Para no tener que elegirla cada mes, pon el IBAN en la ficha de la cuenta.') }}
+    {{ csa.page_header('Contabilidad · Extractos', '¿De qué cuenta es este extracto?', 'Ninguna cuenta del libro tiene el IBAN de este extracto. Elige a cuál corresponde. Si el fichero trae IBAN, sólo salen las cuentas de banco sin IBAN: pónselo en la ficha y no tendrás que elegirla cada mes.') }}
 
     <form method="post" action="{{ path('accounting_bank_statement_upload') }}" class="csa-form-narrow">
         <input type="hidden" name="_token" value="{{ csrf_token('bank_statement_upload') }}">
@@ -35,7 +35,7 @@
                     <label class="csa-label" for="account-{{ read.key }}">Cuenta {{ read.label }}, del {{ read.from|date('d/m/Y') }} al {{ read.to|date('d/m/Y') }} ({{ read.movements|length }} movimientos, saldo final {{ fmt.money(read.closingCents / 100) }})</label>
                     <select class="csa-input" id="account-{{ read.key }}" name="account[{{ read.key }}]" required>
                         <option value="">Elige la cuenta</option>
-                        {% for account in accounts %}
+                        {% for account in accounts[read.key] %}
                             <option value="{{ account.id }}" {{ (chosen[read.key] ?? null) == account.id ? 'selected' }}>{{ account.name }}</option>
                         {% endfor %}
                     </select>
