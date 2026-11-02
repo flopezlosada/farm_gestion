@@ -196,6 +196,34 @@ class RemittanceReturnControllerTest extends AbstractAuthenticatedTest
         $this->assertResponseStatusCodeSame(403);
     }
 
+    /**
+     * La ficha cuadra la remesa con su abono. Si el banco abonó menos, dice cuánto falta
+     * y abre el formulario de «sin apunte»; al marcar el recibo rechazado, cuadra. Un
+     * cobro suelto de otro día del mes no cuenta como abono de la remesa.
+     */
+    public function testLaFichaCuadraLaRemesaConElAbono(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        [$august, $bank, $category] = $this->augustWithBank();
+        $credit = $this->em()->getRepository(AccountEntry::class)->findOneBy(['account' => $bank, 'concept' => 'ab.rem.' . self::REFERENCE]);
+        $credit->setAmount('91.00');
+        $this->entry($bank, $category, '2095-08-04', '97.00', 'ab.rem.20950015586');
+        $this->em()->flush();
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/remittances/%d', $august->getId()));
+        $this->assertResponseIsSuccessful();
+        $text = preg_replace('/\s+/u', ' ', $crawler->filter('body')->text());
+        $this->assertStringContainsString('El banco abonó 91,00 € el 18/08/2095 de 146,00 € pedidos.', $text);
+        $this->assertStringContainsString('Faltan 55,00 € sin explicar', $text);
+        $this->assertCount(1, $crawler->filter('details[open] form[action="/gestion/accounting/returns/new"]'));
+
+        $this->markReturned($client, $august, 'ZZTEST ANA');
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/remittances/%d', $august->getId()));
+        $this->assertStringContainsString('Cuadra.', $crawler->filter('#devoluciones + p')->text());
+    }
+
     /** Da un recibo por devuelto sin apunte desde la ficha de su remesa. */
     private function markReturned(KernelBrowser $client, Remittance $remittance, string $debtor): RemittanceReturn
     {

@@ -20,9 +20,9 @@ use App\Repository\RemittanceReturnRepository;
  * ese importe y la persona elige. El nombre sólo sale en el detalle del movimiento en
  * la web de Fiare.
  *
- * Una remesa no guarda su referencia: son las de los abonos de su mes. Un mes puede
- * tener varios lotes (la remesa y algún cobro suelto), y una devolución de cualquiera
- * de ellos se ofrece; sólo los recibos del importe justo la pueden explicar.
+ * Una remesa no guarda su referencia: son las de sus lotes, los abonos del día en que
+ * entró ({@see RemittanceCredits}). Un cobro suelto de otro día del mes es otro lote y
+ * sus devoluciones no se ofrecen: ningún recibo de la remesa las puede explicar.
  */
 class BankReturns
 {
@@ -35,12 +35,13 @@ class BankReturns
     public function __construct(
         private readonly AccountEntryRepository $entries,
         private readonly RemittanceReturnRepository $returns,
+        private readonly RemittanceCredits $credits,
     ) {
     }
 
     /**
-     * Las devoluciones del banco de los lotes del mes de la remesa que aún no se han
-     * ligado a ningún recibo.
+     * Las devoluciones del banco de los lotes de la remesa que aún no se han ligado a
+     * ningún recibo.
      *
      * @return list<AccountEntry>
      */
@@ -49,7 +50,7 @@ class BankReturns
         $from = $remittance->getPeriod();
         $references = array_flip(array_filter(array_map(
             static fn (AccountEntry $e): ?string => self::reference($e->getConcept(), self::CREDIT_PREFIX),
-            $this->entries->findByConceptPrefix(self::CREDIT_PREFIX, $from, $from->modify('last day of this month')),
+            $this->credits->lotsFor($remittance),
         )));
         if ($references === []) {
             return [];

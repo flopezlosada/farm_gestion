@@ -22,6 +22,7 @@ use App\Service\Accounting\Remittance\PartnerNameMatcher;
 use App\Service\Accounting\Remittance\RemittanceBase;
 use App\Service\Accounting\Remittance\RemittanceCases;
 use App\Service\Accounting\Remittance\RemittanceChargeWatch;
+use App\Service\Accounting\Remittance\RemittanceCredits;
 use App\Service\Accounting\Remittance\RemittanceFromFees;
 use App\Service\Accounting\Remittance\RemittancePartnerMatcher;
 use App\Service\Accounting\Remittance\RemittancePeriodText;
@@ -307,7 +308,7 @@ class RemittanceController extends AbstractController
 
     /** Una remesa: sus recibos, y en un borrador lo que hay que revisar antes de enviarla. */
     #[Route('/{id}', name: 'accounting_remittance_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(Remittance $remittance, RemittanceRepository $remittances, RemittanceReview $review, MonthlyFeeCalculator $fees, ValidatorInterface $validator, RemittanceCases $cases, PartnerRepository $partners, RemittanceReturnRepository $returnRepository, BankReturns $bankReturns, RemittanceChargeWatch $chargeWatch): Response
+    public function show(Remittance $remittance, RemittanceRepository $remittances, RemittanceReview $review, MonthlyFeeCalculator $fees, ValidatorInterface $validator, RemittanceCases $cases, PartnerRepository $partners, RemittanceReturnRepository $returnRepository, BankReturns $bankReturns, RemittanceChargeWatch $chargeWatch, RemittanceCredits $credits): Response
     {
         $everyone = $remittance->isSent() ? $partners->findBy([], ['surname' => 'ASC', 'name' => 'ASC']) : [];
 
@@ -336,6 +337,9 @@ class RemittanceController extends AbstractController
                 $bankReturns->unlinkedFor($remittance),
             ) : [],
             'notReturned' => $remittance->isSent() ? BankReturns::notReturned($remittance, $returns) : [],
+            // Enviada: lo que abonó el banco y lo que falta (recibos rechazados antes
+            // de cobrarlos, que no traen apunte).
+            'bankCheck' => $credits->checkFor($remittance),
             // Borrador: lo devuelto que espera a volver a cobrarse.
             'toRecharge' => $remittance->isDraft() ? $returnRepository->findToRecharge() : [],
             // Borrador: el día de cargo que se propone al darla por enviada.
