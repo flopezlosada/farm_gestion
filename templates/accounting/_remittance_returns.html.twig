@@ -7,13 +7,35 @@
  # devueltos con lo que se puede hacer con cada uno, y dar por devuelto uno
  # sin apunte (rechazado antes de cobrarse).
  #
+ # Antes de todo, el cuadre con el abono del banco: si entró menos de lo
+ # pedido, faltan recibos rechazados antes de cobrarse por marcar.
+ #
  # Usa del controller: remittance, returns, bankReturns ({entry,
- # candidates}), notReturned; y can_edit de remittance_show.
+ # candidates}), notReturned, bankCheck ({lots, missingCents} o null); y
+ # can_edit de remittance_show.
  # ============================================================ #}
 {% import 'accounting/_money.html.twig' as fmt %}
 {% set return_token = csrf_token('return-remittance-' ~ remittance.id) %}
 
 <h2 class="acc-subhead" id="devoluciones">Devoluciones</h2>
+
+{% if bankCheck %}
+    {% set credited = bankCheck.lots|reduce((sum, e) => sum + e.amount, 0) %}
+    {% set missing = bankCheck.missingCents / 100 %}
+    <p class="{{ missing != 0 ? 'rem-warn' : 'acc-muted' }} rem-box">
+        El banco abonó {{ fmt.money(credited) }} el {{ (bankCheck.lots|first).date|date('d/m/Y') }}
+        {%- if bankCheck.lots|length > 1 %} en {{ bankCheck.lots|length }} lotes{% endif %}
+        de {{ fmt.money(remittance.total) }} pedidos.
+        {% if missing > 0 %}
+            Faltan {{ fmt.money(missing) }} sin explicar: son recibos que el banco rechazó antes de cobrarlos
+            (cuenta mal, mandato…). Fiare dice cuáles; dalos por devueltos sin apunte aquí abajo.
+        {% elseif missing < 0 %}
+            Entraron {{ fmt.money(-missing) }} más de lo pedido: mira en el banco los abonos de ese día.
+        {% else %}
+            Cuadra.
+        {% endif %}
+    </p>
+{% endif %}
 
 {% if bankReturns is empty and returns is empty %}
     <p class="acc-muted rem-box">El banco no ha devuelto ningún recibo de esta remesa.</p>
@@ -101,7 +123,7 @@
 {% endif %}
 
 {% if can_edit and notReturned is not empty %}
-    <details class="rem-box">
+    <details class="rem-box"{% if bankCheck and bankCheck.missingCents > 0 %} open{% endif %}>
         <summary class="acc-muted">Dar por devuelto un recibo que no tiene apunte (el banco lo rechazó antes de cobrarlo)</summary>
         <form method="post" class="rem-actions" action="{{ path('accounting_return_new') }}" style="margin-top: 8px;">
             <input type="hidden" name="_token" value="{{ return_token }}">

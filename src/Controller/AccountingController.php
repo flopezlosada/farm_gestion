@@ -26,6 +26,7 @@ use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\MonthNames;
 use App\Service\Accounting\Split\RepeatSplit;
+use App\Service\Accounting\Suggestion\CategorySuggester;
 use App\Service\Accounting\TransferRecorder;
 use Doctrine\ORM\EntityManagerInterface;
 use Knp\Component\Pager\PaginatorInterface;
@@ -428,6 +429,7 @@ class AccountingController extends AbstractController
         BudgetCategoryRepository $categories,
         BankStatementLineRepository $bankLines,
         RepeatSplit $repeat,
+        CategorySuggester $suggester,
     ): Response {
         $entry = new AccountEntry();
         $entry->setDate($this->parseDate($request->query->get('date')) ?? new \DateTimeImmutable('today'));
@@ -443,6 +445,11 @@ class AccountingController extends AbstractController
                 ->setDate($bankLine->getOperationDate())
                 ->setAmount($bankLine->getAmount())
                 ->setConcept($bankLine->getSuggestedConcept());
+        }
+        // La partida, si las últimas veces que el banco dijo lo mismo llevaban la misma.
+        $suggestion = $bankLine !== null ? $suggester->forLine($bankLine) : null;
+        if ($suggestion !== null && !$request->isMethod('POST')) {
+            $entry->setCategory($suggestion->category);
         }
 
         $form = $this->createForm(AccountEntryType::class, $entry);
@@ -485,7 +492,14 @@ class AccountingController extends AbstractController
             'form' => $form->createView(),
             'entry' => null,
             'heading' => 'Anotar un apunte',
-            'lead' => 'Un movimiento de una cuenta. El saldo se recalcula solo.',
+            'lead' => $suggestion !== null
+                ? sprintf(
+                    'Un movimiento de una cuenta. La partida «%s» está puesta porque %s con el mismo concepto la llevaba%s: cámbiala si esta vez no es.',
+                    $suggestion->category->getName(),
+                    $suggestion->times === 1 ? 'el último apunte' : sprintf('los %d últimos apuntes', $suggestion->times),
+                    $suggestion->times === 1 ? '' : 'n',
+                )
+                : 'Un movimiento de una cuenta. El saldo se recalcula solo.',
             'suggestions' => AccountEntryType::suggestedDirections($categories->findActive()),
         ]);
     }

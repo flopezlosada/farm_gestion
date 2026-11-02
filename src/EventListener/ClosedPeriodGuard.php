@@ -24,8 +24,10 @@ use Doctrine\ORM\UnitOfWork;
  * Qué fecha cuenta en cada caso, la misma con la que entra en el paquete:
  *  - apunte: su fecha, la nueva y la de antes (sacar un apunte de un trimestre
  *    entregado también lo cambia);
- *  - factura recibida: sólo confirmada (antes o después del cambio), por su fecha de
- *    factura o, sin ella, la de su apunte;
+ *  - factura recibida: sólo confirmada (antes o después del cambio), por la fecha
+ *    que la pone en el paquete ({@see ReceivedInvoice::packageDate()}): la de
+ *    anotación si llegó tarde, la de factura o, sin ella, la de su apunte. Al
+ *    confirmarla sólo cuenta dónde entra: antes no estaba en ningún paquete;
  *  - factura emitida: sólo emitida, por su fecha de emisión. Ligar el cobro no cuenta:
  *    cobrar en octubre una factura de septiembre no cambia lo entregado.
  */
@@ -91,14 +93,18 @@ final class ClosedPeriodGuard
      */
     private function receivedDates(ReceivedInvoice $invoice, callable $before): array
     {
-        if (!\in_array(ReceivedInvoice::STATUS_CONFIRMED, [$invoice->getStatus(), $before('status', null)], true)) {
-            return [];
+        $wasConfirmed = $before('status', $invoice->getStatus()) === ReceivedInvoice::STATUS_CONFIRMED;
+        $now = $invoice->getStatus() === ReceivedInvoice::STATUS_CONFIRMED ? [$invoice->packageDate()] : [];
+        if (!$wasConfirmed) {
+            // No estaba en ningún paquete: sólo cuenta dónde entra ahora. Así se puede
+            // confirmar una factura que llega tarde, que entra por su día de anotación.
+            return $now;
         }
         $previousEntry = $before('accountEntry', $invoice->getAccountEntry());
 
         return [
-            $invoice->getInvoiceDate() ?? $invoice->getAccountEntry()?->getDate(),
-            $before('invoiceDate', $invoice->getInvoiceDate()) ?? $previousEntry?->getDate(),
+            ...$now,
+            $before('bookedOn', $invoice->getBookedOn()) ?? $before('invoiceDate', $invoice->getInvoiceDate()) ?? $previousEntry?->getDate(),
         ];
     }
 }

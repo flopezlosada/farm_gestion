@@ -12,6 +12,7 @@ use App\Entity\User;
 use App\Repository\AccountEntryRepository;
 use App\Repository\RemittanceReturnRepository;
 use App\Service\Accounting\Remittance\BankReturns;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -92,7 +93,15 @@ class RemittanceReturnController extends AbstractController
 
             return $back;
         }
-        $em->flush();
+        try {
+            $em->flush();
+        } catch (UniqueConstraintViolationException) {
+            // Doble clic: la primera petición ya lo guardó entre la comprobación de
+            // arriba y ésta. Lo que se pedía ya está hecho; no es un error.
+            $this->addFlash('info', sprintf('El recibo de %s ya estaba dado por devuelto.', $line->getDebtorName()));
+
+            return $back;
+        }
         $this->addFlash('success', sprintf('Recibo de %s dado por devuelto. Queda como deuda abierta hasta que elijas qué se hace.', $line->getDebtorName()));
 
         return $back;

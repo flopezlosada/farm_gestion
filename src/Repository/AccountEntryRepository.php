@@ -704,6 +704,31 @@ class AccountEntryRepository extends ServiceEntityRepository
     }
 
     /**
+     * Los apuntes con partida de unas cuentas desde una fecha, los más recientes
+     * primero y con su partida: el historial del que sale la partida que se propone al
+     * anotar un movimiento del banco.
+     *
+     * @param list<FinancialAccount> $accounts Las cuentas.
+     *
+     * @return list<AccountEntry>
+     */
+    public function findCategorizedSince(array $accounts, \DateTimeImmutable $since): array
+    {
+        if ($accounts === []) {
+            return [];
+        }
+
+        return $this->createQueryBuilder('e')
+            ->innerJoin('e.category', 'c')->addSelect('c')
+            ->andWhere('e.account IN (:accounts)')->setParameter('accounts', $accounts)
+            ->andWhere('e.date >= :since')->setParameter('since', $since->format('Y-m-d'))
+            ->orderBy('e.date', 'DESC')
+            ->addOrderBy('e.id', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Las partes separadas de unos apuntes, con su partida, en el orden en que se
      * separaron. Una consulta para todos.
      *

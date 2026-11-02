@@ -25,7 +25,8 @@ use Symfony\Component\Validator\Constraints as Assert;
  *
  * @ORM\Table(name="received_invoice", indexes={
  *     @ORM\Index(name="idx_received_invoice_status", columns={"status", "next_attempt_at"}),
- *     @ORM\Index(name="idx_received_invoice_tax_id", columns={"provider_tax_id"})
+ *     @ORM\Index(name="idx_received_invoice_tax_id", columns={"provider_tax_id"}),
+ *     @ORM\Index(name="idx_received_invoice_file_hash", columns={"file_hash"})
  * })
  * @ORM\Entity(repositoryClass="App\Repository\ReceivedInvoiceRepository")
  */
@@ -84,6 +85,15 @@ class ReceivedInvoice
      * @ORM\Column(name="file_name", type="string", length=255)
      */
     private string $fileName;
+
+    /**
+     * La huella SHA-256 del fichero: dos facturas con la misma son el mismo documento
+     * subido dos veces (por la web y por el correo, o con otro nombre). Null en las que
+     * entraron antes de guardarla.
+     *
+     * @ORM\Column(name="file_hash", type="string", length=64, nullable=true)
+     */
+    private ?string $fileHash = null;
 
     /**
      * El nombre que traía el fichero, para enseñarlo.
@@ -155,6 +165,17 @@ class ReceivedInvoice
      * @ORM\Column(name="invoice_date", type="date_immutable", nullable=true)
      */
     private ?\DateTimeImmutable $invoiceDate = null;
+
+    /**
+     * El día en que se anotó una factura que llegó tarde, cuando el trimestre de su
+     * fecha ya se había entregado a la gestoría. Null en las demás. Es lo que la pone
+     * en el paquete del trimestre siguiente en vez de en el entregado: la recibida se
+     * declara en el periodo en que se recibe (art. 99 LIVA, hasta 4 años) y la gestoría
+     * no rehace un trimestre presentado.
+     *
+     * @ORM\Column(name="booked_on", type="date_immutable", nullable=true)
+     */
+    private ?\DateTimeImmutable $bookedOn = null;
 
     /**
      * @ORM\Column(name="provider_name", type="string", length=150, nullable=true)
@@ -427,6 +448,7 @@ class ReceivedInvoice
     public function reopen(): void
     {
         $this->accountEntry = null;
+        $this->bookedOn = null;
         $this->status = $this->readAt !== null ? self::STATUS_READ : self::STATUS_UNREADABLE;
     }
 
@@ -446,6 +468,22 @@ class ReceivedInvoice
     public function getId(): ?int
     {
         return $this->id;
+    }
+
+    /** La huella del fichero, o null si entró antes de guardarla. */
+    public function getFileHash(): ?string
+    {
+        return $this->fileHash;
+    }
+
+    /**
+     * Guarda la huella del fichero al entrar. Sólo una vez: el fichero no cambia.
+     *
+     * @param string $sha256 Huella SHA-256 en hexadecimal.
+     */
+    public function fingerprint(string $sha256): void
+    {
+        $this->fileHash ??= $sha256;
     }
 
     public function getFileName(): string
@@ -517,6 +555,37 @@ class ReceivedInvoice
     public function getInvoiceDate(): ?\DateTimeImmutable
     {
         return $this->invoiceDate;
+    }
+
+    /** El día en que se anotó, si llegó tarde a un trimestre ya entregado; si no, null. */
+    public function getBookedOn(): ?\DateTimeImmutable
+    {
+        return $this->bookedOn;
+    }
+
+    /**
+     * La fecha que la sitúa en el paquete de la gestoría: la de anotación si llegó
+     * tarde; si no, la de la factura o, sin ella, la de su apunte.
+     */
+    public function packageDate(): ?\DateTimeInterface
+    {
+        return $this->bookedOn ?? $this->invoiceDate ?? $this->accountEntry?->getDate();
+    }
+
+    /**
+     * Llegó tarde: el trimestre de su fecha ya se entregó y va en el paquete del
+     * trimestre de hoy. Sólo al confirmarla, que es cuando entra en un paquete.
+     *
+     * @param \DateTimeImmutable $on El día en que se anota.
+     *
+     * @throws \LogicException Si no está confirmada.
+     */
+    public function bookLate(\DateTimeImmutable $on): void
+    {
+        if ($this->status !== self::STATUS_CONFIRMED) {
+            throw new \LogicException('Sólo una factura confirmada va en un paquete.');
+        }
+        $this->bookedOn = $on->setTime(0, 0);
     }
 
     public function getProviderName(): ?string
