@@ -97,9 +97,7 @@ class AccountEntryType extends AbstractType
             // confirmar una factura, donde sus botones sobraban y había que taparlos.
             ->add('notes', TextareaType::class, ['required' => false]);
 
-        // Gastos: la ficha del proveedor, para que sus pagos salgan juntos en ella. Va
-        // DESPUÉS del texto a propósito: el formulario escribe en orden, y así el nombre
-        // de la ficha (setProvider) pisa lo que quedara escrito en el texto. Al
+        // Gastos: la ficha del proveedor, para que sus pagos salgan juntos en ella. Al
         // confirmar una factura no se ofrece: el proveedor lo elige la factura.
         if ($options['with_provider']) {
             $builder->add('provider', EntityType::class, [
@@ -108,11 +106,18 @@ class AccountEntryType extends AbstractType
                 'query_builder' => static fn (ProviderRepository $r) => $r->createQueryBuilder('p')->orderBy('p.name', 'ASC'),
                 'required' => false,
                 'placeholder' => '— Sin ficha de proveedor —',
-                // Que llame a setProvider también cuando la ficha no cambia: si no, al
-                // editar sólo el texto, el formulario ve el mismo objeto, se salta el
-                // setter y el nombre del apunte deja de ser el de su ficha.
-                'by_reference' => false,
             ]);
+
+            // Con ficha, el nombre del apunte es el de la ficha, aunque se haya tocado el
+            // texto. No vale confiar en setProvider: si la ficha no cambia, el formulario
+            // no lo llama. Y by_reference=false tampoco: clona la ficha, Doctrine no
+            // reconoce el clon y el desplegable revienta al abrir el apunte.
+            $builder->addEventListener(FormEvents::SUBMIT, static function (FormEvent $event): void {
+                $entry = $event->getData();
+                if ($entry instanceof AccountEntry && ($provider = $entry->getProvider()) !== null) {
+                    $entry->setProvider($provider);
+                }
+            });
         }
 
         // Al abrir un apunte que ya trae importe —uno guardado, o uno propuesto a
