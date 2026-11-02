@@ -8,8 +8,8 @@ use App\Service\Accounting\Watch\AccountingWatchPlan;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Qué se avisa y con qué fecha se apunta: lo urgente por tramos de 3 días, el resto
- * por semanas. Las fechas son las que hacen que el registro de efectos no repita.
+ * Qué se avisa y cuándo: lo urgente a los 3 días del último aviso, el resto por
+ * semanas.
  */
 class AccountingWatchPlanTest extends TestCase
 {
@@ -26,33 +26,55 @@ class AccountingWatchPlanTest extends TestCase
         $this->assertSame([], $plan->urgent([]));
     }
 
-    /** Tres días seguidos comparten tramo; el cuarto empieza otro. También antes de la fecha de partida. */
-    public function testElAvisoUrgenteSeRepiteCadaTresDias(): void
+    /** Lo nunca avisado toca ya; lo avisado, a los tres días del último aviso. */
+    public function testElAvisoUrgenteSeRepiteATresDiasDelUltimo(): void
     {
         $plan = new AccountingWatchPlan();
-        $window = fn (string $day): string => $plan->urgentWindow(new \DateTimeImmutable($day))->format('Y-m-d');
+        $due = fn (?string $last, string $today): bool => $plan->isUrgentDue(
+            null === $last ? null : new \DateTimeImmutable($last),
+            new \DateTimeImmutable($today),
+        );
 
-        $this->assertSame('2026-11-03', $window('2026-11-03'));
-        $this->assertSame('2026-11-03', $window('2026-11-04'));
-        $this->assertSame('2026-11-03', $window('2026-11-05'));
-        $this->assertSame('2026-11-06', $window('2026-11-06'));
-        $this->assertSame('2026-01-01', $window('2026-01-01'));
-        $this->assertSame('2026-01-01', $window('2026-01-03'));
-        $this->assertSame('2025-12-29', $window('2025-12-31'));
-        $this->assertSame('2025-12-29', $window('2025-12-29'));
-        $this->assertSame('2026-11-03', $window('2026-11-04 17:45'), 'La hora del día no cambia el tramo.');
+        $this->assertTrue($due(null, '2026-11-03'));
+        $this->assertFalse($due('2026-11-03', '2026-11-03'), 'El mismo día, no.');
+        $this->assertFalse($due('2026-11-03', '2026-11-05'));
+        $this->assertTrue($due('2026-11-03', '2026-11-06'));
+        $this->assertTrue($due('2026-11-03', '2026-11-20'), 'Si el reloj se paró, en cuanto vuelve.');
+        $this->assertTrue($due('2026-11-03 23:50', '2026-11-06 00:10'), 'La hora del aviso anterior no cuenta.');
     }
 
-    /** En diez días (lo que tarda una notificación oficial en darse por notificada) el aviso sale al menos tres veces. */
-    public function testUnaNotificacionOficialAvisaTresVecesAntesDeDarsePorNotificada(): void
+    /**
+     * Lo que aparece un día cualquiera no se repite al día siguiente. Con los tramos
+     * fijos de antes, lo aparecido el último día de un tramo volvía a avisar al otro.
+     */
+    public function testNoRepiteAlDiaSiguienteAparezcaCuandoAparezca(): void
     {
         $plan = new AccountingWatchPlan();
-        $windows = [];
-        for ($day = 0; $day < 10; ++$day) {
-            $windows[] = $plan->urgentWindow((new \DateTimeImmutable('2026-11-02'))->modify("+$day days"))->format('Y-m-d');
+        foreach (['2026-11-03', '2026-11-04', '2026-11-05'] as $first) {
+            $next = (new \DateTimeImmutable($first))->modify('+1 day');
+
+            $this->assertFalse($plan->isUrgentDue(new \DateTimeImmutable($first), $next), $first);
+        }
+    }
+
+    /**
+     * En diez días (lo que tarda una notificación oficial en darse por notificada) el
+     * aviso sale cuatro veces: al llegar (lo da el buzón) y a los 3, 6 y 9 días.
+     */
+    public function testUnaNotificacionOficialAvisaCuatroVecesAntesDeDarsePorNotificada(): void
+    {
+        $plan = new AccountingWatchPlan();
+        $last = new \DateTimeImmutable('2026-11-02 09:15');
+        $alerts = 1;
+        for ($day = 1; $day < 10; ++$day) {
+            $today = (new \DateTimeImmutable('2026-11-02'))->modify("+$day days");
+            if ($plan->isUrgentDue($last, $today)) {
+                $last = $today;
+                ++$alerts;
+            }
         }
 
-        $this->assertGreaterThanOrEqual(3, \count(array_unique($windows)));
+        $this->assertSame(4, $alerts);
     }
 
     public function testElResumenSeApuntaConElLunesDeLaSemana(): void

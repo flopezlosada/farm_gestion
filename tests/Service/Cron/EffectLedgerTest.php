@@ -153,6 +153,32 @@ class EffectLedgerTest extends KernelTestCase
      * Un destino más largo que la columna no puede reventar el INSERT y con él
      * el envío: se recorta al persistir.
      */
+    /**
+     * La fecha del último aviso de cada referencia, en una consulta: la más reciente,
+     * en la zona pedida; las que nunca se emitieron no salen, ni las de otra clase.
+     */
+    public function testLaUltimaFechaDeCadaReferencia(): void
+    {
+        self::bootKernel();
+        $ledger = $this->ledger();
+        $nada = static function (): void {
+        };
+        $ledger->once(self::KIND, 'tarea-a', new \DateTimeImmutable('2099-03-01'), $nada);
+        $ledger->once(self::KIND, 'tarea-a', new \DateTimeImmutable('2099-03-04'), $nada);
+        $ledger->once(self::KIND, 'tarea-b', new \DateTimeImmutable('2099-03-02'), $nada);
+        $madrid = new \DateTimeZone('Europe/Madrid');
+
+        $last = $ledger->lastOccurrences(self::KIND, ['tarea-a', 'tarea-b', 'tarea-c'], $madrid);
+
+        $references = array_keys($last);
+        sort($references);
+        $this->assertSame(['tarea-a', 'tarea-b'], $references);
+        $this->assertSame('2099-03-04 00:00 Europe/Madrid', $last['tarea-a']->format('Y-m-d H:i e'));
+        $this->assertSame('2099-03-02', $last['tarea-b']->format('Y-m-d'));
+        $this->assertSame([], $ledger->lastOccurrences('otra_clase', ['tarea-a'], $madrid));
+        $this->assertSame([], $ledger->lastOccurrences(self::KIND, [], $madrid));
+    }
+
     public function testUnDestinoLarguisimoNoRevientaElApunte(): void
     {
         self::bootKernel();

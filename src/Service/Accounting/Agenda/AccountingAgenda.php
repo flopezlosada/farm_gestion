@@ -129,6 +129,10 @@ class AccountingAgenda
      * sede. Una por aviso (llegan pocas) y siempre apremian: a los 10 días cuentan como
      * notificadas, se abran o no.
      *
+     * Cada una es su propia tarea aunque dos sean del mismo organismo (si no, la segunda
+     * no tendría recordatorio propio), y consta avisada desde que se guardó: el buzón
+     * avisa al momento de guardarla ({@see \App\Service\Accounting\OfficialNotice\OfficialNoticeIntake}).
+     *
      * @return list<AgendaItem>
      */
     private function unreviewedOfficialNotices(): array
@@ -150,6 +154,8 @@ class AccountingAgenda
                 ['id' => $notice->getId()],
                 'accounting_official_notice_reviewed_'.$notice->getId(),
             )],
+            sprintf('notificación %d', $notice->getId()),
+            $notice->getCreatedAt(),
         ), $this->officialNotices->findUnreviewed());
     }
 

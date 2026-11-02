@@ -17,10 +17,11 @@ use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Mime\Email;
 
 /**
- * La vigilancia de contabilidad con la portada real: lo urgente avisa una vez por
- * tramo de 3 días aunque el reloj pase varias veces, vuelve a avisar en el tramo
- * siguiente si sigue sin resolver, y deja de avisar en cuanto se resuelve. Sin nadie
- * que lleve la contabilidad no avisa ni da nada por avisado.
+ * La vigilancia de contabilidad con la portada real: lo urgente avisa a los 3 días del
+ * último aviso aunque el reloj pase varias veces, contando el que dio el buzón al
+ * guardar la notificación; vuelve a avisar mientras siga sin resolver y deja de
+ * avisar en cuanto se resuelve. Sin nadie que lleve la contabilidad no avisa ni da
+ * nada por avisado.
  */
 class SendAccountingWatchCommandTest extends KernelTestCase
 {
@@ -66,36 +67,50 @@ class SendAccountingWatchCommandTest extends KernelTestCase
         parent::tearDown();
     }
 
-    public function testLoUrgenteAvisaUnaVezPorTramoYSeRepiteMientrasSiga(): void
+    public function testLoUrgenteSeRepiteATresDiasDelUltimoAvisoMientrasSiga(): void
     {
-        $notice = new OfficialNotice(str_repeat('d', 64), 'DEHú', 'noreply.dehu@correo.gob.es', new \DateTimeImmutable('2026-11-02 09:12'));
-        $this->em->persist($notice);
-        $this->em->flush();
+        $notice = $this->notice('d');
 
+        $this->runCommand('2026-11-02');
         $this->runCommand('2026-11-03');
         $this->runCommand('2026-11-04');
-        $this->assertSame(1, $this->urgentNotices(), 'Dentro del mismo tramo de 3 días, un solo aviso.');
+        $this->assertSame(0, $this->urgentNotices(), 'El buzón ya avisó el día 2 al guardarla: nada hasta el 5.');
+
+        $this->runCommand('2026-11-05');
+        $this->runCommand('2026-11-06');
+        $this->assertSame(1, $this->urgentNotices(), 'A los 3 días, un aviso; al día siguiente, no.');
         $this->assertSame(1, $this->urgentEmails(), 'Y un solo correo, a la tesorera.');
 
-        $this->runCommand('2026-11-06');
-        $this->assertSame(2, $this->urgentNotices(), 'Sigue sin mirarse: el tramo siguiente vuelve a avisar.');
+        $this->runCommand('2026-11-08');
+        $this->assertSame(2, $this->urgentNotices(), 'Sigue sin mirarse: a los 3 días del último, otro.');
 
         $notice = $this->em->find(OfficialNotice::class, $notice->getId());
-        $notice->markReviewed($this->treasurer(), new \DateTimeImmutable('2026-11-07 10:00'));
+        $notice->markReviewed($this->treasurer(), new \DateTimeImmutable('2026-11-09 10:00'));
         $this->em->flush();
 
-        $this->runCommand('2026-11-09');
+        $this->runCommand('2026-11-11');
         $this->assertSame(2, $this->urgentNotices(), 'Revisada: ya no sale en la portada y no avisa más.');
+    }
+
+    /** Dos notificaciones del mismo organismo tienen cada una su recordatorio. */
+    public function testDosNotificacionesDelMismoOrganismoAvisanCadaUna(): void
+    {
+        $this->notice('g');
+        $this->notice('h');
+
+        $this->runCommand('2026-11-05');
+
+        $this->assertSame(2, $this->urgentNotices());
     }
 
     public function testSinNadieQueLleveLaContabilidadFallaYNoDaNadaPorAvisado(): void
     {
         $treasurer = $this->treasurer();
         $treasurer->setRoles(['ROLE_GESTION_CONTABILIDAD']);
-        $this->em->persist(new OfficialNotice(str_repeat('f', 64), 'DEHú', 'noreply.dehu@correo.gob.es', new \DateTimeImmutable('2026-11-02 09:12')));
         $this->em->flush();
+        $this->notice('f');
 
-        [$exit, $display] = $this->runCommandWithExit('2026-11-03');
+        [$exit, $display] = $this->runCommandWithExit('2026-11-05');
 
         $this->assertSame(Command::FAILURE, $exit);
         $this->assertStringContainsString('Nadie lleva la contabilidad', $display);
@@ -106,19 +121,36 @@ class SendAccountingWatchCommandTest extends KernelTestCase
         $treasurer->setRoles(['ROLE_GESTION_CONTABILIDAD_EDIT']);
         $this->em->flush();
 
-        $this->runCommand('2026-11-04');
-        $this->assertSame(1, $this->urgentNotices(), 'En cuanto alguien lleva la contabilidad, el mismo tramo le avisa.');
+        $this->runCommand('2026-11-05');
+        $this->assertSame(1, $this->urgentNotices(), 'En cuanto alguien lleva la contabilidad, se le avisa ese mismo día.');
     }
 
     public function testElDryRunNoAvisa(): void
     {
-        $this->em->persist(new OfficialNotice(str_repeat('e', 64), 'DEHú', 'noreply.dehu@correo.gob.es', new \DateTimeImmutable('2026-11-02 09:12')));
-        $this->em->flush();
+        $this->notice('e');
 
-        $display = $this->runCommand('2026-11-03', ['--dry-run' => true]);
+        $display = $this->runCommand('2026-11-05', ['--dry-run' => true]);
 
         $this->assertStringContainsString(self::TITLE, $display);
         $this->assertSame(0, $this->urgentNotices());
+    }
+
+    /**
+     * Una notificación de la DEHú como la deja el buzón: llegó el 2-nov a las 9:12 y se
+     * guardó (y se avisó) a las 9:15. La fecha de guardado se fija a mano porque la
+     * entidad la toma del reloj y la tarea corre con fechas fingidas.
+     *
+     * @param string $seed Letra para su huella, distinta en cada una.
+     */
+    private function notice(string $seed): OfficialNotice
+    {
+        $notice = new OfficialNotice(str_repeat($seed, 64), 'DEHú', 'noreply.dehu@correo.gob.es', new \DateTimeImmutable('2026-11-02 09:12'));
+        $this->em->persist($notice);
+        $this->em->flush();
+        $this->em->getConnection()->update('official_notice', ['created_at' => '2026-11-02 09:15:00'], ['id' => $notice->getId()]);
+        $this->em->refresh($notice);
+
+        return $notice;
     }
 
     /**

@@ -630,6 +630,21 @@ class AccountingAgendaTest extends TestCase
         $this->assertSame('accounting_official_notice_reviewed', $items[0]->actions[0]->route);
         $this->assertSame(['id' => $dehu->getId()], $items[0]->actions[0]->routeParams);
         $this->assertSame('accounting_official_notice_reviewed_'.$dehu->getId(), $items[0]->actions[0]->csrfId);
+        $this->assertSame($dehu->getCreatedAt(), $items[0]->alertedOn, 'El buzón ya avisó al guardarla.');
+    }
+
+    /** Dos notificaciones del mismo organismo son dos tareas para la vigilancia, no una. */
+    public function testDosNotificacionesDelMismoOrganismoSonDosTareas(): void
+    {
+        $first = new OfficialNotice(str_repeat('a', 64), 'DEHú', 'noreply.dehu@correo.gob.es', new \DateTimeImmutable('2026-10-14 09:12'));
+        $second = new OfficialNotice(str_repeat('c', 64), 'DEHú', 'noreply.dehu@correo.gob.es', new \DateTimeImmutable('2026-10-15 11:00'));
+        $this->setId($first);
+        $this->setId($second);
+
+        $items = $this->agenda(deliveries: [], officialNotices: [$first, $second])->items(new \DateTimeImmutable('2026-10-16'));
+
+        $this->assertSame($items[0]->title, $items[1]->title);
+        $this->assertNotSame($items[0]->key(), $items[1]->key());
     }
 
     /**
