@@ -8,6 +8,7 @@ use App\Entity\BudgetCategory;
 use App\Entity\FinancialAccount;
 use App\Repository\AccountEntryRepository;
 use App\Service\Accounting\Norma43\Norma43Movement;
+use App\Service\Accounting\ConceptKey;
 use App\Service\Accounting\Suggestion\CategorySuggester;
 use PHPUnit\Framework\TestCase;
 
@@ -22,11 +23,11 @@ class CategorySuggesterTest extends TestCase
     /** Sin cifras, signos, tildes ni mayúsculas: el mismo recibo de cada mes. */
     public function testElConceptoSeComparaSinLoQueCambia(): void
     {
-        $this->assertSame(CategorySuggester::key('rcbo.caymuz sl'), CategorySuggester::key('rcbo.caymuz, s.l.'));
-        $this->assertSame(CategorySuggester::key('FERRETERIA TORRELAGUNA'), CategorySuggester::key('Ferretería Torrelaguna'));
-        $this->assertSame(CategorySuggester::key('rcbo. préstamo0013104153'), CategorySuggester::key('rcbo. préstamo0013104999'));
-        $this->assertSame('rcbotgsscotizacionregimengeneral', CategorySuggester::key('rcbo.tgss. cotizacion 001 regimen general'));
-        $this->assertSame('', CategorySuggester::key('0013104153 / 2026'));
+        $this->assertSame(ConceptKey::of('rcbo.caymuz sl'), ConceptKey::of('rcbo.caymuz, s.l.'));
+        $this->assertSame(ConceptKey::of('FERRETERIA TORRELAGUNA'), ConceptKey::of('Ferretería Torrelaguna'));
+        $this->assertSame(ConceptKey::of('rcbo. préstamo0013104153'), ConceptKey::of('rcbo. préstamo0013104999'));
+        $this->assertSame('rcbotgsscotizacionregimengeneral', ConceptKey::of('rcbo.tgss. cotizacion 001 regimen general'));
+        $this->assertSame('', ConceptKey::of('0013104153 / 2026'));
     }
 
     public function testProponeLaPartidaDeLasUltimasVeces(): void

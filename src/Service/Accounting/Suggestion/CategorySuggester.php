@@ -5,6 +5,7 @@ namespace App\Service\Accounting\Suggestion;
 use App\Entity\AccountEntry;
 use App\Entity\BankStatementLine;
 use App\Repository\AccountEntryRepository;
+use App\Service\Accounting\ConceptKey;
 
 /**
  * La partida de un movimiento del banco, sacada del propio libro: la que llevaban
@@ -16,9 +17,8 @@ use App\Repository\AccountEntryRepository;
  * y quien anota sólo confirma. Si las últimas veces no coinciden, no se propone nada:
  * mejor nada que una partida equivocada que se acepta sin mirar.
  *
- * El concepto se compara sin cifras, tildes, espacios ni signos: «rcbo.caymuz sl»
- * y «rcbo.caymuz, s.l.» son lo mismo; un número de recibo o de referencia que
- * cambia cada mes no lo separa.
+ * El concepto se compara con {@see ConceptKey}: sin cifras, tildes, espacios ni
+ * signos.
  */
 class CategorySuggester
 {
@@ -77,7 +77,7 @@ class CategorySuggester
      */
     public static function suggest(BankStatementLine $line, array $history): ?CategorySuggestion
     {
-        $key = self::key($line->getSuggestedConcept());
+        $key = ConceptKey::of($line->getSuggestedConcept());
         if ($key === '') {
             return null;
         }
@@ -85,7 +85,7 @@ class CategorySuggester
         $same = array_values(array_filter($history, static fn (AccountEntry $e): bool => $e->getAccount() === $line->getAccount()
             && $e->getDate() !== null && $e->getDate() <= $line->getOperationDate()
             && ((float) $e->getAmount() > 0) === $income
-            && self::key($e->getConcept()) === $key));
+            && ConceptKey::of($e->getConcept()) === $key));
         $recent = \array_slice($same, 0, self::SAMPLE);
         if ($recent === []) {
             return null;
@@ -97,16 +97,5 @@ class CategorySuggester
         }
 
         return new CategorySuggestion($category, \count($recent));
-    }
-
-    /**
-     * El concepto sin lo que cambia de un mes a otro ni las erratas de puntuación: sólo
-     * letras, en minúscula y sin tildes.
-     */
-    public static function key(string $concept): string
-    {
-        $plain = transliterator_transliterate('Any-Latin; Latin-ASCII; Lower()', $concept);
-
-        return preg_replace('/[^a-z]+/', '', $plain === false ? mb_strtolower($concept) : $plain) ?? '';
     }
 }
