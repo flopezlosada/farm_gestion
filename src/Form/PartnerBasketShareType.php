@@ -5,6 +5,7 @@ namespace App\Form;
 use App\Entity\BasketShare;
 use App\Entity\PartnerBasketShare;
 use App\Entity\WeeklyBasketGroup;
+use App\Service\Staff\WorkMonth;
 use Doctrine\ORM\EntityRepository;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
@@ -15,7 +16,9 @@ use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\FormEvent;
 use Symfony\Component\Form\FormEvents;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Validator\Constraints\Callback;
 use Symfony\Component\Validator\Constraints\NotBlank;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
 class PartnerBasketShareType extends AbstractType
 {
@@ -101,7 +104,12 @@ class PartnerBasketShareType extends AbstractType
 
         $builder
 
-            ->add('start_date', TextType::class, array('label' => 'Fecha de inicio', 'help'=>"Si la cesta es mensual o sólo tiene huevos una vez al mes, debes indicar la fecha del primer día del mes en que empieza a recibir", 'attr' => array('class' => 'datepicker form-control')))
+            ->add('start_date', TextType::class, [
+                'label' => 'Fecha de inicio',
+                'help' => self::startHelp($options['earliest_start']),
+                'attr' => ['class' => 'datepicker form-control'],
+                'constraints' => $options['earliest_start'] !== null ? [self::notBefore($options['earliest_start'])] : [],
+            ])
             ->add('partner')
             ->add('basket_share', EntityType::class, [
                 'class' => BasketShare::class,
@@ -255,6 +263,47 @@ class PartnerBasketShareType extends AbstractType
         ];
     }
 
+    /**
+     * La ayuda del campo de fecha: la de siempre y, si hay un mes ya cobrado, desde
+     * cuándo se puede empezar.
+     */
+    private static function startHelp(?\DateTimeInterface $earliest): string
+    {
+        $help = 'Si la cesta es mensual o sólo tiene huevos una vez al mes, debes indicar la fecha del primer día del mes en que empieza a recibir.';
+
+        return $earliest !== null ? $help . ' ' . self::chargedMessage($earliest) : $help;
+    }
+
+    /**
+     * Que la cesta no empiece en un mes cuyas cuotas ya se mandaron al banco. Una fecha
+     * que no se entiende la deja pasar: aquí sólo se mira el mes.
+     */
+    private static function notBefore(\DateTimeInterface $earliest): Callback
+    {
+        return new Callback(static function (mixed $value, ExecutionContextInterface $context) use ($earliest): void {
+            try {
+                $start = new \DateTimeImmutable((string) $value);
+            } catch (\Exception) {
+                return;
+            }
+            if ($start->format('Y-m-d') < $earliest->format('Y-m-d')) {
+                $context->addViolation(self::chargedMessage($earliest));
+            }
+        });
+    }
+
+    /** «Las cuotas de octubre de 2026 ya se mandaron al banco: …». */
+    private static function chargedMessage(\DateTimeInterface $earliest): string
+    {
+        $charged = WorkMonth::containing(\DateTimeImmutable::createFromInterface($earliest)->modify('-1 month'));
+
+        return sprintf(
+            'Las cuotas de %s ya se mandaron al banco: lo que cambie a partir de ahí vale desde el mes siguiente, así que la cesta empieza como pronto el %s.',
+            $charged->label(),
+            $earliest->format('d/m/Y'),
+        );
+    }
+
     public function configureOptions(OptionsResolver $resolver): void
     {
         $resolver->setDefaults([
@@ -279,6 +328,10 @@ class PartnerBasketShareType extends AbstractType
             'ask_pickup_group' => false,
             // Preselección del grupo (la elección hecha antes de recargar).
             'pickup_group' => null,
+            // Primer día en que puede empezar la cesta: el del primer mes cuyas cuotas
+            // aún no se han cobrado. Lo pasan el alta y el cambio de cesta; la edición
+            // (corregir datos) no, porque no cambia de cesta.
+            'earliest_start' => null,
         ]);
         $resolver->setAllowedTypes('cohort_choices', 'array');
         $resolver->setAllowedTypes('allowed_share_ids', ['null', 'int[]']);
@@ -286,5 +339,6 @@ class PartnerBasketShareType extends AbstractType
         $resolver->setAllowedTypes('forced_month_order', ['null', 'int']);
         $resolver->setAllowedTypes('ask_pickup_group', 'bool');
         $resolver->setAllowedTypes('pickup_group', ['null', WeeklyBasketGroup::class]);
+        $resolver->setAllowedTypes('earliest_start', ['null', \DateTimeInterface::class]);
     }
 }

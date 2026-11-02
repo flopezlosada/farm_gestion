@@ -91,6 +91,22 @@ class RemittanceRepositoryTest extends KernelTestCase
     }
 
     /**
+     * Una cesta nueva o un cambio de cesta empieza como pronto el mes siguiente a la
+     * última remesa de cuotas MANDADA: ni un borrador ni una remesa de otro tipo cuentan.
+     */
+    public function testElPrimerMesSinCobrarEsElSiguienteALaUltimaRemesaMandada(): void
+    {
+        self::bootKernel();
+        $this->imported('2097-04', ['C 1']);
+        $this->imported('2097-05', ['C 1']);
+        $this->em()->persist(new Remittance(Remittance::KIND_BASKET, new \DateTimeImmutable('2097-09-01'), 'Borrador de septiembre', Remittance::SOURCE_APP, null));
+        $this->em()->persist(Remittance::fromImport(Remittance::KIND_MEMBERSHIP, new \DateTimeImmutable('2097-11-01'), 'Inscripciones', 'x.xlsx', [], null));
+        $this->em()->flush();
+
+        $this->assertSame('2097-06-01', $this->repo()->firstUnchargedBasketMonth()?->format('Y-m-d'));
+    }
+
+    /**
      * La ficha y la revisión leen el socix de cada recibo: tienen que llegar cargados
      * en la misma consulta, no uno por recibo. Con una nula (la primera de su tipo no
      * tiene anterior) no falla.
