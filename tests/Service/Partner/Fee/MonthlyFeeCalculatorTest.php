@@ -43,6 +43,14 @@ class MonthlyFeeCalculatorTest extends TestCase
         return $entity;
     }
 
+    /** Le pone un id a una cesta, como si estuviera guardada. */
+    private static function withShareId(PartnerBasketShare $share, int $id): PartnerBasketShare
+    {
+        $share->setId($id);
+
+        return $share;
+    }
+
     /** Le pone un id a un socix, como si estuviera guardado. */
     private static function withIdOn(Partner $partner, int $id): Partner
     {
@@ -324,13 +332,13 @@ class MonthlyFeeCalculatorTest extends TestCase
         $ana = $withId(self::partner('Ana'), 1);             // de siempre
         $nuria = $withId(self::partner('Nuria'), 2);         // nueva: encabeza su familia
         $oscar = $withId(self::partner('Óscar', $nuria), 3); // de la familia de Nuria, con su propia cesta
-        $pepa = $withId(self::partner('Pepa'), 4);           // nueva; se la paga Ana
+        $pepa = $withId(self::partner('Pepa'), 4);           // nueva; se la paga Ana; su mensual cae el 18
         $quim = $withId(self::partner('Quim'), 5);           // de siempre, en pausa todo diciembre
         $shares = [
             self::share($ana, BasketShare::ID_WEEKLY),
             self::share($nuria, BasketShare::ID_WEEKLY, start: '2026-12-01'),
             self::share($oscar, BasketShare::ID_MONTHLY, start: '2026-12-01'),
-            self::share($pepa, BasketShare::ID_MONTHLY, start: '2026-12-10', payer: $ana),
+            self::withShareId(self::share($pepa, BasketShare::ID_MONTHLY, start: '2026-12-10', payer: $ana), 40),
             self::share($quim, BasketShare::ID_WEEKLY),
         ];
         $pauses = [new PartnerPause($quim, new \DateTimeImmutable('2026-11-20'), new \DateTimeImmutable('2027-01-10'))];
@@ -338,17 +346,18 @@ class MonthlyFeeCalculatorTest extends TestCase
         $charges = static fn (FeeStatement $s): array => array_map(static fn (FeeCharge $c): string => $c->concept->value . ' ' . $c->household->getLegalName() . ' ' . $c->getTotal(), $s->getCharges());
 
         // Sin precio del mantenimiento: cada hogar con cesta lo debe y no se puede cobrar.
-        $fees = MonthlyFeeCalculator::compute($month, $weeks, $shares, new FeeSchedule($rates), [], [], $pauses, [2, 4]);
+        $pepaReceives = [40 => ['2026-12-18']];
+        $fees = MonthlyFeeCalculator::compute($month, $weeks, $shares, new FeeSchedule($rates), [], [], $pauses, [2, 4], [], $pepaReceives);
         $this->assertSame([FeeConcept::MembershipUpkeep], $fees->getMissingConcepts());
 
         $rates[] = new FeeRate(FeeConcept::MembershipUpkeep, '25', new \DateTimeImmutable('2026-01-01'), null);
-        $fees = MonthlyFeeCalculator::compute($month, $weeks, $shares, new FeeSchedule($rates), [], [], $pauses, [2, 4]);
+        $fees = MonthlyFeeCalculator::compute($month, $weeks, $shares, new FeeSchedule($rates), [], [], $pauses, [2, 4], [], $pepaReceives);
         $of = static fn (Partner $p): FeeStatement => self::of($fees->getStatements(), $p);
 
         // Ana paga su mantenimiento y, con la cesta de Pepa, la inscripción y el mantenimiento de Pepa.
         $this->assertSame(['membership_upkeep Ana 25.00', 'membership_signup Pepa 25.00', 'membership_upkeep Pepa 25.00'], $charges($of($ana)));
-        $this->assertSame('122.50', IssuedInvoice::fromCents($of($ana)->getBasketsCents()), 'Su semanal, más 3 de 4 semanas de la mensual de Pepa.');
-        $this->assertSame('197.50', $of($ana)->getTotal());
+        $this->assertSame('130.00', IssuedInvoice::fromCents($of($ana)->getBasketsCents()), 'Su semanal, más la mensual de Pepa entera: empezó el 10, pero su cesta cae el 18.');
+        $this->assertSame('205.00', $of($ana)->getTotal());
         // Nuria y Óscar son un hogar: una inscripción y un mantenimiento, no dos.
         $this->assertSame(['membership_signup Nuria 25.00', 'membership_upkeep Nuria 25.00'], $charges($of($nuria)));
         $this->assertSame('180.00', $of($nuria)->getTotal(), '100 + 30 de las dos cestas y 50 de cuotas de socix.');
@@ -358,6 +367,77 @@ class MonthlyFeeCalculatorTest extends TestCase
         // Fuera de junio y diciembre no hay mantenimiento; la inscripción sólo a quien empieza.
         $nov = MonthlyFeeCalculator::compute(new \DateTimeImmutable('2026-11-01'), self::weeks(), [self::share($ana, BasketShare::ID_WEEKLY)], new FeeSchedule($rates), [], []);
         $this->assertSame([], $nov->getStatements()[0]->getCharges());
+    }
+
+    /**
+     * El primer mes de una quincenal que empieza a medias se paga por las cestas que le
+     * da su turno, no por las semanas: las dos empiezan el 10 de agosto y tienen tres
+     * viernes por delante, pero a Bea su turno sólo le da el 21 y a Ciro el 14 y el 28.
+     */
+    public function testElPrimerMesDeUnaQuincenalSePagaPorLasCestasDeSuTurno(): void
+    {
+        $bea = self::partner('Bea');
+        $ciro = self::partner('Ciro');
+        $shares = [
+            self::withShareId(self::share($bea, BasketShare::ID_BIWEEKLY, start: '2026-08-10'), 1),
+            self::withShareId(self::share($ciro, BasketShare::ID_BIWEEKLY, start: '2026-08-10'), 2),
+        ];
+        $deliveries = [1 => ['2026-08-21'], 2 => ['2026-08-14', '2026-08-28']];
+
+        $statements = MonthlyFeeCalculator::compute(new \DateTimeImmutable('2026-08-01'), self::weeks(), $shares, self::schedule(), [], [], deliveries: $deliveries)->getStatements();
+
+        // Bea: una cesta de dos, a la tarifa del 21 (60): la mitad. Por semanas eran 3/4.
+        $line = self::of($statements, $bea)->getLines()[0];
+        $this->assertSame('30.00', $line->getTotal());
+        $this->assertSame([1, 2, 'cestas'], [$line->weeks, $line->monthWeeks, $line->getUnit()]);
+        $this->assertTrue($line->isPartial());
+
+        // Ciro: sus dos cestas, cada una a su tarifa (55 el 14, 60 el 28): el mes entero.
+        $line = self::of($statements, $ciro)->getLines()[0];
+        $this->assertSame('57.50', $line->getTotal());
+        $this->assertFalse($line->isPartial());
+    }
+
+    /**
+     * Una mensual que empieza a medias se paga entera si su cesta cae ese mes y nada si
+     * no. La que no recibe nada deja su línea a cero sólo si el hogar es nuevo, porque
+     * con ella va la inscripción, que si no se perdería (al mes siguiente ya no es
+     * nuevo). En un hogar de antes no hay nada que cobrar: ni línea ni recibo a 0 €.
+     */
+    public function testUnaMensualQueEmpiezaAMitadSePagaEnteraONada(): void
+    {
+        $hugo = self::withIdOn(self::partner('Hugo'), 1);
+        $nuria = self::withIdOn(self::partner('Nuria'), 2);
+        $olga = self::withIdOn(self::partner('Olga'), 3);   // de antes: deja su semanal el 19 y pasa a mensual
+        $shares = [
+            self::withShareId(self::share($hugo, BasketShare::ID_MONTHLY, start: '2026-08-10'), 1),
+            self::withShareId(self::share($nuria, BasketShare::ID_MONTHLY, start: '2026-08-20'), 2),
+            self::withShareId(self::share($olga, BasketShare::ID_WEEKLY, end: '2026-08-19', active: false), 3),
+            self::withShareId(self::share($olga, BasketShare::ID_MONTHLY, start: '2026-08-20'), 4),
+        ];
+        $schedule = new FeeSchedule([
+            new FeeRate(FeeConcept::VegWeekly, '100', new \DateTimeImmutable('2026-01-01'), null),
+            new FeeRate(FeeConcept::VegMonthly, '30', new \DateTimeImmutable('2026-01-01'), null),
+            new FeeRate(FeeConcept::MembershipSignup, '25', new \DateTimeImmutable('2026-01-01'), null),
+        ]);
+        $deliveries = [1 => ['2026-08-21'], 2 => [], 4 => []];
+
+        $statements = MonthlyFeeCalculator::compute(new \DateTimeImmutable('2026-08-01'), self::weeks(), $shares, $schedule, [], [], [], [1, 2], [], $deliveries)->getStatements();
+
+        $hugo = self::of($statements, $hugo);
+        $this->assertSame('30.00', IssuedInvoice::fromCents($hugo->getBasketsCents()), 'Su cesta cae el 21: entera, no 2 de 4 semanas.');
+        $this->assertFalse($hugo->getLines()[0]->isPartial());
+
+        $nuria = self::of($statements, $nuria);
+        $line = $nuria->getLines()[0];
+        $this->assertSame('0.00', $line->getTotal(), 'Empieza el 20 y su cesta es la de primeros de mes: este mes no recibe nada.');
+        $this->assertSame([0, 1, 'cesta'], [$line->weeks, $line->monthWeeks, $line->getUnit()]);
+        $this->assertSame([FeeConcept::MembershipSignup], array_map(static fn (FeeCharge $c): FeeConcept => $c->concept, $nuria->getCharges()));
+        $this->assertSame('25.00', $nuria->getTotal());
+
+        $olga = self::of($statements, $olga);
+        $this->assertCount(1, $olga->getLines(), 'Sólo su semanal: la mensual no le trae nada en agosto.');
+        $this->assertSame('50.00', $olga->getTotal(), 'Dos de cuatro semanas de semanal.');
     }
 
     /** Sin semanas de reparto dadas de alta no hay nada que prorratear: nadie paga. */

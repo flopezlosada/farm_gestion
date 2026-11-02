@@ -19,11 +19,16 @@ use App\Entity\PartnerBasketShare;
  * {@see $weeks} pero no se cobran ({@see $freeWeeks}); las de quien ya se fue sin que
  * nadie decidiera qué hacer se cobran, pero dejan la cuota sin poder pasar
  * ({@see $undecidedWeeks}).
+ *
+ * El primer mes de una quincenal o una mensual que empieza a medias no se cuenta por
+ * semanas sino por CESTAS ({@see $byDeliveries}): {@see $weeks} son las que recibe y
+ * {@see $monthWeeks} las de un mes normal (2 o 1).
  */
 final class FeeLine
 {
     /**
      * @param list<FeeConcept> $missing
+     * @param bool $byDeliveries Si $weeks y $monthWeeks cuentan cestas en vez de semanas.
      */
     public function __construct(
         public readonly PartnerBasketShare $share,
@@ -35,7 +40,16 @@ final class FeeLine
         public readonly array $missing,
         public readonly int $freeWeeks = 0,
         public readonly int $undecidedWeeks = 0,
+        public readonly bool $byDeliveries = false,
     ) {
+    }
+
+    /** «semanas» o «cestas»: lo que cuentan {@see $weeks} y {@see $monthWeeks}, para listados. */
+    public function getUnit(): string
+    {
+        return $this->byDeliveries
+            ? ($this->monthWeeks === 1 ? 'cesta' : 'cestas')
+            : 'semanas';
     }
 
     public function getCents(): int
