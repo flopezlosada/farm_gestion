@@ -4,17 +4,25 @@ namespace App\Service\Accounting\Watch;
 
 use App\Entity\Notification;
 use App\Service\Accounting\Agenda\AgendaItem;
+use App\Service\AppSettings;
 use App\Service\Notification\NotificationInbox;
 use App\Service\Notification\NotificationLink;
 use App\Service\Notification\StaffAudience;
 use App\Service\Push\PushSender;
+use Symfony\Bridge\Twig\Mime\TemplatedEmail;
+use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 /**
- * Los avisos de la vigilancia de contabilidad: al móvil de quien lleva la contabilidad
- * (sin el admin por jerarquía) y a la bandeja de todo el que puede escribir en ella,
- * admins incluidos, como el aviso de una notificación oficial
- * ({@see \App\Service\Accounting\OfficialNotice\OfficialNoticeAlert}). Los dos llevan
+ * Los avisos de la vigilancia de contabilidad: al móvil y al correo de quien lleva la
+ * contabilidad (sin el admin por jerarquía) y a la bandeja de todo el que puede
+ * escribir en ella, admins incluidos, como el aviso de una notificación oficial
+ * ({@see \App\Service\Accounting\OfficialNotice\OfficialNoticeAlert}). Todos llevan
  * a la portada, que es donde están los botones para resolverlo.
+ *
+ * El correo existe porque el móvil depende de que cada cual haya activado el push en
+ * su navegador y la bandeja sólo se ve entrando: sin él, un aviso urgente podía no
+ * salir de la app.
  */
 class AccountingWatchAlert
 {
@@ -35,7 +43,22 @@ class AccountingWatchAlert
         private readonly NotificationInbox $inbox,
         private readonly PushSender $push,
         private readonly NotificationLink $link,
+        private readonly MailerInterface $mailer,
+        private readonly AppSettings $settings,
+        private readonly UrlGeneratorInterface $urls,
     ) {
+    }
+
+    /**
+     * ¿Hay alguien que lleve la contabilidad? Sin nadie con el permiso, los avisos sólo
+     * llegarían a la bandeja de los admins, que nadie mira a diario: la tarea no debe
+     * darlos por dados.
+     *
+     * @return bool
+     */
+    public function hasResponsibles(): bool
+    {
+        return [] !== $this->staff->responsiblesFor(self::ROLE);
     }
 
     /**
@@ -47,7 +70,7 @@ class AccountingWatchAlert
      */
     public function urgent(AgendaItem $item): int
     {
-        return $this->send($item->title, implode(' ', $item->details), self::KIND_URGENT);
+        return $this->send($item->title, $item->details, self::KIND_URGENT);
     }
 
     /**
@@ -63,13 +86,13 @@ class AccountingWatchAlert
 
         return $this->send(
             1 === $count ? 'Contabilidad: una tarea pendiente' : sprintf('Contabilidad: %d tareas pendientes', $count),
-            self::weeklyBody($items),
+            self::weeklyLines($items),
             self::KIND_WEEKLY,
         );
     }
 
     /**
-     * El texto del resumen: las primeras tareas por su título y, si hay más, cuántas.
+     * El texto del resumen en una línea, para el móvil y la bandeja.
      *
      * @param list<AgendaItem> $items Las tareas; al menos una.
      *
@@ -77,23 +100,54 @@ class AccountingWatchAlert
      */
     public static function weeklyBody(array $items): string
     {
-        $titles = array_map(static fn (AgendaItem $item): string => $item->title, \array_slice($items, 0, self::WEEKLY_LISTED));
-        $rest = \count($items) - \count($titles);
-
-        return implode('. ', $titles) . '.' . ($rest > 0 ? sprintf(' Y %d más en la portada.', $rest) : '');
+        return self::sentence(self::weeklyLines($items));
     }
 
     /**
-     * Deja el aviso en las bandejas y lo manda al móvil de los responsables.
+     * Las líneas del resumen: las primeras tareas por su título y, si hay más, cuántas.
      *
-     * @param string $title Título.
-     * @param string $body  Cuerpo.
-     * @param string $kind  Clase de push, para la bitácora.
+     * @param list<AgendaItem> $items Las tareas; al menos una.
+     *
+     * @return list<string>
+     */
+    private static function weeklyLines(array $items): array
+    {
+        $titles = array_map(static fn (AgendaItem $item): string => $item->title.'.', \array_slice($items, 0, self::WEEKLY_LISTED));
+        $rest = \count($items) - \count($titles);
+
+        return $rest > 0 ? [...$titles, sprintf('Y %d más en la portada.', $rest)] : $titles;
+    }
+
+    /**
+     * Varias líneas en una sola, como las quiere el móvil.
+     *
+     * @param list<string> $lines Las líneas.
+     *
+     * @return string
+     */
+    private static function sentence(array $lines): string
+    {
+        return implode(' ', $lines);
+    }
+
+    /**
+     * Manda el aviso por correo y lo deja en las bandejas y en el móvil.
+     *
+     * El correo va primero porque es lo único que puede fallar con excepción (el
+     * servidor de correo caído): si falla, no se ha dejado nada en ningún sitio y el
+     * siguiente intento lo manda entero, sin duplicar la bandeja ni el móvil.
+     *
+     * @param string       $title Título.
+     * @param list<string> $lines Cuerpo, una línea por idea.
+     * @param string       $kind  Clase de push, para la bitácora.
      *
      * @return int Cuántos avisos se han dejado en bandejas.
      */
-    private function send(string $title, string $body, string $kind): int
+    private function send(string $title, array $lines, string $kind): int
     {
+        $this->email($title, $lines);
+
+        $body = self::sentence($lines);
         $delivered = $this->inbox->deliver($this->staff->withRole(self::ROLE), Notification::KIND_ACCOUNTING_AGENDA, $title, $body);
         $this->push->sendToMany(
             $this->staff->responsiblesFor(self::ROLE),
@@ -104,5 +158,44 @@ class AccountingWatchAlert
         );
 
         return $delivered;
+    }
+
+    /**
+     * El correo a los responsables, si están encendidos el interruptor general de
+     * correo y el suyo. Se miran aquí, y no en el `requires` de la tarea, porque
+     * apagar el correo no puede apagar el móvil ni la bandeja (lo explica
+     * {@see \App\Tests\Service\Cron\CronManifestTest}).
+     *
+     * @param string       $title Asunto.
+     * @param list<string> $lines Cuerpo, una línea por idea.
+     */
+    private function email(string $title, array $lines): void
+    {
+        $to = $this->staff->responsibleEmailsFor(self::ROLE);
+        if ([] === $to || !$this->emailEnabled()) {
+            return;
+        }
+
+        $this->mailer->send((new TemplatedEmail())
+            ->to(...$to)
+            ->subject('CSA Vega · '.$title)
+            ->htmlTemplate('email/accounting_watch.html.twig')
+            ->textTemplate('email/accounting_watch.txt.twig')
+            ->context([
+                'title' => $title,
+                'lines' => $lines,
+                'url' => $this->urls->generate('accounting_index', [], UrlGeneratorInterface::ABSOLUTE_URL),
+            ]));
+    }
+
+    /**
+     * ¿Sale el correo? El interruptor general y el de la vigilancia.
+     *
+     * @return bool
+     */
+    private function emailEnabled(): bool
+    {
+        return $this->settings->getBool(AppSettings::EMAIL_ENABLED)
+            && $this->settings->getBool(AppSettings::EMAIL_ACCOUNTING_WATCH);
     }
 }

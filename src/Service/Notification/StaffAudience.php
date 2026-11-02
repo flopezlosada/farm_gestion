@@ -125,9 +125,33 @@ class StaffAudience
      */
     public function emailsWithRole(string $role): array
     {
+        return self::emailsOf($this->withRole($role));
+    }
+
+    /**
+     * Las direcciones de correo de los responsables de la sección
+     * ({@see responsiblesFor()}), sin repetir y sin las vacías. Es el mismo
+     * público que el aviso al móvil: el admin sólo si se le dio el permiso.
+     *
+     * @param string $role Rol buscado, p. ej. "ROLE_GESTION_CONTABILIDAD_EDIT".
+     * @return list<string>
+     */
+    public function responsibleEmailsFor(string $role): array
+    {
+        return self::emailsOf($this->responsiblesFor($role));
+    }
+
+    /**
+     * Las direcciones de unas cuentas, recortadas, sin repetir y sin las vacías.
+     *
+     * @param list<User> $users Las cuentas.
+     * @return list<string>
+     */
+    private static function emailsOf(array $users): array
+    {
         $emails = [];
 
-        foreach ($this->withRole($role) as $user) {
+        foreach ($users as $user) {
             $email = trim((string) $user->getEmail());
             if ($email !== '') {
                 $emails[$email] = true;
