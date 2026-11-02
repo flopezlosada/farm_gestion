@@ -192,15 +192,15 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
 
     /**
      * La hoja de Excel del banco sin IBAN: se pide la cuenta (la clave no puede ir vacía
-     * en el formulario) y, elegida, el extracto se guarda con sus movimientos.
+     * en el formulario) y, elegida, el extracto se guarda con sus movimientos. Como en
+     * Fiare, la cuenta del libro ya tiene su IBAN: el fichero no lo contradice, así que
+     * se puede elegir igual.
      */
     public function testHojaDeExcelSinIbanPideLaCuentaYSeGuarda(): void
     {
         $client = $this->createAuthenticatedClient();
         static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
         $this->account = $this->bankAccount(sprintf('%010d', random_int(0, 9_999_999_999)));
-        $this->account->setIban(null);
-        static::getContainer()->get(EntityManagerInterface::class)->flush();
 
         $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
         $form = $crawler->filter('form.inv-upload')->form();

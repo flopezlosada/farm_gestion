@@ -17,9 +17,8 @@ use Doctrine\ORM\EntityManagerInterface;
  * duda ({@see BankLineMatcher}).
  *
  * La cuenta se reconoce por el IBAN de la ficha (entidad, oficina y cuenta). Si ninguna
- * lo tiene, la elige una persona entre las cuentas de banco SIN IBAN: adivinar por los
- * últimos dígitos podría meter los movimientos en otra cuenta, y una con otro IBAN es,
- * por definición, otra cuenta.
+ * lo tiene, la elige una persona ({@see choosableAccounts()}): adivinar por los últimos
+ * dígitos podría meter los movimientos en otra cuenta.
  */
 class BankStatementImporter
 {
@@ -33,16 +32,20 @@ class BankStatementImporter
     }
 
     /**
-     * Las cuentas que se pueden elegir para un extracto que no casa por IBAN: de banco,
-     * activas y sin IBAN español.
+     * Las cuentas que se pueden elegir para una cuenta del fichero que no casa por IBAN:
+     * de banco y activas. Si el fichero trae IBAN, además sin IBAN en la ficha: una con
+     * otro IBAN es, por definición, otra cuenta. Si no lo trae (la hoja de Excel de
+     * Fiare), nada lo contradice y vale cualquiera, también la que ya tiene su IBAN.
+     *
+     * @param Norma43Account $read La cuenta del fichero.
      *
      * @return list<FinancialAccount>
      */
-    public function choosableAccounts(): array
+    public function choosableAccounts(Norma43Account $read): array
     {
         return array_values(array_filter(
             $this->accounts->findActive(),
-            static fn (FinancialAccount $a): bool => $a->isBank() && $a->getBankKey() === null,
+            static fn (FinancialAccount $a): bool => $a->isBank() && (!$read->isKnown() || $a->getBankKey() === null),
         ));
     }
 
@@ -65,11 +68,6 @@ class BankStatementImporter
                 $byKey[$key][] = $account;
             }
         }
-        $choosable = [];
-        foreach ($this->choosableAccounts() as $account) {
-            $choosable[(int) $account->getId()] = $account;
-        }
-
         $resolved = [];
         $unresolved = [];
         foreach ($file->accounts as $read) {
@@ -77,10 +75,7 @@ class BankStatementImporter
             if (\count($matches) > 1) {
                 throw new Norma43Exception(sprintf('Hay %d cuentas en el libro con el IBAN de la %s: deja el IBAN sólo en la buena (Ajustes → Cuentas).', \count($matches), $read->label()));
             }
-            $account = $matches[0] ?? (isset($chosen[$read->key()]) ? ($choosable[$chosen[$read->key()]] ?? null) : null);
-            if ($matches === [] && isset($chosen[$read->key()]) && $account === null) {
-                throw new Norma43Exception(sprintf('La cuenta elegida para la %s no vale: tiene que ser una cuenta de banco activa y sin IBAN.', $read->label()));
-            }
+            $account = $matches[0] ?? (isset($chosen[$read->key()]) ? $this->chosen($read, $chosen[$read->key()]) : null);
             if ($account === null) {
                 $unresolved[] = $read;
                 continue;
@@ -100,6 +95,25 @@ class BankStatementImporter
         }
 
         return ['resolved' => $resolved, 'unresolved' => $unresolved];
+    }
+
+    /**
+     * La cuenta que eligió la persona para una cuenta del fichero, si se puede elegir.
+     *
+     * @param Norma43Account $read La cuenta del fichero.
+     * @param int            $id   Id de la cuenta elegida.
+     *
+     * @throws Norma43Exception Si no está entre las que se pueden elegir.
+     */
+    private function chosen(Norma43Account $read, int $id): FinancialAccount
+    {
+        foreach ($this->choosableAccounts($read) as $account) {
+            if ($account->getId() === $id) {
+                return $account;
+            }
+        }
+
+        throw new Norma43Exception(sprintf('La cuenta elegida para la %s no vale: tiene que ser una cuenta de banco activa%s.', $read->label(), $read->isKnown() ? ' y sin IBAN' : ''));
     }
 
     /**
