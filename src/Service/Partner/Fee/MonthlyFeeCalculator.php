@@ -156,7 +156,9 @@ class MonthlyFeeCalculator
         foreach ($shares as $share) {
             $partner = $share->getPartner();
             $own = MonthlyFees::keyOf($partner);
-            $line = self::line($share, $weeks, $schedule, $stops[$own] ?? [], $workerOf[$own] ?? null, $deliveries[$share->getId()] ?? null);
+            // Sólo las que empiezan a medias se cobran por cestas (y sólo ellas tienen que estar guardadas).
+            $received = $deliveries !== [] && self::isLateStart($share, $weeks) ? ($deliveries[$share->getId()] ?? null) : null;
+            $line = self::line($share, $weeks, $schedule, $stops[$own] ?? [], $workerOf[$own] ?? null, $received);
             $household = $partner->getFamilyHead();
             // Una cesta que este mes no recibe nada sólo deja su línea (a cero) si el hogar
             // empieza ahora: es la que lleva su inscripción. Si no, no hay nada que cobrar.
