@@ -8,6 +8,7 @@ use App\Repository\TelegramLinkRepository;
 use App\Service\Accounting\CashCount\CashCountDue;
 use App\Service\Accounting\CashCount\CashCountRecorder;
 use App\Service\Notification\StaffAudience;
+use App\Service\Telegram\TelegramApiException;
 use App\Service\Telegram\TelegramBotApi;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -101,17 +102,33 @@ class SendCashCountReminderCommand extends AbstractCronCommand
 
         $month = $today->modify('first day of this month');
         $sent = 0;
+        $failed = [];
         foreach ($chats as $username => $chatId) {
-            if ($this->emitOnce(self::EFFECT_KIND, fn () => $this->bot->sendMessage($chatId, $text), $input, 'user-' . $username, $month, 'telegram')) {
-                ++$sent;
+            // Un chat que rechaza el mensaje (bot bloqueado, chat borrado) no puede dejar
+            // sin aviso a quien va detrás: el orden es siempre el mismo, así que cortar
+            // aquí lo cortaría todos los días. El ledger ya ha soltado su apunte, y
+            // mañana se le vuelve a intentar.
+            try {
+                if ($this->emitOnce(self::EFFECT_KIND, fn () => $this->bot->sendMessage($chatId, $text), $input, 'user-' . $username, $month, 'telegram')) {
+                    ++$sent;
+                }
+            } catch (TelegramApiException $e) {
+                $failed[] = $username;
+                $io->warning(sprintf('Telegram no ha dejado escribir a %s: %s', $username, $e->getMessage()));
             }
+        }
+        if ($failed !== [] && $sent === 0) {
+            $io->error(sprintf('No se ha podido pedir el arqueo a nadie (falló: %s).', implode(', ', $failed)));
+
+            return Command::FAILURE;
         }
         if ($sent === 0) {
             return $this->nothingToDo('Ya pedido este mes');
         }
-        $io->success(sprintf('Arqueo pedido a %d persona(s).', $sent));
+        $detail = sprintf('Arqueo pedido a %d persona(s)', $sent) . ($failed !== [] ? sprintf('; falló: %s', implode(', ', $failed)) : '');
+        $io->success($detail . '.');
 
-        return $this->didWork(sprintf('Arqueo pedido a %d persona(s)', $sent));
+        return $this->didWork($detail);
     }
 
     /**
