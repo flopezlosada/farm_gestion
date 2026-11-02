@@ -683,6 +683,49 @@ class AccountEntryRepository extends ServiceEntityRepository
     }
 
     /**
+     * Los apuntes de una cuenta entre dos fechas que se partieron (alguno sale de
+     * ellos), los más recientes primero: de donde se saca cómo se partió la última vez
+     * un cargo que se repite.
+     *
+     * @return list<AccountEntry>
+     */
+    public function findSplitBetween(FinancialAccount $account, \DateTimeInterface $from, \DateTimeInterface $to): array
+    {
+        return $this->createQueryBuilder('e')
+            ->andWhere('e.account = :account')->setParameter('account', $account)
+            ->andWhere('e.date >= :from AND e.date < :to')
+            ->setParameter('from', $from->format('Y-m-d'))
+            ->setParameter('to', $to->format('Y-m-d'))
+            ->andWhere('EXISTS (SELECT p.id FROM '.AccountEntry::class.' p WHERE p.splitFrom = e)')
+            ->orderBy('e.date', 'DESC')
+            ->addOrderBy('e.id', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Las partes separadas de unos apuntes, con su partida, en el orden en que se
+     * separaron. Una consulta para todos.
+     *
+     * @param list<AccountEntry> $entries Los apuntes partidos.
+     *
+     * @return list<AccountEntry>
+     */
+    public function findPartsOf(array $entries): array
+    {
+        if ($entries === []) {
+            return [];
+        }
+
+        return $this->createQueryBuilder('p')
+            ->innerJoin('p.category', 'c')->addSelect('c')
+            ->andWhere('p.splitFrom IN (:entries)')->setParameter('entries', $entries)
+            ->orderBy('p.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Los apuntes de unas cuentas entre dos fechas que no explican ningún movimiento
      * del banco, en una consulta: los candidatos a emparejar con un extracto y lo que
      * el extracto no trae. Desde la apertura de cada cuenta, por fecha.

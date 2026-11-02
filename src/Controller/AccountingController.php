@@ -25,6 +25,7 @@ use App\Service\Accounting\BudgetTracker;
 use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\MonthNames;
+use App\Service\Accounting\Split\RepeatSplit;
 use App\Service\Accounting\TransferRecorder;
 use Doctrine\ORM\EntityManagerInterface;
 use Knp\Component\Pager\PaginatorInterface;
@@ -426,6 +427,7 @@ class AccountingController extends AbstractController
         FinancialAccountRepository $accounts,
         BudgetCategoryRepository $categories,
         BankStatementLineRepository $bankLines,
+        RepeatSplit $repeat,
     ): Response {
         $entry = new AccountEntry();
         $entry->setDate($this->parseDate($request->query->get('date')) ?? new \DateTimeImmutable('today'));
@@ -457,6 +459,13 @@ class AccountingController extends AbstractController
             }
             $em->flush();
             $this->addFlash('success', sprintf('Anotado: %s.', $entry->getConcept()));
+            // Un cargo que la última vez se partió (el del Ayuntamiento): a su ficha,
+            // donde se confirma partirlo igual, en vez de volver al extracto.
+            if ($repeat->templateFor($entry) !== null) {
+                $this->addFlash('info', 'Este mismo cargo se partió la última vez: confirma aquí si se parte igual.');
+
+                return $this->redirectToRoute('accounting_entry_show', ['id' => $entry->getId()]);
+            }
             $statementId = QueryId::from($request->query, 'statement');
             if ($bankLine !== null && $statementId !== null) {
                 return $this->redirectToRoute('accounting_bank_statement_show', ['id' => $statementId, '_fragment' => 'sin-apunte']);
@@ -495,6 +504,7 @@ class AccountingController extends AbstractController
         BudgetCategoryRepository $categories,
         InvoiceFileStore $files,
         ClosedPeriods $closed,
+        RepeatSplit $repeat,
     ): Response {
         // Un pago agrupado explica varias facturas: el documento es el de la primera.
         $paid = $invoices->findBy(['accountEntry' => $entry], ['id' => 'ASC']);
@@ -527,7 +537,65 @@ class AccountingController extends AbstractController
             )) : [],
             // Un traspaso no se parte (AccountEntry::splitOff): ni se ofrece.
             'splitCategories' => $entry->isTransfer() ? [] : $categories->findForEntries(),
+            'parts' => $entries->findPartsOf([$entry]),
+            // El mismo cargo se partió la última vez: se propone partirlo igual.
+            'repeatSplit' => $repeat->templateFor($entry),
         ]);
+    }
+
+    /**
+     * Partir un apunte como se partió la última vez el mismo cargo ({@see RepeatSplit}).
+     * Se vuelve a buscar cómo: si entre que se vio y se pulsó ya se partió, o cambió el
+     * importe, no se hace nada.
+     */
+    #[Route('/entry/{id}/split-repeat', name: 'accounting_entry_split_repeat', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
+    public function entrySplitRepeat(
+        Request $request,
+        AccountEntry $entry,
+        RepeatSplit $repeat,
+        ValidatorInterface $validator,
+        EntityManagerInterface $em,
+        ClosedPeriods $closed,
+    ): Response {
+        $back = $this->redirectToRoute('accounting_entry_show', ['id' => $entry->getId()]);
+        if (!$this->isCsrfTokenValid('accounting_entry_split_repeat_'.$entry->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $back;
+        }
+        $closed->assertOpen($entry->getDate());
+        $template = $repeat->templateFor($entry);
+        if ($template === null) {
+            $this->addFlash('warning', 'Ya no se puede partir igual: o ya está partido, o el importe no es el de la última vez.');
+
+            return $back;
+        }
+
+        $whole = $entry->getAmount();
+        try {
+            $parts = RepeatSplit::apply($entry, $template['parts']);
+        } catch (\InvalidArgumentException $e) {
+            $entry->setAmount($whole);
+            $this->addFlash('warning', $e->getMessage());
+
+            return $back;
+        }
+        foreach ($parts as $part) {
+            $part->setCreatedBy($this->currentUser());
+            $violations = $validator->validate($part);
+            if (\count($violations) > 0) {
+                $entry->setAmount($whole);
+                $this->addFlash('warning', (string) $violations[0]->getMessage());
+
+                return $back;
+            }
+            $em->persist($part);
+        }
+        $em->flush();
+        $this->addFlash('success', sprintf('Partido como la última vez. Este apunte queda en %s €.', number_format(abs((float) $entry->getAmount()), 2, ',', '.')));
+
+        return $back;
     }
 
     /**

@@ -110,6 +110,16 @@ class AccountEntry
     private ?AccountEntry $transferPeer = null;
 
     /**
+     * El apunte del que se separó éste al partirlo ({@see splitOff()}): las dos partes
+     * son un mismo movimiento del banco. Null en uno que no sale de partir otro. SET
+     * NULL: si se borra el original, la parte se queda como apunte suelto.
+     *
+     * @ORM\ManyToOne(targetEntity="AccountEntry")
+     * @ORM\JoinColumn(name="split_from_id", nullable=true, onDelete="SET NULL")
+     */
+    private ?AccountEntry $splitFrom = null;
+
+    /**
      * @ORM\Column(type="text", nullable=true)
      */
     private ?string $notes = null;
@@ -347,13 +357,22 @@ class AccountEntry
         $signed = $total < 0 ? -$cents : $cents;
         $this->amount = IssuedInvoice::fromCents($total - $signed);
 
-        return (new self())
+        $part = (new self())
             ->setAccount($this->account)
             ->setDate($this->date)
             ->setCategory($category)
             ->setConcept($concept)
             ->setProviderName($this->providerName)
             ->setAmount(IssuedInvoice::fromCents($signed));
+        $part->splitFrom = $this;
+
+        return $part;
+    }
+
+    /** El apunte del que se separó éste al partirlo, o null. */
+    public function getSplitFrom(): ?AccountEntry
+    {
+        return $this->splitFrom;
     }
 
     public function getNotes(): ?string
