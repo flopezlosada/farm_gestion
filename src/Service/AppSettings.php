@@ -790,8 +790,6 @@ class AppSettings
             'requires' => [self::FEATURE_CONTABILIDAD],
             'depends_on' => [],
         ],
-        // Una vez al día basta: una factura no corre prisa por horas. A las 6, para
-        // que la lectura horaria las tenga leídas cuando alguien abra la bandeja.
         // A diario, después de recoger el buzón (a las 6) para que una notificación
         // oficial recién llegada ya esté en la lista. `confirm` porque lo que sale
         // va al móvil y no se puede des-enviar.
@@ -806,6 +804,8 @@ class AppSettings
             'requires' => [self::FEATURE_CONTABILIDAD],
             'depends_on' => [],
         ],
+        // Una vez al día basta: una factura no corre prisa por horas. A las 6, para
+        // que la lectura horaria las tenga leídas cuando alguien abra la bandeja.
         self::CRON_INVOICE_MAIL => [
             'command' => 'app:fetch-invoice-mail',
             // Las facturas no avisan a nadie (se quedan en la bandeja de
