@@ -82,6 +82,73 @@ class AccountEntrySplitTest extends AbstractAuthenticatedTest
         $this->assertNotNull($sibling->getCreatedBy(), 'Queda quién lo partió.');
     }
 
+    /**
+     * Partido una vez, el cargo del mes siguiente se propone partir igual: un clic deja
+     * las dos partes como la otra vez, y las fichas se enlazan entre sí. Con otro
+     * importe, no se propone.
+     */
+    public function testElMesSiguienteSeParteIgual(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        [$bank, $rent, $supplies] = $this->catalog();
+        $march = $this->entry($bank, $rent, '-158.95', '2090-03-01', 'trf.ayuntamiento de torremocha de jarama');
+        $this->em()->persist($march->splitOff('50.00', $supplies, 'Suministros del local, acuerdo verbal con el Ayto'));
+        $april = $this->entry($bank, $rent, '-158.95', '2090-04-02', 'trf. ayuntamiento de torremocha de jarama');
+        $other = $this->entry($bank, $rent, '-160.00', '2090-04-03', 'trf. ayuntamiento de torremocha de jarama');
+        $this->em()->flush();
+
+        $client->request('GET', sprintf('/gestion/accounting/entry/%d', $other->getId()));
+        $this->assertSelectorNotExists('form[action$="/split-repeat"]', 'Con otro importe no es el mismo cargo.');
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/entry/%d', $april->getId()));
+        $this->assertSelectorTextContains('body', 'este mismo cargo se partió');
+        $client->submit($crawler->filter('form[action$="/split-repeat"]')->form());
+        $this->assertResponseRedirects(sprintf('/gestion/accounting/entry/%d', $april->getId()));
+        $crawler = $client->followRedirect();
+        $this->assertSelectorTextContains('body', 'Partido como la última vez');
+        $this->assertSelectorNotExists('form[action$="/split-repeat"]', 'Ya partido, no se vuelve a proponer.');
+        $this->assertSelectorTextContains('body', 'Partes');
+
+        $this->em()->clear();
+        $this->assertSame('-108.95', $this->em()->find(AccountEntry::class, $april->getId())->getAmount());
+        $part = $this->em()->getRepository(AccountEntry::class)->findOneBy(['splitFrom' => $april->getId()]);
+        $this->assertSame('-50.00', $part->getAmount());
+        $this->assertSame($supplies->getId(), $part->getCategory()->getId());
+        $this->assertSame('Suministros del local, acuerdo verbal con el Ayto', $part->getConcept());
+        $this->assertSame('2090-04-02', $part->getDate()->format('Y-m-d'));
+
+        $client->request('GET', sprintf('/gestion/accounting/entry/%d', $part->getId()));
+        $this->assertSelectorTextContains('body', 'Partido de');
+    }
+
+    /**
+     * El doble clic: el segundo envío del mismo formulario llega con el apunte ya
+     * partido y no crea otra parte; el libro sigue sumando lo que cobró el banco.
+     */
+    public function testPartirIgualDosVecesNoDuplicaLaParte(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        [$bank, $rent, $supplies] = $this->catalog();
+        $march = $this->entry($bank, $rent, '-158.95', '2090-03-01', 'trf.ayuntamiento de torremocha de jarama');
+        $this->em()->persist($march->splitOff('50.00', $supplies, 'Suministros del local'));
+        $april = $this->entry($bank, $rent, '-158.95', '2090-04-02', 'trf. ayuntamiento de torremocha de jarama');
+        $this->em()->flush();
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/entry/%d', $april->getId()));
+        $form = $crawler->filter('form[action$="/split-repeat"]')->form();
+        $client->submit($form);
+        $client->submit($form);
+        $this->assertResponseRedirects(sprintf('/gestion/accounting/entry/%d', $april->getId()));
+        $client->followRedirect();
+        $this->assertSelectorTextContains('body', 'Ya no se puede partir igual');
+
+        $this->em()->clear();
+        $this->assertSame('-108.95', $this->em()->find(AccountEntry::class, $april->getId())->getAmount());
+        $this->assertCount(1, $this->em()->getRepository(AccountEntry::class)->findBy(['splitFrom' => $april->getId()]));
+    }
+
     /** Lo que no vale no toca la base: ni el original baja ni aparece el hermano. */
     public function testUnPostQueNoValeNoParteNada(): void
     {
@@ -162,10 +229,10 @@ class AccountEntrySplitTest extends AbstractAuthenticatedTest
         return $category;
     }
 
-    private function entry(FinancialAccount $account, BudgetCategory $category, string $amount): AccountEntry
+    private function entry(FinancialAccount $account, BudgetCategory $category, string $amount, string $date = '2090-03-01', string $concept = 'RECIBO AYUNTAMIENTO'): AccountEntry
     {
         $entry = (new AccountEntry())->setAccount($account)->setCategory($category)
-            ->setDate(new \DateTimeImmutable('2090-03-01'))->setConcept('RECIBO AYUNTAMIENTO')->setAmount($amount);
+            ->setDate(new \DateTimeImmutable($date))->setConcept($concept)->setAmount($amount);
         $this->em()->persist($entry);
 
         return $entry;
