@@ -25,6 +25,9 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 #[AsCommand(name: 'app:send-accounting-watch', description: 'Avisa de lo pendiente en la portada de contabilidad.')]
 class SendAccountingWatchCommand extends AbstractCronCommand
 {
+    /** Por qué no se avisa cuando nadie tiene el permiso. */
+    public const NO_RESPONSIBLE = 'Nadie lleva la contabilidad (nadie tiene el permiso de escribir en ella; a un admin hay que dárselo aparte): no se avisa a nadie.';
+
     public function __construct(
         private readonly AccountingAgenda $agenda,
         private readonly AccountingWatchPlan $plan,
@@ -66,10 +69,21 @@ class SendAccountingWatchCommand extends AbstractCronCommand
             $items,
         ));
 
+        // Sin nadie que lleve la contabilidad no se avisa ni se apunta nada como avisado:
+        // la ejecución sale en rojo y, el día que alguien tenga el permiso, el
+        // siguiente intento le manda todo lo pendiente.
+        $orphan = !$this->alert->hasResponsibles();
+        if ($orphan) {
+            $io->warning(self::NO_RESPONSIBLE);
+        }
+
         if ($input->getOption('dry-run')) {
             $io->success(sprintf('Dry-run: %d urgente(s) y %d para el resumen semanal. Sin avisos.', \count($urgent), \count($weekly)));
 
             return Command::SUCCESS;
+        }
+        if ($orphan) {
+            return $this->failed(self::NO_RESPONSIBLE);
         }
 
         $window = $this->plan->urgentWindow($today);

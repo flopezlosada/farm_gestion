@@ -230,6 +230,20 @@ abstract class AbstractCronCommand extends Command
     }
 
     /**
+     * Marca la ejecución como fallida, con su explicación, y devuelve error. Es para
+     * lo que impide hacer el trabajo sin ser una excepción (falta configurar algo):
+     * sale en rojo en la pantalla y el planificador lo reintenta.
+     *
+     * @param string $detail Resumen de una línea ("nadie lleva la contabilidad").
+     */
+    protected function failed(string $detail): int
+    {
+        $this->reportedDetail = $detail;
+
+        return Command::FAILURE;
+    }
+
+    /**
      * Plantilla de ejecución: resuelve la tarea en el manifiesto, aplica el
      * gate, registra el arranque, delega en la hija y cierra el registro con el
      * resultado.

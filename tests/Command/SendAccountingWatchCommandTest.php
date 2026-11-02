@@ -12,12 +12,15 @@ use App\Service\AppSettings;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Mime\Email;
 
 /**
  * La vigilancia de contabilidad con la portada real: lo urgente avisa una vez por
  * tramo de 3 días aunque el reloj pase varias veces, vuelve a avisar en el tramo
- * siguiente si sigue sin resolver, y deja de avisar en cuanto se resuelve.
+ * siguiente si sigue sin resolver, y deja de avisar en cuanto se resuelve. Sin nadie
+ * que lleve la contabilidad no avisa ni da nada por avisado.
  */
 class SendAccountingWatchCommandTest extends KernelTestCase
 {
@@ -72,6 +75,7 @@ class SendAccountingWatchCommandTest extends KernelTestCase
         $this->runCommand('2026-11-03');
         $this->runCommand('2026-11-04');
         $this->assertSame(1, $this->urgentNotices(), 'Dentro del mismo tramo de 3 días, un solo aviso.');
+        $this->assertSame(1, $this->urgentEmails(), 'Y un solo correo, a la tesorera.');
 
         $this->runCommand('2026-11-06');
         $this->assertSame(2, $this->urgentNotices(), 'Sigue sin mirarse: el tramo siguiente vuelve a avisar.');
@@ -82,6 +86,28 @@ class SendAccountingWatchCommandTest extends KernelTestCase
 
         $this->runCommand('2026-11-09');
         $this->assertSame(2, $this->urgentNotices(), 'Revisada: ya no sale en la portada y no avisa más.');
+    }
+
+    public function testSinNadieQueLleveLaContabilidadFallaYNoDaNadaPorAvisado(): void
+    {
+        $treasurer = $this->treasurer();
+        $treasurer->setRoles(['ROLE_GESTION_CONTABILIDAD']);
+        $this->em->persist(new OfficialNotice(str_repeat('f', 64), 'DEHú', 'noreply.dehu@correo.gob.es', new \DateTimeImmutable('2026-11-02 09:12')));
+        $this->em->flush();
+
+        [$exit, $display] = $this->runCommandWithExit('2026-11-03');
+
+        $this->assertSame(Command::FAILURE, $exit);
+        $this->assertStringContainsString('Nadie lleva la contabilidad', $display);
+        $this->assertSame(0, $this->emittedEffects(), 'Nada queda apuntado como avisado.');
+        $this->assertSame(0, $this->urgentEmails());
+
+        $treasurer = $this->treasurer();
+        $treasurer->setRoles(['ROLE_GESTION_CONTABILIDAD_EDIT']);
+        $this->em->flush();
+
+        $this->runCommand('2026-11-04');
+        $this->assertSame(1, $this->urgentNotices(), 'En cuanto alguien lleva la contabilidad, el mismo tramo le avisa.');
     }
 
     public function testElDryRunNoAvisa(): void
@@ -102,10 +128,39 @@ class SendAccountingWatchCommandTest extends KernelTestCase
      */
     private function runCommand(string $date, array $input = []): string
     {
-        $tester = new CommandTester((new Application(self::$kernel))->find('app:send-accounting-watch'));
-        $tester->execute($input + ['--force' => true, '--date' => $date]);
+        return $this->runCommandWithExit($date, $input)[1];
+    }
 
-        return preg_replace('/\s+/', ' ', $tester->getDisplay());
+    /**
+     * Pasa la tarea como si hoy fuera ese día y devuelve también el código de salida.
+     *
+     * @param array<string, mixed> $input Opciones de más.
+     *
+     * @return array{int, string}
+     */
+    private function runCommandWithExit(string $date, array $input = []): array
+    {
+        $tester = new CommandTester((new Application(self::$kernel))->find('app:send-accounting-watch'));
+        $exit = $tester->execute($input + ['--force' => true, '--date' => $date]);
+
+        return [$exit, preg_replace('/\s+/', ' ', $tester->getDisplay())];
+    }
+
+    /** Los correos de la notificación que han salido hacia la tesorera. */
+    private function urgentEmails(): int
+    {
+        return \count(array_filter(
+            self::getMailerMessages(),
+            static fn ($message): bool => $message instanceof Email
+                && str_contains((string) $message->getSubject(), self::TITLE)
+                && 'watch-test-tesorera@example.test' === $message->getTo()[0]->getAddress(),
+        ));
+    }
+
+    /** Los avisos de la vigilancia apuntados como emitidos. */
+    private function emittedEffects(): int
+    {
+        return \count($this->em->getRepository(EmittedEffect::class)->findBy(['kind' => [AccountingWatchAlert::KIND_URGENT, AccountingWatchAlert::KIND_WEEKLY]]));
     }
 
     /** Los avisos de la notificación que han llegado a la bandeja de la tesorera. */
