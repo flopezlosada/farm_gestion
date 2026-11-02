@@ -394,6 +394,12 @@ class AppSettings
     public const CRON_INVOICE_MAIL = 'cron.invoice_mail';
 
     /**
+     * Vigila la portada de contabilidad y avisa a quien la lleva: lo urgente al
+     * momento y el resto una vez por semana (app:send-accounting-watch).
+     */
+    public const CRON_ACCOUNTING_WATCH = 'cron.accounting_watch';
+
+    /**
      * Copia de seguridad fuera del hosting: cifrada y bloqueada contra el borrado
      * en Backblaze B2: un volcado de la base y los documentos de var/documentos.
      */
@@ -784,6 +790,20 @@ class AppSettings
             'requires' => [self::FEATURE_CONTABILIDAD],
             'depends_on' => [],
         ],
+        // A diario, después de recoger el buzón (a las 6) para que una notificación
+        // oficial recién llegada ya esté en la lista. `confirm` porque lo que sale
+        // va al móvil y no se puede des-enviar.
+        self::CRON_ACCOUNTING_WATCH => [
+            'command' => 'app:send-accounting-watch',
+            'channels' => ['push', 'inbox'],
+            'needs_recipient' => false,
+            'confirm' => true,
+            'dry' => true,
+            'schedule' => ['freq' => 'daily', 'hour' => 8],
+            'max_delay_hours' => 36,
+            'requires' => [self::FEATURE_CONTABILIDAD],
+            'depends_on' => [],
+        ],
         // Una vez al día basta: una factura no corre prisa por horas. A las 6, para
         // que la lectura horaria las tenga leídas cuando alguien abra la bandeja.
         self::CRON_INVOICE_MAIL => [
@@ -1043,6 +1063,12 @@ class AppSettings
             'group' => 'Tareas programadas',
             'label' => 'Leer las facturas en cola',
             'help' => 'Cada hora vuelve a intentar leer las facturas recibidas que no se pudieron leer al subirlas, porque el servicio de lectura estaba saturado o sin cupo (app:read-received-invoices). No manda nada a nadie. Apagada, esas facturas se quedan en cola hasta que alguien suba otra. Requiere la contabilidad encendida.',
+            'default' => true,
+        ],
+        self::CRON_ACCOUNTING_WATCH => [
+            'group' => 'Tareas programadas',
+            'label' => 'Vigilar la contabilidad',
+            'help' => 'Cada mañana repasa la lista de «Por hacer» de la portada de contabilidad (app:send-accounting-watch). Lo urgente (una notificación oficial sin mirar, el plazo de la gestoría, una remesa que no ha entrado en el banco) avisa al móvil y a la bandeja de quien lleva la contabilidad el día que aparece y otra vez cada 3 días mientras siga sin resolver. El resto llega una vez por semana, en un resumen. Requiere la contabilidad encendida.',
             'default' => true,
         ],
         self::CRON_INVOICE_MAIL => [

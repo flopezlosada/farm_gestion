@@ -2,6 +2,7 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\AccountantDelivery;
 use App\Entity\AccountEntry;
 use App\Entity\BudgetCategory;
 use App\Entity\BudgetCategoryGroup;
@@ -9,7 +10,9 @@ use App\Entity\FinancialAccount;
 use App\Entity\Provider;
 use App\Entity\ReceivedInvoice;
 use App\Entity\Setting;
+use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\ExtractedInvoice;
+use App\Service\Accounting\Invoice\InvoiceQuarter;
 use App\Service\AppSettings;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -38,10 +41,21 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
     /** @var list<int> Proveedores creados a mano, también los que no llevan CIF. */
     private array $providersToRemove = [];
 
+    /** @var list<int> Trimestres dados por entregados; se quitan antes que nada, o la red no deja borrar. */
+    private array $deliveries = [];
+
     protected function tearDown(): void
     {
         $em = static::getContainer()->get(EntityManagerInterface::class);
         $em->clear();
+
+        foreach ($this->deliveries as $id) {
+            if (($delivery = $em->find(AccountantDelivery::class, $id)) !== null) {
+                $em->remove($delivery);
+            }
+        }
+        $em->flush();
+        static::getContainer()->get(ClosedPeriods::class)->reset();
 
         foreach ($em->getRepository(ReceivedInvoice::class)->findBy(['originalName' => ['factura-prueba.pdf', 'apuntes.txt', 'siguiente.pdf']]) as $invoice) {
             $entry = $invoice->getAccountEntry();
@@ -359,6 +373,44 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * Una factura que llega cuando su trimestre (y el de su pago) ya se entregó a la
+     * gestoría: se engancha al pago sin tocarlo, que se entregó tal cual, y va en el
+     * paquete del trimestre de hoy. El aviso lo dice.
+     */
+    public function testUnaFacturaQueLlegaTardeVaAlPaqueteDeHoy(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $invoice = $this->uploadOne($client);
+        $this->createCatalogue();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $invoice = $em->find(ReceivedInvoice::class, $invoice->getId());
+        $invoice->markRead(ExtractedInvoice::fromArray([
+            'fecha' => '2091-03-05', 'total' => 987.65, 'proveedor' => 'Ferretería Torrelaguna', 'numero_factura' => '2232',
+        ]), 'test', $this->category, new \DateTimeImmutable());
+        $bank = (new AccountEntry())->setAccount($this->account)->setCategory($this->category)
+            ->setDate(new \DateTimeImmutable('2091-03-09'))->setConcept('trf. ferreteria torrelaguna')->setAmount('-987.65');
+        $em->persist($bank);
+        $delivery = new AccountantDelivery(InvoiceQuarter::of(2091, 1), null, new \DateTimeImmutable('2091-04-03'));
+        $em->persist($delivery);
+        $em->flush();
+        $this->deliveries[] = $delivery->getId();
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
+        $client->submit($crawler->filter('form[name="received_invoice_confirm"]')->form());
+        $this->assertResponseRedirects();
+        $client->followRedirect();
+
+        $today = new \DateTimeImmutable('today');
+        $this->assertSelectorTextContains('body', sprintf('va en el paquete del %s', InvoiceQuarter::containing($today)->label()));
+        $invoice = $this->findInvoice('factura-prueba.pdf');
+        $this->assertSame(ReceivedInvoice::STATUS_CONFIRMED, $invoice->getStatus());
+        $this->assertSame($bank->getId(), $invoice->getAccountEntry()?->getId());
+        $this->assertSame($today->format('Y-m-d'), $invoice->getBookedOn()?->format('Y-m-d'));
+        $this->assertNull($invoice->getAccountEntry()->getInvoiceNumber(), 'El pago de un trimestre entregado no se toca.');
+    }
+
+    /**
      * Un proveedor que cobra de una vez dos facturas deja un solo pago, por la suma: se
      * ofrece junto con la otra, al elegirlo se enganchan las dos, la ficha del apunte
      * las nombra y al borrarlo vuelven las dos a la bandeja.
@@ -574,6 +626,29 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $client->request('POST', '/gestion/accounting/invoices/upload');
 
         $this->assertSame(403, $client->getResponse()->getStatusCode());
+    }
+
+    /**
+     * El mismo fichero subido dos veces: la revisión de cualquiera de las dos avisa de
+     * la otra; descartada una, la otra ya no avisa.
+     */
+    public function testElMismoFicheroSubidoDosVecesAvisa(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $first = $this->uploadOne($client);
+        $second = $this->uploadOne($client);
+        $this->assertNotSame($first->getId(), $second->getId());
+        $this->assertNotNull($second->getFileHash());
+        $this->assertSame($first->getFileHash(), $second->getFileHash());
+
+        $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $second->getId()));
+        $this->assertSelectorTextContains('body', 'este mismo fichero ya entró como «factura-prueba.pdf»');
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $first->getId()));
+        $client->submit($crawler->filter(sprintf('form[action="/gestion/accounting/invoices/%d/discard"]', $first->getId()))->form());
+        $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $second->getId()));
+        $this->assertSelectorTextNotContains('body', 'este mismo fichero ya entró');
     }
 
     private function uploadOne($client): ReceivedInvoice

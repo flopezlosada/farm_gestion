@@ -10,8 +10,11 @@ use App\Entity\Customer;
 use App\Entity\FinancialAccount;
 use App\Entity\IssuedInvoice;
 use App\Entity\IssuedInvoiceLine;
+use App\Entity\ReceivedInvoice;
+use App\Repository\ReceivedInvoiceRepository;
 use App\Service\Accounting\Closing\ClosedPeriodException;
 use App\Service\Accounting\Closing\ClosedPeriods;
+use App\Service\Accounting\Invoice\ExtractedInvoice;
 use App\Service\Accounting\Invoice\InvoiceQuarter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -20,8 +23,9 @@ use Symfony\Component\Clock\Test\ClockSensitiveTrait;
 /**
  * Con un trimestre entregado a la gestoría, nada fechado en él se crea, se cambia
  * ni se borra; lo de otros trimestres sigue igual, y reabrir lo desbloquea. Cobrar
- * después una emitida del trimestre sí se puede: no cambia lo entregado. Uno que
- * aún no ha terminado no se entrega.
+ * después una emitida del trimestre sí se puede: no cambia lo entregado. Una
+ * recibida que llega tarde entra en el trimestre en que se anota. Uno que aún no ha
+ * terminado no se entrega.
  *
  * Autocontenido: el 3T2094, con el reloj ya en el 4T2094.
  */
@@ -153,6 +157,57 @@ class ClosedPeriodGuardTest extends KernelTestCase
     }
 
     /**
+     * Una factura de septiembre que llega en octubre, con el 3T ya entregado: se
+     * anota en el 4T y va en su paquete, no en el entregado. Sin anotarla tarde, la
+     * red no la deja entrar en el 3T.
+     */
+    public function testUnaRecibidaQueLlegaTardeVaAlTrimestreSiguiente(): void
+    {
+        $this->closed->deliver($this->quarter, null);
+        $invoice = $this->septemberInvoice();
+        $payment = $this->entry('2094-10-05', '-121.00');
+        $this->persist($invoice, $payment);
+
+        $invoice->confirm($payment, null);
+        $invoice->bookLate(new \DateTimeImmutable('2094-10-10'));
+        $this->em->flush();
+
+        $invoices = static::getContainer()->get(ReceivedInvoiceRepository::class);
+        $this->assertSame('2094-10-10', $invoice->packageDate()->format('Y-m-d'));
+        $this->assertContains($invoice, $invoices->findConfirmedBetween(InvoiceQuarter::of(2094, 4)->from(), InvoiceQuarter::of(2094, 4)->to()));
+        $this->assertNotContains($invoice, $invoices->findConfirmedBetween($this->quarter->from(), $this->quarter->to()));
+    }
+
+    public function testUnaRecibidaDelTrimestreEntregadoNoEntraSinAnotarlaTarde(): void
+    {
+        $this->closed->deliver($this->quarter, null);
+        $invoice = $this->septemberInvoice();
+        $payment = $this->entry('2094-10-05', '-121.00');
+        $this->persist($invoice, $payment);
+
+        $invoice->confirm($payment, null);
+        $this->expectException(ClosedPeriodException::class);
+        $this->em->flush();
+    }
+
+    /** Ya anotada tarde, quitarla también cambia el paquete del 4T, no el del 3T: se puede mientras el 4T esté abierto. */
+    public function testUnaAnotadaTardeSeDescartaSinTocarElEntregado(): void
+    {
+        $this->closed->deliver($this->quarter, null);
+        $invoice = $this->septemberInvoice();
+        $payment = $this->entry('2094-10-05', '-121.00');
+        $this->persist($invoice, $payment);
+        $invoice->confirm($payment, null);
+        $invoice->bookLate(new \DateTimeImmutable('2094-10-10'));
+        $this->em->flush();
+
+        $invoice->reopen();
+        $this->em->flush();
+
+        $this->assertNull($invoice->getBookedOn());
+    }
+
+    /**
      * El último día del trimestre aún no se entrega: cerraría también lo que quede por
      * anotar ese día. Al día siguiente, sí.
      */
@@ -170,6 +225,35 @@ class ClosedPeriodGuardTest extends KernelTestCase
 
         static::mockTime('2094-10-01 00:00');
         $this->assertTrue($this->closed->deliver($this->quarter, null)->isStanding());
+    }
+
+    /** Una factura de septiembre ya leída, sin anotar. */
+    private function septemberInvoice(): ReceivedInvoice
+    {
+        $invoice = new ReceivedInvoice('cierre.pdf', 'cierre.pdf', 'application/pdf', ReceivedInvoice::SOURCE_WEB, null);
+        $invoice->markRead(new ExtractedInvoice(
+            documentType: 'factura',
+            date: new \DateTimeImmutable('2094-09-20'),
+            providerName: 'Proveedor de cierre',
+            providerTaxId: null,
+            customerName: null,
+            customerTaxId: null,
+            invoiceNumber: 'C-1',
+            total: '121.00',
+            taxLines: [],
+            withholding: null,
+            withholdingRate: null,
+            providerAddress: null,
+            providerPostalCode: null,
+            providerTown: null,
+            providerProvince: null,
+            concept: 'Material',
+            paymentMethod: ReceivedInvoice::PAYMENT_TRANSFER,
+            confidence: null,
+            categoryId: null,
+        ), 'test', null, new \DateTimeImmutable('2094-10-09'));
+
+        return $invoice;
     }
 
     private function entry(string $date, string $amount = '-50.00'): AccountEntry

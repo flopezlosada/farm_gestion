@@ -118,6 +118,10 @@ class NotificationLink
             // La respuesta a sus vacaciones lleva al trabajador a sus vacaciones,
             // donde ve el estado y los días que le quedan.
             str_starts_with($kind, 'work.') => $this->urlGenerator->generate('work_vacations'),
+            // Las tareas de contabilidad llevan a su portada, que es donde está la
+            // lista entera con los botones para resolverlas. Antes que el prefijo
+            // de abajo, que es el de las notificaciones oficiales.
+            Notification::KIND_ACCOUNTING_AGENDA === $kind => $this->urlGenerator->generate('accounting_index'),
             // El aviso de una notificación oficial lleva a la lista de avisos sin
             // revisar, donde se marca cuando alguien ha entrado en la sede. Nunca al
             // enlace del correo, que es justo lo que se suplanta.

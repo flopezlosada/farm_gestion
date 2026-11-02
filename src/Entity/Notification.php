@@ -151,6 +151,13 @@ class Notification
     public const KIND_ACCOUNTING_OFFICIAL_NOTICE = 'accounting.official_notice';
 
     /**
+     * Tarea pendiente de la portada de contabilidad que alguien tiene que mirar: la
+     * urgente en cuanto aparece (y cada pocos días mientras siga) y el resto en un
+     * resumen semanal (va a quien lleva la contabilidad).
+     */
+    public const KIND_ACCOUNTING_AGENDA = 'accounting.agenda';
+
+    /**
      * @ORM\Id
      * @ORM\GeneratedValue
      * @ORM\Column(type="integer")
