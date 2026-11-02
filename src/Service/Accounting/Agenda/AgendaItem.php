@@ -18,6 +18,9 @@ final class AgendaItem
      * @param array<string, mixed> $routeParams Parámetros de esa ruta.
      * @param string|null          $fragment    Ancla dentro de la página, sin «#».
      * @param list<AgendaAction>   $actions     Lo que se puede resolver desde la propia portada.
+     * @param string|null          $identity    Lo que distingue la tarea en lugar del título,
+     *                                          cuando éste lleva un dato que cambia sin que
+     *                                          cambie la tarea (hasta dónde llega el libro).
      */
     public function __construct(
         public readonly AgendaUrgency $urgency,
@@ -27,6 +30,7 @@ final class AgendaItem
         public readonly array $routeParams = [],
         public readonly ?string $fragment = null,
         public readonly array $actions = [],
+        public readonly ?string $identity = null,
     ) {
     }
 
@@ -34,12 +38,13 @@ final class AgendaItem
      * Lo que identifica la tarea entre un día y el siguiente, para no avisar dos veces
      * de lo mismo: adónde se va, con qué parámetros, y el título. El título entra a
      * propósito: cuando cambia (el plazo de la gestoría pasa de «acaba el 5» a «se
-     * pasó»), la tarea ya no es la misma y merece aviso nuevo.
+     * pasó»), la tarea ya no es la misma y merece aviso nuevo. Si el título lleva algo
+     * que cambia sin que la tarea cambie, la tarea da su identidad y el título no entra.
      *
      * @return string Huella de 40 caracteres.
      */
     public function key(): string
     {
-        return sha1(json_encode([$this->route, $this->routeParams, $this->fragment, $this->title], JSON_THROW_ON_ERROR));
+        return sha1(json_encode([$this->route, $this->routeParams, $this->fragment, $this->identity ?? $this->title], JSON_THROW_ON_ERROR));
     }
 }

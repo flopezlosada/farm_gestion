@@ -438,6 +438,19 @@ class AccountingAgendaTest extends TestCase
         $this->assertSame(['Entra en la banca, mira si está rechazada o pendiente y, si se rechazó entera, vuelve a subirla con fecha nueva y cámbiala en su ficha.'], $item->details);
         $this->assertSame('accounting_remittance_show', $item->route);
         $this->assertSame(['id' => $remittance->getId()], $item->routeParams);
+
+        // Importar otro extracto mueve «ya llega al…», pero es la misma tarea: el
+        // vigilante no vuelve a avisar por eso.
+        $later = $this->only($this->agenda(uncredited: [['remittance' => $remittance, 'bookUpTo' => new \DateTimeImmutable('2026-10-31')]])
+            ->items(new \DateTimeImmutable('2026-10-31')));
+        $this->assertNotSame($item->title, $later->title);
+        $this->assertSame($item->key(), $later->key());
+
+        // Vuelta a subir con otro día de cargo, ya es otra tarea.
+        $remittance->rescheduleCharge(new \DateTimeImmutable('2026-11-03'));
+        $resent = $this->only($this->agenda(uncredited: [['remittance' => $remittance, 'bookUpTo' => new \DateTimeImmutable('2026-11-10')]])
+            ->items(new \DateTimeImmutable('2026-11-10')));
+        $this->assertNotSame($item->key(), $resent->key());
     }
 
     /**
