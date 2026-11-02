@@ -45,7 +45,7 @@ class SecurityController extends AbstractController
      * Dispatcher tras el login: manda a cada cual a la zona que puede abrir.
      * Quien trabaja para la asociación va SIEMPRE a fichar, aunque además sea
      * de gestión o socix: es lo que viene a hacer a diario, y el conmutador de
-     * áreas le lleva al resto. Después, gestión ({@see ManagementVoter}) va al
+     * áreas le lleva al resto. Quien ya se fue, no, salvo que sea lo único que tiene. Después, gestión ({@see ManagementVoter}) va al
      * dashboard y el resto al panel del socix.
      *
      * El trabajador se mira por la ficha vinculada, no por ROLE_WORKER: ROLE_ADMIN
@@ -57,7 +57,10 @@ class SecurityController extends AbstractController
     public function postLogin(): Response
     {
         $user = $this->getUser();
-        $isWorker = $user instanceof User && $user->getWorker() !== null;
+        // Quien ya se fue sólo va a «Mi jornada» si no tiene otra cosa (su registro,
+        // de consulta); si es socix, a su panel.
+        $isWorker = $user instanceof User
+            && ($user->isActiveWorker() || ($user->getWorker() !== null && $user->getPartner() === null));
 
         return $this->redirectToRoute(match (true) {
             $isWorker && $this->isGranted('FEATURE_LABORAL') => 'work',

@@ -57,12 +57,13 @@ class UserChecker implements UserCheckerInterface
         // un trabajador (faceta laboral) no es un socix — su acceso a fichar no
         // depende de que el acceso de socixs esté abierto. Quien es socix Y
         // trabajador entra igualmente (es personal de confianza, no el caso
-        // masivo que el gate frena).
+        // masivo que el gate frena). Quien YA NO trabaja aquí pierde la exención:
+        // entra, si acaso, como cualquier socix.
         if (
             !$this->settings->getBool(AppSettings::FEATURE_PARTNER_LOGIN)
             && !$this->belongsToTeam($user)
             && !$user->isEarlyAccess()
-            && $user->getWorker() === null
+            && !$user->isActiveWorker()
         ) {
             throw new CustomUserMessageAccountStatusException(
                 'El acceso de socixs a la web todavía no está disponible. Te avisaremos en cuanto puedas entrar.'

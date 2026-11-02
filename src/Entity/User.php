@@ -464,6 +464,16 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface, LegacyP
         return $this->worker;
     }
 
+    /**
+     * Si trabaja HOY en la asociación: tiene ficha laboral y no se ha ido. Quien ya
+     * se fue conserva la ficha (y puede consultar su registro), pero no ficha, no
+     * corrige ni pide vacaciones, y no se salta el cierre del acceso de socixs.
+     */
+    public function isActiveWorker(): bool
+    {
+        return $this->worker?->isActive() ?? false;
+    }
+
     public function setWorker(?Worker $worker): self
     {
         $this->worker = $worker;
