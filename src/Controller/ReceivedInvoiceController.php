@@ -254,6 +254,7 @@ class ReceivedInvoiceController extends AbstractController
         return $this->render('accounting/invoice_review.html.twig', [
             'invoice' => $invoice,
             'twin' => $invoices->findAlreadyConfirmedTwin($invoice),
+            'sameFile' => $invoices->findSameFile($invoice),
             'dataWarnings' => $dataWarnings->for($invoice),
             'hasDocument' => $files->pathTo($invoice->getFileName()) !== null,
             'form' => $form->createView(),

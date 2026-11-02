@@ -25,7 +25,8 @@ use Symfony\Component\Validator\Constraints as Assert;
  *
  * @ORM\Table(name="received_invoice", indexes={
  *     @ORM\Index(name="idx_received_invoice_status", columns={"status", "next_attempt_at"}),
- *     @ORM\Index(name="idx_received_invoice_tax_id", columns={"provider_tax_id"})
+ *     @ORM\Index(name="idx_received_invoice_tax_id", columns={"provider_tax_id"}),
+ *     @ORM\Index(name="idx_received_invoice_file_hash", columns={"file_hash"})
  * })
  * @ORM\Entity(repositoryClass="App\Repository\ReceivedInvoiceRepository")
  */
@@ -84,6 +85,15 @@ class ReceivedInvoice
      * @ORM\Column(name="file_name", type="string", length=255)
      */
     private string $fileName;
+
+    /**
+     * La huella SHA-256 del fichero: dos facturas con la misma son el mismo documento
+     * subido dos veces (por la web y por el correo, o con otro nombre). Null en las que
+     * entraron antes de guardarla.
+     *
+     * @ORM\Column(name="file_hash", type="string", length=64, nullable=true)
+     */
+    private ?string $fileHash = null;
 
     /**
      * El nombre que traía el fichero, para enseñarlo.
@@ -458,6 +468,22 @@ class ReceivedInvoice
     public function getId(): ?int
     {
         return $this->id;
+    }
+
+    /** La huella del fichero, o null si entró antes de guardarla. */
+    public function getFileHash(): ?string
+    {
+        return $this->fileHash;
+    }
+
+    /**
+     * Guarda la huella del fichero al entrar. Sólo una vez: el fichero no cambia.
+     *
+     * @param string $sha256 Huella SHA-256 en hexadecimal.
+     */
+    public function fingerprint(string $sha256): void
+    {
+        $this->fileHash ??= $sha256;
     }
 
     public function getFileName(): string
