@@ -29,4 +29,17 @@ final class AgendaItem
         public readonly array $actions = [],
     ) {
     }
+
+    /**
+     * Lo que identifica la tarea entre un día y el siguiente, para no avisar dos veces
+     * de lo mismo: adónde se va, con qué parámetros, y el título. El título entra a
+     * propósito: cuando cambia (el plazo de la gestoría pasa de «acaba el 5» a «se
+     * pasó»), la tarea ya no es la misma y merece aviso nuevo.
+     *
+     * @return string Huella de 40 caracteres.
+     */
+    public function key(): string
+    {
+        return sha1(json_encode([$this->route, $this->routeParams, $this->fragment, $this->title], JSON_THROW_ON_ERROR));
+    }
 }

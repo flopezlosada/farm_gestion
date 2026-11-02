@@ -71,6 +71,8 @@ class NotificationExtension extends AbstractExtension
         'staff_absence_requested' => 'Ausencia de un trabajador por decidir',
         'work_absence_decided' => 'Ausencia aprobada o rechazada',
         'accounting_official_notice' => 'Aviso de notificación oficial',
+        'accounting_watch_urgent' => 'Contabilidad · tarea urgente',
+        'accounting_watch_weekly' => 'Contabilidad · resumen semanal',
         'volunteer_call' => 'Convocatoria de voluntariado',
         'volunteer_change' => 'Cambio en un turno de voluntariado',
         'volunteer_reminder' => 'Recordatorio de voluntariado',
