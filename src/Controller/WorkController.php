@@ -42,6 +42,9 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * El trabajador corrige sus PROPIOS fichajes sin aprobación (modelo Factorial:
  * la traza append-only es la garantía); las vacaciones sí las aprueba el
  * supervisor.
+ *
+ * Quien ya no trabaja aquí sólo CONSULTA: todo POST de este controller lo para
+ * {@see \App\EventSubscriber\WorkerOnLeaveGuard}, también los que se añadan.
  */
 #[Route('/work')]
 #[IsGranted('FEATURE_LABORAL')]
@@ -91,13 +94,8 @@ class WorkController extends AbstractController
             return $this->redirectToRoute('work');
         }
 
-        $worker = $this->worker();
-        if (!$worker->isActive()) {
-            $this->addFlash('error', 'Tu ficha laboral está inactiva: no puedes fichar. Contacta con la administración.');
-            return $this->redirectToRoute('work');
-        }
-
-        $entry = $clock->clockNext($worker, $this->getUser());
+        // Quien ya no trabaja aquí no llega: lo para WorkerOnLeaveGuard.
+        $entry = $clock->clockNext($this->worker(), $this->getUser());
         $this->addFlash('notice', $entry->getType() === TimeEntry::TYPE_IN
             ? 'Entrada fichada. ¡Buen trabajo!'
             : 'Salida fichada. ¡Hasta la próxima!');

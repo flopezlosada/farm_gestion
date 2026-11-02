@@ -239,6 +239,44 @@ class WorkControllerTest extends WebTestCase
         );
     }
 
+    /**
+     * Quien ya no trabaja aquí ve su registro pero no lo cambia: ni botón de fichar
+     * ni de pedir ausencias, y cualquier POST de «Mi jornada» vuelve al panel sin
+     * escribir nada (lo para WorkerOnLeaveGuard, en un solo sitio).
+     */
+    public function testQuienYaSeFueConsultaSuRegistroPeroNoLoCambia(): void
+    {
+        $this->worker->setLeaveDate(Worker::today()->modify('-1 day'));
+        $this->em->flush();
+
+        $this->client->request('GET', '/work');
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorNotExists('form[action="/work/clock"]');
+        $this->assertSelectorTextContains('main', 'Ya no trabajas en la asociación');
+        $this->client->request('GET', '/work/calendar');
+        $this->assertResponseIsSuccessful();
+        $this->client->request('GET', '/work/vacations');
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorTextNotContains('main', 'Solicitar ausencia');
+
+        $today = Worker::today()->format('Y-m-d');
+        foreach ([
+            '/work/clock' => ['_csrf_token' => 'x'],
+            '/work/entry/add' => ['_token' => 'x', 'date' => $today, 'type' => 'in', 'time' => '09:00'],
+            '/work/day/' . $today . '/autofill' => ['_token' => 'x'],
+            '/work/vacations/request' => ['_csrf_token' => 'x', 'type' => Absence::TYPE_VACATION, 'start_date' => $today, 'end_date' => $today],
+        ] as $url => $data) {
+            $this->client->request('POST', $url, $data);
+            $this->assertResponseRedirects('/work', null, $url);
+        }
+        $this->client->followRedirect();
+        $this->assertSelectorTextContains('body', 'puedes consultar tu registro, pero no cambiarlo');
+
+        $this->em->clear();
+        $this->assertSame([], $this->em->getRepository(TimeEntry::class)->findAll());
+        $this->assertSame([], $this->em->getRepository(Absence::class)->findAll());
+    }
+
     public function testPermitIsRegisteredApprovedWithoutApproval(): void
     {
         $token = $this->csrf('/work/vacations');

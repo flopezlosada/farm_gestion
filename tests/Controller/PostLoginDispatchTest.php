@@ -109,6 +109,17 @@ class PostLoginDispatchTest extends WebTestCase
         $this->assertResponseIsSuccessful();
     }
 
+    /** Quien se fue y no es socix sólo tiene su registro: va a «Mi jornada», de consulta. */
+    public function testQuienYaSeFueYNoEsSocixVaASuRegistro(): void
+    {
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_LABORAL, true);
+        $user = $this->loginAs('worker-gone', [], withWorker: true);
+        $user->getWorker()->setLeaveDate(Worker::today()->modify('-1 day'));
+        $this->em->flush();
+
+        $this->assertDispatchesTo('/work');
+    }
+
     public function testTrabajadorQueTambienEsDeGestionVaAFichar(): void
     {
         // Fichar es lo diario; gestión queda a un toque en el conmutador.

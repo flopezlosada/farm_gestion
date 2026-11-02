@@ -23,31 +23,38 @@
             <div class="wk-hero__date">{{ 'now'|format_date('full', locale='es', timezone=madrid)|capitalize }}</div>
         </header>
 
-        {# ===== Estado + botón de fichar ===== #}
-        <div class="wk-clock wk-clock--{{ is_open ? 'in' : 'out' }}">
-            {% if is_open %}
-                <p class="wk-clock__state">Estás trabajando</p>
-                <p class="wk-clock__since">
-                    {% if last %}Entrada fichada a las {{ last.occurredAt|date('H:i', madrid) }}{% endif %}
-                </p>
-            {% elseif last %}
-                {# Ya hubo jornada hoy y está cerrada: «empezar tu jornada» confunde.
-                 # Se dice cuándo salió y que una entrada nueva abre otro tramo. #}
-                <p class="wk-clock__state">Has fichado la salida a las {{ last.occurredAt|date('H:i', madrid) }}</p>
-                <p class="wk-clock__since">Si vuelves a trabajar hoy, ficha otra entrada</p>
-            {% else %}
-                <p class="wk-clock__state">No estás fichando ahora mismo</p>
-                <p class="wk-clock__since">Pulsa para empezar tu jornada</p>
-            {% endif %}
+        {# ===== Estado + botón de fichar (sólo quien sigue trabajando aquí) ===== #}
+        {% if worker.active %}
+            <div class="wk-clock wk-clock--{{ is_open ? 'in' : 'out' }}">
+                {% if is_open %}
+                    <p class="wk-clock__state">Estás trabajando</p>
+                    <p class="wk-clock__since">
+                        {% if last %}Entrada fichada a las {{ last.occurredAt|date('H:i', madrid) }}{% endif %}
+                    </p>
+                {% elseif last %}
+                    {# Ya hubo jornada hoy y está cerrada: «empezar tu jornada» confunde.
+                     # Se dice cuándo salió y que una entrada nueva abre otro tramo. #}
+                    <p class="wk-clock__state">Has fichado la salida a las {{ last.occurredAt|date('H:i', madrid) }}</p>
+                    <p class="wk-clock__since">Si vuelves a trabajar hoy, ficha otra entrada</p>
+                {% else %}
+                    <p class="wk-clock__state">No estás fichando ahora mismo</p>
+                    <p class="wk-clock__since">Pulsa para empezar tu jornada</p>
+                {% endif %}
 
-            <form method="post" action="{{ path('work_clock') }}">
-                <input type="hidden" name="_csrf_token" value="{{ csrf_token('work_clock') }}">
-                <button type="submit" class="wk-btn wk-btn--{{ is_open ? 'out' : 'in' }}">
-                    <i class="fa {{ is_open ? 'fa-sign-out' : 'fa-sign-in' }}" aria-hidden="true"></i>
-                    {{ is_open ? 'Fichar salida' : (last ? 'Fichar otra entrada' : 'Fichar entrada') }}
-                </button>
-            </form>
-        </div>
+                <form method="post" action="{{ path('work_clock') }}">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token('work_clock') }}">
+                    <button type="submit" class="wk-btn wk-btn--{{ is_open ? 'out' : 'in' }}">
+                        <i class="fa {{ is_open ? 'fa-sign-out' : 'fa-sign-in' }}" aria-hidden="true"></i>
+                        {{ is_open ? 'Fichar salida' : (last ? 'Fichar otra entrada' : 'Fichar entrada') }}
+                    </button>
+                </form>
+            </div>
+        {% else %}
+            <div class="csa-callout csa-callout--info" style="margin-bottom: 1rem;">
+                <i class="fa fa-lock"></i> Ya no trabajas en la asociación (tu último día fue el {{ worker.leaveDate|date('d/m/Y') }}).
+                Puedes consultar tu registro de jornada, pero no fichar ni cambiarlo.
+            </div>
+        {% endif %}
 
         {# ===== Fichajes de hoy ===== #}
         <div class="wk-today">

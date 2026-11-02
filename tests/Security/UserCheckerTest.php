@@ -118,6 +118,25 @@ class UserCheckerTest extends TestCase
         $this->checker(false)->checkPreAuth($worker);
     }
 
+    public function testQuienYaNoTrabajaAquiNoSeSaltaElCierreDeSocixs(): void
+    {
+        // La exención es para quien ficha; quien se fue entra, si acaso, como socix.
+        $this->expectException(CustomUserMessageAccountStatusException::class);
+
+        $former = (new User())->setEnabled(true)->setWorker((new Worker())->setLeaveDate(Worker::today()->modify('-1 day')));
+
+        $this->checker(false)->checkPreAuth($former);
+    }
+
+    public function testElUltimoDiaTodaviaEntraComoTrabajador(): void
+    {
+        $leaving = (new User())->setEnabled(true)->setWorker((new Worker())->setLeaveDate(Worker::today()));
+
+        $this->checker(false)->checkPreAuth($leaving);
+
+        $this->addToAssertionCount(1); // no lanzó: pasa
+    }
+
     public function testQuienSoloEscribeEnUnaSeccionEntraComoEquipo(): void
     {
         // Al que escribe se le guarda sólo el _EDIT; la lectura (que es la que

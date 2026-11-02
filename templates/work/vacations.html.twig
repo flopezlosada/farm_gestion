@@ -146,7 +146,9 @@
 
         <div class="vac-bar">
             <h2>Mis solicitudes</h2>
-            {{ csa.btn('Solicitar ausencia', { variant: 'primary', icon: 'fa-plus', attr: { onclick: "document.getElementById('vac-modal').showModal()" } }) }}
+            {% if app.user.activeWorker %}
+                {{ csa.btn('Solicitar ausencia', { variant: 'primary', icon: 'fa-plus', attr: { onclick: "document.getElementById('vac-modal').showModal()" } }) }}
+            {% endif %}
         </div>
 
         <div class="wk-vac">
@@ -156,7 +158,7 @@
                     <span>{{ abs_type[a.type]|default(a.type) }}</span>
                     <span style="color:#6b7280;">{% if a.open %}desde el {{ a.startDate|date('d/m/Y') }}, sin alta ({{ working_days[a.id] }} d laborables hasta hoy){% else %}{{ a.startDate|date('d/m/Y') }} – {{ a.endDate|date('d/m/Y') }} ({{ working_days[a.id] }} d laborables){% endif %}</span>
                     <span style="margin-left:auto; font-size:.72rem; font-weight:600; border-radius:999px; padding:.1rem .55rem; color:{{ st[1] }}; background:{{ st[2] }};">{{ st[0] }}</span>
-                    {% if a.status in ['requested', 'approved'] and (a.open or a.endDate|date('Y-m-d') > today_ymd) %}
+                    {% if app.user.activeWorker and a.status in ['requested', 'approved'] and (a.open or a.endDate|date('Y-m-d') > today_ymd) %}
                         <button type="button" class="wk-btn wk-btn--ghost wk-btn--sm" style="margin-left:.6rem; padding:.3rem .8rem; font-size:.8rem;"
                                 onclick="document.getElementById('cancel-{{ a.id }}').showModal()">Cancelar</button>
                         {{ csa.confirm_dialog('cancel-' ~ a.id, {
@@ -177,7 +179,9 @@
         </div>
     </div>
 
-    {# Modal de solicitud (reusa el lenguaje visual .csa-modal). #}
+    {# Modal de solicitud (reusa el lenguaje visual .csa-modal). Quien ya no
+     # trabaja aquí no puede pedir ausencias: ni botón ni formulario. #}
+    {% if app.user.activeWorker %}
     <dialog id="vac-modal" class="csa-modal csa-modal--info" aria-labelledby="vac-modal-title">
         <form method="post" action="{{ path('work_vacation_request') }}">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token('work_vacation') }}">
@@ -212,6 +216,7 @@
             </footer>
         </form>
     </dialog>
+    {% endif %}
 
     {# Validación de fechas en cliente: "Hasta" nunca antes de "Desde" (validación
      # nativa antes del submit, sin ida y vuelta al servidor). #}

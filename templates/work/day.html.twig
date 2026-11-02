@@ -25,7 +25,9 @@
     {{ csa.page_header('Mi jornada', date|format_date('full', locale='es', timezone=madrid)|capitalize,
         'Total del día: ' ~ (total // 60) ~ 'h ' ~ '%02d'|format(total % 60) ~ 'm.') }}
 
-    {% set popts = { csrf_id: 'work_entry', correct_route: 'work_entry_correct', void_route: 'work_entry_void', base_params: {}, return_to: ymd, readonly: closed } %}
+    {# Quien ya no trabaja aquí sólo consulta, como en un mes aprobado. #}
+    {% set can_edit = not closed and app.user.activeWorker %}
+    {% set popts = { csrf_id: 'work_entry', correct_route: 'work_entry_correct', void_route: 'work_entry_void', base_params: {}, return_to: ymd, readonly: not can_edit } %}
 
     {{ include('staff/_day_warning.html.twig', { open: open, anomaly: anomaly, date: date, madrid: madrid }) }}
 
@@ -56,7 +58,7 @@
         </div>
     </div>
 
-    {% if can_autofill %}
+    {% if can_autofill and can_edit %}
         <form method="post" action="{{ path('work_day_autofill', { date: ymd }) }}" style="margin-bottom: var(--csa-sp-3, 1rem);">
             <input type="hidden" name="_token" value="{{ csrf_token('work_entry') }}">
             <button type="submit" class="csa-btn csa-btn--secondary">
@@ -65,7 +67,7 @@
         </form>
     {% endif %}
 
-    {% if not closed %}
+    {% if can_edit %}
     <details class="stf-add" open>
         <summary><i class="fa fa-plus-circle"></i> Añadir un registro a este día</summary>
         <form method="post" action="{{ path('work_entry_add') }}" class="stf-addrow">
