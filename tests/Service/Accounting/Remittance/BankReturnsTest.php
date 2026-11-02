@@ -10,6 +10,7 @@ use App\Repository\AccountEntryRepository;
 use App\Repository\RemittanceRepository;
 use App\Repository\RemittanceReturnRepository;
 use App\Service\Accounting\Remittance\BankReturns;
+use App\Service\Accounting\Remittance\RemittanceChargeWatch;
 use App\Service\Accounting\Remittance\RemittanceCredits;
 use PHPUnit\Framework\TestCase;
 
@@ -88,7 +89,7 @@ class BankReturnsTest extends TestCase
     /** Las devoluciones con los lotes calculados de verdad sobre el mismo libro simulado. */
     private function bankReturns(AccountEntryRepository $entries, RemittanceReturnRepository $returns): BankReturns
     {
-        return new BankReturns($entries, $returns, new RemittanceCredits($this->createStub(RemittanceRepository::class), $entries, $returns));
+        return new BankReturns($entries, $returns, new RemittanceCredits($this->createStub(RemittanceRepository::class), $entries, $returns, $this->createStub(RemittanceChargeWatch::class)));
     }
 
     private function remittance(array $lines): Remittance

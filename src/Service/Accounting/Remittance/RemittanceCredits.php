@@ -19,6 +19,9 @@ use App\Repository\RemittanceReturnRepository;
  * cobros sueltos que no son la remesa (97,00 el 4 de agosto). Por eso los lotes de una
  * remesa son los abonos del día de su periodo cuya suma más se acerca a lo pedido:
  * alrededor del día de cargo si se sabe, si no en su mes (se cobra el mes en curso).
+ * Y sólo cuando el libro ya pasa de ese periodo, como en {@see RemittanceChargeWatch}:
+ * antes, un cobro suelto anterior al abono de verdad parecería la remesa entera con
+ * casi todo por cobrar.
  *
  * Lo pedido menos lo abonado son los recibos que el banco rechazó ANTES de cobrarlos
  * (cuenta mal, mandato…): no traen apunte de devolución, sólo faltan del abono. Se
@@ -31,6 +34,7 @@ class RemittanceCredits
         private readonly RemittanceRepository $remittances,
         private readonly AccountEntryRepository $entries,
         private readonly RemittanceReturnRepository $returns,
+        private readonly RemittanceChargeWatch $chargeWatch,
     ) {
     }
 
@@ -45,9 +49,9 @@ class RemittanceCredits
     {
         $rows = [];
         $rejected = $this->returns->findBy(['entry' => null]);
-        foreach ($this->lotsOfSent() as ['remittance' => $remittance, 'lots' => $lots]) {
+        foreach ($this->lotsOfSent() as ['remittance' => $remittance, 'lots' => $lots, 'settled' => $settled]) {
             $missing = self::missingCents($remittance, $lots, $rejected);
-            if ($lots !== [] && $missing !== 0) {
+            if ($settled && $lots !== [] && $missing !== 0) {
                 $rows[] = ['remittance' => $remittance, 'lots' => $lots, 'missingCents' => $missing];
             }
         }
@@ -57,13 +61,15 @@ class RemittanceCredits
 
     /**
      * El cuadre de una remesa con el banco, para su ficha: sus lotes y lo que falta.
-     * Null si no está enviada o el abono aún no está en el libro.
+     * Null si no está enviada, si el abono aún no está en el libro o si el libro aún no
+     * pasa del periodo en que puede entrar (puede faltar algún lote).
      *
      * @return array{lots: list<AccountEntry>, missingCents: int}|null
      */
     public function checkFor(Remittance $remittance): ?array
     {
-        $lots = $remittance->isSent() ? $this->lotsFor($remittance) : [];
+        $settled = $remittance->isSent() && self::isSettled(self::range($remittance)[1], $this->chargeWatch->bookUpTo());
+        $lots = $settled ? $this->lotsFor($remittance) : [];
         if ($lots === []) {
             return null;
         }
@@ -185,7 +191,7 @@ class RemittanceCredits
     /**
      * Las remesas enviadas con sus lotes, con una sola consulta de abonos para todas.
      *
-     * @return list<array{remittance: Remittance, lots: list<AccountEntry>}>
+     * @return list<array{remittance: Remittance, lots: list<AccountEntry>, settled: bool}>
      */
     private function lotsOfSent(): array
     {
@@ -194,6 +200,7 @@ class RemittanceCredits
             return [];
         }
         $ranges = array_map(self::range(...), $sent);
+        $bookUpTo = $this->chargeWatch->bookUpTo();
         $credits = $this->entries->findByConceptPrefix(
             BankReturns::CREDIT_PREFIX,
             min(array_column($ranges, 0)),
@@ -201,10 +208,26 @@ class RemittanceCredits
         );
 
         return array_map(
-            static fn (Remittance $r, array $range): array => ['remittance' => $r, 'lots' => self::pickLots($credits, $range[0], $range[1], $r)],
+            static fn (Remittance $r, array $range): array => [
+                'remittance' => $r,
+                'lots' => self::pickLots($credits, $range[0], $range[1], $r),
+                'settled' => self::isSettled($range[1], $bookUpTo),
+            ],
             $sent,
             $ranges,
         );
+    }
+
+    /**
+     * Si el libro ya pasa del último día en que puede entrar el abono: hasta entonces
+     * puede faltar algún lote, y lo que haya no se juzga.
+     *
+     * @param \DateTimeImmutable      $to       Último día del periodo del abono.
+     * @param \DateTimeImmutable|null $bookUpTo Hasta dónde llega el libro; null si no se sabe.
+     */
+    public static function isSettled(\DateTimeImmutable $to, ?\DateTimeImmutable $bookUpTo): bool
+    {
+        return $bookUpTo !== null && $bookUpTo->format('Y-m-d') > $to->format('Y-m-d');
     }
 
     /** El día de un apunte, «2026-09-09». */

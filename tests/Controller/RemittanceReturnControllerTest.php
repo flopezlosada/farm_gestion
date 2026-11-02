@@ -272,6 +272,8 @@ class RemittanceReturnControllerTest extends AbstractAuthenticatedTest
         $em->flush();
         array_push($this->created, [BudgetCategoryGroup::class, $group->getId()], [BudgetCategory::class, $category->getId()], [FinancialAccount::class, $bank->getId()]);
         $this->entry($bank, $category, '2095-08-18', '146.00', 'ab.rem.' . self::REFERENCE);
+        // El libro ya pasa de agosto: hasta entonces el abono de la remesa no se juzga.
+        $this->entry($bank, $category, '2095-09-02', '-1.00', 'comision mantenimiento');
         $em->flush();
 
         return [$august, $bank, $category];

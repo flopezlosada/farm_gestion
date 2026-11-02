@@ -10,6 +10,7 @@ use App\Repository\AccountEntryRepository;
 use App\Repository\RemittanceRepository;
 use App\Repository\RemittanceReturnRepository;
 use App\Service\Accounting\Remittance\BankReturns;
+use App\Service\Accounting\Remittance\RemittanceChargeWatch;
 use App\Service\Accounting\Remittance\RemittanceCredits;
 use PHPUnit\Framework\TestCase;
 
@@ -112,7 +113,7 @@ class RemittanceCreditsTest extends TestCase
             ->willReturn($credits);
         $entries->method('findUnlinkedReturnCharges')->willReturn([$ofLoose, $ofAugust, $ofSeptember]);
 
-        $service = new RemittanceCredits($remittances, $entries, $this->createStub(RemittanceReturnRepository::class));
+        $service = new RemittanceCredits($remittances, $entries, $this->createStub(RemittanceReturnRepository::class), $this->bookUpTo('2026-10-31'));
 
         $this->assertSame([$ofAugust, $ofSeptember], $service->unidentifiedReturns());
     }
@@ -125,7 +126,7 @@ class RemittanceCreditsTest extends TestCase
         $entries = $this->createMock(AccountEntryRepository::class);
         $entries->expects($this->never())->method('findUnlinkedReturnCharges');
 
-        $this->assertSame([], (new RemittanceCredits($remittances, $entries, $this->createStub(RemittanceReturnRepository::class)))->unidentifiedReturns());
+        $this->assertSame([], (new RemittanceCredits($remittances, $entries, $this->createStub(RemittanceReturnRepository::class), $this->bookUpTo(null)))->unidentifiedReturns());
     }
 
     /** Las de agosto y septiembre de verdad: 55 € y 109 € por identificar; la que cuadra no sale. */
@@ -150,9 +151,43 @@ class RemittanceCreditsTest extends TestCase
         $returns = $this->createStub(RemittanceReturnRepository::class);
         $returns->method('findBy')->willReturn([]);
 
-        $rows = (new RemittanceCredits($remittances, $entries, $returns))->mismatches();
+        $rows = (new RemittanceCredits($remittances, $entries, $returns, $this->bookUpTo('2026-10-31')))->mismatches();
 
         $this->assertSame([[$september, 10900], [$august, 5500]], array_map(static fn (array $r): array => [$r['remittance'], $r['missingCents']], $rows));
+    }
+
+    /**
+     * Un cobro suelto de 97 € llega el día 4 y el extracto sólo llega al 5: el abono de
+     * verdad (el 18) aún no está en el libro. No se juzga: no es que falte casi toda la
+     * remesa. Con el libro pasado el mes, ya se ve el abono de verdad.
+     */
+    public function testConElMesSinTerminarEnElLibroNoSeJuzga(): void
+    {
+        $august = $this->remittance('2026-08-01', ['7472.40']);
+        $loose = [$this->entry('2026-08-04', '97.00', 'ab.rem.20260015586')];
+        $remittances = $this->createStub(RemittanceRepository::class);
+        $remittances->method('findAllNewestFirst')->willReturn([$august]);
+        $returns = $this->createStub(RemittanceReturnRepository::class);
+        $returns->method('findBy')->willReturn([]);
+        $early = $this->createStub(AccountEntryRepository::class);
+        $early->method('findByConceptPrefix')->willReturn($loose);
+
+        $this->assertSame([], (new RemittanceCredits($remittances, $early, $returns, $this->bookUpTo('2026-08-05')))->mismatches());
+        $this->assertNull((new RemittanceCredits($remittances, $early, $returns, $this->bookUpTo('2026-08-05')))->checkFor($august));
+
+        $later = $this->createStub(AccountEntryRepository::class);
+        $later->method('findByConceptPrefix')->willReturn([...$loose, $this->entry('2026-08-18', '7417.40', 'ab.rem.20260016561')]);
+        $rows = (new RemittanceCredits($remittances, $later, $returns, $this->bookUpTo('2026-09-02')))->mismatches();
+        $this->assertSame([[$august, 5500]], array_map(static fn (array $r): array => [$r['remittance'], $r['missingCents']], $rows));
+    }
+
+    /** El vigilante de cargos, sólo para decir hasta dónde llega el libro. */
+    private function bookUpTo(?string $day): RemittanceChargeWatch
+    {
+        $watch = $this->createStub(RemittanceChargeWatch::class);
+        $watch->method('bookUpTo')->willReturn($day !== null ? new \DateTimeImmutable($day) : null);
+
+        return $watch;
     }
 
     /**
