@@ -208,7 +208,7 @@ class RemittanceReturnControllerTest extends AbstractAuthenticatedTest
         [$august, $bank, $category] = $this->augustWithBank();
         $credit = $this->em()->getRepository(AccountEntry::class)->findOneBy(['account' => $bank, 'concept' => 'ab.rem.' . self::REFERENCE]);
         $credit->setAmount('91.00');
-        $this->entry($bank, $category, '2095-08-04', '97.00', 'ab.rem.20950015586');
+        $this->entry($bank, $category, '2095-08-04', '25.00', 'ab.rem.20950015586');
         $this->em()->flush();
 
         $crawler = $client->request('GET', sprintf('/gestion/accounting/remittances/%d', $august->getId()));

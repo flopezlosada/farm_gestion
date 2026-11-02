@@ -17,8 +17,8 @@ use App\Repository\RemittanceReturnRepository;
  * Fiare abona una remesa en uno o varios lotes `ab.rem.<ref>` EL MISMO DÍA (en
  * septiembre de 2026, 150,00 y 7.437,40 el día 9). Otros días del mes puede haber
  * cobros sueltos que no son la remesa (97,00 el 4 de agosto). Por eso los lotes de una
- * remesa son los abonos del día en que entró el mayor de su periodo: alrededor del día
- * de cargo si se sabe, si no en su mes (se cobra el mes en curso).
+ * remesa son los abonos del día de su periodo cuya suma más se acerca a lo pedido:
+ * alrededor del día de cargo si se sabe, si no en su mes (se cobra el mes en curso).
  *
  * Lo pedido menos lo abonado son los recibos que el banco rechazó ANTES de cobrarlos
  * (cuenta mal, mandato…): no traen apunte de devolución, sólo faltan del abono. Se
@@ -83,7 +83,7 @@ class RemittanceCredits
     {
         [$from, $to] = self::range($remittance);
 
-        return self::pickLots($this->entries->findByConceptPrefix(BankReturns::CREDIT_PREFIX, $from, $to), $from, $to);
+        return self::pickLots($this->entries->findByConceptPrefix(BankReturns::CREDIT_PREFIX, $from, $to), $from, $to, $remittance);
     }
 
     /**
@@ -132,24 +132,38 @@ class RemittanceCredits
     }
 
     /**
-     * De los abonos de remesa de un periodo, los del día en que entró el mayor. Puro.
+     * De los abonos de remesa de un periodo, los del día cuya suma más se acerca a lo
+     * pedido en la remesa. Puro.
      *
      * @param list<AccountEntry> $credits Apuntes del libro; sólo cuentan los abonos de remesa dentro del periodo.
      *
      * @return list<AccountEntry>
      */
-    public static function pickLots(array $credits, \DateTimeImmutable $from, \DateTimeImmutable $to): array
+    public static function pickLots(array $credits, \DateTimeImmutable $from, \DateTimeImmutable $to, Remittance $remittance): array
     {
-        $inRange = array_values(array_filter($credits, static fn (AccountEntry $e): bool => $e->getDate() !== null
-            && BankReturns::reference($e->getConcept(), BankReturns::CREDIT_PREFIX) !== null
-            && self::day($e) >= $from->format('Y-m-d') && self::day($e) <= $to->format('Y-m-d')));
-        if ($inRange === []) {
+        $byDay = [];
+        foreach ($credits as $e) {
+            if ($e->getDate() !== null
+                && BankReturns::reference($e->getConcept(), BankReturns::CREDIT_PREFIX) !== null
+                && self::day($e) >= $from->format('Y-m-d') && self::day($e) <= $to->format('Y-m-d')) {
+                $byDay[self::day($e)][] = $e;
+            }
+        }
+        if ($byDay === []) {
             return [];
         }
-        usort($inRange, static fn (AccountEntry $a, AccountEntry $b): int => IssuedInvoice::toCents($b->getAmount()) <=> IssuedInvoice::toCents($a->getAmount()));
-        $day = self::day($inRange[0]);
+        $asked = IssuedInvoice::toCents($remittance->getTotal());
+        $distance = static fn (array $lots): int => abs($asked - array_sum(array_map(static fn (AccountEntry $e): int => IssuedInvoice::toCents($e->getAmount()), $lots)));
+        // A igual distancia, el primer día: los días van en orden.
+        ksort($byDay);
+        $best = null;
+        foreach ($byDay as $lots) {
+            if ($best === null || $distance($lots) < $distance($best)) {
+                $best = $lots;
+            }
+        }
 
-        return array_values(array_filter($inRange, static fn (AccountEntry $e): bool => self::day($e) === $day));
+        return $best;
     }
 
     /**
@@ -187,7 +201,7 @@ class RemittanceCredits
         );
 
         return array_map(
-            static fn (Remittance $r, array $range): array => ['remittance' => $r, 'lots' => self::pickLots($credits, $range[0], $range[1])],
+            static fn (Remittance $r, array $range): array => ['remittance' => $r, 'lots' => self::pickLots($credits, $range[0], $range[1], $r)],
             $sent,
             $ranges,
         );

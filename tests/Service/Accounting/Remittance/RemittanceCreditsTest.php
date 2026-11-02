@@ -22,8 +22,10 @@ class RemittanceCreditsTest extends TestCase
 {
     private int $nextId = 1;
 
-    public function testLosLotesSonLosAbonosDelDiaDelMayor(): void
+    /** Los del día que más se acerca a lo pedido, aunque haya otro abono suelto en el mes. */
+    public function testLosLotesSonLosAbonosDelDiaQueMasSeAcercaALoPedido(): void
     {
+        $august = $this->remittance('2026-08-01', ['7472.40']);
         $loose = $this->entry('2026-08-04', '97.00', 'ab.rem.20260015586');
         $main = $this->entry('2026-08-18', '7417.40', 'ab.rem.20260016561');
         $sameDay = $this->entry('2026-08-18', '25.00', 'ab.rem.20260016562');
@@ -34,10 +36,14 @@ class RemittanceCreditsTest extends TestCase
             [$loose, $main, $sameDay, $notACredit, $nextMonth],
             new \DateTimeImmutable('2026-08-01'),
             new \DateTimeImmutable('2026-08-31'),
+            $august,
         );
 
         $this->assertSame([$main, $sameDay], $lots);
-        $this->assertSame([], RemittanceCredits::pickLots([$nextMonth], new \DateTimeImmutable('2026-08-01'), new \DateTimeImmutable('2026-08-31')));
+        $this->assertSame([], RemittanceCredits::pickLots([$nextMonth], new \DateTimeImmutable('2026-08-01'), new \DateTimeImmutable('2026-08-31'), $august));
+
+        $small = $this->remittance('2026-08-01', ['100.00']);
+        $this->assertSame([$loose], RemittanceCredits::pickLots([$loose, $main], new \DateTimeImmutable('2026-08-01'), new \DateTimeImmutable('2026-08-31'), $small), 'Una remesa pequeña casa con el abono pequeño, no con el mayor.');
     }
 
     /** Sin día de cargo se busca en su mes; con él, en su margen de días hábiles. */

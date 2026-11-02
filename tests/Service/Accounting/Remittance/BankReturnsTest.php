@@ -45,7 +45,7 @@ class BankReturnsTest extends TestCase
         $loose = $this->entry('2026-08-06', '-97.00', 'bel-liq.rem.devol20260015586');
 
         $entries = $this->createMock(AccountEntryRepository::class);
-        $entries->method('findByConceptPrefix')->willReturnCallback(function (string $prefix, \DateTimeInterface $from, \DateTimeInterface $to) use ($credits, $linked, $open, $july): array {
+        $entries->method('findByConceptPrefix')->willReturnCallback(function (string $prefix, \DateTimeInterface $from, \DateTimeInterface $to) use ($credits, $linked, $open, $july, $loose): array {
             $this->assertSame('2026-08-01', $from->format('Y-m-d'));
             $this->assertSame($prefix === BankReturns::CREDIT_PREFIX ? '2026-08-31' : '2026-09-30', $to->format('Y-m-d'));
 
@@ -54,7 +54,7 @@ class BankReturnsTest extends TestCase
         $returns = $this->createMock(RemittanceReturnRepository::class);
         $returns->expects($this->once())->method('findLinkedEntryIds')->with([$linked, $open])->willReturn([$linked->getId()]);
 
-        $found = $this->bankReturns($entries, $returns)->unlinkedFor($this->remittance([]));
+        $found = $this->bankReturns($entries, $returns)->unlinkedFor($this->remittance([$this->line('ZZTEST RESTO', '7472.40')]));
 
         $this->assertSame([$open], $found);
     }
