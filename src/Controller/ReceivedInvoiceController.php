@@ -156,8 +156,11 @@ class ReceivedInvoiceController extends AbstractController
         $entry = $drafts->for($invoice);
         // El pago que ya trajo el banco, si está: se calcula con lo leído, no con lo
         // que se teclee, para que las opciones sean las mismas al abrir y al guardar.
-        $candidates = (float) $entry->getAmount() !== 0.0 && $entry->getDate() !== null
-            ? $entries->findPaymentCandidates($entry->getAmount(), $entry->getDate())
+        // Alrededor del día de la factura, no del que propone el apunte: el de una que
+        // llega tarde a un trimestre entregado es hoy, y su pago estará en aquel.
+        $paidAround = $invoice->getInvoiceDate() ?? $entry->getDate();
+        $candidates = (float) $entry->getAmount() !== 0.0 && $paidAround !== null
+            ? $entries->findPaymentCandidates($entry->getAmount(), $paidAround)
             : [];
         // El pago de varias facturas del mismo proveedor a la vez, si lo hay.
         $grouped = $groupedPayments->for($invoice);

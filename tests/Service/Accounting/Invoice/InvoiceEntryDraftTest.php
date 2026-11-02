@@ -2,21 +2,31 @@
 
 namespace App\Tests\Service\Accounting\Invoice;
 
+use App\Entity\AccountantDelivery;
 use App\Entity\FinancialAccount;
 use App\Entity\ReceivedInvoice;
+use App\Repository\AccountantDeliveryRepository;
 use App\Repository\FinancialAccountRepository;
 use App\Repository\ReceivedInvoiceRepository;
 use App\Service\Accounting\Invoice\ExtractedInvoice;
+use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\InvoiceEntryDraft;
+use App\Service\Accounting\Invoice\InvoiceQuarter;
+use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MockClock;
 
 /**
- * La cuenta que propone el apunte de una factura recibida, sin base de datos: las
- * cuentas activas y el historial del proveedor los dan los repositorios.
+ * La cuenta y el día que propone el apunte de una factura recibida, sin base de
+ * datos: las cuentas activas, el historial del proveedor y las entregas a la
+ * gestoría los dan los repositorios.
  */
 class InvoiceEntryDraftTest extends TestCase
 {
     private const TAX_ID = 'B12345678';
+
+    /** Hoy en estos tests: noviembre, con el tercer trimestre ya terminado. */
+    private const TODAY = '2026-11-02 10:30:00';
 
     private int $nextId = 1;
 
@@ -64,17 +74,55 @@ class InvoiceEntryDraftTest extends TestCase
         $this->assertSame($this->fiare, $this->draft($accounts)->for($this->ticket(ReceivedInvoice::PAYMENT_UNKNOWN))->getAccount());
     }
 
+    /** Con su trimestre abierto, el apunte lleva el día de la factura. */
+    public function testConElTrimestreAbiertoProponeElDiaDeLaFactura(): void
+    {
+        $entry = $this->draft([$this->fiare])->for($this->ticket(ReceivedInvoice::PAYMENT_TRANSFER));
+
+        $this->assertSame('2026-09-14', $entry->getDate()->format('Y-m-d'));
+    }
+
     /**
-     * @param list<FinancialAccount> $accounts activas
+     * Una factura de septiembre que llega con el tercer trimestre ya entregado: en ese
+     * trimestre no se puede guardar nada, así que el apunte propone hoy (sin hora), no
+     * un día que el guardado rechazaría.
      */
-    private function draft(array $accounts, ?int $usual = null): InvoiceEntryDraft
+    public function testConSuTrimestreEntregadoProponeHoy(): void
+    {
+        $entry = $this->draft([$this->fiare], delivered: [InvoiceQuarter::of(2026, 3)])
+            ->for($this->ticket(ReceivedInvoice::PAYMENT_TRANSFER));
+
+        $this->assertSame('2026-11-02 00:00:00', $entry->getDate()->format('Y-m-d H:i:s'));
+    }
+
+    /** La entrega de otro trimestre no mueve la fecha. */
+    public function testLaEntregaDeOtroTrimestreNoLaMueve(): void
+    {
+        $entry = $this->draft([$this->fiare], delivered: [InvoiceQuarter::of(2026, 2)])
+            ->for($this->ticket(ReceivedInvoice::PAYMENT_TRANSFER));
+
+        $this->assertSame('2026-09-14', $entry->getDate()->format('Y-m-d'));
+    }
+
+    /**
+     * @param list<FinancialAccount> $accounts  activas
+     * @param list<InvoiceQuarter>   $delivered trimestres entregados a la gestoría
+     */
+    private function draft(array $accounts, ?int $usual = null, array $delivered = []): InvoiceEntryDraft
     {
         $accountRepo = $this->createStub(FinancialAccountRepository::class);
         $accountRepo->method('findActive')->willReturn($accounts);
         $invoices = $this->createStub(ReceivedInvoiceRepository::class);
         $invoices->method('usualAccountIdFor')->willReturn($usual);
+        $clock = new MockClock(self::TODAY);
+        $deliveries = $this->createStub(AccountantDeliveryRepository::class);
+        $deliveries->method('latestByQuarter')->willReturn(array_combine(
+            array_map(static fn (InvoiceQuarter $q): string => $q->year.'-'.$q->quarter, $delivered),
+            array_map(static fn (InvoiceQuarter $q): AccountantDelivery => new AccountantDelivery($q, null, $clock->now()), $delivered),
+        ));
+        $closed = new ClosedPeriods($deliveries, $this->createStub(EntityManagerInterface::class), $clock);
 
-        return new InvoiceEntryDraft($accountRepo, $invoices);
+        return new InvoiceEntryDraft($accountRepo, $invoices, $closed, $clock);
     }
 
     /** Un ticket de ferretería tal como lo deja la lectura, con los campos que no trae a null. */

@@ -7,6 +7,8 @@ use App\Entity\FinancialAccount;
 use App\Entity\ReceivedInvoice;
 use App\Repository\FinancialAccountRepository;
 use App\Repository\ReceivedInvoiceRepository;
+use App\Service\Accounting\Closing\ClosedPeriods;
+use Symfony\Component\Clock\ClockInterface;
 
 /**
  * El apunte que propone una factura, para que quien lleva las cuentas sólo tenga que
@@ -20,10 +22,14 @@ class InvoiceEntryDraft
     /**
      * @param FinancialAccountRepository $accounts Las cuentas.
      * @param ReceivedInvoiceRepository  $invoices Para el historial del proveedor.
+     * @param ClosedPeriods              $closed   Qué trimestres están entregados.
+     * @param ClockInterface             $clock    Hoy.
      */
     public function __construct(
         private readonly FinancialAccountRepository $accounts,
         private readonly ReceivedInvoiceRepository $invoices,
+        private readonly ClosedPeriods $closed,
+        private readonly ClockInterface $clock,
     ) {
     }
 
@@ -35,7 +41,7 @@ class InvoiceEntryDraft
     public function for(ReceivedInvoice $invoice): AccountEntry
     {
         $entry = (new AccountEntry())
-            ->setDate($invoice->getInvoiceDate() ?? new \DateTimeImmutable('today'))
+            ->setDate($this->dateFor($invoice))
             ->setAccount($this->accountFor($invoice))
             ->setCategory($invoice->getSuggestedCategory())
             ->setConcept($this->conceptFor($invoice))
@@ -48,6 +54,21 @@ class InvoiceEntryDraft
         }
 
         return $entry;
+    }
+
+    /**
+     * El día de la factura, o hoy si no se leyó o si su trimestre ya está entregado a
+     * la gestoría: ahí no se puede anotar nada, y el pago que no estaba en el libro se
+     * anota cuando se conoce, igual que la factura va en el paquete del trimestre de hoy.
+     */
+    private function dateFor(ReceivedInvoice $invoice): \DateTimeImmutable
+    {
+        $date = $invoice->getInvoiceDate();
+        if ($date !== null && $this->closed->closingDeliveryFor($date) === null) {
+            return $date;
+        }
+
+        return $this->clock->now()->setTime(0, 0);
     }
 
     /**

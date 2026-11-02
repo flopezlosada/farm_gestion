@@ -411,6 +411,41 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * Una factura que llega tarde y sin pago en el libro: el apunte se propone con
+     * fecha de hoy, porque en su trimestre entregado no se puede guardar nada, y basta
+     * con confirmar para anotarla.
+     */
+    public function testUnaFacturaTardiaSinPagoSeAnotaHoy(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $invoice = $this->uploadOne($client);
+        $this->createCatalogue();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $invoice = $em->find(ReceivedInvoice::class, $invoice->getId());
+        $invoice->markRead(ExtractedInvoice::fromArray([
+            'fecha' => '2091-03-05', 'total' => 987.65, 'proveedor' => 'Ferretería Torrelaguna', 'numero_factura' => '2233',
+        ]), 'test', $this->category, new \DateTimeImmutable());
+        $delivery = new AccountantDelivery(InvoiceQuarter::of(2091, 1), null, new \DateTimeImmutable('2091-04-03'));
+        $em->persist($delivery);
+        $em->flush();
+        $this->deliveries[] = $delivery->getId();
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
+        $this->assertResponseIsSuccessful();
+        $form = $crawler->filter('form[name="received_invoice_confirm"]')->form();
+        $form['received_invoice_confirm[entry][account]']->select((string) $this->account->getId());
+        $client->submit($form);
+        $this->assertResponseRedirects();
+
+        $today = (new \DateTimeImmutable('today'))->format('Y-m-d');
+        $invoice = $this->findInvoice('factura-prueba.pdf');
+        $this->assertSame(ReceivedInvoice::STATUS_CONFIRMED, $invoice->getStatus());
+        $this->assertSame($today, $invoice->getAccountEntry()?->getDate()?->format('Y-m-d'), 'El apunte va con fecha de hoy.');
+        $this->assertSame($today, $invoice->getBookedOn()?->format('Y-m-d'));
+    }
+
+    /**
      * Un proveedor que cobra de una vez dos facturas deja un solo pago, por la suma: se
      * ofrece junto con la otra, al elegirlo se enganchan las dos, la ficha del apunte
      * las nombra y al borrarlo vuelven las dos a la bandeja.
