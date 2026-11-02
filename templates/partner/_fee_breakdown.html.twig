@@ -14,6 +14,53 @@
     .fee-bd__part { color: var(--prl-ochre-d, #8a6a1f); font-size: 11.5px; }
     .fee-bd__soft { color: var(--csa-ink-soft, #6b6b6b); }
     .fee-bd__to { color: var(--csa-ink-soft, #6b6b6b); font-size: 11.5px; white-space: nowrap; }
+    .fee-rc { width: 100%; max-width: 420px; border-collapse: collapse; font-size: 13px; line-height: 1.5; }
+    .fee-rc td { padding: 1px 0; vertical-align: baseline; }
+    .fee-rc td:last-child { text-align: right; white-space: nowrap; padding-left: 16px; }
+    .fee-rc__part td:first-child { padding-left: 14px; color: var(--csa-ink-soft, #6b6b6b); }
+    .fee-rc__total td { border-top: 1px solid var(--csa-rule, #e6e4dd); padding-top: 4px; font-weight: 600; }
+{% endmacro %}
+
+{# El cálculo de la cuota del mes, como un recibo: cada cesta (partida en verdura, huevos y transporte si suma varias), cada cuota de socix y cada ajuste con su importe, y el total que da. #}
+{% macro receipt(statement) %}
+    {% import 'accounting/_money.html.twig' as fmt %}
+    <table class="fee-rc">
+        {% for l in statement.lines %}
+            {% set parts = [
+                { name: 'Verdura', cents: l.vegCents },
+                { name: 'Huevos', cents: l.eggCents },
+                { name: 'Transporte', cents: l.transportCents },
+            ]|filter(p => p.cents) %}
+            <tr>
+                <td>
+                    {{ l.label }}
+                    {% if l.share.partner != statement.payer %}<span class="fee-bd__soft">(de {{ l.share.partner.legalName }})</span>{% endif %}
+                    {% if l.partial %}<span class="fee-bd__part">{{ l.weeks }} de {{ l.monthWeeks }} {{ l.unit }}</span>{% endif %}
+                    {% if l.free %}<span class="fee-bd__part">gratis: cesta de trabajador</span>
+                    {% elseif l.freeWeeks > 0 %}<span class="fee-bd__part">{{ l.freeWeeks }} {{ l.freeWeeks == 1 ? 'semana gratis' : 'semanas gratis' }} (cesta de trabajador)</span>{% endif %}
+                </td>
+                <td>{% if parts|length <= 1 %}{{ fmt.money(l.total) }}{% endif %}</td>
+            </tr>
+            {% if parts|length > 1 %}
+                {% for p in parts %}
+                    <tr class="fee-rc__part"><td>{{ p.name }}</td><td>{{ fmt.money(p.cents / 100) }}</td></tr>
+                {% endfor %}
+            {% endif %}
+        {% endfor %}
+        {% for c in statement.charges %}
+            <tr>
+                <td>{{ c.concept.label }}{% if c.household != statement.payer %} <span class="fee-bd__soft">(de {{ c.household.legalName }})</span>{% endif %}</td>
+                <td>{% if c.missing %}<span class="fee-bd__part">sin precio</span>{% else %}{{ fmt.money(c.total) }}{% endif %}</td>
+            </tr>
+        {% endfor %}
+        {% for a in statement.adjustments %}
+            <tr>
+                <td>{{ a.reason|capitalize }}{% if a.increase %} <span class="fee-bd__to">→ {{ a.initiative ? a.initiative.name : 'para la asociación' }}</span>{% endif %}</td>
+                <td>{{ fmt.money(a.amount, true) }}</td>
+            </tr>
+        {% endfor %}
+        <tr class="fee-rc__total"><td>Total</td><td>{{ fmt.money(statement.total) }}</td></tr>
+    </table>
 {% endmacro %}
 
 {# Cada cesta: modalidad, importe, de quién es, si la tuvo parte del mes cuántas semanas, y si es de trabajador cuántas no se cobran. #}
