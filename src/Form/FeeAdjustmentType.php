@@ -7,8 +7,7 @@ use Doctrine\ORM\EntityRepository;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
-use Symfony\Component\Form\Extension\Core\Type\DateType;
-use Symfony\Component\Form\Extension\Core\Type\NumberType;
+use Symfony\Component\Form\Extension\Core\Type\IntegerType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
@@ -29,12 +28,10 @@ class FeeAdjustmentType extends AbstractType
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
-        $month = [
-            'widget' => 'single_text',
-            'html5' => false,
-            'format' => 'yyyy-MM',
-            'input' => 'datetime_immutable',
-            'attr' => ['type' => 'month', 'placeholder' => 'aaaa-mm'],
+        $months = [
+            'choices' => self::monthChoices(),
+            'choice_value' => static fn (?\DateTimeInterface $month): ?string => $month?->format('Y-m'),
+            'invalid_message' => 'Como pronto, desde el mes que viene.',
         ];
 
         $builder
@@ -43,11 +40,10 @@ class FeeAdjustmentType extends AbstractType
                 'expanded' => true,
                 'constraints' => [new Assert\NotNull(message: 'Elige si paga de más o de menos.')],
             ])
-            ->add('amount', NumberType::class, [
-                'input' => 'string',
-                'scale' => 2,
-                'html5' => true,
-                'attr' => ['step' => '0.01', 'min' => '0.01', 'inputmode' => 'decimal'],
+            // Euros enteros: las flechas van de uno en uno y no se escriben céntimos.
+            ->add('amount', IntegerType::class, [
+                'attr' => ['step' => '1', 'min' => '1', 'inputmode' => 'numeric'],
+                'invalid_message' => 'Escribe euros enteros, sin céntimos.',
                 'constraints' => [
                     new Assert\NotBlank(message: 'Escribe cuánto.'),
                     new Assert\Positive(message: 'Escribe la cantidad sin signo: lo de más o de menos va arriba.'),
@@ -64,8 +60,27 @@ class FeeAdjustmentType extends AbstractType
                 'required' => false,
                 'placeholder' => '— para la asociación —',
             ])
-            ->add('fromMonth', DateType::class, $month + ['constraints' => [new Assert\NotNull(message: 'Escribe desde qué mes.')]])
-            ->add('untilMonth', DateType::class, $month + ['required' => false]);
+            ->add('fromMonth', ChoiceType::class, $months + ['constraints' => [new Assert\NotNull(message: 'Elige desde qué mes.')]])
+            ->add('untilMonth', ChoiceType::class, $months + ['required' => false, 'placeholder' => 'sin fin']);
+    }
+
+    /**
+     * Los meses que se pueden elegir, del que viene a tres años vista: un ajuste
+     * nuevo no entra en el mes en curso, que ya puede ir en una remesa. Al ser una
+     * lista cerrada, el servidor tampoco acepta otro mes.
+     *
+     * @return array<string, \DateTimeImmutable> «Diciembre 2026» => 2026-12-01
+     */
+    private static function monthChoices(): array
+    {
+        $format = new \IntlDateFormatter('es_ES', \IntlDateFormatter::NONE, \IntlDateFormatter::NONE, null, null, 'LLLL yyyy');
+        $next = new \DateTimeImmutable('first day of next month midnight');
+        $months = array_map(static fn (int $i): \DateTimeImmutable => $next->modify(sprintf('+%d months', $i)), range(0, 35));
+
+        return array_combine(
+            array_map(static fn (\DateTimeImmutable $m): string => mb_convert_case((string) $format->format($m), \MB_CASE_TITLE), $months),
+            $months,
+        );
     }
 
     public function configureOptions(OptionsResolver $resolver): void

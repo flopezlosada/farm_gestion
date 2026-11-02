@@ -3,9 +3,9 @@
 namespace App\Form;
 
 use App\Entity\Remittance;
+use App\Form\Type\MonthType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
-use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\FileType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
@@ -42,14 +42,9 @@ class RemittanceImportType extends AbstractType
                 'label' => 'Qué se cobró',
                 'choices' => array_flip(Remittance::KIND_LABELS),
             ])
-            ->add('period', DateType::class, [
+            ->add('period', MonthType::class, [
                 'label' => 'Mes',
-                'widget' => 'single_text',
-                'html5' => false,
-                'format' => 'yyyy-MM',
-                'input' => 'datetime_immutable',
                 'required' => false,
-                'attr' => ['type' => 'month', 'placeholder' => 'aaaa-mm'],
             ])
             ->add('label', TextType::class, [
                 'label' => 'Nombre',

@@ -46,7 +46,7 @@ class FeeAdjustmentController extends AbstractController
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
-            /** @var array{direction: string, amount: string, reason: string, initiative: ?DonationInitiative, fromMonth: \DateTimeImmutable, untilMonth: ?\DateTimeImmutable} $data */
+            /** @var array{direction: string, amount: int, reason: string, initiative: ?DonationInitiative, fromMonth: \DateTimeImmutable, untilMonth: ?\DateTimeImmutable} $data */
             $data = $form->getData();
             // Una reducción no va a ninguna iniciativa: si se eligió una antes de
             // cambiar a «de menos», el campo ya no se veía y se descarta.
