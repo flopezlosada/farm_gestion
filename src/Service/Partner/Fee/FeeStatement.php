@@ -95,15 +95,15 @@ final class FeeStatement
 
     /**
      * Si el total necesita explicación: paga más de una cesta, alguna sólo parte del
-     * mes, una cuota de socix o tiene ajustes. Con una sola cesta entera el total ES la
-     * tarifa.
+     * mes o con varias partes (huevos, transporte), una cuota de socix o tiene ajustes.
+     * Con una sola cesta entera de sólo verdura el total ES la tarifa.
      */
     public function needsBreakdown(): bool
     {
         return count($this->lines) > 1
             || $this->adjustments !== []
             || $this->charges !== []
-            || array_filter($this->lines, static fn (FeeLine $l): bool => $l->isPartial() || $l->freeWeeks > 0) !== [];
+            || array_filter($this->lines, static fn (FeeLine $l): bool => $l->isPartial() || $l->freeWeeks > 0 || $l->hasSeveralParts()) !== [];
     }
 
     /**
