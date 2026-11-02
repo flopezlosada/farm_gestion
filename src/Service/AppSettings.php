@@ -787,8 +787,6 @@ class AppSettings
             'requires' => [self::FEATURE_CONTABILIDAD],
             'depends_on' => [],
         ],
-        // Una vez al día basta: una factura no corre prisa por horas. A las 6, para
-        // que la lectura horaria las tenga leídas cuando alguien abra la bandeja.
         // A diario: la tarea decide sola si toca (cajas sin contar este mes) y pide una
         // vez al mes a cada persona. Diario para que un reloj caído el día 1 no se coma
         // el mes entero.
@@ -803,6 +801,8 @@ class AppSettings
             'requires' => [self::FEATURE_CONTABILIDAD],
             'depends_on' => [],
         ],
+        // Una vez al día basta: una factura no corre prisa por horas. A las 6, para
+        // que la lectura horaria las tenga leídas cuando alguien abra la bandeja.
         self::CRON_INVOICE_MAIL => [
             'command' => 'app:fetch-invoice-mail',
             // Las facturas no avisan a nadie (se quedan en la bandeja de
