@@ -56,6 +56,12 @@ class FeeAdjustmentControllerTest extends AbstractAuthenticatedTest
         return $initiative;
     }
 
+    /** «2026-12» para el mes que está $n meses por delante (1 = el que viene). */
+    private static function monthAhead(int $n): string
+    {
+        return (new \DateTimeImmutable('first day of next month'))->modify(sprintf('+%d months', $n - 1))->format('Y-m');
+    }
+
     /** @return list<FeeAdjustment> */
     private function testAdjustments(Partner $partner): array
     {
@@ -80,7 +86,7 @@ class FeeAdjustmentControllerTest extends AbstractAuthenticatedTest
             'fee_adjustment[amount]' => '20',
             'fee_adjustment[reason]' => 'TEST aporta a la RSP',
             'fee_adjustment[initiative]' => (string) $initiative->getId(),
-            'fee_adjustment[fromMonth]' => '2098-01',
+            'fee_adjustment[fromMonth]' => self::monthAhead(1),
         ]);
 
         $this->assertResponseRedirects(sprintf('/gestion/partner/%d#cuota', $partner->getId()));
@@ -88,7 +94,7 @@ class FeeAdjustmentControllerTest extends AbstractAuthenticatedTest
         $this->assertCount(1, $adjustments);
         $this->assertSame('20.00', $adjustments[0]->getAmount());
         $this->assertSame($initiative->getId(), $adjustments[0]->getInitiative()?->getId());
-        $this->assertSame('2098-01-01', $adjustments[0]->getFromMonth()->format('Y-m-d'));
+        $this->assertSame(self::monthAhead(1), $adjustments[0]->getFromMonth()->format('Y-m'));
         $this->assertNull($adjustments[0]->getUntilMonth());
 
         $client->request('GET', sprintf('/gestion/partner/initiatives/%d', $initiative->getId()));
@@ -108,19 +114,19 @@ class FeeAdjustmentControllerTest extends AbstractAuthenticatedTest
         $client->request('GET', sprintf('/gestion/partner/%d/fee-adjustments/new', $partner->getId()));
         $client->submitForm('Guardar ajuste', [
             'fee_adjustment[direction]' => 'less',
-            'fee_adjustment[amount]' => '15.50',
+            'fee_adjustment[amount]' => '15',
             'fee_adjustment[reason]' => 'TEST no llega a fin de mes',
             'fee_adjustment[initiative]' => (string) $initiative->getId(),
-            'fee_adjustment[fromMonth]' => '2098-02',
-            'fee_adjustment[untilMonth]' => '2098-04',
+            'fee_adjustment[fromMonth]' => self::monthAhead(2),
+            'fee_adjustment[untilMonth]' => self::monthAhead(4),
         ]);
 
         $this->assertResponseRedirects();
         $adjustments = $this->testAdjustments($partner);
         $this->assertCount(1, $adjustments);
-        $this->assertSame('-15.50', $adjustments[0]->getAmount());
+        $this->assertSame('-15.00', $adjustments[0]->getAmount());
         $this->assertNull($adjustments[0]->getInitiative());
-        $this->assertSame('2098-04-01', $adjustments[0]->getUntilMonth()->format('Y-m-d'));
+        $this->assertSame(self::monthAhead(4), $adjustments[0]->getUntilMonth()->format('Y-m'));
     }
 
     public function testNoTerminaAntesDeEmpezar(): void
@@ -133,8 +139,8 @@ class FeeAdjustmentControllerTest extends AbstractAuthenticatedTest
             'fee_adjustment[direction]' => 'more',
             'fee_adjustment[amount]' => '10',
             'fee_adjustment[reason]' => 'TEST al revés',
-            'fee_adjustment[fromMonth]' => '2098-05',
-            'fee_adjustment[untilMonth]' => '2098-03',
+            'fee_adjustment[fromMonth]' => self::monthAhead(5),
+            'fee_adjustment[untilMonth]' => self::monthAhead(3),
         ]);
 
         $this->assertResponseStatusCodeSame(422);
@@ -142,41 +148,60 @@ class FeeAdjustmentControllerTest extends AbstractAuthenticatedTest
         $this->assertSame([], $this->testAdjustments($partner));
     }
 
-    /** Este mes ya puede ir en una remesa: un ajuste nuevo empieza como pronto el que viene. */
-    public function testNoEmpiezaEsteMes(): void
-    {
-        $client = $this->createAuthenticatedClient();
-        $partner = $this->partner();
-
-        $client->request('GET', sprintf('/gestion/partner/%d/fee-adjustments/new', $partner->getId()));
-        $client->submitForm('Guardar ajuste', [
-            'fee_adjustment[direction]' => 'more',
-            'fee_adjustment[amount]' => '10',
-            'fee_adjustment[reason]' => 'TEST este mes',
-            'fee_adjustment[fromMonth]' => (new \DateTimeImmutable())->format('Y-m'),
-        ]);
-
-        $this->assertResponseStatusCodeSame(422);
-        $this->assertSelectorTextContains('main', 'Como pronto, desde el mes que viene.');
-        $this->assertSame([], $this->testAdjustments($partner));
-    }
-
     /**
-     * Los meses se eligen con el selector del navegador y no deja antes del que viene;
-     * las flechas del importe van de euro en euro.
+     * Rellena el formulario de un ajuste nuevo saltándose lo que el navegador no
+     * dejaría elegir (un mes fuera de la lista, céntimos) y lo envía: así se prueba
+     * lo que dice el servidor.
+     *
+     * @param array<string, string> $values
      */
-    public function testElFormularioPintaSelectorDeMesYEuros(): void
+    private function submitRaw(array $values): void
     {
         $client = $this->createAuthenticatedClient();
         $crawler = $client->request('GET', sprintf('/gestion/partner/%d/fee-adjustments/new', $this->partner()->getId()));
-        $next = (new \DateTimeImmutable('first day of next month'))->format('Y-m');
+        $form = $crawler->selectButton('Guardar ajuste')->form();
+        $form->disableValidation();
+        $form->setValues($values + [
+            'fee_adjustment[direction]' => 'more',
+            'fee_adjustment[amount]' => '10',
+            'fee_adjustment[reason]' => 'TEST fuera de lo permitido',
+            'fee_adjustment[fromMonth]' => self::monthAhead(1),
+        ]);
+        $client->submit($form);
+    }
 
-        foreach (['fromMonth', 'untilMonth'] as $field) {
-            $input = $crawler->filter(sprintf('input[name="fee_adjustment[%s]"]', $field));
-            $this->assertSame('month', $input->attr('type'), $field);
-            $this->assertSame($next, $input->attr('min'), $field);
-        }
-        $this->assertSame('any', $crawler->filter('input[name="fee_adjustment[amount]"]')->attr('step'));
+    /** Este mes ya puede ir en una remesa: un ajuste nuevo empieza como pronto el que viene. */
+    public function testNoEmpiezaEsteMes(): void
+    {
+        $this->submitRaw(['fee_adjustment[fromMonth]' => (new \DateTimeImmutable())->format('Y-m')]);
+
+        $this->assertResponseStatusCodeSame(422);
+        $this->assertSelectorTextContains('main', 'Como pronto, desde el mes que viene.');
+        $this->assertSame([], $this->testAdjustments($this->partner()));
+    }
+
+    public function testNoAdmiteCentimos(): void
+    {
+        $this->submitRaw(['fee_adjustment[amount]' => '12.50']);
+
+        $this->assertResponseStatusCodeSame(422);
+        $this->assertSelectorTextContains('main', 'Escribe euros enteros, sin céntimos.');
+        $this->assertSame([], $this->testAdjustments($this->partner()));
+    }
+
+    /** Los meses son una lista que empieza en el que viene; el importe, euros enteros. */
+    public function testElFormularioOfreceMesesDesdeElQueVieneYEurosEnteros(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $crawler = $client->request('GET', sprintf('/gestion/partner/%d/fee-adjustments/new', $this->partner()->getId()));
+
+        $from = $crawler->filter('select[name="fee_adjustment[fromMonth]"] option');
+        $this->assertSame(self::monthAhead(1), $from->first()->attr('value'));
+        $this->assertSame(self::monthAhead(1), $crawler->filter('select[name="fee_adjustment[fromMonth]"] option[selected]')->attr('value'), 'Por defecto, el que viene.');
+        $until = $crawler->filter('select[name="fee_adjustment[untilMonth]"] option');
+        $this->assertSame(['', self::monthAhead(1)], [$until->eq(0)->attr('value'), $until->eq(1)->attr('value')], 'Primero «sin fin».');
+        $amount = $crawler->filter('input[name="fee_adjustment[amount]"]');
+        $this->assertSame(['1', '1'], [$amount->attr('step'), $amount->attr('min')]);
     }
 
     public function testTerminarYQuitar(): void

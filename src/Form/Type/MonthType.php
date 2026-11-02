@@ -15,8 +15,8 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
  * `type="text"`, y poner el tipo en `attr` lo DUPLICA; el navegador se queda con el
  * primero y no sale calendario. Este tipo lo fija en la vista.
  *
- * `min` (opcional) es el primer mes que se puede elegir: limita el selector. La regla
- * de verdad va en las constraints de quien lo usa; esto sólo guía.
+ * Firefox de escritorio no tiene selector de mes: ahí sale como texto «aaaa-mm».
+ * Si el mes tiene que estar acotado, mejor una lista de meses.
  */
 class MonthType extends AbstractType
 {
@@ -32,20 +32,13 @@ class MonthType extends AbstractType
             'html5' => false,
             'format' => 'yyyy-MM',
             'input' => 'datetime_immutable',
-            'min' => null,
         ]);
-        $resolver->setAllowedTypes('min', ['null', \DateTimeInterface::class]);
     }
 
-    /**
-     * Pinta el campo como selector de mes y, si hay `min`, no deja elegir antes.
-     */
+    /** Pinta el campo como selector de mes. */
     public function buildView(FormView $view, FormInterface $form, array $options): void
     {
         $view->vars['type'] = 'month';
         $view->vars['attr']['placeholder'] ??= 'aaaa-mm';
-        if ($options['min'] !== null) {
-            $view->vars['attr']['min'] = $options['min']->format('Y-m');
-        }
     }
 }

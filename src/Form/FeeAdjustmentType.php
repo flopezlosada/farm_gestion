@@ -3,12 +3,11 @@
 namespace App\Form;
 
 use App\Entity\DonationInitiative;
-use App\Form\Type\MonthType;
 use Doctrine\ORM\EntityRepository;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
-use Symfony\Component\Form\Extension\Core\Type\NumberType;
+use Symfony\Component\Form\Extension\Core\Type\IntegerType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
@@ -29,9 +28,11 @@ class FeeAdjustmentType extends AbstractType
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
-        // Un ajuste entra como pronto el mes que viene: el de este mes ya puede ir en
-        // una remesa pasada o a punto de pasar.
-        $next = self::firstAllowedMonth();
+        $months = [
+            'choices' => self::monthChoices(),
+            'choice_value' => static fn (?\DateTimeInterface $month): ?string => $month?->format('Y-m'),
+            'invalid_message' => 'Como pronto, desde el mes que viene.',
+        ];
 
         $builder
             ->add('direction', ChoiceType::class, [
@@ -39,12 +40,10 @@ class FeeAdjustmentType extends AbstractType
                 'expanded' => true,
                 'constraints' => [new Assert\NotNull(message: 'Elige si paga de más o de menos.')],
             ])
-            ->add('amount', NumberType::class, [
-                'input' => 'string',
-                'scale' => 2,
-                'html5' => true,
-                // Las flechas suben de euro en euro; «any» deja escribir céntimos.
-                'attr' => ['step' => 'any', 'min' => '0.01', 'inputmode' => 'decimal'],
+            // Euros enteros: las flechas van de uno en uno y no se escriben céntimos.
+            ->add('amount', IntegerType::class, [
+                'attr' => ['step' => '1', 'min' => '1', 'inputmode' => 'numeric'],
+                'invalid_message' => 'Escribe euros enteros, sin céntimos.',
                 'constraints' => [
                     new Assert\NotBlank(message: 'Escribe cuánto.'),
                     new Assert\Positive(message: 'Escribe la cantidad sin signo: lo de más o de menos va arriba.'),
@@ -61,21 +60,27 @@ class FeeAdjustmentType extends AbstractType
                 'required' => false,
                 'placeholder' => '— para la asociación —',
             ])
-            ->add('fromMonth', MonthType::class, [
-                'min' => $next,
-                'constraints' => [
-                    new Assert\NotNull(message: 'Escribe desde qué mes.'),
-                    new Assert\GreaterThanOrEqual(value: $next, message: 'Como pronto, desde el mes que viene.'),
-                ],
-            ])
-            // Que no empiece antes de «desde» ya lo dice validate(); con eso, tampoco antes del mes que viene.
-            ->add('untilMonth', MonthType::class, ['min' => $next, 'required' => false]);
+            ->add('fromMonth', ChoiceType::class, $months + ['constraints' => [new Assert\NotNull(message: 'Elige desde qué mes.')]])
+            ->add('untilMonth', ChoiceType::class, $months + ['required' => false, 'placeholder' => 'sin fin']);
     }
 
-    /** El primer mes en que puede empezar un ajuste nuevo: el que viene. */
-    private static function firstAllowedMonth(): \DateTimeImmutable
+    /**
+     * Los meses que se pueden elegir, del que viene a tres años vista: un ajuste
+     * nuevo no entra en el mes en curso, que ya puede ir en una remesa. Al ser una
+     * lista cerrada, el servidor tampoco acepta otro mes.
+     *
+     * @return array<string, \DateTimeImmutable> «Diciembre 2026» => 2026-12-01
+     */
+    private static function monthChoices(): array
     {
-        return new \DateTimeImmutable('first day of next month midnight');
+        $format = new \IntlDateFormatter('es_ES', \IntlDateFormatter::NONE, \IntlDateFormatter::NONE, null, null, 'LLLL yyyy');
+        $next = new \DateTimeImmutable('first day of next month midnight');
+        $months = array_map(static fn (int $i): \DateTimeImmutable => $next->modify(sprintf('+%d months', $i)), range(0, 35));
+
+        return array_combine(
+            array_map(static fn (\DateTimeImmutable $m): string => mb_convert_case((string) $format->format($m), \MB_CASE_TITLE), $months),
+            $months,
+        );
     }
 
     public function configureOptions(OptionsResolver $resolver): void
