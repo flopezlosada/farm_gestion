@@ -28,6 +28,7 @@ use App\Service\Accounting\MonthNames;
 use App\Service\Accounting\Split\RepeatSplit;
 use App\Service\Accounting\Suggestion\CategorySuggester;
 use App\Service\Accounting\TransferRecorder;
+use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Knp\Component\Pager\PaginatorInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -579,34 +580,46 @@ class AccountingController extends AbstractController
             return $back;
         }
         $closed->assertOpen($entry->getDate());
-        $template = $repeat->templateFor($entry);
-        if ($template === null) {
-            $this->addFlash('warning', 'Ya no se puede partir igual: o ya está partido, o el importe no es el de la última vez.');
 
-            return $back;
-        }
-
-        $whole = $entry->getAmount();
-        try {
-            $parts = RepeatSplit::apply($entry, $template['parts']);
-        } catch (\InvalidArgumentException $e) {
-            $entry->setAmount($whole);
-            $this->addFlash('warning', $e->getMessage());
-
-            return $back;
-        }
-        foreach ($parts as $part) {
-            $part->setCreatedBy($this->currentUser());
-            $violations = $validator->validate($part);
-            if (\count($violations) > 0) {
-                $entry->setAmount($whole);
-                $this->addFlash('warning', (string) $violations[0]->getMessage());
-
-                return $back;
+        // Con el apunte bloqueado y releído: dos clics seguidos (o dos personas) verían
+        // los dos el apunte sin partir y lo partirían dos veces, y el libro sumaría la
+        // parte de más. El segundo espera aquí, relee el apunte ya partido y no hace nada.
+        $refused = $em->wrapInTransaction(function () use ($em, $entry, $repeat, $validator): ?string {
+            $em->refresh($entry, LockMode::PESSIMISTIC_WRITE);
+            $template = $repeat->templateFor($entry);
+            if ($template === null) {
+                return 'Ya no se puede partir igual: o ya está partido, o el importe no es el de la última vez.';
             }
-            $em->persist($part);
+
+            $whole = $entry->getAmount();
+            try {
+                $parts = RepeatSplit::apply($entry, $template['parts']);
+            } catch (\InvalidArgumentException $e) {
+                $entry->setAmount($whole);
+
+                return $e->getMessage();
+            }
+            foreach ($parts as $part) {
+                $part->setCreatedBy($this->currentUser());
+                $violations = $validator->validate($part);
+                if (\count($violations) > 0) {
+                    $entry->setAmount($whole);
+
+                    return (string) $violations[0]->getMessage();
+                }
+            }
+            foreach ($parts as $part) {
+                $em->persist($part);
+            }
+
+            // wrapInTransaction guarda y confirma al volver.
+            return null;
+        });
+        if ($refused !== null) {
+            $this->addFlash('warning', $refused);
+
+            return $back;
         }
-        $em->flush();
         $this->addFlash('success', sprintf('Partido como la última vez. Este apunte queda en %s €.', number_format(abs((float) $entry->getAmount()), 2, ',', '.')));
 
         return $back;

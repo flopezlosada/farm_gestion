@@ -122,6 +122,33 @@ class AccountEntrySplitTest extends AbstractAuthenticatedTest
         $this->assertSelectorTextContains('body', 'Partido de');
     }
 
+    /**
+     * El doble clic: el segundo envío del mismo formulario llega con el apunte ya
+     * partido y no crea otra parte; el libro sigue sumando lo que cobró el banco.
+     */
+    public function testPartirIgualDosVecesNoDuplicaLaParte(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        [$bank, $rent, $supplies] = $this->catalog();
+        $march = $this->entry($bank, $rent, '-158.95', '2090-03-01', 'trf.ayuntamiento de torremocha de jarama');
+        $this->em()->persist($march->splitOff('50.00', $supplies, 'Suministros del local'));
+        $april = $this->entry($bank, $rent, '-158.95', '2090-04-02', 'trf. ayuntamiento de torremocha de jarama');
+        $this->em()->flush();
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/entry/%d', $april->getId()));
+        $form = $crawler->filter('form[action$="/split-repeat"]')->form();
+        $client->submit($form);
+        $client->submit($form);
+        $this->assertResponseRedirects(sprintf('/gestion/accounting/entry/%d', $april->getId()));
+        $client->followRedirect();
+        $this->assertSelectorTextContains('body', 'Ya no se puede partir igual');
+
+        $this->em()->clear();
+        $this->assertSame('-108.95', $this->em()->find(AccountEntry::class, $april->getId())->getAmount());
+        $this->assertCount(1, $this->em()->getRepository(AccountEntry::class)->findBy(['splitFrom' => $april->getId()]));
+    }
+
     /** Lo que no vale no toca la base: ni el original baja ni aparece el hermano. */
     public function testUnPostQueNoValeNoParteNada(): void
     {
