@@ -7,23 +7,23 @@ use App\Service\Accounting\Agenda\AgendaUrgency;
 
 /**
  * Qué se avisa hoy de la portada de contabilidad. Sin estado: la memoria de lo ya
- * avisado la lleva el registro de efectos de la tarea, con la fecha que esta clase le
- * da a cada aviso.
+ * avisado la lleva el registro de efectos de la tarea; esta clase sólo decide, con la
+ * fecha del último aviso, si toca otro.
  *
  * Dos ritmos, para que el aviso no se acabe ignorando:
  * - Lo URGENTE (tiene plazo: notificación oficial, entrega a la gestoría, remesa que
- *   no ha entrado) avisa el día que aparece y otra vez en cada tramo de
- *   {@see self::URGENT_EVERY_DAYS} días mientras siga ahí. Una notificación oficial
- *   cuenta como notificada a los 10 días, así que en ese plazo insiste tres veces.
+ *   no ha entrado) avisa el día que aparece y otra vez cada
+ *   {@see self::URGENT_EVERY_DAYS} días desde el último aviso mientras siga ahí. Se
+ *   cuenta desde el último aviso y no por tramos fijos del calendario: con tramos, lo
+ *   que aparecía el último día de uno volvía a avisar al día siguiente. Una
+ *   notificación oficial cuenta como notificada a los 10 días, así que en ese plazo
+ *   insiste cuatro veces (al llegar y a los 3, 6 y 9 días).
  * - Lo demás (libro atrasado, facturas por revisar…) va en un solo resumen semanal.
  */
 final class AccountingWatchPlan
 {
     /** Cada cuántos días se repite el aviso de una tarea urgente que sigue sin resolver. */
     public const URGENT_EVERY_DAYS = 3;
-
-    /** Día fijo desde el que se cuentan los tramos; da igual cuál, mientras no cambie. */
-    private const EPOCH = '2026-01-01';
 
     /**
      * Las tareas que apremian.
@@ -50,22 +50,23 @@ final class AccountingWatchPlan
     }
 
     /**
-     * El primer día del tramo de {@see self::URGENT_EVERY_DAYS} días en que cae hoy.
-     * Es la fecha con la que se apunta el aviso urgente: dentro del tramo no se repite,
-     * en el siguiente sí.
+     * ¿Toca avisar hoy de una tarea urgente? Sí si nunca se avisó, o si desde el
+     * último aviso han pasado {@see self::URGENT_EVERY_DAYS} días. Se cuentan días de
+     * calendario en la zona de hoy: la hora del aviso anterior no cuenta.
      *
-     * @param \DateTimeImmutable $today Hoy.
+     * @param \DateTimeImmutable|null $lastAlert Cuándo se avisó por última vez, o null.
+     * @param \DateTimeImmutable      $today     Hoy.
      *
-     * @return \DateTimeImmutable
+     * @return bool
      */
-    public function urgentWindow(\DateTimeImmutable $today): \DateTimeImmutable
+    public function isUrgentDue(?\DateTimeImmutable $lastAlert, \DateTimeImmutable $today): bool
     {
-        $epoch = new \DateTimeImmutable(self::EPOCH, $today->getTimezone());
-        $day = $today->setTime(0, 0);
-        $days = (int) $epoch->diff($day)->format('%r%a');
-        $start = $days - (($days % self::URGENT_EVERY_DAYS) + self::URGENT_EVERY_DAYS) % self::URGENT_EVERY_DAYS;
+        if (null === $lastAlert) {
+            return true;
+        }
+        $next = $lastAlert->setTimezone($today->getTimezone())->setTime(0, 0)->modify(sprintf('+%d days', self::URGENT_EVERY_DAYS));
 
-        return $epoch->modify(sprintf('%+d days', $start));
+        return $today->setTime(0, 0) >= $next;
     }
 
     /**

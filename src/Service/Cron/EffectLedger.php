@@ -3,8 +3,10 @@
 namespace App\Service\Cron;
 
 use App\Entity\EmittedEffect;
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Doctrine\DBAL\ParameterType;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 
@@ -109,6 +111,35 @@ class EffectLedger
         }
 
         return true;
+    }
+
+    /**
+     * La fecha de negocio más reciente con que consta emitido cada efecto, para quien
+     * repite un aviso cada tantos días desde el anterior. Una sola consulta para todas
+     * las referencias.
+     *
+     * @param string        $kind       Clase de efecto.
+     * @param list<string>  $references Referencias que interesan.
+     * @param \DateTimeZone $zone       Zona en que se escribieron las fechas de negocio.
+     *
+     * @return array<string, \DateTimeImmutable> Por referencia; las que nunca se emitieron no están.
+     */
+    public function lastOccurrences(string $kind, array $references, \DateTimeZone $zone): array
+    {
+        if ($references === []) {
+            return [];
+        }
+
+        $rows = $this->connection()->fetchAllKeyValue(
+            'SELECT reference, MAX(occurred_on) FROM ' . self::TABLE . ' WHERE kind = ? AND reference IN (?) GROUP BY reference',
+            [$kind, array_values($references)],
+            [ParameterType::STRING, ArrayParameterType::STRING],
+        );
+
+        return array_map(
+            static fn (string $day): \DateTimeImmutable => \DateTimeImmutable::createFromFormat('!Y-m-d', $day, $zone),
+            $rows,
+        );
     }
 
     /**

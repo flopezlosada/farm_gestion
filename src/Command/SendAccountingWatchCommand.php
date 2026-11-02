@@ -72,16 +72,15 @@ class SendAccountingWatchCommand extends AbstractCronCommand
             return Command::SUCCESS;
         }
 
-        $window = $this->plan->urgentWindow($today);
         $sentUrgent = \count(array_filter(array_map(
             fn (AgendaItem $item): bool => $this->emitOnce(
                 AccountingWatchAlert::KIND_URGENT,
                 fn () => $this->alert->urgent($item),
                 $input,
                 $item->key(),
-                $window,
+                $today,
             ),
-            $urgent,
+            $this->dueUrgent($urgent, $today, (bool) $input->getOption('resend')),
         )));
 
         $sentWeekly = [] !== $weekly && $this->emitOnce(
@@ -100,5 +99,36 @@ class SendAccountingWatchCommand extends AbstractCronCommand
         $io->success($summary);
 
         return $this->didWork($summary);
+    }
+
+    /**
+     * Las tareas urgentes a las que hoy les toca aviso: las que nunca se avisaron y las
+     * que llevan {@see AccountingWatchPlan::URGENT_EVERY_DAYS} días desde el último,
+     * contando también el aviso que dio otro camino ({@see AgendaItem::$alertedOn}).
+     * Con --resend, todas. El último aviso de todas sale en una sola consulta.
+     *
+     * @param list<AgendaItem>   $urgent Las tareas urgentes de hoy.
+     * @param \DateTimeImmutable $today  Hoy.
+     * @param bool               $resend Si se pide repetirlos todos.
+     *
+     * @return list<AgendaItem>
+     */
+    private function dueUrgent(array $urgent, \DateTimeImmutable $today, bool $resend): array
+    {
+        if ($resend) {
+            return $urgent;
+        }
+        $last = $this->effectLedger->lastOccurrences(
+            AccountingWatchAlert::KIND_URGENT,
+            array_map(static fn (AgendaItem $item): string => $item->key(), $urgent),
+            $today->getTimezone(),
+        );
+
+        // max() con null delante o detrás devuelve la fecha (null es menor que cualquier
+        // objeto); con las dos, la más reciente.
+        return array_values(array_filter($urgent, fn (AgendaItem $item): bool => $this->plan->isUrgentDue(
+            max($last[$item->key()] ?? null, $item->alertedOn),
+            $today,
+        )));
     }
 }

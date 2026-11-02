@@ -21,6 +21,10 @@ final class AgendaItem
      * @param string|null          $identity    Lo que distingue la tarea en lugar del título,
      *                                          cuando éste lleva un dato que cambia sin que
      *                                          cambie la tarea (hasta dónde llega el libro).
+     * @param \DateTimeImmutable|null $alertedOn Cuándo se avisó ya de esta tarea por otro
+     *                                          camino (la notificación oficial avisa al
+     *                                          llegar): la vigilancia cuenta desde ahí y
+     *                                          no repite el aviso del mismo día.
      */
     public function __construct(
         public readonly AgendaUrgency $urgency,
@@ -31,6 +35,7 @@ final class AgendaItem
         public readonly ?string $fragment = null,
         public readonly array $actions = [],
         public readonly ?string $identity = null,
+        public readonly ?\DateTimeImmutable $alertedOn = null,
     ) {
     }
 
