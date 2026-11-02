@@ -349,6 +349,26 @@ class BasketShare
     }
 
     /**
+     * Cuántas cestas trae esta modalidad en un mes normal, si no van por semanas: dos la
+     * quincenal y una la mensual (compartidas incluidas). Null en las de cada semana y en
+     * solo huevos, que se cuentan por las semanas del mes.
+     *
+     * Sirve para cobrar un mes empezado a medias por las cestas que de verdad recibe:
+     * una quincenal que sólo recoge una paga la mitad, sea cual sea el viernes en que
+     * empezó.
+     *
+     * @return int|null Cestas al mes, o null si la cadencia es semanal.
+     */
+    public function getDeliveriesPerMonth(): ?int
+    {
+        return match (true) {
+            in_array($this->id, self::IDS_BIWEEKLY, true) => 2,
+            in_array($this->id, self::IDS_MONTHLY, true) => 1,
+            default => null,
+        };
+    }
+
+    /**
      * Peso en cestas FÍSICAS que esta modalidad reparte el día de la entrega:
      * solo-huevos (5) = 0 (no lleva verdura); compartidas (4/6/7) = ½ (dos
      * familias, una cesta); el resto = 1.
