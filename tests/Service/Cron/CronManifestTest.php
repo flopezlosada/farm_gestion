@@ -124,8 +124,10 @@ class CronManifestTest extends KernelTestCase
                 // no tenga interruptor —es el suelo, siempre activa— porque es
                 // justo lo que hay que saber antes de meter algo en `requires`:
                 // una tarea que entrega también por la bandeja NUNCA puede llevar
-                // ahí el ajuste de un canal suelto.
-                $this->assertContains($channel, ['email', 'push', 'inbox'], sprintf('Canal desconocido en "%s".', $key));
+                // ahí el ajuste de un canal suelto. 'telegram' es un mensaje del bot
+                // al chat de cada persona: sin interruptor propio, sale si el bot
+                // está configurado.
+                $this->assertContains($channel, ['email', 'push', 'inbox', 'telegram'], sprintf('Canal desconocido en "%s".', $key));
             }
 
             if ($meta['confirm']) {

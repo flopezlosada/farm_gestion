@@ -12,6 +12,8 @@
  # traspaso sin pareja nearbyLoose (mitades sueltas de otras cuentas cerca de su
  # fecha), pairable (los id de ésas que casan) y peerAccounts (cuentas donde anotar
  # la que falta). splitCategories: partidas para partir el apunte (vacío en un traspaso).
+ # parts: las partes que se separaron de él; repeatSplit: cómo se partió la última vez
+ # el mismo cargo ({previous, parts}), o null.
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -89,6 +91,17 @@
                     <dt>Traspaso</dt>
                     <dd>{{ entry.incoming ? 'desde' : 'hacia' }} <a href="{{ path('accounting_entry_show', { id: entry.transferPeer.id }) }}">{{ entry.transferPeer.account.name }}</a></dd>
                 {% endif %}
+                {% if entry.splitFrom %}
+                    <dt>Partido de</dt>
+                    <dd><a href="{{ path('accounting_entry_show', { id: entry.splitFrom.id }) }}">{{ entry.splitFrom.concept|u.truncate(60, '…', false) }}</a> ({{ fmt.money(entry.splitFrom.amount) }}): son el mismo movimiento del banco.</dd>
+                {% endif %}
+                {% if parts is not empty %}
+                    <dt>Partes</dt>
+                    <dd>
+                        {% for part in parts %}<a href="{{ path('accounting_entry_show', { id: part.id }) }}">{{ fmt.money(part.amount) }} a {{ part.category.name }}</a>{{ loop.last ? '' : ', ' }}{% endfor %}
+                        <span class="acc-muted">· del mismo movimiento del banco</span>
+                    </dd>
+                {% endif %}
                 {% if issuedInvoice %}
                     <dt>{{ issuedInvoice.rectifying ? 'Devolución de' : 'Cobro de' }}</dt>
                     <dd><a href="{{ path('accounting_issued_invoice_show', { id: issuedInvoice.id }) }}">la factura {{ issuedInvoice.numberLabel }}</a>{% if issuedInvoice.customer %} · {{ issuedInvoice.customer.name }}{% endif %}</dd>
@@ -139,6 +152,9 @@
                         <button type="submit" class="csa-btn csa-btn--ghost"><i class="fa fa-trash"></i> <span>{{ entry.pairedTransfer ? 'Borrar el traspaso' : 'Borrar' }}</span></button>
                     </form>
                 </div>
+                {% if repeatSplit %}
+                    {{ here.repeat_split(entry, repeatSplit) }}
+                {% endif %}
                 {% if splitCategories is not empty %}
                     {{ here.split_form(entry, splitCategories, invoice or issuedInvoice) }}
                 {% endif %}
@@ -151,6 +167,26 @@
     {% endif %}
 </div>
 {% endblock %}
+
+{# El mismo cargo se partió la última vez: se propone partirlo igual, con un clic. Es
+ # la regla de reparto, sacada del propio libro (RepeatSplit). #}
+{% macro repeat_split(entry, repeat) %}
+    {% import 'accounting/_money.html.twig' as fmt %}
+    <div class="csa-callout csa-callout--info ent-split">
+        <i class="csa-callout__icon fa fa-scissors"></i>
+        <div>
+            <p>
+                El <a href="{{ path('accounting_entry_show', { id: repeat.previous.id }) }}">{{ repeat.previous.date|date('d/m/Y') }}</a> este mismo cargo se partió:
+                {% for part in repeat.parts %}{{ fmt.money(part.amount|abs) }} a {{ part.category.name }} («{{ part.concept }}»){{ loop.last ? '.' : (loop.revindex == 2 ? ' y ' : ', ') }}{% endfor %}
+                Si se pulsa, se parte igual y este apunte baja en lo que se separa; el saldo no cambia.
+            </p>
+            <form method="post" action="{{ path('accounting_entry_split_repeat', { id: entry.id }) }}">
+                <input type="hidden" name="_token" value="{{ csrf_token('accounting_entry_split_repeat_' ~ entry.id) }}">
+                <button type="submit" class="csa-btn csa-btn--primary"><i class="fa fa-scissors"></i> <span>Partir igual que la última vez</span></button>
+            </form>
+        </div>
+    </div>
+{% endmacro %}
 
 {# Partir el apunte: un cargo del banco que junta dos cosas (el del Ayuntamiento:
  # alquiler con factura + suministros sin ella) se cuenta en dos partidas. Plegado,
