@@ -3,11 +3,11 @@
 namespace App\Form;
 
 use App\Entity\DonationInitiative;
+use App\Form\Type\MonthType;
 use Doctrine\ORM\EntityRepository;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
-use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\NumberType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
@@ -29,13 +29,9 @@ class FeeAdjustmentType extends AbstractType
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
-        $month = [
-            'widget' => 'single_text',
-            'html5' => false,
-            'format' => 'yyyy-MM',
-            'input' => 'datetime_immutable',
-            'attr' => ['type' => 'month', 'placeholder' => 'aaaa-mm'],
-        ];
+        // Un ajuste entra como pronto el mes que viene: el de este mes ya puede ir en
+        // una remesa pasada o a punto de pasar.
+        $next = self::firstAllowedMonth();
 
         $builder
             ->add('direction', ChoiceType::class, [
@@ -47,7 +43,8 @@ class FeeAdjustmentType extends AbstractType
                 'input' => 'string',
                 'scale' => 2,
                 'html5' => true,
-                'attr' => ['step' => '0.01', 'min' => '0.01', 'inputmode' => 'decimal'],
+                // Las flechas suben de euro en euro; «any» deja escribir céntimos.
+                'attr' => ['step' => 'any', 'min' => '0.01', 'inputmode' => 'decimal'],
                 'constraints' => [
                     new Assert\NotBlank(message: 'Escribe cuánto.'),
                     new Assert\Positive(message: 'Escribe la cantidad sin signo: lo de más o de menos va arriba.'),
@@ -64,8 +61,21 @@ class FeeAdjustmentType extends AbstractType
                 'required' => false,
                 'placeholder' => '— para la asociación —',
             ])
-            ->add('fromMonth', DateType::class, $month + ['constraints' => [new Assert\NotNull(message: 'Escribe desde qué mes.')]])
-            ->add('untilMonth', DateType::class, $month + ['required' => false]);
+            ->add('fromMonth', MonthType::class, [
+                'min' => $next,
+                'constraints' => [
+                    new Assert\NotNull(message: 'Escribe desde qué mes.'),
+                    new Assert\GreaterThanOrEqual(value: $next, message: 'Como pronto, desde el mes que viene.'),
+                ],
+            ])
+            // Que no empiece antes de «desde» ya lo dice validate(); con eso, tampoco antes del mes que viene.
+            ->add('untilMonth', MonthType::class, ['min' => $next, 'required' => false]);
+    }
+
+    /** El primer mes en que puede empezar un ajuste nuevo: el que viene. */
+    private static function firstAllowedMonth(): \DateTimeImmutable
+    {
+        return new \DateTimeImmutable('first day of next month midnight');
     }
 
     public function configureOptions(OptionsResolver $resolver): void

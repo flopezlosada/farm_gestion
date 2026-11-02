@@ -142,6 +142,43 @@ class FeeAdjustmentControllerTest extends AbstractAuthenticatedTest
         $this->assertSame([], $this->testAdjustments($partner));
     }
 
+    /** Este mes ya puede ir en una remesa: un ajuste nuevo empieza como pronto el que viene. */
+    public function testNoEmpiezaEsteMes(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $partner = $this->partner();
+
+        $client->request('GET', sprintf('/gestion/partner/%d/fee-adjustments/new', $partner->getId()));
+        $client->submitForm('Guardar ajuste', [
+            'fee_adjustment[direction]' => 'more',
+            'fee_adjustment[amount]' => '10',
+            'fee_adjustment[reason]' => 'TEST este mes',
+            'fee_adjustment[fromMonth]' => (new \DateTimeImmutable())->format('Y-m'),
+        ]);
+
+        $this->assertResponseStatusCodeSame(422);
+        $this->assertSelectorTextContains('main', 'Como pronto, desde el mes que viene.');
+        $this->assertSame([], $this->testAdjustments($partner));
+    }
+
+    /**
+     * Los meses se eligen con el selector del navegador y no deja antes del que viene;
+     * las flechas del importe van de euro en euro.
+     */
+    public function testElFormularioPintaSelectorDeMesYEuros(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $crawler = $client->request('GET', sprintf('/gestion/partner/%d/fee-adjustments/new', $this->partner()->getId()));
+        $next = (new \DateTimeImmutable('first day of next month'))->format('Y-m');
+
+        foreach (['fromMonth', 'untilMonth'] as $field) {
+            $input = $crawler->filter(sprintf('input[name="fee_adjustment[%s]"]', $field));
+            $this->assertSame('month', $input->attr('type'), $field);
+            $this->assertSame($next, $input->attr('min'), $field);
+        }
+        $this->assertSame('any', $crawler->filter('input[name="fee_adjustment[amount]"]')->attr('step'));
+    }
+
     public function testTerminarYQuitar(): void
     {
         $client = $this->createAuthenticatedClient();
