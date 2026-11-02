@@ -15,6 +15,7 @@ use App\Service\Accounting\Norma43\BankStatementImporter;
 use App\Service\Accounting\Norma43\BankStatementReader;
 use App\Service\Accounting\Norma43\Norma43Exception;
 use App\Service\Accounting\Norma43\StatementReviewer;
+use App\Service\Accounting\Suggestion\CategorySuggester;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -114,10 +115,14 @@ class BankStatementController extends AbstractController
 
     /** El cuadre de un extracto con el libro, como está hoy. */
     #[Route('/{id}', name: 'accounting_bank_statement_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(BankStatement $statement, StatementReviewer $reviewer): Response
+    public function show(BankStatement $statement, StatementReviewer $reviewer, CategorySuggester $suggester): Response
     {
+        $review = $reviewer->review($statement);
+
         return $this->render('accounting/bank_statement_show.html.twig', [
-            'review' => $reviewer->review($statement),
+            'review' => $review,
+            // La partida que se propondrá al anotar cada movimiento, para verlo de un vistazo.
+            'suggestions' => $suggester->forLines(array_column($review->unlinked, 'line')),
         ]);
     }
 

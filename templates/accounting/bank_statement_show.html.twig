@@ -129,6 +129,9 @@
                                     {% if can_edit %}
                                         <a class="prl-btn prl-btn--sm{{ row.candidates is empty ? ' prl-btn--primary' : '' }}" href="{{ path('accounting_entry_new', { bank_line: line.id, statement: s.id }) }}"><i class="fa fa-plus"></i> Anotar</a>
                                     {% endif %}
+                                    {% if suggestions[line.id] is defined %}
+                                        <span class="acc-small acc-muted">en {{ suggestions[line.id].category.name }}, como las últimas veces</span>
+                                    {% endif %}
                                 </td>
                             </tr>
                         {% endfor %}
