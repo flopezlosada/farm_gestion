@@ -110,6 +110,16 @@ class AccountEntry
     private ?AccountEntry $transferPeer = null;
 
     /**
+     * El proveedor al que se paga, en un gasto: la ficha, para que sus pagos (con
+     * factura o sin ella) salgan juntos en ella. Null en los ingresos (quien paga va en
+     * {@see $providerName}, que es lo que dice el banco) y en los gastos sin ficha.
+     *
+     * @ORM\ManyToOne(targetEntity="Provider")
+     * @ORM\JoinColumn(name="provider_id", nullable=true, onDelete="SET NULL")
+     */
+    private ?Provider $provider = null;
+
+    /**
      * El apunte del que se separó éste al partirlo ({@see splitOff()}): las dos partes
      * son un mismo movimiento del banco. Null en uno que no sale de partir otro. SET
      * NULL: si se borra el original, la parte se queda como apunte suelto.
@@ -320,6 +330,7 @@ class AccountEntry
      */
     public function completeFrom(AccountEntry $other): void
     {
+        $this->provider ??= $other->provider;
         $blank = static fn (?string $v): bool => $v === null || trim($v) === '';
         $this->providerName = $blank($this->providerName) ? $other->providerName : $this->providerName;
         $this->invoiceNumber = $blank($this->invoiceNumber) ? $other->invoiceNumber : $this->invoiceNumber;
@@ -373,6 +384,25 @@ class AccountEntry
     public function getSplitFrom(): ?AccountEntry
     {
         return $this->splitFrom;
+    }
+
+    public function getProvider(): ?Provider
+    {
+        return $this->provider;
+    }
+
+    /**
+     * El proveedor de un gasto. Al ponerlo, el nombre que se enseña pasa a ser el de su
+     * ficha: así el libro y las búsquedas dicen lo mismo que la ficha.
+     */
+    public function setProvider(?Provider $provider): self
+    {
+        $this->provider = $provider;
+        if ($provider !== null) {
+            $this->providerName = mb_substr((string) $provider->getName(), 0, 255);
+        }
+
+        return $this;
     }
 
     public function getNotes(): ?string

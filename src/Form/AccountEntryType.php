@@ -5,8 +5,10 @@ namespace App\Form;
 use App\Entity\AccountEntry;
 use App\Entity\BudgetCategory;
 use App\Entity\FinancialAccount;
+use App\Entity\Provider;
 use App\Repository\BudgetCategoryRepository;
 use App\Repository\FinancialAccountRepository;
+use App\Repository\ProviderRepository;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
@@ -87,11 +89,36 @@ class AccountEntryType extends AbstractType
                     new Assert\Positive(message: 'El importe se escribe en positivo; el signo lo pone «entra» o «sale».'),
                 ],
             ])
+            // Ingresos: quién paga, tal como lo dice el banco (a menudo no es la persona
+            // socia). Y en un gasto, el nombre si el proveedor no tiene ficha.
             ->add('providerName', TextType::class, ['required' => false])
             ->add('invoiceNumber', TextType::class, ['required' => false])
             // Sin botones: los pone cada plantilla. Este tipo va también incrustado al
             // confirmar una factura, donde sus botones sobraban y había que taparlos.
             ->add('notes', TextareaType::class, ['required' => false]);
+
+        // Gastos: la ficha del proveedor, para que sus pagos salgan juntos en ella. Al
+        // confirmar una factura no se ofrece: el proveedor lo elige la factura.
+        if ($options['with_provider']) {
+            $builder->add('provider', EntityType::class, [
+                'class' => Provider::class,
+                'choice_label' => 'name',
+                'query_builder' => static fn (ProviderRepository $r) => $r->createQueryBuilder('p')->orderBy('p.name', 'ASC'),
+                'required' => false,
+                'placeholder' => '— Sin ficha de proveedor —',
+            ]);
+
+            // Con ficha, el nombre del apunte es el de la ficha, aunque se haya tocado el
+            // texto. No vale confiar en setProvider: si la ficha no cambia, el formulario
+            // no lo llama. Y by_reference=false tampoco: clona la ficha, Doctrine no
+            // reconoce el clon y el desplegable revienta al abrir el apunte.
+            $builder->addEventListener(FormEvents::SUBMIT, static function (FormEvent $event): void {
+                $entry = $event->getData();
+                if ($entry instanceof AccountEntry && ($provider = $entry->getProvider()) !== null) {
+                    $entry->setProvider($provider);
+                }
+            });
+        }
 
         // Al abrir un apunte que ya trae importe —uno guardado, o uno propuesto a
         // partir de una factura—, deshace el signo para llenar las dos casillas.
@@ -121,7 +148,9 @@ class AccountEntryType extends AbstractType
     {
         $resolver->setDefaults([
             'data_class' => AccountEntry::class,
+            'with_provider' => true,
         ]);
+        $resolver->setAllowedTypes('with_provider', 'bool');
     }
 
     /**

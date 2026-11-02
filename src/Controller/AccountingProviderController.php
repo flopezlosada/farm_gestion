@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\Provider;
 use App\Form\AccountingProviderType;
+use App\Repository\AccountEntryRepository;
 use App\Repository\ProviderRepository;
 use App\Repository\ReceivedInvoiceRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -46,11 +47,38 @@ class AccountingProviderController extends AbstractController
      * La ficha: sus datos y sus facturas, cada una con su apunte.
      */
     #[Route('/{id}', name: 'accounting_provider_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(Provider $provider, ReceivedInvoiceRepository $invoices): Response
+    public function show(Provider $provider, ReceivedInvoiceRepository $invoices, AccountEntryRepository $entries): Response
     {
         return $this->render('accounting/provider_show.html.twig', [
             'provider' => $provider,
             'invoices' => $invoices->findConfirmedByProvider($provider),
+            'paymentsWithoutInvoice' => $entries->findWithoutInvoiceByProvider($provider),
+        ]);
+    }
+
+    /**
+     * Dar de alta un proveedor a mano: el que se paga sin factura (o antes de que
+     * llegue la primera) y por eso no ha nacido al confirmar una.
+     */
+    #[Route('/new', name: 'accounting_provider_new', methods: ['GET', 'POST'])]
+    #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
+    public function new(Request $request, EntityManagerInterface $em): Response
+    {
+        $provider = new Provider();
+        $form = $this->createForm(AccountingProviderType::class, $provider);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $em->persist($provider);
+            $em->flush();
+            $this->addFlash('success', sprintf('Proveedor dado de alta: %s. Ya se puede elegir al anotar un pago.', $provider->getName()));
+
+            return $this->redirectToRoute('accounting_provider_show', ['id' => $provider->getId()]);
+        }
+
+        return $this->render('accounting/provider_form.html.twig', [
+            'form' => $form->createView(),
+            'provider' => $provider,
         ]);
     }
 

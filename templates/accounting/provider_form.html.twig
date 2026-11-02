@@ -7,7 +7,7 @@
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
-{% block title %}{{ provider.name }} · Proveedores{% endblock %}
+{% block title %}{{ provider.id ? provider.name : 'Proveedor nuevo' }} · Proveedores{% endblock %}
 
 {% block csa_crumbs %}
     <a href="{{ path('dashboard') }}">Inicio</a>
@@ -16,11 +16,11 @@
     <span class="csa-topbar__crumbs-sep">/</span>
     <a href="{{ path('accounting_providers') }}">Proveedores</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <span class="csa-topbar__crumb-active">Cambiar</span>
+    <span class="csa-topbar__crumb-active">{{ provider.id ? 'Cambiar' : 'Nuevo' }}</span>
 {% endblock %}
 
 {% block csa_main %}
-    {{ csa.page_header('Contabilidad · Proveedores', provider.name, 'Lo que hace falta para reconocerle en una factura, pagarle y declararle.') }}
+    {{ csa.page_header('Contabilidad · Proveedores', provider.id ? provider.name : 'Proveedor nuevo', 'Lo que hace falta para reconocerle en una factura, pagarle y declararle.') }}
 
     {{ form_start(form, { attr: { class: 'csa-form-narrow' } }) }}
 
@@ -66,7 +66,7 @@
             <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
                 <div></div>
                 <div class="csa-row">
-                    {{ csa.btn('Cancelar', { variant: 'ghost', href: path('accounting_provider_show', { id: provider.id }) }) }}
+                    {{ csa.btn('Cancelar', { variant: 'ghost', href: provider.id ? path('accounting_provider_show', { id: provider.id }) : path('accounting_providers') }) }}
                     {{ form_widget(form.submit, { attr: { class: 'csa-btn csa-btn--primary' } }) }}
                 </div>
             </div>

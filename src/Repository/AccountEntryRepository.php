@@ -7,6 +7,7 @@ use App\Entity\BankStatementLine;
 use App\Entity\BudgetCategoryGroup;
 use App\Entity\FinancialAccount;
 use App\Entity\IssuedInvoice;
+use App\Entity\Provider;
 use App\Entity\ReceivedInvoice;
 use App\Entity\RemittanceReturn;
 use App\Service\Accounting\CashCount\DayBalances;
@@ -680,6 +681,25 @@ class AccountEntryRepository extends ServiceEntityRepository
             'before' => $opening + IssuedInvoice::toCents((string) $row['beforeFrom']),
             'through' => $opening + IssuedInvoice::toCents((string) $row['throughTo']),
         ];
+    }
+
+    /**
+     * Los apuntes con la ficha de un proveedor que no son el pago de ninguna factura
+     * recibida, los más recientes primero: lo que se le paga sin papel.
+     *
+     * @return list<AccountEntry>
+     */
+    public function findWithoutInvoiceByProvider(Provider $provider): array
+    {
+        return $this->createQueryBuilder('e')
+            ->leftJoin('e.category', 'c')->addSelect('c')
+            ->leftJoin(ReceivedInvoice::class, 'i', 'WITH', 'i.accountEntry = e')
+            ->andWhere('e.provider = :provider')->setParameter('provider', $provider)
+            ->andWhere('i.id IS NULL')
+            ->orderBy('e.date', 'DESC')
+            ->addOrderBy('e.id', 'DESC')
+            ->getQuery()
+            ->getResult();
     }
 
     /**

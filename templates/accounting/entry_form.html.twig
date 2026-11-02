@@ -50,7 +50,11 @@
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
-                        {{ csa.field(form.providerName, 'Proveedor') }}
+                        {% if form.provider is defined %}
+                            {{ csa.field(form.provider, 'Proveedor', { widget_class: 'csa-select', hint: 'en un gasto, su ficha' }) }}
+                            <p class="acc-small acc-muted">¿No está? <a href="{{ path('accounting_provider_new') }}" target="_blank" rel="noopener">Dalo de alta</a> y vuelve a cargar esta página.</p>
+                        {% endif %}
+                        {{ csa.field(form.providerName, 'Quién paga, o proveedor sin ficha', { hint: 'en un ingreso, lo que dice el banco' }) }}
                         {{ csa.field(form.invoiceNumber, 'Nº de factura') }}
                         {{ csa.field(form.notes, 'Notas', { full: true, widget_class: 'csa-textarea' }) }}
                     </div>

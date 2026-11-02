@@ -50,7 +50,7 @@ class ReceivedInvoiceConfirmType extends AbstractType
         $builder
             // Sin mapear, el validador no recorre el apunte por su cuenta (sólo valida
             // los datos del formulario raíz): Valid le aplica las reglas de la entidad.
-            ->add('entry', AccountEntryType::class, ['mapped' => false, 'data' => $options['entry'], 'constraints' => [new Assert\Valid()]])
+            ->add('entry', AccountEntryType::class, ['mapped' => false, 'data' => $options['entry'], 'with_provider' => false, 'constraints' => [new Assert\Valid()]])
             ->add('provider', EntityType::class, [
                 'class' => Provider::class,
                 'mapped' => false,

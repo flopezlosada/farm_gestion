@@ -107,10 +107,10 @@
                     <dd><a href="{{ path('accounting_issued_invoice_show', { id: issuedInvoice.id }) }}">la factura {{ issuedInvoice.numberLabel }}</a>{% if issuedInvoice.customer %} · {{ issuedInvoice.customer.name }}{% endif %}</dd>
                 {% endif %}
                 {% if entry.providerName %}
-                    <dt>Proveedor</dt>
+                    <dt>{{ entry.incoming ? 'Quién paga' : 'Proveedor' }}</dt>
                     <dd>
-                        {% if invoice and invoice.provider %}
-                            <a href="{{ path('accounting_provider_show', { id: invoice.provider.id }) }}">{{ entry.providerName }}</a>
+                        {% if entry.provider or (invoice and invoice.provider) %}
+                            <a href="{{ path('accounting_provider_show', { id: (entry.provider ?? invoice.provider).id }) }}">{{ entry.providerName }}</a>
                         {% else %}
                             {{ entry.providerName }}
                         {% endif %}
