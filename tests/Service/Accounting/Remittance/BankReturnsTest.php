@@ -7,8 +7,10 @@ use App\Entity\Remittance;
 use App\Entity\RemittanceLine;
 use App\Entity\RemittanceReturn;
 use App\Repository\AccountEntryRepository;
+use App\Repository\RemittanceRepository;
 use App\Repository\RemittanceReturnRepository;
 use App\Service\Accounting\Remittance\BankReturns;
+use App\Service\Accounting\Remittance\RemittanceCredits;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -31,27 +33,28 @@ class BankReturnsTest extends TestCase
     }
 
     /**
-     * Las devoluciones de los lotes abonados en el mes de la remesa, menos las ya
-     * ligadas. La de un lote de otro mes no es de esta remesa.
+     * Las devoluciones de los lotes de la remesa, menos las ya ligadas. La de un lote de
+     * otro mes no es de esta remesa, ni la de un cobro suelto de otro día del mismo mes.
      */
-    public function testSonLasDevolucionesDeLosLotesDelMesSinLigar(): void
+    public function testSonLasDevolucionesDeLosLotesDeLaRemesaSinLigar(): void
     {
         $credits = [$this->entry('2026-08-04', '97.00', 'ab.rem.20260015586'), $this->entry('2026-08-18', '7417.40', 'ab.rem.20260016561')];
         $linked = $this->entry('2026-08-19', '-36.00', 'bel-liq.rem.devol20260016561');
         $open = $this->entry('2026-08-19', '-55.00', 'bel-liq.rem.devol20260016561');
         $july = $this->entry('2026-08-02', '-97.00', 'bel-liq.rem.devol20260014500');
+        $loose = $this->entry('2026-08-06', '-97.00', 'bel-liq.rem.devol20260015586');
 
         $entries = $this->createMock(AccountEntryRepository::class);
-        $entries->method('findByConceptPrefix')->willReturnCallback(function (string $prefix, \DateTimeInterface $from, \DateTimeInterface $to) use ($credits, $linked, $open, $july): array {
+        $entries->method('findByConceptPrefix')->willReturnCallback(function (string $prefix, \DateTimeInterface $from, \DateTimeInterface $to) use ($credits, $linked, $open, $july, $loose): array {
             $this->assertSame('2026-08-01', $from->format('Y-m-d'));
             $this->assertSame($prefix === BankReturns::CREDIT_PREFIX ? '2026-08-31' : '2026-09-30', $to->format('Y-m-d'));
 
-            return $prefix === BankReturns::CREDIT_PREFIX ? $credits : [$july, $linked, $open];
+            return $prefix === BankReturns::CREDIT_PREFIX ? $credits : [$july, $loose, $linked, $open];
         });
         $returns = $this->createMock(RemittanceReturnRepository::class);
         $returns->expects($this->once())->method('findLinkedEntryIds')->with([$linked, $open])->willReturn([$linked->getId()]);
 
-        $found = (new BankReturns($entries, $returns))->unlinkedFor($this->remittance([]));
+        $found = $this->bankReturns($entries, $returns)->unlinkedFor($this->remittance([$this->line('ZZTEST RESTO', '7472.40')]));
 
         $this->assertSame([$open], $found);
     }
@@ -63,7 +66,7 @@ class BankReturnsTest extends TestCase
         $returns = $this->createMock(RemittanceReturnRepository::class);
         $returns->expects($this->never())->method('findLinkedEntryIds');
 
-        $this->assertSame([], (new BankReturns($entries, $returns))->unlinkedFor($this->remittance([])));
+        $this->assertSame([], $this->bankReturns($entries, $returns)->unlinkedFor($this->remittance([])));
     }
 
     /** Para una devolución de 55, los recibos de 55 que no estén ya devueltos. */
@@ -82,6 +85,12 @@ class BankReturnsTest extends TestCase
     }
 
     /** @param list<RemittanceLine> $lines */
+    /** Las devoluciones con los lotes calculados de verdad sobre el mismo libro simulado. */
+    private function bankReturns(AccountEntryRepository $entries, RemittanceReturnRepository $returns): BankReturns
+    {
+        return new BankReturns($entries, $returns, new RemittanceCredits($this->createStub(RemittanceRepository::class), $entries, $returns));
+    }
+
     private function remittance(array $lines): Remittance
     {
         return Remittance::fromImport(Remittance::KIND_BASKET, new \DateTimeImmutable('2026-08-01'), 'Recibos AGOSTO 2026', 'agosto.xlsx', $lines, null);
