@@ -109,8 +109,9 @@ final class FeeStatement
     /**
      * Si no se le cobra nada porque todas sus cestas son de trabajador, gratis, y no
      * tiene ajustes ni cuotas de socix que sumen. No es un recibo que falle: es que no
-     * hay recibo. Con mantenimiento o inscripción sí hay recibo: esas cuotas son del
-     * hogar, no de la cesta.
+     * hay recibo. Un hogar con todas sus cestas así no paga inscripción ni mantenimiento
+     * ({@see MonthlyFeeCalculator::compute()}); si las tiene es porque el hogar paga
+     * otra cesta, y entonces sí hay recibo.
      */
     public function isFree(): bool
     {

@@ -46,7 +46,8 @@ use Doctrine\ORM\EntityManagerInterface;
  * nunca; no se guarda quién la pagó.
  *
  * La cesta de quien trabaja en la asociación no se cobra las semanas que trabajaba, ni
- * tras su baja si se decidió regalársela ({@see Worker::basketWeek()}).
+ * tras su baja si se decidió regalársela ({@see Worker::basketWeek()}). Si todas las
+ * cestas de su hogar ese mes son gratis así, tampoco paga inscripción ni mantenimiento.
  *
  * Las semanas cerradas por un festivo o los cambios puntuales de una semana NO
  * descuentan: la cuota es mensual y se paga por la cesta, no por cada reparto.
@@ -131,7 +132,8 @@ class MonthlyFeeCalculator
             return $statements[MonthlyFees::keyOf($payer)] ??= new FeeStatement($payer);
         };
 
-        $charged = [];
+        /** @var array<string, array{0: Partner, 1: FeeStatement, 2: bool}> $households hogar, recibo de su primera cesta del mes, si alguna se cobra */
+        $households = [];
         foreach ($shares as $share) {
             $partner = $share->getPartner();
             $own = MonthlyFees::keyOf($partner);
@@ -142,15 +144,21 @@ class MonthlyFeeCalculator
             $statement = $statementFor($share->getEffectivePayer()->getFamilyHead());
             $statement->addLine($line);
 
-            // Las cuotas de socix, una vez por hogar, en el recibo de su primera cesta del mes.
             $household = $partner->getFamilyHead();
             $key = MonthlyFees::keyOf($household);
-            if (!isset($charged[$key])) {
-                $charged[$key] = true;
-                foreach (self::membershipConcepts($month, \in_array($household->getId(), $newHouseholds, true)) as $concept) {
-                    $price = $schedule->rateOn($concept, $month)?->getPrice();
-                    $statement->addCharge(new FeeCharge($concept, $household, $price !== null ? IssuedInvoice::toCents($price) : null));
-                }
+            $households[$key] ??= [$household, $statement, false];
+            $households[$key][2] = $households[$key][2] || !$line->isFree();
+        }
+
+        // Las cuotas de socix, una vez por hogar, en el recibo de su primera cesta del mes.
+        // Un hogar cuyas cestas del mes son todas de trabajador, gratis, no las paga.
+        foreach ($households as [$household, $statement, $paying]) {
+            if (!$paying) {
+                continue;
+            }
+            foreach (self::membershipConcepts($month, \in_array($household->getId(), $newHouseholds, true)) as $concept) {
+                $price = $schedule->rateOn($concept, $month)?->getPrice();
+                $statement->addCharge(new FeeCharge($concept, $household, $price !== null ? IssuedInvoice::toCents($price) : null));
             }
         }
         foreach ($adjustments as $adjustment) {
