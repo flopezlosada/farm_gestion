@@ -45,13 +45,13 @@ class ProviderRepository extends ServiceEntityRepository
     public function findWithYearTotals(int $year): array
     {
         $rows = $this->createQueryBuilder('p')
-            // La fecha es la de la factura o, si no se leyó, la del apunte: el mismo
-            // criterio que la entrega a la gestoría. Va dentro de la suma y no en el
+            // La fecha es la de anotación si llegó tarde, la de la factura o, si no se
+            // leyó, la del apunte: el mismo criterio que la entrega a la gestoría. Va dentro de la suma y no en el
             // WHERE para que los proveedores sin facturas en el año sigan saliendo.
             ->select(
                 'p AS provider',
-                'SUM(CASE WHEN COALESCE(i.invoiceDate, e.date) BETWEEN :from AND :to THEN 1 ELSE 0 END) AS invoices',
-                'SUM(CASE WHEN COALESCE(i.invoiceDate, e.date) BETWEEN :from AND :to THEN i.total ELSE 0 END) AS total',
+                'SUM(CASE WHEN COALESCE(i.bookedOn, i.invoiceDate, e.date) BETWEEN :from AND :to THEN 1 ELSE 0 END) AS invoices',
+                'SUM(CASE WHEN COALESCE(i.bookedOn, i.invoiceDate, e.date) BETWEEN :from AND :to THEN i.total ELSE 0 END) AS total',
             )
             ->leftJoin(ReceivedInvoice::class, 'i', 'WITH', 'i.provider = p AND i.status = :confirmed')
             ->leftJoin('i.accountEntry', 'e')
