@@ -35,7 +35,7 @@
     {{ csa.page_header(
         'Contabilidad',
         'Proveedores',
-        'A quién se le compra y cuánto en ' ~ year ~ ', según las facturas subidas: un pago del libro sin su factura no suma aquí. Se dan de alta solos al confirmar una factura con CIF.'
+        'A quién se le compra y cuánto en ' ~ year ~ ', según las facturas subidas: un pago del libro sin su factura no suma aquí. Se dan de alta solos al confirmar una factura con CIF, o a mano para los que se pagan sin factura.'
     ) }}
 
     <div class="prl-stats">
@@ -56,6 +56,9 @@
             <a href="{{ path('accounting_providers', { year: year + 1 }) }}" class="prl-btn" title="Año siguiente"><i class="fa fa-chevron-right"></i></a>
         </div>
         <div class="spacer"></div>
+        {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+            <a href="{{ path('accounting_provider_new') }}" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Proveedor nuevo</a>
+        {% endif %}
         <a href="{{ path('accounting_invoices') }}" class="prl-btn"><i class="fa fa-file-text-o"></i> Facturas</a>
     </div>
 

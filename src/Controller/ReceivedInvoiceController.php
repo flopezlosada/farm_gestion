@@ -186,6 +186,8 @@ class ReceivedInvoiceController extends AbstractController
             $entry->setCreatedBy($this->currentUser());
             $confirmed = $this->confirmOnce($em, $invoices, [$invoice, ...$others], static function () use ($em, $invoice, $entry, $match, $others, $providers, $chosen): void {
                 $provider = $providers->resolve($invoice, $entry, $chosen);
+                // El pago queda con la ficha del proveedor: así sale en ella con o sin factura.
+                $entry->setProvider($provider);
                 if ($match !== null) {
                     // El pago ya estaba en el libro: la factura lo explica, no lo repite.
                     // Si paga también otras del mismo proveedor, van con ella.

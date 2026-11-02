@@ -2,7 +2,8 @@
  # La ficha de un proveedor: sus datos y sus facturas anotadas, cada una con el
  # apunte en que se convirtió.
  #
- # El controller pasa: provider, invoices.
+ # El controller pasa: provider, invoices, paymentsWithoutInvoice (sus apuntes sin
+ # factura: gastos con su ficha y sin factura enlazada).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -85,6 +86,32 @@
             </table>
         {% endif %}
     </div>
+
+    {% if paymentsWithoutInvoice is not empty %}
+        <h2 class="acc-subhead">Pagos sin factura <span class="count">{{ paymentsWithoutInvoice|length }}</span></h2>
+        <div class="prl-table-wrap">
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th class="tight">Fecha</th>
+                        <th>Concepto</th>
+                        <th class="tight">Partida</th>
+                        <th class="tight acc-num">Importe</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in paymentsWithoutInvoice %}
+                        <tr>
+                            <td class="tight">{{ entry.date|date('d/m/Y') }}</td>
+                            <td><a href="{{ path('accounting_entry_show', { id: entry.id }) }}">{{ entry.concept }}</a></td>
+                            <td class="tight">{{ entry.category ? entry.category.name : '—' }}</td>
+                            <td class="acc-num">{{ fmt.money(entry.amount) }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
 
 </div>
 {% endblock %}

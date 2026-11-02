@@ -145,6 +145,7 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $this->assertNotNull($invoice->getProvider(), 'Con CIF, la factura queda enlazada a su proveedor.');
         $this->assertSame('Ferretería Torrelaguna', $invoice->getProvider()->getName(), 'Un proveedor nuevo nace con el nombre del apunte.');
         $this->assertSame(self::TAX_ID, $invoice->getProvider()->getTaxId());
+        $this->assertSame($invoice->getProvider()->getId(), $entry->getProvider()?->getId(), 'El pago queda con la ficha del proveedor.');
 
         // Ya anotada se enseña tal como quedó, sin formulario con que crear otro apunte.
         $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
