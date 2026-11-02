@@ -2,6 +2,7 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\AccountantDelivery;
 use App\Entity\AccountEntry;
 use App\Entity\BudgetCategory;
 use App\Entity\BudgetCategoryGroup;
@@ -9,7 +10,9 @@ use App\Entity\FinancialAccount;
 use App\Entity\Provider;
 use App\Entity\ReceivedInvoice;
 use App\Entity\Setting;
+use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\ExtractedInvoice;
+use App\Service\Accounting\Invoice\InvoiceQuarter;
 use App\Service\AppSettings;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -38,10 +41,21 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
     /** @var list<int> Proveedores creados a mano, también los que no llevan CIF. */
     private array $providersToRemove = [];
 
+    /** @var list<int> Trimestres dados por entregados; se quitan antes que nada, o la red no deja borrar. */
+    private array $deliveries = [];
+
     protected function tearDown(): void
     {
         $em = static::getContainer()->get(EntityManagerInterface::class);
         $em->clear();
+
+        foreach ($this->deliveries as $id) {
+            if (($delivery = $em->find(AccountantDelivery::class, $id)) !== null) {
+                $em->remove($delivery);
+            }
+        }
+        $em->flush();
+        static::getContainer()->get(ClosedPeriods::class)->reset();
 
         foreach ($em->getRepository(ReceivedInvoice::class)->findBy(['originalName' => ['factura-prueba.pdf', 'apuntes.txt', 'siguiente.pdf']]) as $invoice) {
             $entry = $invoice->getAccountEntry();
@@ -355,6 +369,44 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $this->assertSame('-987.65', $invoice->getAccountEntry()->getAmount());
         $this->assertSame('trf. ferreteria torrelaguna', $invoice->getAccountEntry()->getConcept(), 'El concepto es del banco.');
         $this->assertSame('2232', $invoice->getAccountEntry()->getInvoiceNumber(), 'Lo que le faltaba lo completa la factura.');
+    }
+
+    /**
+     * Una factura que llega cuando su trimestre (y el de su pago) ya se entregó a la
+     * gestoría: se engancha al pago sin tocarlo, que se entregó tal cual, y va en el
+     * paquete del trimestre de hoy. El aviso lo dice.
+     */
+    public function testUnaFacturaQueLlegaTardeVaAlPaqueteDeHoy(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $invoice = $this->uploadOne($client);
+        $this->createCatalogue();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $invoice = $em->find(ReceivedInvoice::class, $invoice->getId());
+        $invoice->markRead(ExtractedInvoice::fromArray([
+            'fecha' => '2091-03-05', 'total' => 987.65, 'proveedor' => 'Ferretería Torrelaguna', 'numero_factura' => '2232',
+        ]), 'test', $this->category, new \DateTimeImmutable());
+        $bank = (new AccountEntry())->setAccount($this->account)->setCategory($this->category)
+            ->setDate(new \DateTimeImmutable('2091-03-09'))->setConcept('trf. ferreteria torrelaguna')->setAmount('-987.65');
+        $em->persist($bank);
+        $delivery = new AccountantDelivery(InvoiceQuarter::of(2091, 1), null, new \DateTimeImmutable('2091-04-03'));
+        $em->persist($delivery);
+        $em->flush();
+        $this->deliveries[] = $delivery->getId();
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
+        $client->submit($crawler->filter('form[name="received_invoice_confirm"]')->form());
+        $this->assertResponseRedirects();
+        $client->followRedirect();
+
+        $today = new \DateTimeImmutable('today');
+        $this->assertSelectorTextContains('body', sprintf('va en el paquete del %s', InvoiceQuarter::containing($today)->label()));
+        $invoice = $this->findInvoice('factura-prueba.pdf');
+        $this->assertSame(ReceivedInvoice::STATUS_CONFIRMED, $invoice->getStatus());
+        $this->assertSame($bank->getId(), $invoice->getAccountEntry()?->getId());
+        $this->assertSame($today->format('Y-m-d'), $invoice->getBookedOn()?->format('Y-m-d'));
+        $this->assertNull($invoice->getAccountEntry()->getInvoiceNumber(), 'El pago de un trimestre entregado no se toca.');
     }
 
     /**

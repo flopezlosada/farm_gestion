@@ -221,7 +221,8 @@ class ReceivedInvoiceRepository extends ServiceEntityRepository
     /**
      * Las facturas anotadas cuya fecha cae entre dos días, ambos incluidos, en orden
      * de fecha: lo que se le entrega a la gestoría de un trimestre. La fecha es la de
-     * la factura (la que manda para el IVA); si no se leyó, la del apunte.
+     * {@see ReceivedInvoice::packageDate()}: la de anotación si llegó tarde a un
+     * trimestre ya entregado; si no, la de la factura o, si no se leyó, la del apunte.
      *
      * Trae en la misma consulta el proveedor, el desglose de IVA, el apunte y su
      * partida, que es todo lo que pide el libro de facturas.
@@ -236,7 +237,7 @@ class ReceivedInvoiceRepository extends ServiceEntityRepository
             ->leftJoin('i.accountEntry', 'e')->addSelect('e')
             ->leftJoin('e.category', 'c')->addSelect('c')
             ->andWhere('i.status = :confirmed')
-            ->andWhere('COALESCE(i.invoiceDate, e.date) BETWEEN :from AND :to')
+            ->andWhere('COALESCE(i.bookedOn, i.invoiceDate, e.date) BETWEEN :from AND :to')
             ->setParameter('confirmed', ReceivedInvoice::STATUS_CONFIRMED)
             ->setParameter('from', $from->format('Y-m-d'))
             ->setParameter('to', $to->format('Y-m-d'))

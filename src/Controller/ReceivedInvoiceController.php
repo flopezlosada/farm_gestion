@@ -12,11 +12,13 @@ use App\Form\ReceivedInvoiceUploadType;
 use App\Repository\AccountEntryRepository;
 use App\Repository\BudgetCategoryRepository;
 use App\Repository\ReceivedInvoiceRepository;
+use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\GroupedPaymentFinder;
 use App\Service\Accounting\Invoice\InvoiceDataWarnings;
 use App\Service\Accounting\Invoice\InvoiceEntryDraft;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\Invoice\InvoiceProviderResolver;
+use App\Service\Accounting\Invoice\InvoiceQuarter;
 use App\Service\Accounting\Invoice\InvoiceReadQueue;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -134,6 +136,7 @@ class ReceivedInvoiceController extends AbstractController
         AccountEntryRepository $entries,
         GroupedPaymentFinder $groupedPayments,
         InvoiceDataWarnings $dataWarnings,
+        ClosedPeriods $closed,
     ): Response {
         if (!$invoice->isOpen()) {
             // Anotada o descartada ya no se revisa: se enseña tal como quedó. Un envío
@@ -184,21 +187,29 @@ class ReceivedInvoiceController extends AbstractController
             $match = $form->has('match') ? $form->get('match')->getData() : null;
             $others = $match !== null ? ($othersByPayment[$match->getId()] ?? []) : [];
             $entry->setCreatedBy($this->currentUser());
-            $confirmed = $this->confirmOnce($em, $invoices, [$invoice, ...$others], static function () use ($em, $invoice, $entry, $match, $others, $providers, $chosen): void {
+            $today = new \DateTimeImmutable('today');
+            $late = static fn (ReceivedInvoice $i): bool => $i->packageDate() !== null && $closed->closingDeliveryFor($i->packageDate()) !== null;
+            $confirmed = $this->confirmOnce($em, $invoices, [$invoice, ...$others], static function () use ($em, $invoice, $entry, $match, $others, $providers, $chosen, $closed, $late, $today): void {
                 $provider = $providers->resolve($invoice, $entry, $chosen);
                 if ($match !== null) {
                     // El pago ya estaba en el libro: la factura lo explica, no lo repite.
-                    // Si paga también otras del mismo proveedor, van con ella.
-                    $match->completeFrom($entry);
+                    // Si paga también otras del mismo proveedor, van con ella. Un pago de
+                    // un trimestre ya entregado no se toca: se entregó tal cual.
+                    if ($match->getDate() === null || $closed->closingDeliveryFor($match->getDate()) === null) {
+                        $match->completeFrom($entry);
+                    }
                     $invoice->confirm($match, $provider);
                     foreach ($others as $other) {
                         $other->confirmAlongside($match, $provider);
                     }
-
-                    return;
+                } else {
+                    $invoice->confirm($entry, $provider);
+                    $em->persist($entry);
                 }
-                $invoice->confirm($entry, $provider);
-                $em->persist($entry);
+                // La que llega tarde a un trimestre entregado va en el de hoy.
+                foreach (array_filter([$invoice, ...$others], $late) as $lateInvoice) {
+                    $lateInvoice->bookLate($today);
+                }
             });
             if (!$confirmed) {
                 $this->addFlash('warning', $others === []
@@ -212,6 +223,12 @@ class ReceivedInvoiceController extends AbstractController
                 $match !== null => sprintf('Enganchada al pago que ya estaba en el libro: %s.', $match->getConcept()),
                 default => sprintf('Anotado: %s.', $entry->getConcept()),
             };
+            if ($invoice->getBookedOn() !== null) {
+                $done .= sprintf(
+                    ' Su trimestre ya se entregó a la gestoría: va en el paquete del %s.',
+                    InvoiceQuarter::containing($invoice->getBookedOn())->label(),
+                );
+            }
 
             // Quien confirma suele ir una tras otra: la siguiente lista para revisar.
             // El aviso lo dice, porque habla de la factura anterior y la pantalla ya

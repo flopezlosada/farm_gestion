@@ -157,6 +157,17 @@ class ReceivedInvoice
     private ?\DateTimeImmutable $invoiceDate = null;
 
     /**
+     * El día en que se anotó una factura que llegó tarde, cuando el trimestre de su
+     * fecha ya se había entregado a la gestoría. Null en las demás. Es lo que la pone
+     * en el paquete del trimestre siguiente en vez de en el entregado: la recibida se
+     * declara en el periodo en que se recibe (art. 99 LIVA, hasta 4 años) y la gestoría
+     * no rehace un trimestre presentado.
+     *
+     * @ORM\Column(name="booked_on", type="date_immutable", nullable=true)
+     */
+    private ?\DateTimeImmutable $bookedOn = null;
+
+    /**
      * @ORM\Column(name="provider_name", type="string", length=150, nullable=true)
      */
     private ?string $providerName = null;
@@ -427,6 +438,7 @@ class ReceivedInvoice
     public function reopen(): void
     {
         $this->accountEntry = null;
+        $this->bookedOn = null;
         $this->status = $this->readAt !== null ? self::STATUS_READ : self::STATUS_UNREADABLE;
     }
 
@@ -517,6 +529,37 @@ class ReceivedInvoice
     public function getInvoiceDate(): ?\DateTimeImmutable
     {
         return $this->invoiceDate;
+    }
+
+    /** El día en que se anotó, si llegó tarde a un trimestre ya entregado; si no, null. */
+    public function getBookedOn(): ?\DateTimeImmutable
+    {
+        return $this->bookedOn;
+    }
+
+    /**
+     * La fecha que la sitúa en el paquete de la gestoría: la de anotación si llegó
+     * tarde; si no, la de la factura o, sin ella, la de su apunte.
+     */
+    public function packageDate(): ?\DateTimeInterface
+    {
+        return $this->bookedOn ?? $this->invoiceDate ?? $this->accountEntry?->getDate();
+    }
+
+    /**
+     * Llegó tarde: el trimestre de su fecha ya se entregó y va en el paquete del
+     * trimestre de hoy. Sólo al confirmarla, que es cuando entra en un paquete.
+     *
+     * @param \DateTimeImmutable $on El día en que se anota.
+     *
+     * @throws \LogicException Si no está confirmada.
+     */
+    public function bookLate(\DateTimeImmutable $on): void
+    {
+        if ($this->status !== self::STATUS_CONFIRMED) {
+            throw new \LogicException('Sólo una factura confirmada va en un paquete.');
+        }
+        $this->bookedOn = $on->setTime(0, 0);
     }
 
     public function getProviderName(): ?string
