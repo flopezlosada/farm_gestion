@@ -112,6 +112,38 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * Si el mes anterior el mismo concepto se anotó en una partida, el extracto lo dice
+     * y «Anotar» llega con esa partida puesta.
+     */
+    public function testAnotarProponeLaPartidaDeLasUltimasVeces(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
+        $number = sprintf('%010d', random_int(0, 9_999_999_999));
+        $this->account = $this->bankAccount($number);
+        $category = $this->category();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $em->persist((new AccountEntry())->setAccount($em->find(FinancialAccount::class, $this->account->getId()))
+            ->setCategory($em->find(BudgetCategory::class, $category->getId()))
+            ->setDate(new \DateTimeImmutable('2091-03-05'))->setConcept('rcbo.caymuz, s.l.')->setAmount('-170.00'));
+        $em->flush();
+        $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
+        $form = $crawler->filter('form.inv-upload')->form();
+        $form['file']->upload($this->tempFile(N43::file(N43::account('9999', '0001', $number, '910401', '910430', 50000, [
+            ['910405', -17000, ['RCBO.CAYMUZ SL']],
+        ]))));
+        $client->submit($form);
+        $crawler = $client->followRedirect();
+        $this->assertSelectorTextContains('#sin-apunte', sprintf('en %s, como las últimas veces', $category->getName()));
+
+        $crawler = $client->click($crawler->selectLink('Anotar')->link());
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSame((string) $category->getId(), $crawler->filter('#account_entry_category option[selected]')->attr('value'));
+        $this->assertSelectorTextContains('body', 'porque el último apunte con el mismo concepto la llevaba');
+    }
+
+    /**
      * Un movimiento cuyo único apunte posible se anotó a 5 días (no se liga solo) sale
      * en la portada como pregunta; «Sí, es ése» los liga y vuelve a la portada.
      */

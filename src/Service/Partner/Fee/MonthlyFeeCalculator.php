@@ -41,9 +41,10 @@ use Doctrine\ORM\EntityManagerInterface;
  * junio y diciembre, si ese mes tiene alguna cesta que cobrar. Van en el recibo de quien
  * paga la primera cesta del hogar (por id, para que no dependa del orden de la base).
  * Las cestas importadas sin fecha de inicio son de hogares de antes: nunca pagan
- * inscripción. Límite conocido: si el mes de la primera cesta no tiene ningún reparto
- * que cobrar (empieza tras el último viernes, o en pausa), la inscripción no se cobra
- * nunca; no se guarda quién la pagó.
+ * inscripción. Si la primera cesta empieza después del último reparto de su mes, la
+ * inscripción va con el primer reparto, al mes siguiente. Límite conocido: si el mes
+ * del primer reparto está entero en pausa, la inscripción no se cobra nunca; no se
+ * guarda quién la pagó.
  *
  * La cesta de quien trabaja en la asociación no se cobra las semanas que trabajaba, ni
  * tras su baja si se decidió regalársela ({@see Worker::basketWeek()}). Si todas las
@@ -112,7 +113,7 @@ class MonthlyFeeCalculator
      * @param list<FeeAdjustment>       $adjustments
      * @param list<PartnerEvent>        $events      Bajas y vueltas, en orden.
      * @param list<PartnerPause>        $pauses      Pausas que tocan el mes.
-     * @param list<int>                 $newHouseholds Ids de los hogares (quien encabeza la familia) cuya primera cesta empieza este mes.
+     * @param list<int>                 $newHouseholds Ids de los hogares (quien encabeza la familia) que pagan la inscripción este mes.
      * @param list<Worker>              $workers     Trabajadorxs con ficha de socix.
      */
     public static function compute(\DateTimeImmutable $month, array $weeks, array $shares, FeeSchedule $schedule, array $adjustments, array $events, array $pauses = [], array $newHouseholds = [], array $workers = []): MonthlyFees
@@ -318,20 +319,35 @@ class MonthlyFeeCalculator
     }
 
     /**
-     * Los hogares cuya primera cesta empieza este mes: la más antigua de todas las de su
-     * familia, en una consulta. Un hogar con alguna cesta sin fecha es de antes de que
-     * se guardaran: nunca es nuevo.
+     * Los hogares que pagan la inscripción este mes: aquellos cuya primera cesta (la
+     * más antigua de todas las de su familia) tiene este mes su primer reparto. Casi
+     * siempre es el mes en que empieza; pero una cesta que empieza después del último
+     * reparto de un mes tiene el primero en el mes siguiente, y es entonces cuando se
+     * cobra (antes no tenía ninguna semana que cobrar y la inscripción se perdía). En
+     * una consulta. Un hogar con alguna cesta sin fecha es de antes de que se
+     * guardaran: nunca es nuevo.
      *
      * @return list<int> Ids de quien encabeza cada familia.
      */
     private function newHouseholds(\DateTimeImmutable $start, \DateTimeImmutable $end): array
     {
+        $previous = $start->modify('-1 month');
+
         return array_map('intval', $this->em->getConnection()->fetchFirstColumn(
-            'SELECT COALESCE(p.parent_id, p.id) AS household
-               FROM partner_basket_share s JOIN partner p ON p.id = s.partner_id
-              GROUP BY household
-             HAVING SUM(s.start_date IS NULL) = 0 AND MIN(s.start_date) BETWEEN :start AND :end',
-            ['start' => $start->format('Y-m-d'), 'end' => $end->format('Y-m-d')],
+            'SELECT h.household
+               FROM (SELECT COALESCE(p.parent_id, p.id) AS household, MIN(s.start_date) AS first_start
+                       FROM partner_basket_share s JOIN partner p ON p.id = s.partner_id
+                      GROUP BY household
+                     HAVING SUM(s.start_date IS NULL) = 0) h
+              WHERE h.first_start BETWEEN :previous AND :end
+                AND (h.first_start >= :start
+                     OR NOT EXISTS (SELECT 1 FROM basket b WHERE b.date BETWEEN h.first_start AND :previousEnd))',
+            [
+                'previous' => $previous->format('Y-m-d'),
+                'previousEnd' => $start->modify('-1 day')->format('Y-m-d'),
+                'start' => $start->format('Y-m-d'),
+                'end' => $end->format('Y-m-d'),
+            ],
         ));
     }
 

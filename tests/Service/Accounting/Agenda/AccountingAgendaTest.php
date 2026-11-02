@@ -40,6 +40,7 @@ use App\Service\Accounting\IssuedInvoice\IssuedInvoiceBook;
 use App\Service\Accounting\Norma43\BankLineMatcher;
 use App\Service\Accounting\Norma43\Norma43Movement;
 use App\Service\Accounting\Remittance\RemittanceChargeWatch;
+use App\Service\Accounting\Remittance\RemittanceCredits;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\String\Slugger\AsciiSlugger;
@@ -392,9 +393,29 @@ class AccountingAgendaTest extends TestCase
             '1 sin decidir qué se hace: es deuda de esa persona.',
             '1 por volver a cobrar: se añaden desde el próximo borrador de remesa.',
         ], $resolve->details);
+    }
 
-        $none = $this->agenda(unlinkedReturns: $bank)->items(new \DateTimeImmutable('2026-08-20'));
-        $this->assertSame([], array_filter($none, static fn (AgendaItem $i): bool => str_contains($i->title, 'devuelto')), 'Sin remesas aquí, las devoluciones no tienen recibo con el que ligarse.');
+    /**
+     * Una remesa que entró en el banco por menos de lo pedido: recibos rechazados antes
+     * de cobrarlos, que hay que marcar; lleva a las devoluciones de su ficha. Si entró
+     * por más, se dice también, con otro consejo.
+     */
+    public function testLaRemesaQueEntroConMenosDeLoPedido(): void
+    {
+        $september = new Remittance(Remittance::KIND_BASKET, new \DateTimeImmutable('2026-09-01'), 'Recibos SEPTIEMBRE 2026', Remittance::SOURCE_IMPORT, null);
+        $this->setId($september);
+
+        $item = $this->only($this->agenda(creditMismatches: [['remittance' => $september, 'lots' => [], 'missingCents' => 10900]])
+            ->items(new \DateTimeImmutable('2026-10-20')));
+
+        $this->assertSame(AgendaUrgency::Normal, $item->urgency);
+        $this->assertSame('La remesa «Recibos SEPTIEMBRE 2026» entró en el banco con 109,00 € menos de lo pedido', $item->title);
+        $this->assertStringContainsString('«sin apunte»', $item->details[0]);
+        $this->assertSame(['accounting_remittance_show', ['id' => $september->getId()], 'devoluciones'], [$item->route, $item->routeParams, $item->fragment]);
+
+        $over = $this->only($this->agenda(creditMismatches: [['remittance' => $september, 'lots' => [], 'missingCents' => -2500]])
+            ->items(new \DateTimeImmutable('2026-10-20')));
+        $this->assertSame('La remesa «Recibos SEPTIEMBRE 2026» entró en el banco con 25,00 € más de lo pedido', $over->title);
     }
 
     /**
@@ -639,6 +660,7 @@ class AccountingAgendaTest extends TestCase
         array $officialNotices = [],
         int $unlinkedBankLines = 0,
         array $bankProposals = [],
+        array $creditMismatches = [],
     ): AccountingAgenda {
         $receivedRepo = $this->createStub(ReceivedInvoiceRepository::class);
         $receivedRepo->method('findOpen')->willReturn($open);
@@ -652,7 +674,6 @@ class AccountingAgendaTest extends TestCase
         $entries->method('lastDateByAccount')->willReturn($lastDates);
         $entries->method('findUnpairedTransfers')->willReturn($unpaired);
         $entries->method('findExpensesWithoutInvoice')->willReturn($withoutInvoice);
-        $entries->method('findUnlinkedReturnCharges')->willReturn($unlinkedReturns);
         $entries->method('balanceFor')->willReturnCallback(static fn (FinancialAccount $a): string => $balances[$a->getId()] ?? '0.00');
         $entries->method('dayBalances')->willReturnCallback(static fn (FinancialAccount $a): DayBalances => $dayBalances[$a->getId()] ?? new DayBalances(0, 0));
         $latest = [];
@@ -683,6 +704,9 @@ class AccountingAgendaTest extends TestCase
         $bankLines->method('findUnlinked')->willReturn(array_map(static fn (array $pair): BankStatementLine => $pair[0], $bankProposals));
         $matcher = $this->createStub(BankLineMatcher::class);
         $matcher->method('proposalsFor')->willReturn($bankProposals);
+        $credits = $this->createStub(RemittanceCredits::class);
+        $credits->method('unidentifiedReturns')->willReturn($unlinkedReturns);
+        $credits->method('mismatches')->willReturn($creditMismatches);
 
         return new AccountingAgenda(
             $receivedRepo,
@@ -701,6 +725,7 @@ class AccountingAgendaTest extends TestCase
             $notices,
             $bankLines,
             $matcher,
+            $credits,
         );
     }
 

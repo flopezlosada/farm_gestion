@@ -31,8 +31,8 @@ use App\Service\Accounting\IssuedInvoice\IssuedInvoiceBook;
 use App\Service\Accounting\MonthNames;
 use App\Service\Accounting\Norma43\BankLineMatcher;
 use App\Service\Accounting\OfficialNotice\OfficialNoticeAlert;
-use App\Service\Accounting\Remittance\BankReturns;
 use App\Service\Accounting\Remittance\RemittanceChargeWatch;
+use App\Service\Accounting\Remittance\RemittanceCredits;
 
 /**
  * Lo que queda por hacer en la contabilidad, para la portada: las notificaciones
@@ -83,6 +83,7 @@ class AccountingAgenda
         private readonly OfficialNoticeRepository $officialNotices,
         private readonly BankStatementLineRepository $bankLines,
         private readonly BankLineMatcher $matcher,
+        private readonly RemittanceCredits $credits,
     ) {
     }
 
@@ -108,6 +109,7 @@ class AccountingAgenda
             ...$this->uncollectedIssuedInvoices($today),
             $this->monthlyRemittance($today),
             ...$this->uncreditedRemittances(),
+            ...$this->creditMismatches(),
             $this->unidentifiedReturns(),
             $this->openReturns(),
             $this->unpairedTransfers(),
@@ -532,13 +534,43 @@ class AccountingAgenda
     }
 
     /**
-     * Las devoluciones que trae el banco sin saber aún de quién son. Desde la primera
-     * remesa que se lleva aquí: las de antes no tienen recibo con el que ligarse.
+     * Las remesas que entraron en el banco por menos (o más) de lo pedido. Lo que falta
+     * son recibos que el banco rechazó antes de cobrarlos: no traen apunte de
+     * devolución y, si no se marcan, esa gente queda como pagada sin haber pagado. Se
+     * quita sola al darlos por devueltos sin apunte en la ficha de la remesa
+     * ({@see RemittanceCredits}).
+     *
+     * @return list<AgendaItem>
+     */
+    private function creditMismatches(): array
+    {
+        return array_map(static function (array $row): AgendaItem {
+            $missing = $row['missingCents'];
+            $amount = number_format(abs($missing) / 100, 2, ',', '.');
+
+            return new AgendaItem(
+                AgendaUrgency::Normal,
+                $missing > 0
+                    ? sprintf('La remesa «%s» entró en el banco con %s € menos de lo pedido', $row['remittance']->getLabel(), $amount)
+                    : sprintf('La remesa «%s» entró en el banco con %s € más de lo pedido', $row['remittance']->getLabel(), $amount),
+                $missing > 0
+                    ? ['Son recibos que el banco rechazó antes de cobrarlos (cuenta mal, mandato…): Fiare dice cuáles. Dalos por devueltos «sin apunte» en la ficha de la remesa, en «Devoluciones».']
+                    : ['Mira en el banco los abonos de ese día: puede haber un cobro suelto que no es de la remesa.'],
+                'accounting_remittance_show',
+                ['id' => $row['remittance']->getId()],
+                'devoluciones',
+            );
+        }, $this->credits->mismatches());
+    }
+
+    /**
+     * Las devoluciones que trae el banco sin saber aún de quién son, de los lotes de
+     * las remesas de aquí: las de antes, o las de un cobro suelto, no tienen recibo con
+     * el que ligarse ({@see RemittanceCredits::unidentifiedReturns()}).
      */
     private function unidentifiedReturns(): ?AgendaItem
     {
-        $from = $this->remittances->firstPeriod();
-        $count = $from !== null ? \count($this->entries->findUnlinkedReturnCharges(BankReturns::RETURN_PREFIX, $from)) : 0;
+        $count = \count($this->credits->unidentifiedReturns());
         if ($count === 0) {
             return null;
         }
