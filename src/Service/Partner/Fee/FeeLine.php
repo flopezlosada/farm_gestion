@@ -62,6 +62,15 @@ final class FeeLine
         return IssuedInvoice::fromCents($this->getCents());
     }
 
+    /**
+     * Si su importe suma más de una parte (verdura y huevos, o con transporte): el
+     * total de la cesta no se entiende sin decir cuánto es cada cosa.
+     */
+    public function hasSeveralParts(): bool
+    {
+        return count(array_filter([$this->vegCents, $this->eggCents, $this->transportCents])) > 1;
+    }
+
     /** Si la tuvo sólo parte del mes. */
     public function isPartial(): bool
     {

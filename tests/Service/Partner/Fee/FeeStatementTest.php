@@ -12,9 +12,9 @@ use App\Service\Partner\Fee\FeeStatement;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Cuándo el total de una cuota necesita desglose: con una sola cesta entera el total
- * es la tarifa y no hay nada que explicar; con más cestas, una parte del mes o
- * ajustes, sí.
+ * Cuándo el total de una cuota necesita desglose: con una sola cesta entera de sólo
+ * verdura el total es la tarifa y no hay nada que explicar; con huevos o transporte,
+ * más cestas, una parte del mes o ajustes, sí.
  */
 class FeeStatementTest extends TestCase
 {
@@ -42,11 +42,21 @@ class FeeStatementTest extends TestCase
         return $statement;
     }
 
-    public function testUnaSolaCestaEnteraNoNecesitaDesglose(): void
+    public function testUnaSolaCestaEnteraDeSoloVerduraNoNecesitaDesglose(): void
+    {
+        $payer = new Partner();
+        $share = new PartnerBasketShare();
+        $share->setPartner($payer);
+
+        $this->assertFalse(self::statement($payer, [new FeeLine($share, 5500, 0, 0, 4, 4, [])])->needsBreakdown());
+    }
+
+    /** Una sola cesta entera con huevos y transporte: el total sólo se entiende partido. */
+    public function testUnaSolaCestaConHuevosYTransporteSeDesglosa(): void
     {
         $payer = new Partner();
 
-        $this->assertFalse(self::statement($payer, [self::line($payer)])->needsBreakdown());
+        $this->assertTrue(self::statement($payer, [self::line($payer)])->needsBreakdown());
     }
 
     public function testSinCestasNiAjustesNoHayNadaQueDesglosar(): void
