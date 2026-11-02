@@ -68,7 +68,28 @@ final class FeeLine
      */
     public function hasSeveralParts(): bool
     {
-        return count(array_filter([$this->vegCents, $this->eggCents, $this->transportCents])) > 1;
+        return count($this->getParts()) > 1;
+    }
+
+    /**
+     * Las partes que cobra, cada una con su cuenta: cestas × tarifa de la modalidad,
+     * docenas × tarifa de la docena, repartos × precio del reparto. Sin las que salen a
+     * cero.
+     *
+     * @return list<FeeLinePart>
+     */
+    public function getParts(): array
+    {
+        $exact = !$this->isPartial() && $this->freeWeeks === 0;
+        $amount = (int) $this->share->getAmount();
+        $basketShare = $this->share->getBasketShare();
+        $deliveries = $basketShare !== null ? (FeeConcept::forBasketShare($basketShare)?->deliveriesPerMonth() ?? 0) : 0;
+
+        return array_values(array_filter([
+            new FeeLinePart('Verdura', $this->vegCents, $amount, 'cesta', 'cestas', $exact),
+            new FeeLinePart('Huevos', $this->eggCents, $this->share->getEggAmount()?->getDozens() ?? 0.0, 'docena', 'docenas', $exact),
+            new FeeLinePart('Transporte', $this->transportCents, $deliveries * $amount, 'reparto', 'repartos', $exact),
+        ], static fn (FeeLinePart $p): bool => $p->cents !== 0));
     }
 
     /** Si la tuvo sólo parte del mes. */
