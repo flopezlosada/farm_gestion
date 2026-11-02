@@ -76,7 +76,7 @@
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
-                        {{ csa.field(form.start_date, 'Fecha de inicio', { full: true, attr: { class: 'csa-input datepicker' } }) }}
+                        {{ csa.field(form.start_date, 'Fecha de inicio', { full: true, hint: form.start_date.vars.help, attr: { class: 'csa-input datepicker' } }) }}
                         <div id="day_month_order" class="csa-field--full hidden">
                             {{ csa.field(form.dayMonthOrder, 'Qué entrega del mes recoge la cesta', { full: true }) }}
                         </div>

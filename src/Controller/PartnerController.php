@@ -1190,6 +1190,7 @@ class PartnerController extends AbstractController
         PartnerShareEventRecorder $shareEventRecorder,
         CohortChoiceBuilder $cohortChoiceBuilder,
         WeeklyBasketGenerator $generator,
+        RemittanceRepository $remittances,
     ): Response {
         $partnerBasketShare = new PartnerBasketShare();
         $partnerBasketShare->setPartner($partner);
@@ -1222,6 +1223,8 @@ class PartnerController extends AbstractController
             'forced_month_order' => $cohort['forcedMonthOrder'],
             'ask_pickup_group' => $askPickupGroup,
             'pickup_group' => $pickupGroup,
+            // Un alta tras la remesa del mes empieza el mes siguiente: ese ya está cobrado.
+            'earliest_start' => $remittances->firstUnchargedBasketMonth(),
         ]);
         $form->handleRequest($request);
 

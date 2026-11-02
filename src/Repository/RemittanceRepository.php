@@ -109,6 +109,24 @@ class RemittanceRepository extends ServiceEntityRepository
         return $first !== null ? new \DateTimeImmutable((string) $first) : null;
     }
 
+    /**
+     * El primer mes cuyas cuotas de cesta aún no se han mandado al banco: el siguiente al
+     * de la última remesa de cuotas enviada, o null si no se ha enviado ninguna. Una cesta
+     * nueva o un cambio de cesta no pueden empezar antes: ese mes ya está cobrado, y lo
+     * cobrado no se regulariza.
+     */
+    public function firstUnchargedBasketMonth(): ?\DateTimeImmutable
+    {
+        $last = $this->createQueryBuilder('r')
+            ->select('MAX(r.period)')
+            ->andWhere('r.kind = :kind')->setParameter('kind', Remittance::KIND_BASKET)
+            ->andWhere('r.status = :sent')->setParameter('sent', Remittance::STATUS_SENT)
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        return $last !== null ? (new \DateTimeImmutable((string) $last))->modify('first day of next month') : null;
+    }
+
     public function existsFor(string $kind, \DateTimeInterface $period): bool
     {
         return $this->count(['kind' => $kind, 'period' => Remittance::firstOfMonth($period)]) > 0;

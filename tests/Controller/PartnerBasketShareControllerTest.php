@@ -8,6 +8,8 @@ use App\Entity\EggPeriod;
 use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
+use App\Entity\Remittance;
+use App\Entity\RemittanceLine;
 use App\Entity\WeeklyBasketGroup;
 
 /**
@@ -160,6 +162,41 @@ class PartnerBasketShareControllerTest extends AbstractAuthenticatedTest
             $conn->executeStatement('DELETE FROM partner WHERE id = ?', [$partnerId]);
             $conn->executeStatement('DELETE FROM weekly_basket_group WHERE id = ?', [$groupId]);
             $conn->executeStatement('DELETE FROM node WHERE id = ?', [$nodeId]);
+        }
+    }
+
+    /**
+     * Un cambio de cesta no puede empezar en un mes cuyas cuotas ya se mandaron al
+     * banco: lo cobrado no se regulariza, así que vale desde el mes siguiente. El
+     * formulario lo rechaza, lo explica y no toca la cesta.
+     */
+    public function testUnCambioNoPuedeEmpezarEnUnMesYaCobrado(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $em = static::getContainer()->get('doctrine')->getManager();
+        $line = (new RemittanceLine())->setDebtorName('SOCIX CORTE')->setIban('ES9121000418450200051332')
+            ->setMandateReference('CORTE 1')->setMandateSignedOn(new \DateTimeImmutable('2022-11-01'))
+            ->setDebitReference('CORTE 1 2098-03')->setSequenceType('RCUR')->setAmount('50.00');
+        $charged = Remittance::fromImport(Remittance::KIND_BASKET, new \DateTimeImmutable('2098-03-01'), 'Recibos MARZO 2098', 'x.xlsx', [$line], null);
+        $em->persist($charged);
+        $em->flush();
+        $shareId = $this->findActiveShareId();
+
+        try {
+            $crawler = $client->request('GET', sprintf('/gestion/partner/basket/share/%d/change-modality', $shareId));
+            $form = $crawler->selectButton('Aplicar cambio de cesta')->form();
+            $form['partner_basket_share[start_date]'] = '2098-03-20';
+            $client->submit($form);
+
+            $this->assertFalse($client->getResponse()->isRedirect(), 'Un mes ya cobrado no se acepta.');
+            $this->assertStringContainsString('Las cuotas de marzo de 2098 ya se mandaron al banco', (string) $client->getResponse()->getContent());
+            $this->assertStringContainsString('01/04/2098', (string) $client->getResponse()->getContent());
+            $em->clear();
+            $this->assertTrue($em->find(PartnerBasketShare::class, $shareId)->getIsActive(), 'La cesta sigue como estaba.');
+        } finally {
+            $em = static::getContainer()->get('doctrine')->getManager();
+            $em->remove($em->find(Remittance::class, $charged->getId()));
+            $em->flush();
         }
     }
 

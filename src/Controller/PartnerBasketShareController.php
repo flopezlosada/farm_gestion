@@ -9,6 +9,7 @@ use App\Entity\PartnerBasketShare;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketStatus;
 use App\Form\PartnerBasketShareType;
+use App\Repository\RemittanceRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Service\Delivery\CohortChoiceBuilder;
 use App\Service\Delivery\SharedBasketChangeNotifier;
@@ -159,6 +160,7 @@ class PartnerBasketShareController extends AbstractController
         WeeklyBasketGenerator $generator,
         CohortChoiceBuilder $cohortChoiceBuilder,
         SharedBasketChangeNotifier $notifier,
+        RemittanceRepository $remittances,
     ): Response {
         // start_date queda vacío: admin introduce la fecha EFECTIVA del cambio.
         $new = $partnerBasketShare->successor();
@@ -180,6 +182,9 @@ class PartnerBasketShareController extends AbstractController
             'allowed_share_ids' => $cohort['allowedShareIds'],
             'offered_month_orders' => $cohort['offeredMonthOrders'],
             'forced_month_order' => $cohort['forcedMonthOrder'],
+            // Un cambio tras la remesa del mes, a más o a menos, vale desde el mes
+            // siguiente: ese ya está cobrado y no se regulariza.
+            'earliest_start' => $remittances->firstUnchargedBasketMonth(),
         ]);
         $form->handleRequest($request);
 

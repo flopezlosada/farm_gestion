@@ -86,7 +86,7 @@
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
-                        {{ csa.field(form.start_date, 'Fecha efectiva del cambio', { full: true, hint: 'La cesta actual se cierra el día anterior a esta fecha.', attr: { class: 'csa-input datepicker' } }) }}
+                        {{ csa.field(form.start_date, 'Fecha efectiva del cambio', { full: true, hint: 'La cesta actual se cierra el día anterior a esta fecha. ' ~ form.start_date.vars.help, attr: { class: 'csa-input datepicker' } }) }}
                         <div id="day_month_order" class="csa-field--full hidden">
                             {{ csa.field(form.dayMonthOrder, 'Qué entrega del mes recoge la cesta', { full: true }) }}
                         </div>
