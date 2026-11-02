@@ -21,6 +21,7 @@ use App\Repository\PendingTransferRepository;
 use App\Repository\ReceivedInvoiceRepository;
 use App\Repository\RemittanceRepository;
 use App\Repository\RemittanceReturnRepository;
+use App\Service\Accounting\CashCount\CashCountDue;
 use App\Service\Accounting\CashCount\DayBalances;
 use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\AccountantPackage;
@@ -61,6 +62,9 @@ class AccountingAgenda
      * resto sigue en la ficha del extracto.
      */
     public const MAX_BANK_PROPOSALS = 10;
+
+    /** Desde qué día del mes se avisa de que falta el arqueo del mes anterior. */
+    public const CASH_COUNT_DUE_DAY = 5;
 
     public function __construct(
         private readonly ReceivedInvoiceRepository $receivedInvoices,
@@ -111,6 +115,7 @@ class AccountingAgenda
             $this->unpairedTransfers(),
             ...$this->botTransfers(),
             ...$this->cashCountMismatches(),
+            $this->cashCountsDue($today),
         ]));
 
         // usort es estable: a igual urgencia se respeta el orden de arriba.
@@ -698,9 +703,48 @@ class AccountingAgenda
                 ],
                 'accounting_entry_new',
                 ['account' => $count->getAccount()->getId(), 'date' => $count->getCountDate()->format('Y-m-d')],
+                null,
+                [AgendaAction::link(
+                    'Anotar la diferencia como descuadre',
+                    sprintf('Abre el alta con %s, fecha del %s y concepto de descuadre; eliges la partida y, al guardarlo, la caja cuadra. Sólo si ya has buscado lo que falta y no aparece.', DayBalances::euros($difference), $day),
+                    'accounting_entry_new',
+                    [
+                        'account' => $count->getAccount()->getId(),
+                        'date' => $count->getCountDate()->format('Y-m-d'),
+                        'amount' => number_format($difference / 100, 2, '.', ''),
+                        'concept' => sprintf('Descuadre del arqueo del %s', $day),
+                    ],
+                )],
             );
         }
 
         return $items;
+    }
+
+    /**
+     * Las cajas sin arqueo este mes ({@see CashCountDue}). Se pide por el bot; si
+     * nadie lo manda, aquí se ve. Sólo a partir del día 5: los primeros días es normal
+     * que aún no esté.
+     */
+    private function cashCountsDue(\DateTimeImmutable $today): ?AgendaItem
+    {
+        if ((int) $today->format('j') < self::CASH_COUNT_DUE_DAY) {
+            return null;
+        }
+        $cash = array_values(array_filter($this->accounts->findActive(), static fn (FinancialAccount $a): bool => $a->getKind() === FinancialAccount::KIND_CASH));
+        $pending = CashCountDue::pending($cash, $this->cashCounts->findLatestOfActiveCashAccounts(), $today);
+        if ($pending === []) {
+            return null;
+        }
+        $names = implode(', ', array_map(static fn (FinancialAccount $a): string => $a->getName(), $pending));
+        $month = mb_strtolower(MonthNames::LONG[(int) $today->modify('first day of last month')->format('n')]);
+
+        return new AgendaItem(
+            AgendaUrgency::Normal,
+            sprintf('Falta el arqueo de %s: %s', $month, $names),
+            ['Quien tiene el permiso de arqueo lo manda al bot de Telegram («caja huerta 450,50»); el bot se lo pide el día 1.'],
+            'accounting_ledger',
+            ['account' => $pending[0]->getId()],
+        );
     }
 }

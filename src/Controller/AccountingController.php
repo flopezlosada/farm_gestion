@@ -414,7 +414,8 @@ class AccountingController extends AbstractController
 
     /**
      * Anotar un movimiento. Preselecciona cuenta y fecha si vienen en la URL, que es
-     * como llega quien acaba de guardar otro apunte del mismo extracto.
+     * como llega quien acaba de guardar otro apunte del mismo extracto; e importe y
+     * concepto, que es como llega el descuadre de un arqueo desde la portada.
      *
      * Desde un extracto del banco (`bank_line`) llega con cuenta, fecha, importe y
      * concepto del movimiento, y al guardarlo queda ligado a él. Si se cambia la cuenta
@@ -434,6 +435,15 @@ class AccountingController extends AbstractController
         $accountId = QueryId::from($request->query, 'account');
         if ($accountId !== null) {
             $entry->setAccount($accounts->find($accountId));
+        }
+        // Importe y concepto propuestos por quien enlaza aquí (el descuadre de un arqueo).
+        $amount = Amount::parse($request->query->get('amount', ''));
+        if ($amount !== null) {
+            $entry->setAmount($amount);
+        }
+        $concept = trim((string) $request->query->get('concept', ''));
+        if ($concept !== '') {
+            $entry->setConcept(mb_substr($concept, 0, 255));
         }
         $bankLineId = QueryId::from($request->query, 'bank_line');
         $bankLine = $bankLineId !== null ? $bankLines->find($bankLineId) : null;
