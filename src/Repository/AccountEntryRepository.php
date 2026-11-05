@@ -427,8 +427,9 @@ class AccountEntryRepository extends ServiceEntityRepository
     public const PAYMENT_DAYS_BEFORE = 7;
 
     /**
-     * Días después: una transferencia sale a los pocos días, la tarjeta se carga el 5
-     * del mes siguiente y una domiciliación puede tardar un mes.
+     * Días después en que se busca el pago conjunto de varias facturas
+     * ({@see findPaymentsAmong}): ahí se prueban combinaciones y conviene acotar. El
+     * pago de una sola no tiene tope ({@see findPaymentCandidates}).
      */
     public const PAYMENT_DAYS_AFTER = 45;
 
@@ -445,6 +446,11 @@ class AccountEntryRepository extends ServiceEntityRepository
      * explica ninguna otra factura, ni recibida ni emitida. El que más se
      * acerca en fecha, primero.
      *
+     * Sin `$daysAfter`, sin tope hacia delante: hay proveedores que cobran meses
+     * después (una factura de julio pagada en octubre), y si su pago no se ofrece, la
+     * factura no tiene a qué engancharse. Lo que ya explica otra factura no sale, y el
+     * más cercano va primero: uno lejano sólo aparece si no hay otro.
+     *
      * Es lo que evita contar un gasto dos veces: el movimiento lo trae el banco (el
      * extracto ya está en el libro) y la factura sólo lo explica.
      *
@@ -454,15 +460,15 @@ class AccountEntryRepository extends ServiceEntityRepository
      * @param string             $amount Importe con signo, como en el apunte (un gasto es negativo).
      * @param \DateTimeInterface $date   Fecha de la factura.
      * @param int                $limit     Cuántos como mucho.
-     * @param int                $daysAfter Hasta cuántos días después de la factura buscar.
+     * @param int|null           $daysAfter Hasta cuántos días después de la factura buscar; null, sin tope.
      *
      * @return list<AccountEntry>
      */
-    public function findPaymentCandidates(string $amount, \DateTimeInterface $date, int $limit = 3, int $daysAfter = self::PAYMENT_DAYS_AFTER): array
+    public function findPaymentCandidates(string $amount, \DateTimeInterface $date, int $limit = 3, ?int $daysAfter = null): array
     {
         $day = \DateTimeImmutable::createFromInterface($date);
 
-        return $this->unexplainedPayments($day->modify(sprintf('-%d days', self::PAYMENT_DAYS_BEFORE)), $day->modify(sprintf('+%d days', $daysAfter)))
+        return $this->unexplainedPayments($day->modify(sprintf('-%d days', self::PAYMENT_DAYS_BEFORE)), $daysAfter === null ? null : $day->modify(sprintf('+%d days', $daysAfter)))
             ->addSelect('ABS(DATE_DIFF(e.date, :day)) AS HIDDEN distance')
             ->andWhere('e.amount = :amount')
             ->setParameter('amount', $amount)
@@ -499,27 +505,28 @@ class AccountEntryRepository extends ServiceEntityRepository
     }
 
     /**
-     * Lo común a buscar el pago de una factura: entre dos fechas, sin ninguna factura
+     * Lo común a buscar el pago de una factura: desde una fecha (y hasta otra, si se da), sin ninguna factura
      * (recibida ni emitida) que ya lo explique, que no sea un traspaso, y en una
      * cuenta y una partida que se pueden elegir.
      */
-    private function unexplainedPayments(\DateTimeInterface $from, \DateTimeInterface $to): QueryBuilder
+    private function unexplainedPayments(\DateTimeInterface $from, ?\DateTimeInterface $to): QueryBuilder
     {
-        return $this->createQueryBuilder('e')
+        $qb = $this->createQueryBuilder('e')
             ->innerJoin('e.account', 'a')->addSelect('a')
             ->innerJoin('e.category', 'c')->addSelect('c')
             ->innerJoin('c.group', 'g')
             ->leftJoin(ReceivedInvoice::class, 'ri', 'WITH', 'ri.accountEntry = e')
             ->leftJoin(IssuedInvoice::class, 'ii', 'WITH', 'ii.accountEntry = e')
-            ->andWhere('e.date BETWEEN :from AND :to')
+            ->andWhere('e.date >= :from')
             ->andWhere('ri.id IS NULL')
             ->andWhere('ii.id IS NULL')
             ->andWhere('g.kind != :transfer')
             ->andWhere('a.active = true')
             ->andWhere('c.active = true')
             ->setParameter('from', $from->format('Y-m-d'))
-            ->setParameter('to', $to->format('Y-m-d'))
             ->setParameter('transfer', BudgetCategoryGroup::KIND_TRANSFER);
+
+        return $to === null ? $qb : $qb->andWhere('e.date <= :to')->setParameter('to', $to->format('Y-m-d'));
     }
 
     /**

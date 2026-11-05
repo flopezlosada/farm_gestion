@@ -134,6 +134,11 @@
                 {{ form_errors(e) }}
 
                 <div class="csa-stack-lg">
+                    {# Se paga por banco y el pago aún no está en el libro: no se anota
+                     # aquí (llegará con el extracto), la factura espera en la bandeja. #}
+                    {% if form.match is not defined and e.account.vars.data and e.account.vars.data.bank %}
+                        {{ csa.callout('Esperando el pago: esta factura se paga por ' ~ e.account.vars.data.name ~ ' y su pago todavía no está en ningún extracto subido. Déjala en la bandeja: cuando subas el extracto con el pago, al volver aquí se engancha a él. Sólo si se pagó en efectivo o con tarjeta, anótala ahora eligiendo esa cuenta.', 'info', 'hourglass-half') }}
+                    {% endif %}
                     {% if form.match is defined %}
                         {# El pago ya lo trajo el banco: la factura se engancha a él. Elegido el
                          # primero (el más cercano en fecha); el apunte nuevo sólo aparece si
