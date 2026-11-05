@@ -2,7 +2,6 @@
 
 namespace App\Controller;
 
-use App\Entity\Partner;
 use App\Entity\User;
 use App\Entity\VolunteerCall;
 use App\Entity\VolunteerCategory;
@@ -797,10 +796,8 @@ class VolunteeringController extends AbstractController
             'reachable' => $reachable,
             'already_asked' => $alreadyAsked,
             // Para anotar a mano a quien organizó el turno o vino sin apuntarse.
-            'all_partners' => $partners->findBy(
-                ['status' => Partner::STATUS_ACTIVO],
-                ['name' => 'ASC', 'surname' => 'ASC']
-            ),
+            // Sólo socias: lo que hace una trabajadora es su trabajo.
+            'all_partners' => $partners->findActiveMembers(),
             // Cuánta gente recibiría el aviso general, para que quien pulsa el
             // botón vea el número ANTES de molestar a media asociación. Sólo se
             // cuenta si el botón va a salir: es una consulta de agregado y en la
@@ -1171,9 +1168,11 @@ class VolunteeringController extends AbstractController
             $this->addFlash('warning', sprintf(
                 'A %s no se le puede pedir: %s',
                 $name,
-                $who->isVolunteeringOptOut()
-                    ? 'ha pedido que no se le avise de voluntariado.'
-                    : 'ya no consta como socix activx.'
+                match (true) {
+                    $who->isVolunteeringOptOut() => 'ha pedido que no se le avise de voluntariado.',
+                    !$who->isMember() => 'recibe cesta, pero no es socia.',
+                    default => 'ya no consta como socix activx.',
+                }
             ));
 
             return $back;
@@ -1277,7 +1276,7 @@ class VolunteeringController extends AbstractController
         }
 
         $partner = $partners->find($request->request->getInt('partner'));
-        if (null === $partner) {
+        if (null === $partner || !$partner->isMember()) {
             $this->addFlash('error', 'No he encontrado a esa persona.');
 
             return $this->redirectToRoute('volunteering_shift', ['id' => $shift->getId()]);

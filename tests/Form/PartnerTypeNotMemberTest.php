@@ -46,14 +46,14 @@ class PartnerTypeNotMemberTest extends KernelTestCase
     {
         $form = $this->factory->create(PartnerType::class, (new Partner())->setName('Socia'));
 
-        $this->assertFalse($form->get('notMember')->getData());
+        $this->assertFalse($form->get('notMember')->getNormData());
     }
 
     public function testLaFichaDeNoSociaSalePintadaMarcada(): void
     {
         $form = $this->factory->create(PartnerType::class, (new Partner())->setName('Trabajadora')->setMember(false));
 
-        $this->assertTrue($form->get('notMember')->getData());
+        $this->assertTrue($form->get('notMember')->getNormData());
     }
 
     public function testSinMarcarSigueSiendoSocia(): void

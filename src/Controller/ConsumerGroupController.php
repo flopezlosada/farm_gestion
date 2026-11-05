@@ -684,7 +684,7 @@ class ConsumerGroupController extends AbstractController
             }
 
             $partner = $em->getRepository(Partner::class)->find($request->request->getInt('partner'));
-            if ($partner === null) {
+            if ($partner === null || !$partner->isMember()) {
                 $this->addFlash('warning', 'Elige una socia.');
 
                 return $this->redirectToRoute('consumer_group_order_new', ['id' => $round->getId()]);

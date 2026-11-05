@@ -55,6 +55,15 @@ class PublicSurveyController extends AbstractController
             ], new Response('', Response::HTTP_NOT_FOUND));
         }
 
+        // El enlace pudo salir cuando aún era socia: quien recibe cesta sin serlo
+        // no vota.
+        if (!$partner->isMember()) {
+            return $this->render('public_survey/message.html.twig', [
+                'title' => 'Esta encuesta es para socias',
+                'text'  => 'Las encuestas las responden las socias de la asociación.',
+            ]);
+        }
+
         if ($participations->hasParticipated($survey, $partner)) {
             return $this->render('public_survey/thanks.html.twig', ['survey' => $survey]);
         }

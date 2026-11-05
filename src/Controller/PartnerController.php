@@ -229,10 +229,12 @@ class PartnerController extends AbstractController
     #[Route("/evolution", name: "partner_evolution", methods: ["GET"])]
     public function evolution(PartnerRepository $partnerRepository): Response
     {
-        // Conteo actual por estado.
+        // Conteo actual por estado. Sólo socias, como las altas y bajas de la serie:
+        // si no, la ficha de cesta de una trabajadora desplazaría el acumulado.
         $currentByStatus = [Partner::STATUS_ACTIVO => 0, Partner::STATUS_PAUSADO => 0, Partner::STATUS_BAJA => 0];
         foreach ($partnerRepository->createQueryBuilder('p')
             ->select('p.status AS status, COUNT(p.id) AS total')
+            ->where('p.member = true')
             ->groupBy('p.status')
             ->getQuery()->getArrayResult() as $row) {
             $currentByStatus[$row['status']] = (int) $row['total'];
