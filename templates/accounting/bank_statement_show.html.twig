@@ -162,7 +162,7 @@
                             <tr>
                                 <td class="tight">{{ entry.date|date('d/m/Y') }}</td>
                                 <td><a href="{{ path('accounting_entry_show', { id: entry.id }) }}">{{ entry.concept }}</a></td>
-                                <td class="acc-num">{{ fmt.money(entry.amount) }}</td>
+                                <td class="acc-num">{{ fmt.money(entry.movementAmount) }}</td>
                             </tr>
                         {% endfor %}
                     </tbody>

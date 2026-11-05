@@ -132,7 +132,8 @@ class BankStatementLine
     /**
      * Liga el movimiento al apunte que lo anota. Sólo si es de la misma cuenta y el
      * importe es EXACTAMENTE el mismo, con signo: un importe parecido no es el mismo
-     * movimiento.
+     * movimiento. En un apunte partido cuenta el movimiento entero (él más sus partes),
+     * y una parte no se liga: el movimiento va con el apunte del que salió.
      *
      * @throws \DomainException Si ya estaba ligado o el apunte no puede ser éste.
      */
@@ -144,7 +145,10 @@ class BankStatementLine
         if ($entry->getAccount() !== $this->account) {
             throw new \DomainException('El apunte es de otra cuenta.');
         }
-        if (IssuedInvoice::toCents($entry->getAmount()) !== $this->getAmountCents()) {
+        if ($entry->getSplitFrom() !== null) {
+            throw new \DomainException('Este apunte es una parte de otro: el movimiento del banco se liga al apunte del que salió.');
+        }
+        if (IssuedInvoice::toCents($entry->getMovementAmount()) !== $this->getAmountCents()) {
             throw new \DomainException('El apunte no tiene el mismo importe que el movimiento del banco.');
         }
         $this->entry = $entry;

@@ -785,10 +785,14 @@ class AccountEntryRepository extends ServiceEntityRepository
         if ($accounts === [] || $amounts === []) {
             return [];
         }
+        // Las partes, en la misma consulta: con ellas se sabe el movimiento entero de
+        // un apunte partido. Una parte no se busca: su movimiento es el del original.
         $qb = $this->createQueryBuilder('e')
             ->innerJoin('e.account', 'a')
+            ->leftJoin('e.parts', 'p')->addSelect('p')
             ->leftJoin(BankStatementLine::class, 'l', 'WITH', 'l.entry = e')
             ->andWhere('l.id IS NULL')
+            ->andWhere('e.splitFrom IS NULL')
             ->andWhere('e.account IN (:accounts)')->setParameter('accounts', $accounts)
             ->andWhere('e.date BETWEEN :from AND :to')
             ->andWhere('e.date >= a.openingDate')
@@ -797,7 +801,10 @@ class AccountEntryRepository extends ServiceEntityRepository
             ->orderBy('e.date', 'ASC')
             ->addOrderBy('e.id', 'ASC');
         if ($amounts !== null) {
-            $qb->andWhere('e.amount IN (:amounts)')->setParameter('amounts', $amounts);
+            // Uno partido no tiene ya el importe del banco: entra siempre y lo filtra
+            // quien compara el movimiento entero.
+            $qb->andWhere('e.amount IN (:amounts) OR EXISTS (SELECT s.id FROM '.AccountEntry::class.' s WHERE s.splitFrom = e)')
+                ->setParameter('amounts', $amounts);
         }
 
         return $qb->getQuery()->getResult();

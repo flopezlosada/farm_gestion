@@ -4,6 +4,8 @@ namespace App\Tests\Service\Accounting\Norma43;
 
 use App\Entity\AccountEntry;
 use App\Entity\BankStatementLine;
+use App\Entity\BudgetCategory;
+use App\Entity\BudgetCategoryGroup;
 use App\Entity\FinancialAccount;
 use App\Repository\AccountEntryRepository;
 use App\Service\Accounting\Norma43\BankLineMatcher;
@@ -211,6 +213,42 @@ class BankLineMatcherTest extends TestCase
 
         $this->expectException(\DomainException::class);
         $line->linkTo($this->entry($bank, '2026-10-10', '-45.00'));
+    }
+
+    /**
+     * El cargo del Ayuntamiento partido en alquiler y suministros antes de subir el
+     * extracto: el banco trae 158,95 y el apunte se quedó en 108,95. Casa por el
+     * movimiento entero y se liga solo.
+     */
+    public function testUnApuntePartidoCasaPorElMovimientoEntero(): void
+    {
+        $bank = $this->account();
+        $line = $this->line($bank, '2026-10-09', -15895);
+        $rent = $this->entry($bank, '2026-10-09', '-158.95');
+        $rent->splitOff('50.00', $this->category(), 'Suministros del local');
+
+        $this->assertSame([[$line, $rent]], BankLineMatcher::safePairs([$line], [$rent]));
+        $this->assertTrue(BankLineMatcher::isCandidate($line, $rent));
+        $line->linkTo($rent);
+        $this->assertSame($rent, $line->getEntry());
+    }
+
+    /** La parte separada no se liga a nada: su movimiento va con el apunte del que salió. */
+    public function testUnaParteNoSeLiga(): void
+    {
+        $bank = $this->account();
+        $line = $this->line($bank, '2026-10-09', -5000);
+        $part = $this->entry($bank, '2026-10-09', '-158.95')->splitOff('50.00', $this->category(), 'Suministros del local');
+
+        $this->expectException(\DomainException::class);
+        $line->linkTo($part);
+    }
+
+    private function category(): BudgetCategory
+    {
+        $group = (new BudgetCategoryGroup())->setName('ADMINISTRACIÓN')->setKind(BudgetCategoryGroup::KIND_EXPENSE);
+
+        return (new BudgetCategory())->setGroup($group)->setName('Local');
     }
 
     private function account(): FinancialAccount
