@@ -3,6 +3,7 @@
 namespace App\Entity;
 
 use App\Service\Staff\PunchSequenceException;
+use App\Validator\SpanishNif;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
@@ -68,6 +69,53 @@ class Worker
     #[Assert\NotBlank]
     #[Assert\Length(max: 255)]
     private $name;
+
+    /**
+     * DNI o NIE, guardado normalizado (mayúsculas, sin espacios ni guiones). Sale
+     * en el registro de jornada para identificar sin dudas a la persona ante la
+     * Inspección. Null en las fichas creadas antes de existir el campo.
+     *
+     * Los datos personales de la relación laboral viven aquí y no en
+     * {@see Partner}: tienen otra finalidad y otro plazo de conservación, y un
+     * trabajador puede no ser socix. Sólo se guarda lo que la asociación usa: el
+     * número de la Seguridad Social y la cuenta de la nómina los lleva la gestoría.
+     *
+     * @var string|null
+     * @ORM\Column(name="nif", type="string", length=9, nullable=true)
+     */
+    #[SpanishNif]
+    private $nif;
+
+    /**
+     * Teléfono de contacto.
+     *
+     * @var string|null
+     * @ORM\Column(name="phone", type="string", length=20, nullable=true)
+     */
+    #[Assert\Length(max: 20)]
+    private $phone;
+
+    /**
+     * Correo personal de contacto. Va aparte del correo de su cuenta ({@see User}):
+     * esa cuenta es el acceso para fichar y se retira al irse, y el contacto sigue
+     * haciendo falta (finiquito, certificados).
+     *
+     * @var string|null
+     * @ORM\Column(name="email", type="string", length=255, nullable=true)
+     */
+    #[Assert\Email]
+    #[Assert\Length(max: 255)]
+    private $email;
+
+    /**
+     * Dirección postal, en un solo texto (calle, número, código postal y
+     * localidad): sólo se consulta, no se explota por partes.
+     *
+     * @var string|null
+     * @ORM\Column(name="address", type="string", length=255, nullable=true)
+     */
+    #[Assert\Length(max: 255)]
+    private $address;
 
     /**
      * Fecha de alta laboral. Obligatoria: es el suelo del registro de jornada
@@ -237,6 +285,100 @@ class Worker
         $this->name = $name;
 
         return $this;
+    }
+
+    /**
+     * @return string|null DNI/NIE normalizado.
+     */
+    public function getNif(): ?string
+    {
+        return $this->nif;
+    }
+
+    /**
+     * Guarda el DNI/NIE normalizado: «12.345.678-z» y «12345678Z» son el mismo, y
+     * así se valida y se compara siempre la misma forma. Vacío = sin DNI.
+     *
+     * @param string|null $nif
+     * @return self
+     */
+    public function setNif(?string $nif): self
+    {
+        $normalized = strtoupper((string) preg_replace('/[\s.\-]/', '', (string) $nif));
+        $this->nif = $normalized === '' ? null : $normalized;
+
+        return $this;
+    }
+
+    /**
+     * @return string|null
+     */
+    public function getPhone(): ?string
+    {
+        return $this->phone;
+    }
+
+    /**
+     * @param string|null $phone
+     * @return self
+     */
+    public function setPhone(?string $phone): self
+    {
+        $this->phone = self::blankToNull($phone);
+
+        return $this;
+    }
+
+    /**
+     * @return string|null Correo personal de contacto.
+     */
+    public function getEmail(): ?string
+    {
+        return $this->email;
+    }
+
+    /**
+     * @param string|null $email
+     * @return self
+     */
+    public function setEmail(?string $email): self
+    {
+        $this->email = self::blankToNull($email);
+
+        return $this;
+    }
+
+    /**
+     * @return string|null
+     */
+    public function getAddress(): ?string
+    {
+        return $this->address;
+    }
+
+    /**
+     * @param string|null $address
+     * @return self
+     */
+    public function setAddress(?string $address): self
+    {
+        $this->address = self::blankToNull($address);
+
+        return $this;
+    }
+
+    /**
+     * Recorta el texto y deja null si queda vacío: un campo en blanco es «no lo
+     * sabemos», no un dato.
+     *
+     * @param string|null $value
+     * @return string|null
+     */
+    private static function blankToNull(?string $value): ?string
+    {
+        $trimmed = trim((string) $value);
+
+        return $trimmed === '' ? null : $trimmed;
     }
 
     /**

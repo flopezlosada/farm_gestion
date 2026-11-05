@@ -23,7 +23,19 @@
             {% endblock %}
         {% endembed %}
 
-        {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Cesta', subtitle: 'Mientras trabaja su cesta es gratis. Cuando se va, se decide si la paga o se le sigue regalando.' } %}
+        {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Datos personales', subtitle: 'Para identificarle en el registro de jornada y poder contactar. Todos opcionales.' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                <div class="csa-form-grid">
+                    {{ csa.field(form.nif, 'DNI/NIE') }}
+                    {{ csa.field(form.phone, 'Teléfono') }}
+                    {{ csa.field(form.email, 'Correo personal', { full: true }) }}
+                    {{ csa.field(form.address, 'Dirección', { full: true }) }}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Cesta', subtitle: 'Mientras trabaja su cesta es gratis. Cuando se va, se decide si la paga o se le sigue regalando.' } %}
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
                 <div class="csa-form-grid">

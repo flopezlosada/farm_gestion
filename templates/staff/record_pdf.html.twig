@@ -36,10 +36,10 @@
             <p>Nadie tiene registro de jornada en este periodo.</p>
         {% else %}
             <table class="sheet team">
-                <thead><tr><th>Trabajador/a</th><th>Fecha de alta</th></tr></thead>
+                <thead><tr><th>Trabajador/a</th><th>DNI/NIE</th><th>Fecha de alta</th></tr></thead>
                 <tbody>
                     {% for worker in workers %}
-                        <tr><td>{{ worker.name }}</td><td>{{ worker.hireDate ? worker.hireDate|date('d/m/Y') : '—' }}</td></tr>
+                        <tr><td>{{ worker.name }}</td><td>{{ worker.nif ?? '—' }}</td><td>{{ worker.hireDate ? worker.hireDate|date('d/m/Y') : '—' }}</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
