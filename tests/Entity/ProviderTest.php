@@ -30,6 +30,19 @@ class ProviderTest extends TestCase
         $this->assertSame('ESTONOESUNCIF', Provider::normalizeTaxId('es tono es un cif'), 'Sólo se quita delante de algo con forma de CIF.');
     }
 
+    /**
+     * Un NIF sin el cero de delante es el mismo NIF: se rellena para que cuadre con su
+     * letra y no dé de alta al proveedor dos veces. Sólo a lo que tiene forma de NIF.
+     */
+    public function testAUnNifCortoSeLePonenLosCerosDeDelante(): void
+    {
+        $this->assertSame('05153584C', Provider::normalizeTaxId('5153584C'));
+        $this->assertSame('05153584C', Provider::normalizeTaxId('5.153.584-c'));
+        $this->assertSame('05153584C', Provider::normalizeTaxId('05153584C'), 'El que ya tiene sus ocho cifras queda igual.');
+        $this->assertSame('B8428390', Provider::normalizeTaxId('B8428390'), 'Un CIF corto no es un NIF: no se toca.');
+        $this->assertSame('5153584', Provider::normalizeTaxId('5153584'), 'Sin letra no es un NIF: no se toca.');
+    }
+
     /** El IBAN se guarda sin espacios, que es como lo pide un fichero de transferencias. */
     public function testElIbanSeGuardaSinEspacios(): void
     {

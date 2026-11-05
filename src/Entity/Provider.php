@@ -531,12 +531,18 @@ class Provider
      * mismo CIF (ESB84283902 = B84283902). Si no se quitara, el mismo proveedor quedaría
      * dado de alta dos veces.
      *
+     * Un NIF con menos de ocho cifras lleva ceros delante (5153584C = 05153584C): muchas
+     * facturas los omiten y la letra de control es la misma, porque se calcula sobre el
+     * número. Sin rellenarlo no cuadraría con su control y el mismo proveedor saldría
+     * dos veces.
+     *
      * @param string|null $taxId CIF o NIF tal como venga.
      */
     public static function normalizeTaxId(?string $taxId): ?string
     {
         $clean = strtoupper((string) preg_replace('/[^A-Za-z0-9]/', '', (string) $taxId));
         $clean = (string) preg_replace('/^ES([0-9A-Z]\d{7}[0-9A-Z])$/', '$1', $clean);
+        $clean = preg_match('/^\d{1,7}[A-Z]$/', $clean) === 1 ? str_pad($clean, 9, '0', STR_PAD_LEFT) : $clean;
 
         return $clean === '' ? null : mb_substr($clean, 0, 20);
     }
