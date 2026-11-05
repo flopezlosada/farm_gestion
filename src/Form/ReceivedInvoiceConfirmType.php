@@ -3,6 +3,7 @@
 namespace App\Form;
 
 use App\Entity\AccountEntry;
+use App\Entity\FinancialAccount;
 use App\Entity\Provider;
 use App\Entity\ReceivedInvoice;
 use App\Service\Accounting\Invoice\GroupedPayment;
@@ -14,6 +15,7 @@ use Symfony\Component\Form\Extension\Core\Type\CollectionType;
 use Symfony\Component\Form\Extension\Core\Type\NumberType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Component\Form\FormError;
 use Symfony\Component\Form\FormEvent;
 use Symfony\Component\Form\FormEvents;
 use Symfony\Component\OptionsResolver\OptionsResolver;
@@ -35,6 +37,9 @@ use Symfony\Component\Validator\Constraints as Assert;
  * oculta; para que no falle por algo que no se ve, sus datos se toman del elegido.
  * También ofrece (`grouped`) el pago de esta factura junto con otras del mismo
  * proveedor que siguen en la bandeja: al elegirlo, se enganchan todas.
+ *
+ * Un apunte nuevo sólo puede ir a una caja o una tarjeta: lo que se paga por banco
+ * lo trae el extracto, y la factura espera a engancharse a ese pago.
  *
  * Reutiliza {@see AccountEntryType} entero en vez de copiar sus campos: así el
  * signo, las partidas que se ofrecen y la validación son exactamente los mismos
@@ -97,6 +102,23 @@ class ReceivedInvoiceConfirmType extends AbstractType
             $withOthers[(string) $group->payment->getId()] = $group->others;
         }
         $candidates = [...$options['candidates'], ...array_map(static fn (GroupedPayment $g): AccountEntry => $g->payment, $options['grouped'])];
+
+        // Un pago por banco no se anota desde la factura: llega con el extracto, y
+        // anotarlo aquí lo contaría dos veces cuando se suba. La factura espera en la
+        // bandeja hasta que su pago esté en el libro y se engancha a él. Sólo se
+        // crea apunte en una caja o una tarjeta, cuyos pagos no trae ningún extracto
+        // (la tarjeta llega al banco liquidada de golpe, no compra a compra).
+        $builder->addEventListener(FormEvents::POST_SUBMIT, static function (FormEvent $event): void {
+            $form = $event->getForm();
+            $matched = $form->has('match') && $form->get('match')->getData() !== null;
+            $account = $form->get('entry')->get('account')->getData();
+            if (!$matched && $account instanceof FinancialAccount && $account->isBank()) {
+                $form->get('entry')->get('account')->addError(new FormError(
+                    'Un pago por banco no se anota desde la factura: llega con el extracto. Deja la factura en la bandeja; al subir el extracto con su pago, se enganchará a él. Si se pagó en efectivo o con tarjeta, elige esa cuenta.',
+                ));
+            }
+        });
+
         if ($candidates === []) {
             return;
         }

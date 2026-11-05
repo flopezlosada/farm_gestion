@@ -13,11 +13,13 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
  * Qué apuntes del libro pueden ser el pago de una factura
- * ({@see AccountEntryRepository::findPaymentCandidates}): mismo importe exacto, de
- * una semana antes a mes y medio después, sin factura ya, el más cercano primero.
+ * ({@see AccountEntryRepository::findPaymentCandidates}): mismo importe exacto, desde
+ * una semana antes y sin tope después (salvo que se pida), sin factura ya, el más
+ * cercano primero.
  *
  * Los casos reales que lo motivan: transferencias de 3, 5 y 20 días después de la
- * fecha de la factura, que acabaron contadas dos veces.
+ * fecha de la factura, que acabaron contadas dos veces; y una factura de julio
+ * pagada en octubre, a la que no se ofrecía su pago.
  *
  * Autocontenido: fechas de 2092 y un importe que no usa nadie.
  */
@@ -57,7 +59,7 @@ class AccountEntryPaymentCandidatesTest extends KernelTestCase
 
         $near = $this->entry($account, $category, '2092-05-08', self::AMOUNT);   // +3 días: el bueno
         $far = $this->entry($account, $category, '2092-05-25', self::AMOUNT);    // +20 días: también vale, detrás
-        $this->entry($account, $category, '2092-07-01', self::AMOUNT);           // +57 días: fuera de la ventana
+        $late = $this->entry($account, $category, '2092-07-01', self::AMOUNT);   // +57 días: tardío, el último
         $this->entry($account, $category, '2092-04-20', self::AMOUNT);           // −15 días: fuera
         $this->entry($account, $category, '2092-05-06', '-876.55');              // otro importe
         $linked = $this->entry($account, $category, '2092-05-05', self::AMOUNT); // ya tiene factura
@@ -68,9 +70,19 @@ class AccountEntryPaymentCandidatesTest extends KernelTestCase
         $this->persist($invoice);
         $this->em->flush();
 
-        $found = $this->em->getRepository(AccountEntry::class)->findPaymentCandidates(self::AMOUNT, new \DateTimeImmutable('2092-05-05'));
+        $repository = $this->em->getRepository(AccountEntry::class);
+        $ids = static fn (array $found): array => array_map(static fn (AccountEntry $e) => $e->getId(), $found);
 
-        $this->assertSame([$near->getId(), $far->getId()], array_map(static fn (AccountEntry $e) => $e->getId(), $found));
+        $this->assertSame(
+            [$near->getId(), $far->getId(), $late->getId()],
+            $ids($repository->findPaymentCandidates(self::AMOUNT, new \DateTimeImmutable('2092-05-05'))),
+            'Sin tope: el pago tardío también sale, detrás de los cercanos.',
+        );
+        $this->assertSame(
+            [$near->getId(), $far->getId()],
+            $ids($repository->findPaymentCandidates(self::AMOUNT, new \DateTimeImmutable('2092-05-05'), 3, 45)),
+            'Con tope, lo que pasa de él no sale.',
+        );
     }
 
     private function entry(FinancialAccount $account, BudgetCategory $category, string $date, string $amount): AccountEntry

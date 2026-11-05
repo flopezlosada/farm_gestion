@@ -31,7 +31,11 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
     /** CIF de la ferretería de las pruebas; tearDown borra el proveedor que cree. */
     private const TAX_ID = '51454945N';
 
+    /** Cuenta de banco: la de los pagos que trae el extracto. */
     private ?FinancialAccount $account = null;
+
+    /** Caja de efectivo: donde sí se anota un apunte nuevo desde la factura. */
+    private ?FinancialAccount $cash = null;
     private ?BudgetCategoryGroup $group = null;
     private ?BudgetCategory $category = null;
 
@@ -85,7 +89,8 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
 
         foreach ([$this->category ? [BudgetCategory::class, $this->category->getId()] : null,
                   $this->group ? [BudgetCategoryGroup::class, $this->group->getId()] : null,
-                  $this->account ? [FinancialAccount::class, $this->account->getId()] : null] as $ref) {
+                  $this->account ? [FinancialAccount::class, $this->account->getId()] : null,
+                  $this->cash ? [FinancialAccount::class, $this->cash->getId()] : null] as $ref) {
             if ($ref !== null && ($row = $em->find($ref[0], $ref[1])) !== null) {
                 $em->remove($row);
                 $em->flush();
@@ -137,7 +142,7 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
 
         $confirm = $crawler->filter('form[name="received_invoice_confirm"]')->form([
             'received_invoice_confirm[entry][date]' => '2026-03-05',
-            'received_invoice_confirm[entry][account]' => (string) $this->account->getId(),
+            'received_invoice_confirm[entry][account]' => (string) $this->cash->getId(),
             'received_invoice_confirm[entry][category]' => (string) $this->category->getId(),
             'received_invoice_confirm[entry][concept]' => 'Ferretería Torrelaguna · tornillería',
             'received_invoice_confirm[entry][direction]' => 'out',
@@ -434,7 +439,7 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
         $this->assertResponseIsSuccessful();
         $form = $crawler->filter('form[name="received_invoice_confirm"]')->form();
-        $form['received_invoice_confirm[entry][account]']->select((string) $this->account->getId());
+        $form['received_invoice_confirm[entry][account]']->select((string) $this->cash->getId());
         $client->submit($form);
         $this->assertResponseRedirects();
 
@@ -516,7 +521,7 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
         $form = $crawler->filter('form[name="received_invoice_confirm"]')->form();
         $form['received_invoice_confirm[match]']->select('');
-        $form['received_invoice_confirm[entry][account]']->select((string) $this->account->getId());
+        $form['received_invoice_confirm[entry][account]']->select((string) $this->cash->getId());
         $client->submit($form);
         $this->assertResponseRedirects();
 
@@ -547,6 +552,36 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $client->followRedirect();
         $this->assertSelectorTextContains('.csa-alerts', 'Anotado: Ferretería Torrelaguna · tornillería.');
         $this->assertSelectorTextContains('.csa-alerts', 'Ahora tienes delante la siguiente sin validar (es la última).');
+    }
+
+    /**
+     * Un pago por banco no se anota desde la factura: llegará con el extracto, y
+     * anotarlo aquí lo contaría dos veces. La factura se queda en la bandeja.
+     */
+    public function testUnPagoPorBancoSinExtractoNoSeAnotaYLaFacturaEspera(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $invoice = $this->uploadOne($client);
+        $this->createCatalogue();
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
+        $form = $crawler->filter('form[name="received_invoice_confirm"]')->form([
+            'received_invoice_confirm[entry][date]' => '2026-03-05',
+            'received_invoice_confirm[entry][account]' => (string) $this->account->getId(),
+            'received_invoice_confirm[entry][category]' => (string) $this->category->getId(),
+            'received_invoice_confirm[entry][concept]' => 'Ferretería Torrelaguna · tornillería',
+            'received_invoice_confirm[entry][direction]' => 'out',
+            'received_invoice_confirm[entry][magnitude]' => '26.75',
+            'received_invoice_confirm[entry][providerName]' => 'Ferretería Torrelaguna',
+        ]);
+        $client->submit($form);
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorTextContains('body', 'Un pago por banco no se anota desde la factura');
+        $invoice = $this->findInvoice('factura-prueba.pdf');
+        $this->assertTrue($invoice->isOpen(), 'La factura sigue en la bandeja.');
+        $this->assertNull($invoice->getAccountEntry(), 'No se ha creado ningún apunte.');
     }
 
     /** Una línea de IVA a medias no deja confirmar: la gestoría la necesita entera. */
@@ -580,7 +615,7 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $this->assertResponseIsSuccessful();
         $this->assertCount(1, $crawler->filter(sprintf('iframe[src*="/invoices/%d/file"]', $invoice->getId())), 'La ficha del apunte enseña la factura.');
 
-        $crawler = $client->request('GET', '/gestion/accounting/ledger?account=' . $this->account->getId());
+        $crawler = $client->request('GET', '/gestion/accounting/ledger?account=' . $this->cash->getId());
         $this->assertCount(1, $crawler->filter('.fa-paperclip'), 'En el libro, el apunte con factura lleva el clip.');
 
         $crawler = $client->request('GET', sprintf('/gestion/accounting/entry/%d', $entry->getId()));
@@ -716,7 +751,7 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         ], $invoiceFields);
         $values['received_invoice_confirm']['entry'] = array_replace($values['received_invoice_confirm']['entry'], [
             'date' => '2026-03-05',
-            'account' => (string) $this->account->getId(),
+            'account' => (string) $this->cash->getId(),
             'category' => (string) $this->category->getId(),
             'concept' => 'Ferretería Torrelaguna · tornillería',
             'direction' => 'out',
@@ -762,10 +797,18 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
             ->setOpeningDate(new \DateTimeImmutable('2026-01-01'))
             ->setActive(true)
             ->setSortOrder(99);
+        $this->cash = (new FinancialAccount())
+            ->setName('Caja de prueba ' . $suffix)
+            ->setKind(FinancialAccount::KIND_CASH)
+            ->setOpeningBalance('0.00')
+            ->setOpeningDate(new \DateTimeImmutable('2026-01-01'))
+            ->setActive(true)
+            ->setSortOrder(99);
         $this->group = (new BudgetCategoryGroup())->setName('GASTOS PRUEBA ' . $suffix)->setKind(BudgetCategoryGroup::KIND_EXPENSE)->setSortOrder(99);
         $this->category = (new BudgetCategory())->setGroup($this->group)->setName('Ferretería')->setSortOrder(1);
 
         $em->persist($this->account);
+        $em->persist($this->cash);
         $em->persist($this->group);
         $em->persist($this->category);
         $em->flush();
