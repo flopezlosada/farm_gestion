@@ -101,7 +101,8 @@ class GeminiClient
                 'responseSchema' => $schema,
             ],
         ];
-        $lastProblem = 'El servicio de lectura no responde.';
+        $noAnswer = 'El servicio de lectura no responde.';
+        $lastProblem = $noAnswer;
 
         foreach ($this->models as $model) {
             try {
@@ -126,6 +127,13 @@ class GeminiClient
                 $lastProblem = $status === 429
                     ? 'Se ha agotado el cupo gratuito de lectura por ahora.'
                     : 'El servicio de lectura está saturado.';
+                continue;
+            }
+            if ($status === 404) {
+                // El modelo ya no existe (Google los retira y renombra): no es culpa del
+                // documento, el siguiente de la lista puede leerlo. Si otro ya falló por
+                // saturación o cupo, ése es el motivo que hay que contar: se arregla esperando.
+                $lastProblem = $lastProblem === $noAnswer ? sprintf('El modelo %s ya no está disponible.', $model) : $lastProblem;
                 continue;
             }
             if ($status === 401 || $status === 403) {
