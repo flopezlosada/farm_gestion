@@ -56,6 +56,11 @@
             {% else %}se le regala{{ worker.basketGiftUntil ? ' hasta el ' ~ worker.basketGiftUntil|date('d/m/Y') : ' sin fecha de fin' }}.
             {% endif %}
         </p>
+    {% elseif is_granted('ROLE_GESTION_LABORAL_EDIT') and is_granted('ROLE_GESTION_SOCIXS_EDIT') %}
+        <p style="margin: 0 0 1.4rem; color: #374151;">
+            <i class="fa fa-shopping-basket"></i> No recibe cesta.
+            {{ csa.btn('Darle cesta', { variant: 'secondary', icon: 'fa-plus', href: path('partner_new', { worker: worker.id }) }) }}
+        </p>
     {% endif %}
 
     {# ===== Datos personales ===== #}

@@ -20,8 +20,10 @@
 
     {{ csa.page_header(
         'Socixs · Alta',
-        'Nuevx socix',
-        'Sólo datos de persona. La cesta y el punto de recogida se asignan después desde la ficha.'
+        worker ? 'Ficha de cesta de ' ~ worker.name : 'Nuevx socix',
+        worker
+            ? 'Con sus datos de la ficha laboral y como no socia. Completa lo que falta; al guardar se elige la cesta.'
+            : 'Sólo datos de persona. La cesta y el punto de recogida se asignan después desde la ficha.'
     ) }}
 
     {{ form_start(form, { attr: { role: 'form', class: 'csa-form-narrow', enctype: 'multipart/form-data' } }) }}
