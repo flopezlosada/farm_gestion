@@ -14,7 +14,8 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 /**
  * Los gastos de un trimestre a los que les falta la factura
  * ({@see AccountEntryRepository::findExpensesWithoutInvoice}): de gasto o inversión,
- * de una partida que la pide, sin factura recibida ligada y dentro de las fechas.
+ * de una partida que la pide, sin factura recibida ligada y dentro de las fechas. Y el
+ * filtro «Sin factura» del libro, que usa la misma regla.
  *
  * Autocontenido: fechas de 2093.
  */
@@ -72,6 +73,13 @@ class AccountEntryWithoutInvoiceTest extends KernelTestCase
             ->findExpensesWithoutInvoice(new \DateTimeImmutable('2093-07-01'), new \DateTimeImmutable('2093-09-30'));
 
         $this->assertSame([$missing->getId(), $investment->getId()], array_map(static fn (AccountEntry $e) => $e->getId(), $found));
+        // El filtro «Sin factura» del libro es la misma regla, sin el trimestre.
+        $listed = $this->em->getRepository(AccountEntry::class)
+            ->listingQueryBuilder(['account' => $account, 'without_invoice' => true], ascending: true)->getQuery()->getResult();
+        $this->assertSame(['2093-06-30', '2093-07-01', '2093-09-30', '2093-10-01'], array_map(static fn (AccountEntry $e) => $e->getDate()->format('Y-m-d'), $listed));
+        $this->assertCount(9, $this->em->getRepository(AccountEntry::class)
+            ->listingQueryBuilder(['account' => $account, 'without_invoice' => false])->getQuery()->getResult(), 'sin marcar, todos');
+
         $this->assertTrue($missing->getCategory()->expectsInvoice());
         $this->assertFalse($payroll->expectsInvoice());
         $this->assertFalse($fees->expectsInvoice(), 'en ingresos no cuenta, aunque la casilla siga marcada');

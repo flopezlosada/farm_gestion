@@ -399,8 +399,27 @@ class AccountEntryRepository extends ServiceEntityRepository
             $qb->andWhere('e.concept LIKE :text OR e.providerName LIKE :text OR e.invoiceNumber LIKE :text')
                 ->setParameter('text', '%'.$filters['text'].'%');
         }
+        if (!empty($filters['without_invoice'])) {
+            self::missingInvoice($qb);
+        }
 
         return $qb;
+    }
+
+    /**
+     * Deja sólo los gastos que tendrían que llevar factura y no tienen ninguna recibida
+     * ligada: partida de gasto o inversión que la pide ({@see \App\Entity\BudgetCategory::expectsInvoice()}).
+     * Una sola definición para la pantalla de la gestoría y el filtro del libro.
+     *
+     * @param QueryBuilder $qb Consulta sobre apuntes `e` con su partida `c` y su grupo `g` ya unidos.
+     */
+    private static function missingInvoice(QueryBuilder $qb): QueryBuilder
+    {
+        return $qb->leftJoin(ReceivedInvoice::class, 'ri', 'WITH', 'ri.accountEntry = e')
+            ->andWhere('ri.id IS NULL')
+            ->andWhere('g.kind IN (:kinds)')->setParameter('kinds', BudgetCategoryGroup::INVOICED_KINDS)
+            ->andWhere('c.requiresInvoice = true')
+            ->andWhere('e.amount < 0');
     }
 
     /** Días antes de la fecha de una factura en que puede estar ya su pago en el libro. */
@@ -557,15 +576,10 @@ class AccountEntryRepository extends ServiceEntityRepository
      */
     public function findExpensesWithoutInvoice(\DateTimeInterface $from, \DateTimeInterface $to): array
     {
-        return $this->createQueryBuilder('e')
+        return self::missingInvoice($this->createQueryBuilder('e')
             ->innerJoin('e.account', 'a')->addSelect('a')
             ->innerJoin('e.category', 'c')->addSelect('c')
-            ->innerJoin('c.group', 'g')
-            ->leftJoin(ReceivedInvoice::class, 'ri', 'WITH', 'ri.accountEntry = e')
-            ->andWhere('ri.id IS NULL')
-            ->andWhere('g.kind IN (:kinds)')->setParameter('kinds', BudgetCategoryGroup::INVOICED_KINDS)
-            ->andWhere('c.requiresInvoice = true')
-            ->andWhere('e.amount < 0')
+            ->innerJoin('c.group', 'g'))
             ->andWhere('e.date BETWEEN :from AND :to')
             ->setParameter('from', $from)
             ->setParameter('to', $to)

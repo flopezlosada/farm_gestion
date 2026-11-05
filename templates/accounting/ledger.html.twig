@@ -62,8 +62,11 @@
                 Del <input type="date" name="from" value="{{ filters.from ? filters.from|date('Y-m-d') : '' }}" aria-label="Desde">
                 al <input type="date" name="to" value="{{ filters.to ? filters.to|date('Y-m-d') : '' }}" aria-label="Hasta">
             </span>
+            <label class="acc-small" title="Gastos de partidas que piden factura y no tienen ninguna ligada">
+                <input type="checkbox" name="without_invoice" value="1" {{ filters.without_invoice ? 'checked' }}> Sin factura
+            </label>
             <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-filter"></i> Filtrar</button>
-            {% if filters.text or account or filters.category or filters.from or filters.to %}<a href="{{ path('accounting_ledger') }}" class="prl-btn">Quitar filtros</a>{% endif %}
+            {% if filters.text or account or filters.category or filters.from or filters.to or filters.without_invoice %}<a href="{{ path('accounting_ledger') }}" class="prl-btn">Quitar filtros</a>{% endif %}
         </form>
     </div>
 
