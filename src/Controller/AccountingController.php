@@ -462,6 +462,11 @@ class AccountingController extends AbstractController
         if ($suggestion !== null && !$request->isMethod('POST')) {
             $entry->setCategory($suggestion->category);
         }
+        // Y el proveedor, por la misma regla: lo casado una vez con su ficha sigue casado.
+        $provider = $bankLine !== null ? $suggester->providerFor($bankLine) : null;
+        if ($provider !== null && !$request->isMethod('POST')) {
+            $entry->setProvider($provider);
+        }
 
         $form = $this->createForm(AccountEntryType::class, $entry);
         $form->handleRequest($request);
@@ -509,8 +514,8 @@ class AccountingController extends AbstractController
                     $suggestion->category->getName(),
                     $suggestion->times === 1 ? 'el último apunte' : sprintf('los %d últimos apuntes', $suggestion->times),
                     $suggestion->times === 1 ? '' : 'n',
-                )
-                : 'Un movimiento de una cuenta. El saldo se recalcula solo.',
+                ).($provider !== null ? sprintf(' El proveedor «%s», por lo mismo.', $provider->getName()) : '')
+                : 'Un movimiento de una cuenta. El saldo se recalcula solo.'.($provider !== null ? sprintf(' El proveedor «%s» está puesto porque las últimas veces con el mismo concepto lo llevaban.', $provider->getName()) : ''),
             'suggestions' => AccountEntryType::suggestedDirections($categories->findActive()),
         ]);
     }
