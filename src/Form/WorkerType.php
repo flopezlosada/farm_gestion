@@ -59,7 +59,7 @@ class WorkerType extends AbstractType
                 'help' => 'Último día que trabaja. Desde el día siguiente conserva su histórico pero no puede fichar. Vacío = sigue trabajando.',
             ])
             ->add('partner', EntityType::class, [
-                'label' => 'Su ficha de socix',
+                'label' => 'Su ficha de cesta',
                 'class' => Partner::class,
                 'query_builder' => static fn (EntityRepository $r) => $r->createQueryBuilder('p')->orderBy('p.name')->addOrderBy('p.surname'),
                 'choice_label' => static fn (Partner $p): string => $p->getLegalName(),
