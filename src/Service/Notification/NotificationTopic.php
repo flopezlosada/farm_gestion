@@ -46,22 +46,28 @@ final class NotificationTopic
     public const SURVEYS = 'surveys';
 
     /**
-     * El catálogo. Clave => etiqueta, ayuda, feature que lo habilita (o null) y
-     * canales por los que se manda de verdad.
+     * El catálogo. Clave => etiqueta, ayuda, feature que lo habilita (o null), si
+     * es sólo de socias y canales por los que se manda de verdad.
      *
-     * @var array<string, array{label: string, help: string, feature: ?string, channels: list<string>}>
+     * `members` a true = sólo para socias: quien recibe cesta sin ser socia (una
+     * trabajadora, {@see \App\Entity\Partner::isMember()}) ni lo configura ni lo
+     * recibe. La cesta y las novedades sí le llegan.
+     *
+     * @var array<string, array{label: string, help: string, feature: ?string, members: bool, channels: list<string>}>
      */
     public const TOPICS = [
         self::PICKUP => [
             'label' => 'Mi cesta',
             'help' => 'Cuándo y dónde te toca recoger. Se manda una vez por reparto, unos días antes.',
             'feature' => null,
+            'members' => false,
             'channels' => [self::CHANNEL_EMAIL, self::CHANNEL_PUSH],
         ],
         self::VOLUNTEERING => [
             'label' => 'Voluntariado',
             'help' => 'Cuando falta gente para algo que encaja contigo. El recordatorio de una tarea a la que ya te has apuntado llega siempre al móvil.',
             'feature' => AppSettings::FEATURE_VOLUNTEERING,
+            'members' => true,
             // Los dos, pero OJO: el correo sólo sale de los avisos que piden
             // gente, y además exige que administración lo encienda
             // (AppSettings::EMAIL_VOLUNTEERING, apagado por defecto). El
@@ -73,6 +79,7 @@ final class NotificationTopic
             'label' => 'Novedades de la web',
             'help' => 'Cuando añadimos algo nuevo que puedas usar. De vez en cuando, nunca urgente.',
             'feature' => null,
+            'members' => false,
             // Los dos canales, cada uno con su casilla. Que el móvil se pueda
             // apagar POR SEPARADO es justo lo que permite mandarlo: sin esa
             // casilla, quien no quisiera enterarse de las novedades tendría que
@@ -85,6 +92,7 @@ final class NotificationTopic
             'label' => 'Grupo de consumo',
             'help' => 'Cuando se abre un pedido de aceite, fruta o legumbre al que puedes apuntarte. Son unos pocos al año.',
             'feature' => AppSettings::FEATURE_GRUPO_CONSUMO,
+            'members' => true,
             // Encendido por defecto, como todos: el pedido está abierto a toda
             // la asociación, así que el aviso también. Quien no consuma nada de
             // esto lo apaga aquí y no vuelve a enterarse, sin tener que renunciar
@@ -95,6 +103,7 @@ final class NotificationTopic
             'label' => 'Encuestas',
             'help' => 'Cuando la asociación pregunta vuestra opinión sobre algo. Unas pocas al año, y el correo trae un enlace para responder sin entrar en la web.',
             'feature' => AppSettings::FEATURE_SURVEYS,
+            'members' => true,
             // Encendido por defecto, como todos: una encuesta a la que no llega
             // el aviso no la responde nadie. Quien no quiera, lo apaga aquí sin
             // renunciar al aviso de su cesta.

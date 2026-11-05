@@ -9,6 +9,7 @@ use App\Entity\ConsumerGroupRound;
 use App\Entity\Image;
 use App\Repository\ConsumerGroupOrderRepository;
 use App\Repository\ConsumerGroupRoundRepository;
+use App\Security\MemberVoter;
 use App\Service\AppSettings;
 use App\Service\ConsumerGroup\ConsumerGroupEventRecorder;
 use App\Service\ConsumerGroup\MinimumAutoConfirmer;
@@ -34,6 +35,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[Route('/panel/consumer-group')]
 #[IsGranted('FEATURE_GRUPO_CONSUMO')]
 #[IsGranted('ROLE_PARTNER')]
+#[IsGranted(MemberVoter::MEMBER_AREA)]
 class PanelConsumerGroupController extends AbstractController
 {
     /**

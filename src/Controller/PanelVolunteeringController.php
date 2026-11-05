@@ -14,6 +14,7 @@ use App\Repository\VolunteerCategoryRepository;
 use App\Repository\VolunteerCoordinationLogRepository;
 use App\Repository\VolunteerShiftRepository;
 use App\Repository\VolunteerSignupRepository;
+use App\Security\MemberVoter;
 use App\Service\Calendar\MonthGrid;
 use App\Service\Volunteering\CreditedTime;
 use App\Service\Volunteering\ShiftCalendar;
@@ -65,6 +66,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  */
 #[Route('/panel/voluntariado')]
 #[IsGranted('ROLE_PARTNER')]
+#[IsGranted(MemberVoter::MEMBER_AREA)]
 #[IsGranted('FEATURE_VOLUNTEERING')]
 class PanelVolunteeringController extends AbstractController
 {

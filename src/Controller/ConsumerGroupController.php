@@ -670,7 +670,7 @@ class ConsumerGroupController extends AbstractController
         // en su pantalla de avisos): sin fila = lo quiere, así que hoy esto casi
         // no filtra nada, y va estrechando la lista según la gente vaya apagando
         // el tema.
-        $partners = $preferences->filterAny($partnerRepository->findActive(), NotificationTopic::CONSUMER_GROUP);
+        $partners = $preferences->filterAny($partnerRepository->findActiveMembers(), NotificationTopic::CONSUMER_GROUP);
         usort(
             $partners,
             static fn (Partner $a, Partner $b): int => [$a->getName(), $a->getSurname()] <=> [$b->getName(), $b->getSurname()]

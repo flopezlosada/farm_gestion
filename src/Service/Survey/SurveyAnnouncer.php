@@ -90,7 +90,7 @@ class SurveyAnnouncer
      */
     public function audience(): array
     {
-        $active = $this->partners->findActive();
+        $active = $this->partners->findActiveMembers();
         $emailEnabled = $this->settings->getBool(AppSettings::EMAIL_ENABLED);
 
         return [
@@ -110,7 +110,7 @@ class SurveyAnnouncer
      */
     public function announce(Survey $survey): array
     {
-        $active = $this->partners->findActive();
+        $active = $this->partners->findActiveMembers();
 
         $result = [
             'inbox' => $this->deliverInbox($survey, $active),
@@ -303,7 +303,7 @@ class SurveyAnnouncer
     private function emailRecipients(): array
     {
         return $this->preferences->filter(
-            $this->partners->findActiveWithEmail(),
+            $this->partners->findActiveMembersWithEmail(),
             NotificationTopic::SURVEYS,
             NotificationTopic::CHANNEL_EMAIL,
         );

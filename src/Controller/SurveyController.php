@@ -98,7 +98,7 @@ class SurveyController extends AbstractController
             // A quién se le puede reenviar el enlace: sólo mientras admite
             // respuestas y a quien puede escribir. Nombres, nada más: este rol
             // no ve fichas ni correos de socias.
-            'resend_partners' => $canWrite && $survey->acceptsResponses($now) ? $partners->findActiveWithEmail() : [],
+            'resend_partners' => $canWrite && $survey->acceptsResponses($now) ? $partners->findActiveMembersWithEmail() : [],
             // Abrir desde la ficha: es donde se revisa antes. El diálogo dice a
             // cuánta gente llegará el aviso.
             'can_open'        => $canWrite && $survey->isEditable(),
@@ -348,7 +348,7 @@ class SurveyController extends AbstractController
         }
 
         $partner = $partners->find($request->request->getInt('partner'));
-        if (!$partner instanceof Partner || Partner::STATUS_ACTIVO !== $partner->getStatus() || '' === trim((string) $partner->getEmail())) {
+        if (!$partner instanceof Partner || !$partner->isActiveMember() || '' === trim((string) $partner->getEmail())) {
             $this->addFlash('warning', 'Elige una socia activa con correo.');
 
             return $back;

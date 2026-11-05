@@ -337,7 +337,8 @@ class VolunteerCallNotifier
      * Dos condiciones, las mismas que respetan los finders de
      * {@see \App\Repository\PartnerRepository} de los que sale la audiencia
      * automática: que no haya pedido que no se le avise de voluntariado, y que
-     * siga siendo socix activx. A quien se dio de baja no se le pide ayuda.
+     * siga siendo socia activa. A quien se dio de baja no se le pide ayuda, ni a
+     * quien recibe cesta sin ser socia.
      *
      * Vive aquí y no sólo en el controlador porque es política de a-quién-se-le-
      * manda, y este servicio es el único que manda: una comprobación en la
@@ -350,7 +351,7 @@ class VolunteerCallNotifier
     public function canBeAsked(Partner $partner): bool
     {
         return !$partner->isVolunteeringOptOut()
-            && Partner::STATUS_ACTIVO === $partner->getStatus();
+            && $partner->isActiveMember();
     }
 
     /**
