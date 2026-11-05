@@ -234,6 +234,8 @@ class AccountingController extends AbstractController
             'from' => $this->parseDate($request->query->get('from')),
             'to' => $this->parseDate($request->query->get('to')),
             'text' => trim((string) $request->query->get('q')) ?: null,
+            // Gastos que piden factura y no tienen ninguna: lo que la gestoría echará en falta.
+            'without_invoice' => $request->query->getBoolean('without_invoice'),
         ];
 
         $ascending = $request->query->get('direction') === 'asc';
@@ -250,8 +252,8 @@ class AccountingController extends AbstractController
         $pageIds = array_map(static fn (AccountEntry $e): int => (int) $e->getId(), $pageEntries);
 
         // El saldo fila a fila sólo se puede seguir con todos los movimientos de UNA
-        // cuenta: filtrar por partida o por texto deja huecos. Las fechas no molestan.
-        $showsRunningBalance = $account !== null && $filters['category'] === null && $filters['group'] === null && $filters['text'] === null;
+        // cuenta: filtrar por partida, por texto o por «sin factura» deja huecos. Las fechas no molestan.
+        $showsRunningBalance = $account !== null && $filters['category'] === null && $filters['group'] === null && $filters['text'] === null && !$filters['without_invoice'];
 
         return $this->render('accounting/ledger.html.twig', [
             'pagination' => $pagination,
