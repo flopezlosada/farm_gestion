@@ -106,6 +106,26 @@ class StaffControllerTest extends WebTestCase
         return $worker;
     }
 
+    /**
+     * Entra con un usuario que sólo tiene esos roles, ya con contraseña puesta
+     * (sin ella, la app le manda antes a elegirla).
+     *
+     * @param list<string> $roles
+     */
+    private function loginWithRoles(array $roles): void
+    {
+        $user = (new User())
+            ->setUsername('worker-test-' . uniqid())
+            ->setEmail(uniqid('worker-test-') . '@example.test')
+            ->setPassword('x')
+            ->setEnabled(true)
+            ->setPasswordSet(true)
+            ->setRoles($roles);
+        $this->em->persist($user);
+        $this->em->flush();
+        $this->client->loginUser($user);
+    }
+
     private function addEntry(Worker $worker, string $type, string $at): TimeEntry
     {
         $entry = (new TimeEntry())
@@ -323,12 +343,14 @@ class StaffControllerTest extends WebTestCase
             json_decode($this->client->getResponse()->getContent(), true),
         );
 
+        // La petición limpia el EntityManager: se vuelve a cargar.
+        $member = $this->em->getRepository(Partner::class)->find($member->getId());
         $member->setMember(false);
         $this->em->flush();
         $this->client->request('GET', '/gestion/staff/member-data/' . $member->getId());
         $this->assertResponseStatusCodeSame(404, 'De una ficha de no socia no se dan datos.');
 
-        $this->em->remove($member);
+        $this->em->remove($this->em->getRepository(Partner::class)->find($member->getId()));
         $this->em->flush();
     }
 
@@ -337,19 +359,12 @@ class StaffControllerTest extends WebTestCase
     {
         $member = (new Partner())->setName('TEST')->setSurname('Socia ' . uniqid());
         $this->em->persist($member);
-        $staff = (new User())
-            ->setUsername('worker-test-laboral-' . uniqid())
-            ->setEmail(uniqid('laboral') . '@example.test')
-            ->setPassword('x')
-            ->setRoles(['ROLE_GESTION_LABORAL_EDIT']);
-        $this->em->persist($staff);
-        $this->em->flush();
-        $this->client->loginUser($staff);
+        $this->loginWithRoles(['ROLE_GESTION_LABORAL_EDIT']);
 
         $this->client->request('GET', '/gestion/staff/member-data/' . $member->getId());
         $this->assertResponseStatusCodeSame(403);
 
-        $this->em->remove($member);
+        $this->em->remove($this->em->getRepository(Partner::class)->find($member->getId()));
         $this->em->flush();
     }
 
@@ -397,14 +412,7 @@ class StaffControllerTest extends WebTestCase
     public function testGiveBasketNeedsLaborEditRole(): void
     {
         $worker = $this->makeWorker();
-        $editor = (new User())
-            ->setUsername('worker-test-socixs-' . uniqid())
-            ->setEmail(uniqid('socixs') . '@example.test')
-            ->setPassword('x')
-            ->setRoles(['ROLE_GESTION_SOCIXS_EDIT']);
-        $this->em->persist($editor);
-        $this->em->flush();
-        $this->client->loginUser($editor);
+        $this->loginWithRoles(['ROLE_GESTION_SOCIXS_EDIT']);
 
         $this->client->request('GET', '/gestion/partner/new?worker=' . $worker->getId());
         $this->assertResponseStatusCodeSame(403);
