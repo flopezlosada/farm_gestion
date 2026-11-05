@@ -10,6 +10,7 @@ use App\Entity\FinancialAccount;
 use App\Entity\Provider;
 use App\Entity\ReceivedInvoice;
 use App\Entity\Setting;
+use App\Repository\ReceivedInvoiceRepository;
 use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\ExtractedInvoice;
 use App\Service\Accounting\Invoice\InvoiceQuarter;
@@ -30,6 +31,9 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
 {
     /** CIF de la ferretería de las pruebas; tearDown borra el proveedor que cree. */
     private const TAX_ID = '51454945N';
+
+    /** Facturas leídas que crean los tests de la cola; tearDown las borra. */
+    private const QUEUE_FILES = ['atras.pdf', 'primera.pdf', 'segunda.pdf', 'tercera.pdf'];
 
     private ?FinancialAccount $account = null;
     private ?BudgetCategoryGroup $group = null;
@@ -57,7 +61,7 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $em->flush();
         static::getContainer()->get(ClosedPeriods::class)->reset();
 
-        foreach ($em->getRepository(ReceivedInvoice::class)->findBy(['originalName' => ['factura-prueba.pdf', 'apuntes.txt', 'siguiente.pdf']]) as $invoice) {
+        foreach ($em->getRepository(ReceivedInvoice::class)->findBy(['originalName' => ['factura-prueba.pdf', 'apuntes.txt', 'siguiente.pdf', ...self::QUEUE_FILES]]) as $invoice) {
             $entry = $invoice->getAccountEntry();
             $em->remove($invoice);
             if ($entry !== null) {
@@ -572,7 +576,6 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
     {
         $client = $this->createAuthenticatedClient();
         $this->enableModule();
-        $this->createCatalogue();
         $first = $this->persistRead('primera.pdf');
         $second = $this->persistRead('segunda.pdf');
         $third = $this->persistRead('tercera.pdf');
@@ -580,8 +583,14 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $second->getId()));
 
         $this->assertResponseIsSuccessful();
+        // Puede haber otras en la bandeja (de antes, con id menor): el puesto se cuenta
+        // con ellas, y las tres de la prueba van seguidas al final.
+        $total = \count(array_filter(
+            static::getContainer()->get(ReceivedInvoiceRepository::class)->findOpen(),
+            static fn (ReceivedInvoice $i): bool => $i->getStatus() !== ReceivedInvoice::STATUS_PENDING,
+        ));
         $nav = $crawler->filter('nav.inv-nav');
-        $this->assertStringContainsString('Factura 2 de 3 por revisar', $nav->text());
+        $this->assertStringContainsString(sprintf('Factura %d de %d por revisar', $total - 1, $total), $nav->text());
         $links = $nav->filter('a')->each(static fn ($a): string => (string) $a->attr('href'));
         $this->assertSame([
             sprintf('/gestion/accounting/invoices/%d', $first->getId()),
@@ -735,7 +744,9 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
     {
         $em = static::getContainer()->get(EntityManagerInterface::class);
         $invoice = new ReceivedInvoice($name, $name, 'application/pdf', ReceivedInvoice::SOURCE_WEB, null);
-        $invoice->markRead(ExtractedInvoice::fromArray(['fecha' => '2026-03-06', 'total' => 12.5]), 'test', $this->category, new \DateTimeImmutable());
+        // Sin partida propuesta: puede crearse antes de una subida, que reinicia el
+        // kernel, y la partida de createCatalogue ya no sería de este EntityManager.
+        $invoice->markRead(ExtractedInvoice::fromArray(['fecha' => '2026-03-06', 'total' => 12.5]), 'test', null, new \DateTimeImmutable());
         $em->persist($invoice);
         $em->flush();
 
