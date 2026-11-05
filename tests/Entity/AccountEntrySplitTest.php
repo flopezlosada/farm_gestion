@@ -33,6 +33,19 @@ class AccountEntrySplitTest extends TestCase
         $this->assertNull($sibling->getInvoiceNumber(), 'La factura es del alquiler: se queda en el original.');
     }
 
+    /** Partido, sigue diciendo cuánto movió el banco: él más sus partes. Sin partir, lo suyo. */
+    public function testElMovimientoEnteroEsElDelBanco(): void
+    {
+        $entry = $this->entry('-158.95');
+        $this->assertSame('-158.95', $entry->getMovementAmount());
+
+        $entry->splitOff('50.00', $this->category('Suministros'), 'Suministros');
+        $entry->splitOff('8.95', $this->category('Agua'), 'Agua');
+
+        $this->assertSame('-100.00', $entry->getAmount());
+        $this->assertSame('-158.95', $entry->getMovementAmount());
+    }
+
     /** Un ingreso también se parte, y en céntimos: con float, 0,30 − 0,10 no da 0,20. */
     public function testUnIngresoSeParteAlCentimo(): void
     {

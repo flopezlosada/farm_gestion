@@ -109,6 +109,32 @@ class BankStatementImporterTest extends KernelTestCase
     }
 
     /**
+     * El cargo del Ayuntamiento se partió (alquiler + suministros) antes de subir el
+     * extracto. El banco trae el movimiento entero: se liga solo al apunte partido, y
+     * la parte no sale como «en el libro y no en el banco».
+     */
+    public function testUnApuntePartidoSeLigaPorElMovimientoEntero(): void
+    {
+        [$account, $number] = $this->bankAccount();
+        $category = $this->category();
+        $rent = $this->entry($account, $category, '2091-10-09', '-158.95', 'TRF. AYUNTAMIENTO');
+        $this->em->persist($rent->splitOff('50.00', $category, 'Suministros del local'));
+        $this->em->flush();
+        $this->em->clear();
+
+        $import = $this->import(N43::file(N43::account('9999', '0001', $number, '911001', '911031', 0, [
+            ['911009', -15895, ['TRF. AYUNTAMIENTO']],
+        ])));
+
+        $this->assertSame(1, $import->linked);
+        $line = $this->em->getRepository(BankStatementLine::class)->findOneBy(['account' => $account->getId()]);
+        $this->assertSame($rent->getId(), $line->getEntry()->getId());
+        $review = static::getContainer()->get(StatementReviewer::class)->review($import->statements[0]);
+        $this->assertSame([], $review->unbanked);
+        $this->assertSame(0, $review->closingDiffCents());
+    }
+
+    /**
      * El mismo mes en Norma 43 y, después, dentro de la hoja de Excel del banco (que no
      * trae documento ni referencias): sólo entra lo que la hoja trae de más.
      */

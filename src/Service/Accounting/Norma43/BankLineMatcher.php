@@ -11,7 +11,8 @@ use App\Repository\AccountEntryRepository;
  * Empareja los movimientos del banco con los apuntes del libro que los anotan. Sólo por
  * reglas que se pueden explicar, nunca por el texto ni por un importe parecido:
  *
- *  - misma cuenta y el MISMO importe, con signo, al céntimo;
+ *  - misma cuenta y el MISMO importe, con signo, al céntimo (el de un apunte partido
+ *    es el del movimiento entero: {@see AccountEntry::getMovementAmount()});
  *  - el apunte no explica ya otro movimiento;
  *  - fechas a ±{@see SUGGEST_DAYS} días naturales.
  *
@@ -80,7 +81,7 @@ class BankLineMatcher
     {
         return $line->getEntry() === null
             && $entry->getAccount() === $line->getAccount()
-            && IssuedInvoice::toCents($entry->getAmount()) === $line->getAmountCents()
+            && IssuedInvoice::toCents($entry->getMovementAmount()) === $line->getAmountCents()
             && self::days($line, $entry) <= self::SUGGEST_DAYS;
     }
 
@@ -96,7 +97,7 @@ class BankLineMatcher
     {
         $byKey = [];
         foreach ($entries as $entry) {
-            $byKey[self::key($entry->getAccount()?->getId(), IssuedInvoice::toCents($entry->getAmount()))][] = $entry;
+            $byKey[self::key($entry->getAccount()?->getId(), IssuedInvoice::toCents($entry->getMovementAmount()))][] = $entry;
         }
 
         return array_map(static function (BankStatementLine $line) use ($byKey): array {
@@ -191,7 +192,7 @@ class BankLineMatcher
             $groups[self::dayKey($line->getAccount()->getId(), $line->getAmountCents(), $line->getOperationDate())]['lines'][] = $line;
         }
         foreach ($entries as $entry) {
-            $key = self::dayKey($entry->getAccount()?->getId(), IssuedInvoice::toCents($entry->getAmount()), $entry->getDate());
+            $key = self::dayKey($entry->getAccount()?->getId(), IssuedInvoice::toCents($entry->getMovementAmount()), $entry->getDate());
             if (isset($groups[$key])) {
                 $groups[$key]['entries'][] = $entry;
             }

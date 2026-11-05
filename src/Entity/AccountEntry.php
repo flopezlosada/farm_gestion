@@ -2,6 +2,8 @@
 
 namespace App\Entity;
 
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Gedmo\Mapping\Annotation as Gedmo;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -130,6 +132,16 @@ class AccountEntry
     private ?AccountEntry $splitFrom = null;
 
     /**
+     * Las partes que se separaron de éste ({@see splitOff()}). Con él suman el
+     * movimiento del banco entero: {@see getMovementAmount()}.
+     *
+     * @ORM\OneToMany(targetEntity="AccountEntry", mappedBy="splitFrom")
+     *
+     * @var Collection<int, AccountEntry>
+     */
+    private Collection $parts;
+
+    /**
      * @ORM\Column(type="text", nullable=true)
      */
     private ?string $notes = null;
@@ -154,6 +166,12 @@ class AccountEntry
      * @ORM\Column(name="updated_at", type="datetime")
      */
     private ?\DateTimeInterface $updatedAt = null;
+
+    /** Un apunte nuevo, sin partes. */
+    public function __construct()
+    {
+        $this->parts = new ArrayCollection();
+    }
 
     /**
      * La fecha no puede ser anterior a la apertura de la cuenta: el saldo empieza a
@@ -376,8 +394,24 @@ class AccountEntry
             ->setProviderName($this->providerName)
             ->setAmount(IssuedInvoice::fromCents($signed));
         $part->splitFrom = $this;
+        $this->parts->add($part);
 
         return $part;
+    }
+
+    /**
+     * El importe del movimiento del banco que anota este apunte: el suyo más el de las
+     * partes que se separaron de él. Es lo que se compara con el extracto, porque partir
+     * no cambia lo que dijo el banco. En uno sin partes, su importe.
+     */
+    public function getMovementAmount(): string
+    {
+        $cents = IssuedInvoice::toCents($this->amount);
+        foreach ($this->parts as $part) {
+            $cents += IssuedInvoice::toCents($part->getAmount());
+        }
+
+        return IssuedInvoice::fromCents($cents);
     }
 
     /** El apunte del que se separó éste al partirlo, o null. */
