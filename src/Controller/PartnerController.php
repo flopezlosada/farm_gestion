@@ -13,10 +13,12 @@ use App\Entity\PartnerBasketExtra;
 use App\Entity\PartnerBasketShare;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketGroup;
+use App\Entity\Worker;
 use App\Form\PartnerBasketShareType;
 use App\Form\PartnerType;
 use App\Entity\Basket;
 use App\Entity\BasketComponent;
+use App\Http\QueryDate;
 use App\Http\QueryId;
 use App\Repository\BasketRepository;
 use App\Repository\FeeAdjustmentRepository;
@@ -29,6 +31,7 @@ use App\Repository\RemittanceRepository;
 use App\Repository\RemittanceReturnRepository;
 use App\Service\Delivery\CohortChoiceBuilder;
 use App\Repository\WeeklyBasketGroupRepository;
+use App\Repository\WorkerRepository;
 use App\Security\MagicLinkMailer;
 use App\Security\PartnerAccessPolicy;
 use App\Security\PartnerUserProvisioner;
@@ -263,10 +266,28 @@ class PartnerController extends AbstractController
     }
 
 
+    /**
+     * Alta de socix. Con `?worker=<id>` es la ficha de cesta de ese trabajador:
+     * sale prerrellenada con sus datos y como no socia, al guardar queda enlazada
+     * al trabajador y se sigue a «Añadir cesta», con la fecha de `?start=` si la trae.
+     *
+     * @param Request                $request       La petición.
+     * @param EntityManagerInterface $entityManager Para guardar la ficha.
+     * @param RemittanceRepository   $remittances   Siguiente referencia de mandato libre.
+     * @param WorkerRepository       $workers       Para el trabajador de `?worker=`.
+     * @return Response El formulario, o la redirección tras guardar.
+     */
     #[Route("/new", name: "partner_new", methods: ["GET","POST"])]
-    public function new(Request $request, EntityManagerInterface $entityManager, RemittanceRepository $remittances): Response
+    public function new(Request $request, EntityManagerInterface $entityManager, RemittanceRepository $remittances, WorkerRepository $workers): Response
     {
-        $partner = new Partner();
+        $worker = $this->workerToGiveBasket($request, $workers);
+        if ($worker?->getPartner() !== null) {
+            $this->addFlash('info', $worker->getName() . ' ya tiene ficha de cesta.');
+
+            return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
+        }
+
+        $partner = $worker === null ? new Partner() : Partner::nonMemberFor($worker);
         // Alta sólo con datos de persona: la cesta Y el grupo de recogida se
         // asignan después desde la ficha ("añadir cesta"), que es el único
         // camino de creación de cesta (pasa por reconcile). Pedido por
@@ -283,17 +304,45 @@ class PartnerController extends AbstractController
                 $partner->setHasFile(1);
             }
             $entityManager->persist($partner);
+            $worker?->setPartner($partner);
             $entityManager->flush();
 
-            return $this->redirectToRoute('partner_show', array('id' => $partner->getId()));
+            return $worker === null
+                ? $this->redirectToRoute('partner_show', array('id' => $partner->getId()))
+                : $this->redirectToRoute('partner_add_basket', [
+                    'id' => $partner->getId(),
+                    'start' => QueryDate::from($request->query, 'start')?->format('Y-m-d'),
+                ]);
         }
 
         return $this->render('partner/new.html.twig', [
             'partner' => $partner,
             'entity' => $partner,
+            'worker' => $worker,
             'form' => $form->createView(),
             'next_mandate' => $remittances->nextMandateReference(),
         ]);
+    }
+
+    /**
+     * El trabajador de `?worker=<id>` al que se le da cesta, o null en un alta
+     * normal. Enlazarle la ficha es tocar su ficha laboral: exige el mismo permiso
+     * que editarla.
+     *
+     * @param Request          $request La petición.
+     * @param WorkerRepository $workers Para buscarlo.
+     * @return Worker|null El trabajador, o null si la URL no lo trae.
+     */
+    private function workerToGiveBasket(Request $request, WorkerRepository $workers): ?Worker
+    {
+        $id = QueryId::from($request->query, 'worker');
+        if ($id === null) {
+            return null;
+        }
+        $this->denyAccessUnlessGranted('FEATURE_LABORAL');
+        $this->denyAccessUnlessGranted('ROLE_GESTION_LABORAL_EDIT');
+
+        return $workers->find($id) ?? throw $this->createNotFoundException('No existe ese trabajador.');
     }
 
     #[Route("/{id}", name: "partner_show", methods: ["GET"], requirements: ["id" => "\\d+"])]
@@ -1196,6 +1245,8 @@ class PartnerController extends AbstractController
     ): Response {
         $partnerBasketShare = new PartnerBasketShare();
         $partnerBasketShare->setPartner($partner);
+        // Desde la ficha de un trabajador llega la fecha en que empieza su cesta.
+        $partnerBasketShare->setStartDate(QueryDate::from($request->query, 'start')?->format('Y-m-d'));
 
         // El alta de socio ya no fija grupo de recogida: si el socio no lo
         // tiene, se elige aquí mismo. El grupo manda sobre el resto del form

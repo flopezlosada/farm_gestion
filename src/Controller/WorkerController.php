@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\Absence;
+use App\Entity\Partner;
 use App\Entity\TimeEntry;
 use App\Entity\Worker;
 use App\Form\AbsenceType;
@@ -32,7 +33,9 @@ use App\Service\Staff\WorkdayBuilder;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bridge\Doctrine\Attribute\MapEntity;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
+use Symfony\Component\Form\FormInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -72,6 +75,31 @@ class WorkerController extends AbstractController
                 'total' => count($all),
                 'active' => count(array_filter($all, static fn (Worker $w) => $w->isActive())),
             ],
+        ]);
+    }
+
+    /**
+     * Los datos personales de la ficha de una socia, para rellenar con ellos la
+     * del trabajador que ya es socia. Se piden de uno en uno y sólo quien puede
+     * ver Socixs: no se vuelcan los de todas en el formulario.
+     *
+     * @param Partner $partner La ficha elegida.
+     * @return JsonResponse Con las claves de los campos del formulario del trabajador.
+     */
+    #[Route('/member-data/{id}', name: 'staff_member_data', methods: ['GET'], requirements: ['id' => '\d+'])]
+    #[IsGranted('ROLE_GESTION_SOCIXS')]
+    public function memberData(Partner $partner): JsonResponse
+    {
+        if (!$partner->isMember()) {
+            throw $this->createNotFoundException('Esa ficha no es de socia.');
+        }
+
+        return $this->json([
+            'name' => trim($partner->getname() . ' ' . $partner->getSurname()),
+            'nif' => $partner->getDNI(),
+            'phone' => $partner->getcelular(),
+            'email' => $partner->getemail(),
+            'address' => $partner->getAddress(),
         ]);
     }
 
@@ -675,13 +703,38 @@ class WorkerController extends AbstractController
             $em->flush();
             $this->addFlash('success', sprintf('Trabajador «%s» creado.', $worker->getName()));
 
-            return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
+            return $this->nextStepAfterSave($worker, $form);
         }
 
         return $this->render('staff/new.html.twig', [
             'worker' => $worker,
             'form' => $form->createView(),
         ]);
+    }
+
+    /**
+     * Tras guardar la ficha, si se marcó «Recibe cesta»: a quien no es socia se le
+     * da de alta la ficha de no socia, que acaba en «Añadir cesta»; a una socia
+     * sin cesta en curso se le añade en su ficha. Las dos pantallas se abren con la
+     * fecha de inicio elegida. Una socia que ya tiene cesta no necesita otra. En
+     * los demás casos, a su ficha laboral.
+     *
+     * @param Worker        $worker El trabajador recién guardado.
+     * @param FormInterface $form   El formulario enviado.
+     * @return RedirectResponse El siguiente paso.
+     */
+    private function nextStepAfterSave(Worker $worker, FormInterface $form): RedirectResponse
+    {
+        $partner = $worker->getPartner();
+        $givesBasket = $form->has('givesBasket') && $form->get('givesBasket')->getData() === true;
+        $start = $givesBasket ? $form->get('basketStart')->getData()?->format('Y-m-d') : null;
+
+        return match (true) {
+            !$givesBasket => $this->redirectToRoute('staff_show', ['id' => $worker->getId()]),
+            $partner === null => $this->redirectToRoute('partner_new', ['worker' => $worker->getId(), 'start' => $start]),
+            !$partner->hasActiveBasket() => $this->redirectToRoute('partner_add_basket', ['id' => $partner->getId(), 'start' => $start]),
+            default => $this->redirectToRoute('staff_show', ['id' => $worker->getId()]),
+        };
     }
 
     /**
@@ -702,7 +755,7 @@ class WorkerController extends AbstractController
             $em->flush();
             $this->addFlash('success', sprintf('Trabajador «%s» actualizado.', $worker->getName()));
 
-            return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
+            return $this->nextStepAfterSave($worker, $form);
         }
 
         return $this->render('staff/edit.html.twig', [
