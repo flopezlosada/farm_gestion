@@ -20,6 +20,7 @@ use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\Invoice\InvoiceProviderResolver;
 use App\Service\Accounting\Invoice\InvoiceQuarter;
 use App\Service\Accounting\Invoice\InvoiceReadQueue;
+use App\Service\Accounting\Invoice\ReviewQueuePosition;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\FormError;
@@ -235,14 +236,14 @@ class ReceivedInvoiceController extends AbstractController
                 );
             }
 
-            // Quien confirma suele ir una tras otra: la siguiente lista para revisar.
+            // Quien confirma suele ir una tras otra: la siguiente de la cola, la que
+            // venía detrás de ésta (las que se dejaron atrás, como una aún sin pagar,
+            // no vuelven a salir una y otra vez), o la primera si era la última.
             // El aviso lo dice, porque habla de la factura anterior y la pantalla ya
             // enseña otra: sin eso parece que no se ha guardado.
-            $next = array_values(array_filter(
-                $invoices->findOpen(),
-                static fn (ReceivedInvoice $open): bool => $open->getStatus() !== ReceivedInvoice::STATUS_PENDING,
-            ));
-            if ($next === []) {
+            $queue = $this->reviewQueue($invoices);
+            $next = ReviewQueuePosition::of($invoice, $queue)->next ?? $queue[0] ?? null;
+            if ($next === null) {
                 $this->addFlash('success', $done);
 
                 return $this->redirectToRoute('accounting_invoices');
@@ -250,10 +251,10 @@ class ReceivedInvoiceController extends AbstractController
             $this->addFlash('success', sprintf(
                 '%s Ahora tienes delante la siguiente sin validar (%s).',
                 $done,
-                \count($next) === 1 ? 'es la última' : sprintf('quedan %d', \count($next)),
+                \count($queue) === 1 ? 'es la última' : sprintf('quedan %d', \count($queue)),
             ));
 
-            return $this->redirectToRoute('accounting_invoice_review', ['id' => $next[0]->getId()]);
+            return $this->redirectToRoute('accounting_invoice_review', ['id' => $next->getId()]);
         }
 
         return $this->render('accounting/invoice_review.html.twig', [
@@ -264,7 +265,22 @@ class ReceivedInvoiceController extends AbstractController
             'hasDocument' => $files->pathTo($invoice->getFileName()) !== null,
             'form' => $form->createView(),
             'suggestions' => AccountEntryType::suggestedDirections($categories->findActive()),
+            'queue' => ReviewQueuePosition::of($invoice, $this->reviewQueue($invoices)),
         ]);
+    }
+
+    /**
+     * Las facturas que esperan que alguien las revise: las de la bandeja menos las
+     * que aún están en cola para leerse, que no tienen nada que mirar todavía.
+     *
+     * @return list<ReceivedInvoice>
+     */
+    private function reviewQueue(ReceivedInvoiceRepository $invoices): array
+    {
+        return array_values(array_filter(
+            $invoices->findOpen(),
+            static fn (ReceivedInvoice $open): bool => $open->getStatus() !== ReceivedInvoice::STATUS_PENDING,
+        ));
     }
 
     /**

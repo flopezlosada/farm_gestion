@@ -549,6 +549,46 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $this->assertSelectorTextContains('.csa-alerts', 'Ahora tienes delante la siguiente sin validar (es la última).');
     }
 
+    /**
+     * Al confirmar se sigue por la que venía detrás, no se vuelve a la primera: la que
+     * se dejó atrás a propósito (una aún sin pagar) no sale una y otra vez.
+     */
+    public function testAlConfirmarSigueDetrasYNoVuelveALaQueSeDejoAtras(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->createCatalogue();
+        $behind = $this->persistRead('atras.pdf');
+        $invoice = $this->uploadOne($client);
+        $next = $this->persistRead('siguiente.pdf');
+
+        $this->confirm($client, $invoice, [], '26.75');
+
+        $this->assertResponseRedirects(sprintf('/gestion/accounting/invoices/%d', $next->getId()), sprintf('No vuelve a la %d, que se dejó atrás.', $behind->getId()));
+    }
+
+    /** Desde una factura se va a la anterior y a la siguiente por revisar, y se ve cuántas quedan. */
+    public function testLaRevisionLlevaALaAnteriorYALaSiguiente(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->createCatalogue();
+        $first = $this->persistRead('primera.pdf');
+        $second = $this->persistRead('segunda.pdf');
+        $third = $this->persistRead('tercera.pdf');
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $second->getId()));
+
+        $this->assertResponseIsSuccessful();
+        $nav = $crawler->filter('nav.inv-nav');
+        $this->assertStringContainsString('Factura 2 de 3 por revisar', $nav->text());
+        $links = $nav->filter('a')->each(static fn ($a): string => (string) $a->attr('href'));
+        $this->assertSame([
+            sprintf('/gestion/accounting/invoices/%d', $first->getId()),
+            sprintf('/gestion/accounting/invoices/%d', $third->getId()),
+        ], $links);
+    }
+
     /** Una línea de IVA a medias no deja confirmar: la gestoría la necesita entera. */
     public function testUnaLineaDeIvaIncompletaNoSeConfirma(): void
     {
@@ -684,6 +724,22 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $client->submit($crawler->filter(sprintf('form[action="/gestion/accounting/invoices/%d/discard"]', $first->getId()))->form());
         $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $second->getId()));
         $this->assertSelectorTextNotContains('body', 'este mismo fichero ya entró');
+    }
+
+    /**
+     * Una factura ya leída, lista para revisar.
+     *
+     * @param string $name Nombre del fichero.
+     */
+    private function persistRead(string $name): ReceivedInvoice
+    {
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $invoice = new ReceivedInvoice($name, $name, 'application/pdf', ReceivedInvoice::SOURCE_WEB, null);
+        $invoice->markRead(ExtractedInvoice::fromArray(['fecha' => '2026-03-06', 'total' => 12.5]), 'test', $this->category, new \DateTimeImmutable());
+        $em->persist($invoice);
+        $em->flush();
+
+        return $invoice;
     }
 
     private function uploadOne($client): ReceivedInvoice

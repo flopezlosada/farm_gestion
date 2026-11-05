@@ -66,6 +66,8 @@
         .inv-check { font-size: 13px; padding: 8px 12px; border-radius: 6px; margin-top: var(--csa-sp-3, 12px); }
         .inv-check--ok { background: #eef6ee; color: #2f6b34; }
         .inv-check--ko { background: #fdf3e6; color: #8a5300; }
+        .inv-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 0 0 var(--csa-sp-4, 16px); font-size: 13px; color: var(--csa-ink-soft, #6b6b6b); }
+        .inv-nav__side { min-width: 0; }
         @media (max-width: 900px) {
             .inv-review { grid-template-columns: 1fr; }
             .inv-doc { position: static; }
@@ -85,6 +87,21 @@
             ? 'Revisa lo leído mirando el documento. Si está bien, guarda: se crea el apunte.'
             : 'Esta factura no se ha leído sola. Complétala mirando el documento y guarda.'
     ) }}
+
+    {# Para ir de una factura a otra de las que esperan revisión sin volver a la
+     # bandeja: dejar una atrás (una aún sin pagar) y seguir con las demás. #}
+    {% if queue.previous or queue.next %}
+        <nav class="inv-nav" aria-label="Facturas por revisar">
+            <span class="inv-nav__side">
+                {% if queue.previous %}{{ csa.btn('Anterior', { variant: 'ghost', size: 'sm', icon: 'fa-chevron-left', href: path('accounting_invoice_review', { id: queue.previous.id }) }) }}{% endif %}
+            </span>
+            <span>{{ queue.position ? 'Factura ' ~ queue.position ~ ' de ' ~ queue.total ~ ' por revisar' : queue.total ~ ' por revisar' }}</span>
+            <span class="inv-nav__side">
+                {# A mano y no con csa.btn: la flecha va detrás del texto. #}
+                {% if queue.next %}<a href="{{ path('accounting_invoice_review', { id: queue.next.id }) }}" class="csa-btn csa-btn--ghost csa-btn--sm"><span>Siguiente</span><i class="fa fa-chevron-right"></i></a>{% endif %}
+            </span>
+        </nav>
+    {% endif %}
 
     {% if sameFile %}
         {{ csa.callout('Ojo: este mismo fichero ya entró como «' ~ sameFile.originalName ~ '»' ~ (sameFile.createdAt ? ' el ' ~ sameFile.createdAt|date('d/m/Y') : '') ~ (sameFile.status == 'confirmed' ? ', y ya está anotada' : ', y está en la bandeja') ~ '. Es el mismo documento: descarta una de las dos, o el gasto contará doble.', 'danger', 'files-o') }}
