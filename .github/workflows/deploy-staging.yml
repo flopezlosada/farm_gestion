@@ -144,14 +144,23 @@ jobs:
       # instantáneo y sólo pide permiso sobre var/cache, así que Symfony regenera de cero
       # en el primer request. Si falla, el deploy falla: un cache viejo no se tolera.
       # Los prod_old_* quedan en el servidor; borrarlos no corre prisa.
+      # Con tiempos límite: el 5-nov un `apt-get update` se colgó con el mirror de Azure
+      # y el paso esperó 10 min en silencio, con el código nuevo ya subido y el cache
+      # viejo sirviéndose. Ahora apt y lftp se rinden pronto y el paso falla, que basta
+      # con relanzar (la subida es por delta).
       - name: Invalidar cache compilado de prod
+        timeout-minutes: 4
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
-          sudo apt-get update && sudo apt-get install -y lftp
+          APT_OPTS="-o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=2"
+          sudo apt-get $APT_OPTS update && sudo apt-get $APT_OPTS install -y lftp
           lftp -c "
+            set net:timeout 20;
+            set net:max-retries 3;
+            set net:reconnect-interval-base 5;
             set ssl:verify-certificate no;
             set ftp:ssl-allow no;
             set cmd:fail-exit yes;
