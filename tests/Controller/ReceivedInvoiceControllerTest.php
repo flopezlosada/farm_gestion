@@ -568,7 +568,7 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
 
         $this->confirm($client, $invoice, [], '26.75');
 
-        $this->assertResponseRedirects(sprintf('/gestion/accounting/invoices/%d', $next->getId()), sprintf('No vuelve a la %d, que se dejó atrás.', $behind->getId()));
+        $this->assertResponseRedirects(sprintf('/gestion/accounting/invoices/%d', $next->getId()), null, sprintf('No vuelve a la %d, que se dejó atrás.', $behind->getId()));
     }
 
     /** Desde una factura se va a la anterior y a la siguiente por revisar, y se ve cuántas quedan. */
