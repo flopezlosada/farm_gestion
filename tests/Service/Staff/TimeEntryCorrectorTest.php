@@ -43,6 +43,14 @@ class TimeEntryCorrectorTest extends TestCase
         );
     }
 
+    /**
+     * Trabajador con el alta muy atrás: los casos van de otra cosa que del suelo del registro.
+     */
+    private function worker(string $hireDate = '2020-01-01'): Worker
+    {
+        return (new Worker())->setHireDate(new \DateTimeImmutable($hireDate));
+    }
+
     private function entry(string $type, string $datetime): TimeEntry
     {
         return (new TimeEntry())
@@ -56,7 +64,7 @@ class TimeEntryCorrectorTest extends TestCase
         // El día tiene una entrada a las 09:00, así que mover la salida a las 17:00 es válido.
         $in = $this->entry(TimeEntry::TYPE_IN, '2026-06-20 09:00:00');
         $original = (new TimeEntry())
-            ->setWorker(new Worker())
+            ->setWorker($this->worker())
             ->setType(TimeEntry::TYPE_OUT)
             ->setOccurredAt(new \DateTimeImmutable('2026-06-20 16:00:00', new \DateTimeZone('UTC')));
 
@@ -97,7 +105,7 @@ class TimeEntryCorrectorTest extends TestCase
     public function testAnadirOlvidadoCreaFichajeVigente(): void
     {
         $author = new User();
-        $worker = new Worker();
+        $worker = $this->worker();
 
         $entry = $this->corrector()->addEntry(
             $worker,
@@ -120,7 +128,7 @@ class TimeEntryCorrectorTest extends TestCase
 
         // Día vacío: una salida sin entrada antes rompe el orden.
         $this->corrector()->addEntry(
-            new Worker(),
+            $this->worker(),
             TimeEntry::TYPE_OUT,
             new \DateTimeImmutable('2026-06-19 14:00:00', new \DateTimeZone('UTC')),
             new User(),
@@ -135,7 +143,7 @@ class TimeEntryCorrectorTest extends TestCase
 
         // Un minuto después de "ahora" (2026-06-21 10:00 UTC): no se ficha por adelantado.
         $this->corrector()->addEntry(
-            new Worker(),
+            $this->worker(),
             TimeEntry::TYPE_IN,
             new \DateTimeImmutable('2026-06-21 10:01:00', new \DateTimeZone('UTC')),
             new User(),
@@ -146,7 +154,7 @@ class TimeEntryCorrectorTest extends TestCase
     public function testCorregirAUnaHoraFuturaSeRechazaYNoAnulaElOriginal(): void
     {
         $original = (new TimeEntry())
-            ->setWorker(new Worker())
+            ->setWorker($this->worker())
             ->setType(TimeEntry::TYPE_IN)
             ->setOccurredAt(new \DateTimeImmutable('2026-06-20 09:00:00', new \DateTimeZone('UTC')));
 
@@ -168,13 +176,13 @@ class TimeEntryCorrectorTest extends TestCase
     public function testEnUnMesAprobadoNoSeAnadeNiSeAnulaNiSeCorrige(): void
     {
         $entry = (new TimeEntry())
-            ->setWorker(new Worker())
+            ->setWorker($this->worker())
             ->setType(TimeEntry::TYPE_IN)
             ->setOccurredAt(new \DateTimeImmutable('2026-06-19 09:00:00', new \DateTimeZone('UTC')));
         $corrector = $this->corrector([], monthClosed: true);
 
         foreach ([
-            fn () => $corrector->addEntry(new Worker(), TimeEntry::TYPE_IN, new \DateTimeImmutable('2026-06-19 08:30:00'), new User(), TimeEntry::SOURCE_SUPERVISOR),
+            fn () => $corrector->addEntry($this->worker(), TimeEntry::TYPE_IN, new \DateTimeImmutable('2026-06-19 08:30:00'), new User(), TimeEntry::SOURCE_SUPERVISOR),
             fn () => $corrector->correctTime($entry, new \DateTimeImmutable('2026-06-19 09:15:00'), new User(), TimeEntry::SOURCE_SUPERVISOR, 'hora real'),
             fn () => $corrector->voidEntry($entry, new User(), 'duplicado'),
         ] as $attempt) {
@@ -185,6 +193,45 @@ class TimeEntryCorrectorTest extends TestCase
                 // Se rechaza ANTES de tocar nada: el original sigue vigente.
                 $this->assertFalse($entry->isVoided());
             }
+        }
+    }
+
+    /**
+     * Antes del alta no hay contrato ni jornada: ni la trabajadora ni su supervisor
+     * pueden apuntar un fichaje ese día. El mismo día del alta, sí.
+     */
+    public function testNoSeAnadeUnFichajeAntesDelAlta(): void
+    {
+        $worker = $this->worker('2026-06-19');
+
+        foreach ([TimeEntry::SOURCE_SELF, TimeEntry::SOURCE_SUPERVISOR] as $source) {
+            try {
+                $this->corrector()->addEntry($worker, TimeEntry::TYPE_IN, new \DateTimeImmutable('2026-06-18 23:30:00'), new User(), $source);
+                $this->fail('Se esperaba PunchSequenceException para ' . $source);
+            } catch (PunchSequenceException $e) {
+                $this->assertSame('No se puede fichar antes del alta (19/06/2026).', $e->getMessage());
+            }
+        }
+
+        $entry = $this->corrector()->addEntry($worker, TimeEntry::TYPE_IN, new \DateTimeImmutable('2026-06-19 08:00:00'), new User(), TimeEntry::SOURCE_SELF);
+        $this->assertSame('2026-06-19', $entry->getOccurredAt()->format('Y-m-d'));
+    }
+
+    /**
+     * Mover un fichaje a un día anterior al alta se rechaza antes de anular nada.
+     */
+    public function testCorregirAUnDiaAnteriorAlAltaSeRechazaYNoAnulaElOriginal(): void
+    {
+        $original = (new TimeEntry())
+            ->setWorker($this->worker('2026-06-19'))
+            ->setType(TimeEntry::TYPE_IN)
+            ->setOccurredAt(new \DateTimeImmutable('2026-06-20 09:00:00'));
+
+        try {
+            $this->corrector()->correctTime($original, new \DateTimeImmutable('2026-06-18 09:00:00'), new User(), TimeEntry::SOURCE_SUPERVISOR, 'Día equivocado');
+            $this->fail('Se esperaba PunchSequenceException.');
+        } catch (PunchSequenceException) {
+            $this->assertFalse($original->isVoided());
         }
     }
 }

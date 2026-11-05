@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Service\Staff\PunchSequenceException;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
@@ -382,6 +383,39 @@ class Worker
     public function isActiveOn(\DateTimeInterface $day): bool
     {
         return $this->leaveDate === null || $day->format('Y-m-d') <= $this->leaveDate->format('Y-m-d');
+    }
+
+    /**
+     * ¿Ya había empezado a trabajar ese día (alta incluida)? Antes del alta no hay
+     * contrato y, por tanto, ninguna jornada que registrar: nadie puede fichar ese
+     * día, ni la persona ni quien la supervisa. Sin alta (ficha a medio crear) no
+     * ha empezado.
+     *
+     * @param \DateTimeInterface $day Día a mirar (se compara la fecha, no la hora).
+     * @return bool
+     */
+    public function hasStartedOn(\DateTimeInterface $day): bool
+    {
+        return $this->hireDate !== null && $day->format('Y-m-d') >= $this->hireDate->format('Y-m-d');
+    }
+
+    /**
+     * Falla si ese día aún no había empezado a trabajar: es el suelo del registro
+     * de jornada, compartido por todo lo que crea fichajes (TimeClock y
+     * TimeEntryCorrector).
+     *
+     * @param \DateTimeInterface $day Día del fichaje.
+     * @return void
+     *
+     * @throws PunchSequenceException Si el día es anterior al alta.
+     */
+    public function assertStartedOn(\DateTimeInterface $day): void
+    {
+        if (!$this->hasStartedOn($day)) {
+            throw new PunchSequenceException($this->hireDate === null
+                ? 'La ficha no tiene fecha de alta: no se puede fichar.'
+                : sprintf('No se puede fichar antes del alta (%s).', $this->hireDate->format('d/m/Y')));
+        }
     }
 
     /**

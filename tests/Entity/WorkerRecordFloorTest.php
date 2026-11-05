@@ -42,4 +42,35 @@ class WorkerRecordFloorTest extends TestCase
     {
         $this->assertNull((new Worker())->setRecordingStartDate(new \DateTimeImmutable('2026-10-22'))->getRecordFloor());
     }
+
+    /**
+     * Fichar se corta en el alta, día incluido, y la hora no cuenta: a las 23:59
+     * del día anterior aún no ha empezado.
+     */
+    public function testEmpiezaATrabajarElDiaDelAlta(): void
+    {
+        $worker = (new Worker())->setHireDate(new \DateTimeImmutable('2026-11-09'));
+
+        $this->assertFalse($worker->hasStartedOn(new \DateTimeImmutable('2026-11-08 23:59:59')));
+        $this->assertTrue($worker->hasStartedOn(new \DateTimeImmutable('2026-11-09 00:00:00')));
+        $this->assertTrue($worker->hasStartedOn(new \DateTimeImmutable('2026-12-01')));
+    }
+
+    /**
+     * El corte de fichar es el alta, no el inicio del registro en la app: lo de
+     * antes de empezar a registrar aquí aún se puede apuntar (había contrato).
+     */
+    public function testElInicioDelRegistroNoImpideApuntarDiasTrasElAlta(): void
+    {
+        $worker = (new Worker())
+            ->setHireDate(new \DateTimeImmutable('2017-06-09'))
+            ->setRecordingStartDate(new \DateTimeImmutable('2026-10-22'));
+
+        $this->assertTrue($worker->hasStartedOn(new \DateTimeImmutable('2026-10-01')));
+    }
+
+    public function testSinAltaNoHaEmpezado(): void
+    {
+        $this->assertFalse((new Worker())->hasStartedOn(new \DateTimeImmutable('2026-11-09')));
+    }
 }
