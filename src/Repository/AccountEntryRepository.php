@@ -11,6 +11,7 @@ use App\Entity\Provider;
 use App\Entity\ReceivedInvoice;
 use App\Entity\RemittanceReturn;
 use App\Service\Accounting\CashCount\DayBalances;
+use App\Service\Accounting\Duplicate\DuplicateEntryRule;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
@@ -519,6 +520,48 @@ class AccountEntryRepository extends ServiceEntityRepository
             ->orderBy('e.date', 'DESC')
             ->getQuery()
             ->getResult();
+    }
+
+    /**
+     * Parejas de apuntes que parecen el mismo pago anotado dos veces, desde una fecha
+     * ({@see DuplicateEntryRule}): misma cuenta de banco, mismo importe, a
+     * {@see DuplicateEntryRule::DAYS} días como mucho, sin traspasos ni partes, no ligados
+     * los dos a movimientos del banco, y que dicen lo mismo. Dos consultas en total.
+     *
+     * @return list<array{0: AccountEntry, 1: AccountEntry}> El anotado antes primero; las parejas, por fecha.
+     */
+    public function findLikelyDuplicates(\DateTimeImmutable $since): array
+    {
+        $pairs = $this->createQueryBuilder('e')
+            ->select('e.id AS first, d.id AS second')
+            ->innerJoin(AccountEntry::class, 'd', 'WITH', 'd.account = e.account AND d.amount = e.amount AND d.id > e.id')
+            ->innerJoin('e.account', 'a')
+            ->innerJoin('e.category', 'c')->innerJoin('c.group', 'g')
+            ->innerJoin('d.category', 'dc')->innerJoin('dc.group', 'dg')
+            ->andWhere('a.kind = :bank')->setParameter('bank', FinancialAccount::KIND_BANK)
+            ->andWhere('g.kind <> :transfer AND dg.kind <> :transfer')->setParameter('transfer', BudgetCategoryGroup::KIND_TRANSFER)
+            ->andWhere('e.splitFrom IS NULL AND d.splitFrom IS NULL')
+            ->andWhere('e.date >= :since')->setParameter('since', $since->format('Y-m-d'))
+            ->andWhere('ABS(DATE_DIFF(d.date, e.date)) <= :days')->setParameter('days', DuplicateEntryRule::DAYS)
+            ->andWhere('NOT (EXISTS (SELECT l1.id FROM '.BankStatementLine::class.' l1 WHERE l1.entry = e)'
+                .' AND EXISTS (SELECT l2.id FROM '.BankStatementLine::class.' l2 WHERE l2.entry = d))')
+            ->orderBy('e.date', 'ASC')
+            ->addOrderBy('e.id', 'ASC')
+            ->getQuery()
+            ->getArrayResult();
+        if ($pairs === []) {
+            return [];
+        }
+        $ids = array_unique(array_merge(array_column($pairs, 'first'), array_column($pairs, 'second')));
+        $byId = [];
+        foreach ($this->findBy(['id' => $ids]) as $entry) {
+            $byId[$entry->getId()] = $entry;
+        }
+
+        return array_values(array_filter(
+            array_map(static fn (array $p): array => [$byId[$p['first']], $byId[$p['second']]], $pairs),
+            static fn (array $p): bool => DuplicateEntryRule::isLikely($p[0], $p[1]),
+        ));
     }
 
     /**
