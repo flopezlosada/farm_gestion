@@ -6,6 +6,7 @@ use App\Entity\AccountEntry;
 use App\Entity\BankStatementLine;
 use App\Entity\BudgetCategory;
 use App\Entity\FinancialAccount;
+use App\Entity\Provider;
 use App\Repository\AccountEntryRepository;
 use App\Service\Accounting\Norma43\Norma43Movement;
 use App\Service\Accounting\ConceptKey;
@@ -44,6 +45,42 @@ class CategorySuggesterTest extends TestCase
 
         $this->assertSame($gestoria, $suggestion?->category);
         $this->assertSame(3, $suggestion->times);
+    }
+
+    /** El pago a Semilleros Álvarez casado con su ficha: el siguiente sale con ella puesta. */
+    public function testProponeElProveedorDeLasUltimasVeces(): void
+    {
+        $fiare = $this->account();
+        $seeds = $this->category('Semillas y plantel');
+        $alvarez = $this->provider('SEMILLEROS ÁLVAREZ S.L.');
+        $history = [
+            $this->entry($fiare, '2026-09-16', '-357.50', 'trf. semilleros alvarez', $seeds)->setProvider($alvarez),
+            $this->entry($fiare, '2026-07-10', '-480.70', 'TRF. SEMILLEROS ALVAREZ', $seeds)->setProvider($alvarez),
+        ];
+
+        $this->assertSame($alvarez, CategorySuggester::suggestProvider($this->line($fiare, '2026-10-16', -39820, 'TRF. SEMILLEROS ALVAREZ'), $history));
+    }
+
+    /**
+     * Si alguna de las últimas veces no tenía ficha o tenía otra, nada: el proveedor
+     * de una nómina o de un traspaso no se adivina. Ni en un cobro.
+     */
+    public function testElProveedorSoloSiTodasLoLlevaban(): void
+    {
+        $fiare = $this->account();
+        $seeds = $this->category('Semillas y plantel');
+        $alvarez = $this->provider('SEMILLEROS ÁLVAREZ S.L.');
+        $line = $this->line($fiare, '2026-10-16', -39820, 'TRF. SEMILLEROS ALVAREZ');
+
+        $this->assertNull(CategorySuggester::suggestProvider($line, [
+            $this->entry($fiare, '2026-09-16', '-357.50', 'trf. semilleros alvarez', $seeds)->setProvider($alvarez),
+            $this->entry($fiare, '2026-07-10', '-480.70', 'trf. semilleros alvarez', $seeds),
+        ]), 'una sin ficha');
+        $this->assertNull(CategorySuggester::suggestProvider($line, [
+            $this->entry($fiare, '2026-09-16', '-357.50', 'trf. semilleros alvarez', $seeds)->setProvider($alvarez),
+            $this->entry($fiare, '2026-07-10', '-480.70', 'trf. semilleros alvarez', $seeds)->setProvider($this->provider('Otro')),
+        ]), 'dos fichas distintas');
+        $this->assertNull(CategorySuggester::suggestProvider($line, []), 'sin historia');
     }
 
     /** Si las últimas veces no coinciden, mejor nada que una partida que se acepta sin mirar. */
@@ -113,6 +150,14 @@ class CategorySuggesterTest extends TestCase
         $this->setId($account);
 
         return $account;
+    }
+
+    private function provider(string $name): Provider
+    {
+        $provider = (new Provider())->setName($name);
+        $this->setId($provider);
+
+        return $provider;
     }
 
     private function category(string $name): BudgetCategory

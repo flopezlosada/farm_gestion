@@ -4,6 +4,7 @@ namespace App\Service\Accounting\Suggestion;
 
 use App\Entity\AccountEntry;
 use App\Entity\BankStatementLine;
+use App\Entity\Provider;
 use App\Repository\AccountEntryRepository;
 use App\Service\Accounting\ConceptKey;
 
@@ -70,6 +71,20 @@ class CategorySuggester
     }
 
     /**
+     * El proveedor de un pago del banco, con la misma regla que la partida: el de las
+     * últimas veces que el banco dijo lo mismo, si todas lo llevaban. Así lo que se casó
+     * una vez con su ficha se sigue casando solo.
+     */
+    public function providerFor(BankStatementLine $line): ?Provider
+    {
+        if ($line->getAmountCents() >= 0) {
+            return null;
+        }
+
+        return self::suggestProvider($line, $this->entries->findCategorizedSince([$line->getAccount()], $line->getOperationDate()->modify(self::HISTORY)));
+    }
+
+    /**
      * La partida de las últimas veces que ese concepto entró en esa cuenta, en el mismo
      * sentido (cobro o pago) y antes del movimiento, si coinciden todas. Puro.
      *
@@ -77,16 +92,7 @@ class CategorySuggester
      */
     public static function suggest(BankStatementLine $line, array $history): ?CategorySuggestion
     {
-        $key = ConceptKey::of($line->getSuggestedConcept());
-        if ($key === '') {
-            return null;
-        }
-        $income = $line->getAmountCents() > 0;
-        $same = array_values(array_filter($history, static fn (AccountEntry $e): bool => $e->getAccount() === $line->getAccount()
-            && $e->getDate() !== null && $e->getDate() <= $line->getOperationDate()
-            && ((float) $e->getAmount() > 0) === $income
-            && ConceptKey::of($e->getConcept()) === $key));
-        $recent = \array_slice($same, 0, self::SAMPLE);
+        $recent = self::recent($line, $history);
         if ($recent === []) {
             return null;
         }
@@ -97,5 +103,41 @@ class CategorySuggester
         }
 
         return new CategorySuggestion($category, \count($recent));
+    }
+
+    /**
+     * El proveedor de las últimas veces que ese concepto salió de esa cuenta, si todas
+     * llevaban el mismo. Si alguna no tenía ficha o tenía otra, nada. Puro.
+     *
+     * @param list<AccountEntry> $history Apuntes, los más recientes primero.
+     */
+    public static function suggestProvider(BankStatementLine $line, array $history): ?Provider
+    {
+        $recent = self::recent($line, $history);
+        $providers = array_unique(array_map(static fn (AccountEntry $e): int => (int) $e->getProvider()?->getId(), $recent));
+
+        return $recent !== [] && \count($providers) === 1 && $providers[0] !== 0 ? $recent[0]->getProvider() : null;
+    }
+
+    /**
+     * Las últimas {@see SAMPLE} veces que el banco dijo lo mismo en esa cuenta, en el
+     * mismo sentido (cobro o pago) y antes del movimiento.
+     *
+     * @param list<AccountEntry> $history Apuntes, los más recientes primero.
+     *
+     * @return list<AccountEntry>
+     */
+    private static function recent(BankStatementLine $line, array $history): array
+    {
+        $key = ConceptKey::of($line->getSuggestedConcept());
+        if ($key === '') {
+            return [];
+        }
+        $income = $line->getAmountCents() > 0;
+
+        return \array_slice(array_values(array_filter($history, static fn (AccountEntry $e): bool => $e->getAccount() === $line->getAccount()
+            && $e->getDate() !== null && $e->getDate() <= $line->getOperationDate()
+            && ((float) $e->getAmount() > 0) === $income
+            && ConceptKey::of($e->getConcept()) === $key)), 0, self::SAMPLE);
     }
 }
