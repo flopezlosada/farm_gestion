@@ -8,6 +8,7 @@ use App\Entity\WorkerLeaveBasket;
 use Doctrine\ORM\EntityRepository;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\EmailType;
@@ -16,17 +17,28 @@ use Symfony\Component\Form\Extension\Core\Type\IntegerType;
 use Symfony\Component\Form\Extension\Core\Type\TelType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Component\Form\FormError;
+use Symfony\Component\Form\FormEvent;
+use Symfony\Component\Form\FormEvents;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
 
 /**
  * Form para crear/editar un {@see Worker} (ficha laboral). Datos mínimos: nombre,
  * alta, tipo de jornada, días de vacaciones al año y baja; y de contacto, todos
- * opcionales: DNI/NIE, teléfono, correo y dirección. Al editar, también su ficha de
- * socix, si recibe cesta, y qué pasa con ella tras la baja. El acceso de login se gestiona
+ * opcionales: DNI/NIE, teléfono, correo y dirección. También su cesta: si ya es
+ * socia, si recibe cesta y qué pasa con ella tras la baja. El acceso de login se gestiona
  * aparte (vinculación a User), no desde aquí.
  */
 class WorkerType extends AbstractType
 {
+    /**
+     * @param AuthorizationCheckerInterface $auth Para ofrecer «Recibe cesta» sólo a quien puede dar la cesta.
+     */
+    public function __construct(private readonly AuthorizationCheckerInterface $auth)
+    {
+    }
+
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $builder
@@ -86,31 +98,46 @@ class WorkerType extends AbstractType
     }
 
     /**
-     * La cesta según en qué punto está el trabajador. En el alta no sale: la cesta
-     * se le da desde su ficha, que es donde está «Darle cesta». Ya creado, se puede
-     * enlazar la ficha de una socia. Qué pasa con la cesta tras la baja sólo sale
-     * si tiene cesta: sin ella no hay nada que decidir.
+     * La cesta. Lo primero es si ya es socia: entonces su cesta es la de su ficha,
+     * que se elige. Si no lo es, se marca si recibe cesta y, al guardar, se le da
+     * de alta la ficha de no socia ({@see \App\Controller\WorkerController}).
+     * Con esa ficha ya creada no hay nada que preguntar: la plantilla la enseña.
+     * Qué pasa con la cesta tras la baja sólo sale si ya tiene ficha: sin ella no
+     * hay nada que decidir.
      *
      * @param FormBuilderInterface $builder El formulario.
-     * @param Worker|null          $worker  El trabajador que se edita.
+     * @param Worker|null          $worker  El trabajador que se da de alta o se edita.
      */
     private function addBasketFields(FormBuilderInterface $builder, ?Worker $worker): void
     {
-        if ($worker?->getId() === null) {
-            return;
-        }
-        $builder
-            ->add('partner', EntityType::class, [
-                'label' => 'Su ficha de cesta',
-                'class' => Partner::class,
-                'query_builder' => static fn (EntityRepository $r) => $r->createQueryBuilder('p')->orderBy('p.name')->addOrderBy('p.surname'),
-                'choice_label' => static fn (Partner $p): string => $p->getLegalName(),
-                'required' => false,
-                'placeholder' => '— sin cesta —',
-                'help' => 'Si ya es socia, elige su ficha. Si no, «Darle cesta» desde su ficha crea la de no socia.',
-            ]);
+        $partner = $worker?->getPartner();
+        if ($partner === null || $partner->isMember()) {
+            $builder
+                ->add('alreadyMember', ChoiceType::class, [
+                    'mapped' => false,
+                    'expanded' => true,
+                    'choices' => ['No' => false, 'Sí' => true],
+                    'data' => $partner !== null,
+                ])
+                ->add('partner', EntityType::class, [
+                    'class' => Partner::class,
+                    'query_builder' => static fn (EntityRepository $r) => $r->createQueryBuilder('p')
+                        ->andWhere('p.member = true')
+                        ->orderBy('p.name')->addOrderBy('p.surname'),
+                    'choice_label' => static fn (Partner $p): string => $p->getLegalName(),
+                    'required' => false,
+                    'placeholder' => '— elige su ficha —',
+                ])
+                // Antes que la validación (prioridad 0): fija la ficha que se valida.
+                ->addEventListener(FormEvents::POST_SUBMIT, $this->resolveMemberCard(...), 10);
 
-        if ($worker->getPartner() === null) {
+            // Lleva a dar de alta la ficha o la cesta, que son de Socixs.
+            if ($this->auth->isGranted('ROLE_GESTION_SOCIXS_EDIT')) {
+                $builder->add('givesBasket', CheckboxType::class, ['mapped' => false, 'required' => false]);
+            }
+        }
+
+        if ($partner === null) {
             return;
         }
         $builder
@@ -120,14 +147,32 @@ class WorkerType extends AbstractType
                 'choice_label' => static fn (WorkerLeaveBasket $c): string => $c->label(),
                 'required' => false,
                 'placeholder' => '— sin decidir —',
-                'help' => 'Mientras no se decida, su cuota sale como pendiente y no se cobra.',
             ])
             ->add('basketGiftUntil', DateType::class, [
                 'label' => 'Se le regala hasta',
                 'widget' => 'single_text',
                 'required' => false,
-                'help' => 'Último día del regalo. Vacío = sin fin.',
             ]);
+    }
+
+    /**
+     * «¿Ya es socia?» manda sobre el desplegable, que el navegador envía aunque esté
+     * escondido: con «No» no se enlaza ninguna ficha de socia; con «Sí» hay que
+     * elegirla.
+     *
+     * @param FormEvent $event El envío del formulario.
+     */
+    private function resolveMemberCard(FormEvent $event): void
+    {
+        $form = $event->getForm();
+        /** @var Worker $worker */
+        $worker = $event->getData();
+
+        if ($form->get('alreadyMember')->getData() !== true) {
+            $worker->setPartner(null);
+        } elseif ($worker->getPartner() === null) {
+            $form->get('partner')->addError(new FormError('Elige su ficha de socia.'));
+        }
     }
 
     public function configureOptions(OptionsResolver $resolver): void

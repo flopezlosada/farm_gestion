@@ -35,21 +35,38 @@
             {% endblock %}
         {% endembed %}
 
-        {# En el alta no hay cesta: se le da desde su ficha («Darle cesta»). #}
-        {% if form.partner is defined %}
-            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Cesta', subtitle: 'Mientras trabaja su cesta es gratis. Cuando se va, se decide si la paga o se le sigue regalando.' } %}
-                {% block body %}
-                    {% import '_macros/csa.html.twig' as csa %}
-                    <div class="csa-form-grid">
-                        {{ csa.field(form.partner, 'Su ficha de cesta', { full: true, hint: 'Si ya es socia, elige su ficha. Si no, guarda y usa «Darle cesta» en su ficha: crea la de no socia con sus datos.' }) }}
-                        {% if form.basketAfterLeave is defined %}
-                            {{ csa.field(form.basketAfterLeave, 'Su cesta tras la baja') }}
-                            {{ csa.field(form.basketGiftUntil, 'Se le regala hasta') }}
+        {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Cesta', subtitle: 'Mientras trabaja su cesta es gratis. Cuando se va, se decide si la paga o se le sigue regalando.' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                <div class="csa-form-grid">
+                    {% if form.alreadyMember is defined %}
+                        {{ csa.field(form.alreadyMember, '¿Ya es socia?', { full: true, attr: { class: 'csa-segmented' } }) }}
+                        {{ csa.field(form.partner, 'Su ficha de socia', { full: true, show_when: 'alreadyMember=1' }) }}
+                        {% if form.givesBasket is defined %}
+                            <div class="csa-field csa-field--full">
+                                <label for="{{ form.givesBasket.vars.id }}" style="display:flex; gap:.6rem; align-items:flex-start; cursor:pointer;">
+                                    {{ form_widget(form.givesBasket) }}
+                                    <span>
+                                        <strong>Recibe cesta</strong>
+                                        <span class="csa-field__hint" style="display:block;">Al guardar se sigue a dar de alta su cesta. Si es socia y ya tiene una, no hace falta otra.</span>
+                                    </span>
+                                </label>
+                            </div>
                         {% endif %}
-                    </div>
-                {% endblock %}
-            {% endembed %}
-        {% endif %}
+                    {% else %}
+                        {# Ya tiene ficha de no socia: no hay nada que preguntar. #}
+                        <p class="csa-field--full" style="margin: 0;">
+                            <i class="fa fa-shopping-basket"></i>
+                            Ficha de cesta de no socia: <a href="{{ path('partner_show', { id: form.vars.data.partner.id }) }}">{{ form.vars.data.partner.legalName }}</a>
+                        </p>
+                    {% endif %}
+                    {% if form.basketAfterLeave is defined %}
+                        {{ csa.field(form.basketAfterLeave, 'Su cesta tras la baja') }}
+                        {{ csa.field(form.basketGiftUntil, 'Se le regala hasta') }}
+                    {% endif %}
+                </div>
+            {% endblock %}
+        {% endembed %}
 
         <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
             <div></div>

@@ -221,29 +221,91 @@ class StaffControllerTest extends WebTestCase
     }
 
     /**
-     * La cesta en el formulario sigue al trabajador: en el alta no sale (se da
-     * desde su ficha); sin cesta sólo se puede enlazar la ficha de una socia; con
-     * cesta, además, qué pasa con ella tras la baja.
+     * Alta de quien no es socia y recibe cesta: al guardar se sigue a dar de alta
+     * su ficha de no socia. Lo de tras la baja no sale: aún no hay cesta.
      */
-    public function testBasketFieldsFollowTheWorker(): void
+    public function testNewWorkerWhoGetsABasketGoesOnToGiveIt(): void
     {
+        $name = 'Nuevo con cesta ' . uniqid();
         $form = $this->client->request('GET', '/gestion/staff/new')->selectButton('Crear trabajador')->form();
-        $this->assertFalse($form->has('worker[partner]'));
         $this->assertFalse($form->has('worker[basketAfterLeave]'));
+        $form['worker[name]'] = $name;
+        $form['worker[hireDate]'] = '2026-01-01';
+        $form['worker[workdayType]'] = Worker::WORKDAY_FULL_TIME;
+        $form['worker[alreadyMember]'] = '0';
+        $form['worker[givesBasket]']->tick();
+        $this->client->submit($form);
 
+        $worker = $this->em->getRepository(Worker::class)->findOneBy(['name' => $name]);
+        $this->assertNotNull($worker);
+        $this->assertResponseRedirects('/gestion/partner/new?worker=' . $worker->getId());
+    }
+
+    /** «Sí» sin elegir ficha no se guarda: se pide que se elija. */
+    public function testAlreadyMemberNeedsTheirCard(): void
+    {
         $worker = $this->makeWorker();
         $form = $this->client->request('GET', '/gestion/staff/' . $worker->getId() . '/edit')->selectButton('Guardar cambios')->form();
-        $this->assertTrue($form->has('worker[partner]'));
-        $this->assertFalse($form->has('worker[basketAfterLeave]'));
-        $this->assertFalse($form->has('worker[basketGiftUntil]'));
+        $form['worker[workdayType]'] = Worker::WORKDAY_FULL_TIME;
+        $form['worker[alreadyMember]'] = '1';
+        $this->client->submit($form);
 
-        $card = (new Partner())->setName('TEST')->setSurname('Con cesta ' . uniqid())->setMember(false);
-        $this->em->persist($card);
-        $worker->setPartner($card);
-        $this->em->flush();
+        $this->assertResponseIsSuccessful('Se vuelve a pintar el formulario, sin redirigir.');
+        $this->assertSelectorTextContains('.csa-field__error', 'Elige su ficha de socia');
+    }
+
+    /**
+     * Socia sin cesta en curso que recibe cesta: se enlaza su ficha y se sigue a
+     * «Añadir cesta». Al volver a «No», la ficha se desenlaza aunque el
+     * desplegable escondido siga enviándola.
+     */
+    public function testMemberWithoutBasketIsLinkedAndGoesOnToAddIt(): void
+    {
+        $member = (new Partner())->setName('TEST')->setSurname('Socia sin cesta ' . uniqid());
+        $this->em->persist($member);
+        $worker = $this->makeWorker();
+
         $form = $this->client->request('GET', '/gestion/staff/' . $worker->getId() . '/edit')->selectButton('Guardar cambios')->form();
+        $form['worker[workdayType]'] = Worker::WORKDAY_FULL_TIME;
+        $form['worker[alreadyMember]'] = '1';
+        $form['worker[partner]'] = (string) $member->getId();
+        $form['worker[givesBasket]']->tick();
+        $this->client->submit($form);
+        $this->assertResponseRedirects('/gestion/partner/' . $member->getId() . '/add_basket');
+
+        $form = $this->client->request('GET', '/gestion/staff/' . $worker->getId() . '/edit')->selectButton('Guardar cambios')->form();
+        $this->assertSame('1', $form['worker[alreadyMember]']->getValue());
+        $this->assertTrue($form->has('worker[basketAfterLeave]'), 'Con ficha ya se puede decidir qué pasa tras la baja.');
+        $form['worker[alreadyMember]'] = '0';
+        $this->client->submit($form);
+        $this->assertResponseRedirects('/gestion/staff/' . $worker->getId());
+
+        $this->em->clear();
+        $this->assertNull($this->em->getRepository(Worker::class)->find($worker->getId())->getPartner());
+        $this->em->remove($this->em->getRepository(Partner::class)->find($member->getId()));
+        $this->em->flush();
+    }
+
+    /** Con ficha de no socia no se pregunta nada: se enseña, y guardar la conserva. */
+    public function testNonMemberCardIsShownAndKept(): void
+    {
+        $card = (new Partner())->setName('TEST')->setSurname('No socia ' . uniqid())->setMember(false);
+        $this->em->persist($card);
+        $worker = $this->makeWorker()->setPartner($card);
+        $this->em->flush();
+
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $worker->getId() . '/edit');
+        $form = $crawler->selectButton('Guardar cambios')->form();
+        $this->assertFalse($form->has('worker[alreadyMember]'));
+        $this->assertFalse($form->has('worker[partner]'));
         $this->assertTrue($form->has('worker[basketAfterLeave]'));
-        $this->assertTrue($form->has('worker[basketGiftUntil]'));
+        $this->assertSelectorTextContains('form', 'Ficha de cesta de no socia');
+
+        $form['worker[workdayType]'] = Worker::WORKDAY_FULL_TIME;
+        $this->client->submit($form);
+        $this->assertResponseRedirects('/gestion/staff/' . $worker->getId());
+        $this->em->clear();
+        $this->assertSame($card->getId(), $this->em->getRepository(Worker::class)->find($worker->getId())->getPartner()?->getId());
     }
 
     /** Con ficha de cesta ya no se ofrece ni se crea otra: se vuelve a su ficha laboral. */

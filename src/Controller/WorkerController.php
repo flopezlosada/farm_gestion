@@ -33,6 +33,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bridge\Doctrine\Attribute\MapEntity;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\RedirectResponse;
+use Symfony\Component\Form\FormInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -675,13 +676,36 @@ class WorkerController extends AbstractController
             $em->flush();
             $this->addFlash('success', sprintf('Trabajador «%s» creado.', $worker->getName()));
 
-            return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
+            return $this->nextStepAfterSave($worker, $form);
         }
 
         return $this->render('staff/new.html.twig', [
             'worker' => $worker,
             'form' => $form->createView(),
         ]);
+    }
+
+    /**
+     * Tras guardar la ficha, si se marcó «Recibe cesta»: a quien no es socia se le
+     * da de alta la ficha de no socia, que acaba en «Añadir cesta»; a una socia
+     * sin cesta en curso se le añade en su ficha. Una socia que ya tiene cesta no
+     * necesita otra. En los demás casos, a su ficha laboral.
+     *
+     * @param Worker        $worker El trabajador recién guardado.
+     * @param FormInterface $form   El formulario enviado.
+     * @return RedirectResponse El siguiente paso.
+     */
+    private function nextStepAfterSave(Worker $worker, FormInterface $form): RedirectResponse
+    {
+        $partner = $worker->getPartner();
+        $givesBasket = $form->has('givesBasket') && $form->get('givesBasket')->getData() === true;
+
+        return match (true) {
+            !$givesBasket => $this->redirectToRoute('staff_show', ['id' => $worker->getId()]),
+            $partner === null => $this->redirectToRoute('partner_new', ['worker' => $worker->getId()]),
+            !$partner->hasActiveBasket() => $this->redirectToRoute('partner_add_basket', ['id' => $partner->getId()]),
+            default => $this->redirectToRoute('staff_show', ['id' => $worker->getId()]),
+        };
     }
 
     /**
@@ -702,7 +726,7 @@ class WorkerController extends AbstractController
             $em->flush();
             $this->addFlash('success', sprintf('Trabajador «%s» actualizado.', $worker->getName()));
 
-            return $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
+            return $this->nextStepAfterSave($worker, $form);
         }
 
         return $this->render('staff/edit.html.twig', [

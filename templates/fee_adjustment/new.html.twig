@@ -21,19 +21,6 @@
     <span class="csa-topbar__crumb-active">Ajustar la cuota</span>
 {% endblock %}
 
-{% block more_css %}
-    {{ parent() }}
-    <style>
-        /* Las dos direcciones como dos botones: es la decisión principal. El radio
-           queda dentro del botón (va justo antes de su etiqueta). */
-        .fa-direction { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-        .fa-direction input[type=radio] { position: absolute; opacity: 0; pointer-events: none; }
-        .fa-direction label { padding: 9px 16px; border: 1px solid var(--csa-rule); border-radius: 8px; cursor: pointer; font-weight: 500; background: var(--csa-surface, #fff); }
-        .fa-direction input:checked + label { border-color: var(--csa-ink, #222); box-shadow: inset 0 0 0 1px var(--csa-ink, #222); }
-        .fa-direction input:focus-visible + label { outline: 2px solid var(--csa-ink, #222); outline-offset: 2px; }
-    </style>
-{% endblock %}
-
 {% block csa_main %}
     {{ csa.page_header('Socios · Cuota', 'Ajustar la cuota de ' ~ partner.legalName,
         'Lo que paga de más o de menos sobre la tarifa de su cesta, en euros al mes. Va en la ficha de quien paga el recibo.') }}
@@ -48,7 +35,7 @@
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
-                        {{ csa.field(form.direction, 'Paga', { full: true, attr: { class: 'fa-direction' } }) }}
+                        {{ csa.field(form.direction, 'Paga', { full: true, attr: { class: 'csa-segmented' } }) }}
                         {{ csa.field(form.amount, 'Euros al mes', { hint: 'sin signo' }) }}
                         {{ csa.field(form.initiative, 'A qué va', { show_when: 'direction=more' }) }}
                         {{ csa.field(form.reason, 'Motivo', { full: true, hint: 'por ejemplo, «amplía su cuota» o «se le cobró dos veces en septiembre»' }) }}
