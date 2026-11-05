@@ -74,9 +74,13 @@ class TimeClock
      * @param Worker $worker Trabajador que ficha.
      * @param User   $author Login que realiza la acción (normalmente el propio trabajador).
      * @return TimeEntry El fichaje creado.
+     *
+     * @throws PunchSequenceException Si hoy aún no ha empezado a trabajar (antes del alta).
      */
     public function clockNext(Worker $worker, User $author): TimeEntry
     {
+        $worker->assertStartedOn($this->now());
+
         // Sólo el estado de HOY decide entrada/salida: un día nuevo siempre
         // arranca en entrada aunque quedara una salida sin fichar el día anterior.
         $last = $this->lastEffectiveToday($worker);

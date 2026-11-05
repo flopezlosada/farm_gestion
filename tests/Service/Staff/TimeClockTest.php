@@ -6,6 +6,7 @@ use App\Entity\TimeEntry;
 use App\Entity\User;
 use App\Entity\Worker;
 use App\Repository\TimeEntryRepository;
+use App\Service\Staff\PunchSequenceException;
 use App\Service\Staff\TimeClock;
 use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
@@ -53,7 +54,7 @@ class TimeClockTest extends TestCase
         $em->expects($this->once())->method('flush');
 
         $clock = $this->clockAt('2026-06-27 09:30:00', $staleIn, null, $em);
-        $entry = $clock->clockNext(new Worker(), new User());
+        $entry = $clock->clockNext((new Worker())->setHireDate(new \DateTimeImmutable('2020-01-01')), new User());
 
         $this->assertSame(TimeEntry::TYPE_IN, $entry->getType());
         $this->assertSame('2026-06-27', $entry->getOccurredAt()->format('Y-m-d'));
@@ -84,5 +85,29 @@ class TimeClockTest extends TestCase
         $last = (new TimeEntry())->setType(TimeEntry::TYPE_OUT);
 
         $this->assertSame(TimeEntry::TYPE_IN, TimeClock::nextTypeAfter($last));
+    }
+
+    /**
+     * Antes del alta el botón no ficha: no hay jornada que registrar y no se
+     * persiste nada. El mismo día del alta ya ficha.
+     */
+    public function testClockNextAntesDelAltaSeRechazaSinGuardar(): void
+    {
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects($this->never())->method('persist');
+        $clock = $this->clockAt('2026-11-08 23:30:00', null, null, $em);
+
+        $this->expectException(PunchSequenceException::class);
+        $this->expectExceptionMessage('No se puede fichar antes del alta (09/11/2026).');
+        $clock->clockNext((new Worker())->setHireDate(new \DateTimeImmutable('2026-11-09')), new User());
+    }
+
+    public function testClockNextElDiaDelAltaFicha(): void
+    {
+        $clock = $this->clockAt('2026-11-09 00:05:00', null, null);
+
+        $entry = $clock->clockNext((new Worker())->setHireDate(new \DateTimeImmutable('2026-11-09')), new User());
+
+        $this->assertSame(TimeEntry::TYPE_IN, $entry->getType());
     }
 }

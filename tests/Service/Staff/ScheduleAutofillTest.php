@@ -22,7 +22,7 @@ class ScheduleAutofillTest extends TestCase
 {
     private function worker(): Worker
     {
-        return new Worker();
+        return (new Worker())->setHireDate(new \DateTimeImmutable('2020-01-01'));
     }
 
     private function schedule(array $times): WorkSchedule

@@ -277,6 +277,24 @@ class WorkControllerTest extends WebTestCase
         $this->assertSame([], $this->em->getRepository(Absence::class)->findAll());
     }
 
+    /**
+     * Con el alta por llegar entra y ve su panel, pero sin botón de fichar: se le
+     * dice desde cuándo podrá. La regla en sí la cubren TimeClockTest y
+     * TimeEntryCorrectorTest; aquí, que el panel no la invite a fichar.
+     */
+    public function testBeforeHireThePanelSaysWhenSheCanStartInsteadOfTheClock(): void
+    {
+        $hire = Worker::today()->modify('+4 days');
+        $this->worker->setHireDate($hire);
+        $this->em->flush();
+
+        $this->client->request('GET', '/work');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorNotExists('form[action="/work/clock"]');
+        $this->assertSelectorTextContains('main', 'Empiezas a trabajar el ' . $hire->format('d/m/Y'));
+    }
+
     public function testPermitIsRegisteredApprovedWithoutApproval(): void
     {
         $token = $this->csrf('/work/vacations');

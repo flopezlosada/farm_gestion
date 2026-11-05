@@ -71,6 +71,7 @@ class WorkController extends AbstractController
         return $this->render('work/index.html.twig', [
             'worker' => $worker,
             'is_open' => $clock->hasOpenInterval($worker),
+            'has_started' => $worker->hasStartedOn(Worker::today()),
             'today_entries' => $timeEntries->findEffectiveForWorkerBetween($worker, $from, $to),
         ]);
     }
@@ -95,7 +96,12 @@ class WorkController extends AbstractController
         }
 
         // Quien ya no trabaja aquí no llega: lo para WorkerOnLeaveGuard.
-        $entry = $clock->clockNext($this->worker(), $this->getUser());
+        try {
+            $entry = $clock->clockNext($this->worker(), $this->getUser());
+        } catch (PunchSequenceException $e) {
+            $this->addFlash('error', $e->getMessage());
+            return $this->redirectToRoute('work');
+        }
         $this->addFlash('notice', $entry->getType() === TimeEntry::TYPE_IN
             ? 'Entrada fichada. ¡Buen trabajo!'
             : 'Salida fichada. ¡Hasta la próxima!');

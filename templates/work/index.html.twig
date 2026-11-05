@@ -23,8 +23,13 @@
             <div class="wk-hero__date">{{ 'now'|format_date('full', locale='es', timezone=madrid)|capitalize }}</div>
         </header>
 
-        {# ===== Estado + botón de fichar (sólo quien sigue trabajando aquí) ===== #}
-        {% if worker.active %}
+        {# ===== Estado + botón de fichar (sólo quien ya empezó y sigue trabajando aquí) ===== #}
+        {% if not has_started %}
+            <div class="csa-callout csa-callout--info" style="margin-bottom: 1rem;">
+                <i class="fa fa-calendar"></i> Empiezas a trabajar el {{ worker.hireDate|date('d/m/Y') }}.
+                Podrás fichar a partir de ese día.
+            </div>
+        {% elseif worker.active %}
             <div class="wk-clock wk-clock--{{ is_open ? 'in' : 'out' }}">
                 {% if is_open %}
                     <p class="wk-clock__state">Estás trabajando</p>
