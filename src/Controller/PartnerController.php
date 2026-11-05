@@ -18,6 +18,7 @@ use App\Form\PartnerBasketShareType;
 use App\Form\PartnerType;
 use App\Entity\Basket;
 use App\Entity\BasketComponent;
+use App\Http\QueryDate;
 use App\Http\QueryId;
 use App\Repository\BasketRepository;
 use App\Repository\FeeAdjustmentRepository;
@@ -268,7 +269,7 @@ class PartnerController extends AbstractController
     /**
      * Alta de socix. Con `?worker=<id>` es la ficha de cesta de ese trabajador:
      * sale prerrellenada con sus datos y como no socia, al guardar queda enlazada
-     * al trabajador y se sigue a «Añadir cesta».
+     * al trabajador y se sigue a «Añadir cesta», con la fecha de `?start=` si la trae.
      *
      * @param Request                $request       La petición.
      * @param EntityManagerInterface $entityManager Para guardar la ficha.
@@ -308,7 +309,10 @@ class PartnerController extends AbstractController
 
             return $worker === null
                 ? $this->redirectToRoute('partner_show', array('id' => $partner->getId()))
-                : $this->redirectToRoute('partner_add_basket', ['id' => $partner->getId()]);
+                : $this->redirectToRoute('partner_add_basket', [
+                    'id' => $partner->getId(),
+                    'start' => QueryDate::from($request->query, 'start')?->format('Y-m-d'),
+                ]);
         }
 
         return $this->render('partner/new.html.twig', [
@@ -1241,6 +1245,8 @@ class PartnerController extends AbstractController
     ): Response {
         $partnerBasketShare = new PartnerBasketShare();
         $partnerBasketShare->setPartner($partner);
+        // Desde la ficha de un trabajador llega la fecha en que empieza su cesta.
+        $partnerBasketShare->setStartDate(QueryDate::from($request->query, 'start')?->format('Y-m-d'));
 
         // El alta de socio ya no fija grupo de recogida: si el socio no lo
         // tiene, se elige aquí mismo. El grupo manda sobre el resto del form

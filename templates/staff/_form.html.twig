@@ -60,6 +60,7 @@
                                     </span>
                                 </label>
                             </div>
+                            {{ csa.field(form.basketStart, 'Desde', { show_when: 'givesBasket=checked', hint: 'primer día de su cesta' }) }}
                         {% endif %}
                         {% if form.basketAfterLeave is defined %}
                             {{ csa.field(form.basketAfterLeave, 'Su cesta tras la baja') }}

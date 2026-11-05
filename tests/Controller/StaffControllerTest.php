@@ -197,7 +197,7 @@ class StaffControllerTest extends WebTestCase
             $crawler->selectLink('Darle cesta')->attr('href'),
         );
 
-        $crawler = $this->client->request('GET', '/gestion/partner/new?worker=' . $worker->getId());
+        $crawler = $this->client->request('GET', '/gestion/partner/new?worker=' . $worker->getId() . '&start=2030-01-07');
         $this->assertResponseIsSuccessful();
         $form = $crawler->selectButton('Crear socix')->form();
         $this->assertSame('Carmen', $form['partner[name]']->getValue());
@@ -214,7 +214,7 @@ class StaffControllerTest extends WebTestCase
         $this->em->clear();
         $card = $this->em->getRepository(Worker::class)->find($worker->getId())->getPartner();
         $this->assertNotNull($card, 'La ficha queda enlazada al trabajador.');
-        $this->assertResponseRedirects('/gestion/partner/' . $card->getId() . '/add_basket');
+        $this->assertResponseRedirects('/gestion/partner/' . $card->getId() . '/add_basket?start=2030-01-07');
         $this->assertFalse($card->isMember());
         $this->assertSame('Calle Mayor 1, 28190 Patones', $card->getAddress());
         $this->assertCount(0, $card->getPartnerBasketShares(), 'La cesta se elige en el paso siguiente.');
@@ -234,11 +234,26 @@ class StaffControllerTest extends WebTestCase
         $form['worker[workdayType]'] = Worker::WORKDAY_FULL_TIME;
         $form['worker[alreadyMember]'] = '0';
         $form['worker[givesBasket]']->tick();
+        $form['worker[basketStart]'] = '2030-01-07';
         $this->client->submit($form);
 
         $worker = $this->em->getRepository(Worker::class)->findOneBy(['name' => $name]);
         $this->assertNotNull($worker);
-        $this->assertResponseRedirects('/gestion/partner/new?worker=' . $worker->getId());
+        $this->assertResponseRedirects('/gestion/partner/new?worker=' . $worker->getId() . '&start=2030-01-07');
+    }
+
+    /** «Recibe cesta» sin fecha no se guarda: es con la que se abre «Añadir cesta». */
+    public function testGivesBasketNeedsAStartDate(): void
+    {
+        $worker = $this->makeWorker();
+        $form = $this->client->request('GET', '/gestion/staff/' . $worker->getId() . '/edit')->selectButton('Guardar cambios')->form();
+        $form['worker[workdayType]'] = Worker::WORKDAY_FULL_TIME;
+        $form['worker[alreadyMember]'] = '0';
+        $form['worker[givesBasket]']->tick();
+        $this->client->submit($form);
+
+        $this->assertResponseIsSuccessful('Se vuelve a pintar el formulario, sin redirigir.');
+        $this->assertSelectorTextContains('.csa-field__error', 'desde cuándo recibe cesta');
     }
 
     /** «Sí» sin elegir ficha no se guarda: se pide que se elija. */
@@ -270,8 +285,12 @@ class StaffControllerTest extends WebTestCase
         $form['worker[alreadyMember]'] = '1';
         $form['worker[partner]'] = (string) $member->getId();
         $form['worker[givesBasket]']->tick();
+        $form['worker[basketStart]'] = '2030-01-07';
         $this->client->submit($form);
-        $this->assertResponseRedirects('/gestion/partner/' . $member->getId() . '/add_basket');
+        $this->assertResponseRedirects('/gestion/partner/' . $member->getId() . '/add_basket?start=2030-01-07');
+
+        $crawler = $this->client->request('GET', '/gestion/partner/' . $member->getId() . '/add_basket?start=2030-01-07');
+        $this->assertSame('2030-01-07', $crawler->filter('#partner_basket_share_start_date')->attr('value'), '«Añadir cesta» llega con la fecha puesta.');
 
         $form = $this->client->request('GET', '/gestion/staff/' . $worker->getId() . '/edit')->selectButton('Guardar cambios')->form();
         $this->assertSame('1', $form['worker[alreadyMember]']->getValue());

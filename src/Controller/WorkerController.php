@@ -715,8 +715,9 @@ class WorkerController extends AbstractController
     /**
      * Tras guardar la ficha, si se marcó «Recibe cesta»: a quien no es socia se le
      * da de alta la ficha de no socia, que acaba en «Añadir cesta»; a una socia
-     * sin cesta en curso se le añade en su ficha. Una socia que ya tiene cesta no
-     * necesita otra. En los demás casos, a su ficha laboral.
+     * sin cesta en curso se le añade en su ficha. Las dos pantallas se abren con la
+     * fecha de inicio elegida. Una socia que ya tiene cesta no necesita otra. En
+     * los demás casos, a su ficha laboral.
      *
      * @param Worker        $worker El trabajador recién guardado.
      * @param FormInterface $form   El formulario enviado.
@@ -726,11 +727,12 @@ class WorkerController extends AbstractController
     {
         $partner = $worker->getPartner();
         $givesBasket = $form->has('givesBasket') && $form->get('givesBasket')->getData() === true;
+        $start = $givesBasket ? $form->get('basketStart')->getData()?->format('Y-m-d') : null;
 
         return match (true) {
             !$givesBasket => $this->redirectToRoute('staff_show', ['id' => $worker->getId()]),
-            $partner === null => $this->redirectToRoute('partner_new', ['worker' => $worker->getId()]),
-            !$partner->hasActiveBasket() => $this->redirectToRoute('partner_add_basket', ['id' => $partner->getId()]),
+            $partner === null => $this->redirectToRoute('partner_new', ['worker' => $worker->getId(), 'start' => $start]),
+            !$partner->hasActiveBasket() => $this->redirectToRoute('partner_add_basket', ['id' => $partner->getId(), 'start' => $start]),
             default => $this->redirectToRoute('staff_show', ['id' => $worker->getId()]),
         };
     }

@@ -133,7 +133,16 @@ class WorkerType extends AbstractType
 
             // Lleva a dar de alta la ficha o la cesta, que son de Socixs.
             if ($this->auth->isGranted('ROLE_GESTION_SOCIXS_EDIT')) {
-                $builder->add('givesBasket', CheckboxType::class, ['mapped' => false, 'required' => false]);
+                $builder
+                    ->add('givesBasket', CheckboxType::class, ['mapped' => false, 'required' => false])
+                    ->add('basketStart', DateType::class, [
+                        'mapped' => false,
+                        'required' => false,
+                        'widget' => 'single_text',
+                        'input' => 'datetime_immutable',
+                    ])
+                    // Después de fijar la ficha: si es socia con cesta, no hace falta fecha.
+                    ->addEventListener(FormEvents::POST_SUBMIT, $this->requireBasketStart(...), 5);
             }
         }
 
@@ -172,6 +181,23 @@ class WorkerType extends AbstractType
             $worker->setPartner(null);
         } elseif ($worker->getPartner() === null) {
             $form->get('partner')->addError(new FormError('Elige su ficha de socia.'));
+        }
+    }
+
+    /**
+     * Con «Recibe cesta» hay que decir desde cuándo: es la fecha con la que se
+     * abre «Añadir cesta». Salvo si es socia y ya tiene cesta, que no se le da otra.
+     *
+     * @param FormEvent $event El envío del formulario.
+     */
+    private function requireBasketStart(FormEvent $event): void
+    {
+        $form = $event->getForm();
+        $partner = $event->getData()->getPartner();
+        if ($form->get('givesBasket')->getData() === true
+            && $form->get('basketStart')->getData() === null
+            && !($partner?->hasActiveBasket() ?? false)) {
+            $form->get('basketStart')->addError(new FormError('Indica desde cuándo recibe cesta.'));
         }
     }
 
