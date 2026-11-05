@@ -51,6 +51,8 @@
         {# El rótulo corto de voluntariado es el MISMO que el largo: «Echar mano»
          # obligaba a traducir entre el nombre del módulo y el de la pestaña, y
          # en la barra de abajo cabe «Voluntariado» de sobra. #}
+        {# Voluntariado, encuestas y grupo de consumo son de socias: quien recibe
+         # cesta sin serlo (MemberVoter) tiene panel, pero no esas tres áreas. #}
         {% set panel_areas = [
             { label: 'Inicio', short: 'Inicio', icon: 'fa-home',
               url: path('panel'), active: route == 'panel', tab: true },
@@ -61,17 +63,17 @@
               url: path('panel_basket'), active: route starts with 'panel_basket' or route starts with 'panel_shared_basket', tab: false,
               hint: 'Modalidad, huevos y cuota' },
         ]
-        |merge(is_granted('FEATURE_VOLUNTEERING') ? [
+        |merge(is_granted('FEATURE_VOLUNTEERING') and is_granted('MEMBER_AREA') ? [
             { label: 'Voluntariado', short: 'Voluntariado', icon: 'fa-hand-paper-o',
               url: path('panel_volunteering'), active: route starts with 'panel_volunteering', tab: true,
               hint: 'Lo que hace falta y lo que llevas hecho' },
         ] : [])
-        |merge(is_granted('FEATURE_SURVEYS') ? [
+        |merge(is_granted('FEATURE_SURVEYS') and is_granted('MEMBER_AREA') ? [
             { label: 'Encuestas', short: 'Encuestas', icon: 'fa-check-square-o',
               url: path('panel_survey_index'), active: route starts with 'panel_survey', tab: false,
               hint: 'Lo que la asociación te pregunta' },
         ] : [])
-        |merge(is_granted('FEATURE_GRUPO_CONSUMO') ? [
+        |merge(is_granted('FEATURE_GRUPO_CONSUMO') and is_granted('MEMBER_AREA') ? [
             { label: 'Grupo de consumo', short: 'Pedidos', icon: 'fa-shopping-cart',
               url: path('panel_consumer_group_index'), active: route starts with 'panel_consumer_group', tab: false,
               hint: 'Pedidos de despensa y productoras aliadas' },
@@ -192,7 +194,7 @@
                                  # Su sitio natural es al lado de «Cómo te
                                  # avisamos»: las dos deciden qué te llega, una
                                  # por tema y la otra por canal. #}
-                                {% if is_granted('FEATURE_VOLUNTEERING') %}
+                                {% if is_granted('FEATURE_VOLUNTEERING') and is_granted('MEMBER_AREA') %}
                                     <a href="{{ path('panel_volunteering_areas') }}" role="menuitem">
                                         <i class="fa fa-hand-paper-o" aria-hidden="true"></i> Mis áreas de voluntariado
                                     </a>

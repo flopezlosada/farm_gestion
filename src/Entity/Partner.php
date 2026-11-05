@@ -269,6 +269,19 @@ class Partner
     private bool $needs_review = false;
 
     /**
+     * Si es socia de la asociación. Casi todas lo son; la excepción es quien
+     * trabaja en la asociación y recibe cesta sin ser socia: la ficha existe
+     * porque la cesta (nodo, modalidad, día) cuelga de ella, pero no vota, no pide
+     * al grupo de consumo, no se le llama a voluntariado ni cuenta como socia.
+     *
+     * La ficha de cesta es lo que comparten las dos; lo de socia se mira aquí, en
+     * {@see self::isActiveMember()}, no en el estado.
+     *
+     * @ORM\Column(name="is_member", type="boolean", options={"default": true})
+     */
+    private bool $member = true;
+
+    /**
      * parientes
      * One Category has Many Categories.
      * @Orm\OneToMany(targetEntity="Partner", mappedBy="parent")
@@ -1231,6 +1244,36 @@ class Partner
         $this->needs_review = $needs_review;
 
         return $this;
+    }
+
+    /**
+     * @return bool false = ficha sólo para la cesta de una trabajadora que no es socia
+     */
+    public function isMember(): bool
+    {
+        return $this->member;
+    }
+
+    /**
+     * @param bool $member false = recibe cesta sin ser socia
+     */
+    public function setMember(bool $member): self
+    {
+        $this->member = $member;
+
+        return $this;
+    }
+
+    /**
+     * Socia en activo: la que vota, pide al grupo de consumo y a la que se llama a
+     * voluntariado. Quien recibe cesta sin ser socia está ACTIVO para el reparto,
+     * pero no es socia.
+     *
+     * @return bool true si es socia y está en ACTIVO
+     */
+    public function isActiveMember(): bool
+    {
+        return $this->member && self::STATUS_ACTIVO === $this->status;
     }
 
 }

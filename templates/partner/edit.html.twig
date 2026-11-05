@@ -78,6 +78,7 @@
                         {{ csa.field(form.share_payment, 'Forma de pago') }}
                         {{ csa.field(form.weekly_basket_group, 'Grupo de recogida') }}
                         {{ csa.field(form.eat_meat, '¿Consume cárnicos?', { full: true }) }}
+                        {{ csa.field(form.notMember, 'No es socia', { full: true, hint: 'Sólo para la cesta de una trabajadora que no es socia: recibe su cesta, pero no vota, no pide al grupo de consumo, no se le llama a voluntariado ni cuenta como socia.' }) }}
                         {{ csa.field(form.registration_form_file, 'Ficha de socix', { full: true, hint: 'opcional · sustituye la actual' }) }}
                     </div>
                 {% endblock %}

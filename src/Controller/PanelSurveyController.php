@@ -7,6 +7,7 @@ use App\Entity\Survey;
 use App\Form\SurveyResponseType;
 use App\Repository\SurveyParticipationRepository;
 use App\Repository\SurveyRepository;
+use App\Security\MemberVoter;
 use App\Service\Survey\SurveyResponseRecorder;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -28,6 +29,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[Route('/panel/surveys')]
 #[IsGranted('FEATURE_SURVEYS')]
 #[IsGranted('ROLE_PARTNER')]
+#[IsGranted(MemberVoter::MEMBER_AREA)]
 class PanelSurveyController extends AbstractController
 {
     /**

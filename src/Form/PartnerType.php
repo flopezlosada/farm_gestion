@@ -5,6 +5,7 @@ namespace App\Form;
 use App\Entity\Partner;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\CallbackTransformer;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\EmailType;
@@ -37,6 +38,11 @@ class PartnerType extends AbstractType
             ))
 
             ->add('eat_meat', CheckboxType::class, array('label'=>'¿Consume productos cárnicos?', 'required'=>false))
+            ->add('notMember', CheckboxType::class, [
+                'property_path' => 'member',
+                'label' => 'No es socia',
+                'required' => false,
+            ])
             ->add('email', EmailType::class, array('label'=>'Correo electrónico'))
 
             ->add('state',EntityType::class, array('class' => 'App\Entity\State', 'required' => true, 'placeholder' => "Selecciona provincia"))
@@ -58,6 +64,15 @@ class PartnerType extends AbstractType
                 'input' => 'datetime_immutable',
             ])
         ;
+
+        // La casilla dice «No es socia» y no «Es socia»: una casilla que no llega
+        // (un formulario abierto de antes) cuenta como desmarcada, y así deja la
+        // ficha como socia, que es lo que son casi todas. Al revés, el mismo
+        // descuido dejaría a una socia fuera de encuestas y voluntariado.
+        $builder->get('notMember')->addModelTransformer(new CallbackTransformer(
+            static fn (?bool $member): bool => false === $member,
+            static fn (?bool $notMember): bool => true !== $notMember,
+        ));
 
         if ($options['include_pickup_group']) {
             $builder->add('weekly_basket_group', null, array('label' => 'Indica si está asociada/o a algún grupo de recogida', 'required' => true));

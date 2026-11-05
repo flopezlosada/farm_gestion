@@ -47,7 +47,7 @@ class NotificationPreferences
      */
     public function wants(Partner $partner, string $topic, string $channel): bool
     {
-        if (!$this->available($topic, $channel)) {
+        if (!$this->available($topic, $channel) || !$this->reaches($partner, $topic)) {
             return false;
         }
 
@@ -78,7 +78,8 @@ class NotificationPreferences
 
         return array_values(array_filter(
             $partners,
-            static fn (Partner $partner): bool => !isset($silenced[(int) $partner->getId()][$key])
+            fn (Partner $partner): bool => $this->reaches($partner, $topic)
+                && !isset($silenced[(int) $partner->getId()][$key])
         ));
     }
 
@@ -136,7 +137,7 @@ class NotificationPreferences
 
         foreach (NotificationTopic::TOPICS as $topic => $meta) {
             foreach ($meta['channels'] as $channel) {
-                if (!$this->available($topic, $channel)) {
+                if (!$this->available($topic, $channel) || !$this->reaches($partner, $topic)) {
                     continue;
                 }
 
@@ -177,7 +178,7 @@ class NotificationPreferences
 
         $topics = [];
         foreach (NotificationTopic::TOPICS as $topic => $meta) {
-            if (null !== $meta['feature'] && !$this->settings->getBool($meta['feature'])) {
+            if ((null !== $meta['feature'] && !$this->settings->getBool($meta['feature'])) || !$this->reaches($partner, $topic)) {
                 continue;
             }
 
@@ -195,6 +196,20 @@ class NotificationPreferences
         }
 
         return $topics;
+    }
+
+    /**
+     * Si el tema es para esta ficha: los de socias ({@see NotificationTopic::TOPICS},
+     * `members`) no son para quien recibe cesta sin ser socia.
+     *
+     * @param Partner $partner la ficha
+     * @param string  $topic   clave del tema
+     *
+     * @return bool true si el tema le corresponde
+     */
+    private function reaches(Partner $partner, string $topic): bool
+    {
+        return !(NotificationTopic::TOPICS[$topic]['members'] ?? false) || $partner->isMember();
     }
 
     /**

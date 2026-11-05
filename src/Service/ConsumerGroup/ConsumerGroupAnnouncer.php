@@ -115,7 +115,7 @@ class ConsumerGroupAnnouncer
      */
     public function audience(): array
     {
-        $active = $this->partners->findActive();
+        $active = $this->partners->findActiveMembers();
         $emailEnabled = $this->settings->getBool(AppSettings::EMAIL_ENABLED);
 
         return [
@@ -162,7 +162,7 @@ class ConsumerGroupAnnouncer
      */
     public function announce(ConsumerGroupRound $round, bool $resend = false): array
     {
-        $active = $this->partners->findActive();
+        $active = $this->partners->findActiveMembers();
 
         $result = [
             'inbox' => $this->deliverInbox($round, $active),
@@ -323,7 +323,7 @@ class ConsumerGroupAnnouncer
     private function emailRecipients(): array
     {
         return $this->preferences->filter(
-            $this->partners->findActiveWithEmail(),
+            $this->partners->findActiveMembersWithEmail(),
             NotificationTopic::CONSUMER_GROUP,
             NotificationTopic::CHANNEL_EMAIL,
         );

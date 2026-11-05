@@ -43,6 +43,7 @@ class PartnerRepository extends ServiceEntityRepository
             ->join('p.volunteerCategories', 'c')
             ->where('p.status = :status')
             ->andWhere('p.volunteering_opt_out = false')
+            ->andWhere('p.member = true')
             ->andWhere('c IN (:categories)')
             ->setParameter('status', Partner::STATUS_ACTIVO)
             ->setParameter('categories', $categories)
@@ -66,6 +67,7 @@ class PartnerRepository extends ServiceEntityRepository
         return $this->createQueryBuilder('p')
             ->where('p.status = :status')
             ->andWhere('p.volunteering_opt_out = false')
+            ->andWhere('p.member = true')
             ->andWhere('p.volunteerCategories IS EMPTY')
             ->setParameter('status', Partner::STATUS_ACTIVO)
             ->getQuery()
@@ -93,17 +95,19 @@ class PartnerRepository extends ServiceEntityRepository
         return $this->createQueryBuilder('p')
             ->where('p.status = :status')
             ->andWhere('p.volunteering_opt_out = false')
+            ->andWhere('p.member = true')
             ->setParameter('status', Partner::STATUS_ACTIVO)
             ->getQuery()
             ->getResult();
     }
 
     /**
-     * Todxs lxs socixs activxs, sin más filtro.
+     * Todas las fichas en ACTIVO, sin más filtro: también la de quien recibe cesta
+     * sin ser socia.
      *
      * Es la lista de "la asociación" para lo que va dirigido a todo el mundo,
-     * como las novedades de la web o el aviso de que hay un pedido del grupo de
-     * consumo abierto.
+     * como las novedades de la web. Lo que es sólo de socias (encuestas, grupo de
+     * consumo) va con {@see findActiveMembers()}.
      *
      * NO CONFUNDIR CON {@see findVolunteeringAudience()}, que descuenta a quien
      * pidió que no se le llame para echar una mano: ése es un "no" sobre el
@@ -116,13 +120,19 @@ class PartnerRepository extends ServiceEntityRepository
      */
     public function findActive(): array
     {
-        return $this->createQueryBuilder('p')
-            ->where('p.status = :status')
-            ->setParameter('status', Partner::STATUS_ACTIVO)
-            ->orderBy('p.name', 'ASC')
-            ->addOrderBy('p.surname', 'ASC')
-            ->getQuery()
-            ->getResult();
+        return $this->activeByNameQb()->getQuery()->getResult();
+    }
+
+    /**
+     * Como {@see findActive()}, pero sólo socias: sin quien recibe cesta sin serlo
+     * ({@see Partner::isMember()}). Es la lista de lo que es de socias, como las
+     * encuestas o el grupo de consumo.
+     *
+     * @return list<Partner> ordenadas por nombre
+     */
+    public function findActiveMembers(): array
+    {
+        return $this->activeByNameQb()->andWhere('p.member = true')->getQuery()->getResult();
     }
 
     /**
@@ -135,6 +145,7 @@ class PartnerRepository extends ServiceEntityRepository
     {
         return $this->createQueryBuilder('p')
             ->where('p.status IN (:statuses)')
+            ->andWhere('p.member = true')
             ->setParameter('statuses', [Partner::STATUS_ACTIVO, Partner::STATUS_PAUSADO])
             ->orderBy('p.name', 'ASC')
             ->addOrderBy('p.surname', 'ASC')
@@ -154,15 +165,39 @@ class PartnerRepository extends ServiceEntityRepository
      */
     public function findActiveWithEmail(): array
     {
+        return $this->activeWithEmailQb()->getQuery()->getResult();
+    }
+
+    /**
+     * Como {@see findActiveWithEmail()}, pero sólo socias ({@see findActiveMembers()}).
+     *
+     * @return list<Partner> ordenadas por nombre
+     */
+    public function findActiveMembersWithEmail(): array
+    {
+        return $this->activeWithEmailQb()->andWhere('p.member = true')->getQuery()->getResult();
+    }
+
+    /**
+     * Las fichas en ACTIVO con correo, ordenadas por nombre.
+     */
+    private function activeWithEmailQb(): QueryBuilder
+    {
+        return $this->activeByNameQb()
+            ->andWhere('p.email IS NOT NULL')
+            ->andWhere("TRIM(p.email) <> ''");
+    }
+
+    /**
+     * Las fichas en ACTIVO, ordenadas por nombre: la base de las listas de envío.
+     */
+    private function activeByNameQb(): QueryBuilder
+    {
         return $this->createQueryBuilder('p')
             ->where('p.status = :status')
-            ->andWhere('p.email IS NOT NULL')
-            ->andWhere("TRIM(p.email) <> ''")
             ->setParameter('status', Partner::STATUS_ACTIVO)
             ->orderBy('p.name', 'ASC')
-            ->addOrderBy('p.surname', 'ASC')
-            ->getQuery()
-            ->getResult();
+            ->addOrderBy('p.surname', 'ASC');
     }
 
     /**
@@ -190,6 +225,7 @@ class PartnerRepository extends ServiceEntityRepository
     ): QueryBuilder {
         $qb = $this->createQueryBuilder('p')
             ->where('p.status = :status')
+            ->andWhere('p.member = true')
             ->setParameter('status', Partner::STATUS_ACTIVO);
 
         // Con 246 socixs, encontrar a alguien sin buscador es imposible.
@@ -523,6 +559,8 @@ class PartnerRepository extends ServiceEntityRepository
      * de base para la pantalla de evolución; cuando importemos los
      * PartnerEvent retroactivos podremos afinar y diferenciar pausas.
      *
+     * Sólo socias: la ficha de cesta de una trabajadora no socia no es un alta.
+     *
      * @return array<int, array{month:string, label:string, joins:int, leaves:int, net:int}>
      */
     public function countMonthlyJoinsAndLeaves(int $months = 13): array
@@ -533,6 +571,7 @@ class PartnerRepository extends ServiceEntityRepository
             "SELECT SUBSTRING(p.inscription_date, 1, 7) AS month, COUNT(p.id) AS total
              FROM App\\Entity\\Partner p
              WHERE p.inscription_date IS NOT NULL
+               AND p.member = true
              GROUP BY month"
         )->getArrayResult();
 
@@ -540,6 +579,7 @@ class PartnerRepository extends ServiceEntityRepository
             "SELECT SUBSTRING(p.demote_date, 1, 7) AS month, COUNT(p.id) AS total
              FROM App\\Entity\\Partner p
              WHERE p.demote_date IS NOT NULL
+               AND p.member = true
              GROUP BY month"
         )->getArrayResult();
 
@@ -590,6 +630,7 @@ class PartnerRepository extends ServiceEntityRepository
         return (int) $this->createQueryBuilder('p')
             ->select('COUNT(p.id)')
             ->where('p.status = :status')
+            ->andWhere('p.member = true')
             ->setParameter('status', Partner::STATUS_ACTIVO)
             ->getQuery()
             ->getSingleScalarResult();
@@ -701,6 +742,7 @@ class PartnerRepository extends ServiceEntityRepository
             ->leftJoin('p.city', 'c')->addSelect('c')
             ->where('p.status = :status')
             ->andWhere('p.parent IS NULL')
+            ->andWhere('p.member = true')
             ->setParameter('status', Partner::STATUS_ACTIVO)
             ->orderBy('p.surname', 'ASC')
             ->addOrderBy('p.name', 'ASC')

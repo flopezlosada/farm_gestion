@@ -98,6 +98,9 @@
             <h1 class="prt-hero__title">{{ partner.name }} {{ partner.surname }}</h1>
             <div class="prt-hero__meta">
                 <span class="prt-chip prt-chip--{{ sc.cls }}"><span class="dot"></span>{{ sc.label }}</span>
+                {% if not partner.member %}
+                    <span class="prt-chip prt-chip--mute" title="Recibe cesta sin ser socia: no vota, no pide al grupo de consumo ni se le llama a voluntariado">No socia</span>
+                {% endif %}
 
                 {% if partner.status == 'ACTIVO' %}
                     {% if partner.hasActiveBasket %}

@@ -27,7 +27,7 @@
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
                 <div class="csa-form-grid">
-                    {{ csa.field(form.partner, 'Su ficha de socix', { full: true }) }}
+                    {{ csa.field(form.partner, 'Su ficha de cesta', { full: true, hint: 'Si no es socia, dale antes de alta una ficha en Socixs con «No es socia» marcado y su cesta, y elígela aquí.' }) }}
                     {{ csa.field(form.basketAfterLeave, 'Su cesta tras la baja') }}
                     {{ csa.field(form.basketGiftUntil, 'Se le regala hasta') }}
                 </div>

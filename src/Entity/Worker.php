@@ -19,9 +19,10 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
  * {@see User} (la identidad de login) por una OneToOne unidireccional cuyo dueño
  * es el User (columna `worker_id` en `fos_user`), exactamente como Partner. Por
  * eso una misma persona puede ser:
- *   - socix Y trabajador  → User con Partner y Worker (p. ej. Damaso),
- *   - solo trabajador     → User con Worker, sin Partner (p. ej. Sara González,
- *                           que no es socia aunque reciba cesta),
+ *   - socix Y trabajador  → User con Partner y Worker,
+ *   - solo trabajador     → User con Worker, sin Partner. Si recibe cesta sin ser
+ *                           socia, su cesta va en una ficha marcada como no socia
+ *                           ({@see Partner::isMember()}), enlazada en {@see self::$partner},
  *   - solo socix          → User con Partner, sin Worker (la mayoría).
  *
  * Tener Worker es lo que deriva {@see User::getRoles()} en ROLE_WORKER, igual
@@ -139,8 +140,10 @@ class Worker
     private $leaveDate;
 
     /**
-     * Su ficha de socix, si recibe cesta. Mientras trabaja su cesta es gratis; tras
-     * la baja, según {@see self::$basketAfterLeave}.
+     * Su ficha de cesta, si recibe cesta. Mientras trabaja su cesta es gratis; tras
+     * la baja, según {@see self::$basketAfterLeave}. Si no es socia, es una ficha
+     * marcada como no socia ({@see Partner::isMember()}): la cesta necesita la ficha
+     * (nodo, modalidad, día), pero no por eso es socia.
      *
      * Va aparte del {@see User} aunque la misma persona pueda tener las dos facetas
      * en su cuenta: esa cuenta es el ACCESO para fichar, y se retira al irse
@@ -438,7 +441,7 @@ class Worker
     }
 
     /**
-     * @return Partner|null Su ficha de socix, si recibe cesta.
+     * @return Partner|null Su ficha de cesta, si recibe cesta.
      */
     public function getPartner(): ?Partner
     {

@@ -94,9 +94,9 @@ class PartnerProfileCompleteness
     /**
      * A quién tiene sentido perseguirle la ficha.
      *
-     * SÓLO SOCIXS ACTIVOS: a quien está de baja o en pausa no se le pide que
-     * complete nada, y en la lista de la coordinadora serían ruido permanente que
-     * nadie va a resolver.
+     * SÓLO SOCIAS ACTIVAS: a quien está de baja o en pausa, o recibe cesta sin ser
+     * socia, no se le pide que complete nada, y en la lista de la coordinadora
+     * serían ruido permanente que nadie va a resolver.
      *
      * Y SÓLO LA CABEZA DE UNA FAMILIA (sin `parent`): las fichas de familiares
      * comparten dirección, teléfono y correo con la principal y por diseño los
@@ -109,7 +109,7 @@ class PartnerProfileCompleteness
      */
     public function applies(Partner $partner): bool
     {
-        return Partner::STATUS_ACTIVO === $partner->getStatus() && null === $partner->getParent();
+        return $partner->isActiveMember() && null === $partner->getParent();
     }
 
     /**

@@ -248,8 +248,8 @@ class SurveyAnnouncerTest extends TestCase
         bool $emailEnabled = true,
     ): SurveyAnnouncer {
         $partners = $this->createMock(PartnerRepository::class);
-        $partners->method('findActive')->willReturn($this->active);
-        $partners->method('findActiveWithEmail')->willReturn($this->active);
+        $partners->method('findActiveMembers')->willReturn($this->active);
+        $partners->method('findActiveMembersWithEmail')->willReturn($this->active);
 
         $users = $this->createMock(UserRepository::class);
         $users->method('findByPartners')->willReturnCallback(

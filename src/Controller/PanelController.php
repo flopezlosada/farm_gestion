@@ -26,6 +26,7 @@ use App\Repository\VolunteerSignupRepository;
 use App\Repository\WeeklyBasketGroupRepository;
 use App\Repository\WeeklyBasketRepository;
 use App\Security\ManagementVoter;
+use App\Security\MemberVoter;
 use App\Service\ConsumerGroup\PartnerConsumerGroupDeliveries;
 use App\Service\Delivery\AccumulatingMove;
 use App\Service\Delivery\DeliveryCalendarProjector;
@@ -99,7 +100,7 @@ class PanelController extends AbstractController
         // de la cesta: en una familia responde cada cual. Sin esto, la única
         // entrada era el menú —y en el móvil, escondida en «Más»—, así que una
         // encuesta abierta podía pasar semanas sin que nadie la viera.
-        $pendingSurveys = $this->isGranted('FEATURE_SURVEYS')
+        $pendingSurveys = $this->memberFeature('FEATURE_SURVEYS')
             ? $surveys->findPendingFor($partner, new \DateTimeImmutable())
             : [];
 
@@ -120,7 +121,7 @@ class PanelController extends AbstractController
         // perro son dos turnos al día y en tres semanas suma más que todo el
         // trabajo de campo junto. El aviso decía "hay 85 turnos esperando gente"
         // cuando lo que de verdad necesitaba a alguien eran veinte.
-        $stillNeeded = $this->isGranted('FEATURE_VOLUNTEERING')
+        $stillNeeded = $this->memberFeature('FEATURE_VOLUNTEERING')
             ? $volunteerShifts->findStillNeededFor(
                 new \DateTime(),
                 $partner->getWeeklyBasketGroup()?->getNode(),
@@ -198,7 +199,7 @@ class PanelController extends AbstractController
             // El objeto y no los números sueltos: lleva consigo la regla de a quién
             // se le enseña la mediana, que es lo que no se puede perder por el
             // camino ({@see VolunteerContribution}).
-            'my_contribution' => $this->isGranted('FEATURE_VOLUNTEERING')
+            'my_contribution' => $this->memberFeature('FEATURE_VOLUNTEERING')
                 ? $contributions->forPartner($partner)
                 : null,
             // Las áreas que ha marcado. La tarjeta las usa para decir con
@@ -242,7 +243,7 @@ class PanelController extends AbstractController
         }
 
         $partner = $this->getUser()->getPartner();
-        $volunteering = $this->isGranted('FEATURE_VOLUNTEERING');
+        $volunteering = $this->memberFeature('FEATURE_VOLUNTEERING');
 
         return $this->render('Panel/notifications.html.twig', [
             'partner' => $partner,
@@ -805,6 +806,20 @@ class PanelController extends AbstractController
     }
 
     /**
+     * Si una parte del panel que es de socias (encuestas, voluntariado) está
+     * encendida PARA ESTA CUENTA: el módulo encendido y que sea socia. Quien recibe
+     * cesta sin ser socia no la ve ({@see MemberVoter}).
+     *
+     * @param string $feature atributo FEATURE_* del módulo
+     *
+     * @return bool true si se le enseña
+     */
+    private function memberFeature(string $feature): bool
+    {
+        return $this->isGranted($feature) && $this->isGranted(MemberVoter::MEMBER_AREA);
+    }
+
+    /**
      * El montaje del reparto de la próxima entrega del socix: quién se ha
      * comprometido a preparar las cestas de SU punto de recogida esa semana.
      *
@@ -833,7 +848,7 @@ class PanelController extends AbstractController
         ?array $next,
         VolunteerShiftRepository $shifts,
     ): array {
-        if ($next === null || !$this->isGranted('FEATURE_VOLUNTEERING')) {
+        if ($next === null || !$this->memberFeature('FEATURE_VOLUNTEERING')) {
             return [];
         }
 

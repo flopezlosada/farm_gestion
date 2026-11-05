@@ -437,6 +437,23 @@ class VolunteerCallNotifierTest extends TestCase
     }
 
     /**
+     * Ni a quien recibe cesta sin ser socia (una trabajadora): está ACTIVO para el
+     * reparto, pero el voluntariado es de socias. Su ficha llega por la URL igual
+     * que la de cualquiera, así que el finder no la protege.
+     */
+    public function testAQuienNoEsSociaNoSeLePide(): void
+    {
+        $inbox = $this->createMock(NotificationInbox::class);
+        $inbox->expects($this->never())->method('deliver');
+
+        $this->assertSame(
+            [],
+            $this->notifier(inbox: $inbox)
+                ->ask($this->shift(), $this->partner(7, 'x@example.org', member: false))
+        );
+    }
+
+    /**
      * PERO SIN CUENTA TODAVÍA PUEDE HABER CORREO, y es fácil confundirlo: la
      * bandeja y el push cuelgan de la cuenta de acceso, la dirección de correo
      * vive en la ficha del socix. Quien nunca ha entrado en la web pero tiene su
@@ -528,8 +545,8 @@ class VolunteerCallNotifierTest extends TestCase
      * Sin correo por defecto, a propósito: uno de cada ocho socixs no tiene, y
      * conviene que el caso normal de los tests sea el que más se olvida.
      *
-     * El estado se dobla explícitamente a ACTIVO: un mock sin stub devuelve la
-     * cadena vacía, que NO es un estado válido, y entonces `canBeAsked()` diría
+     * El estado se dobla explícitamente a ACTIVO, y socia: un mock sin stub
+     * devuelve la cadena vacía y false, y entonces `canBeAsked()` diría
      * que a nadie se le puede pedir nada y los casos pasarían por el motivo
      * equivocado.
      *
@@ -537,18 +554,22 @@ class VolunteerCallNotifierTest extends TestCase
      * @param string|null $email   su dirección, si la tiene en la ficha
      * @param bool        $optOut  si ha pedido que no se le avise de voluntariado
      * @param string      $status  su estado como socix
+     * @param bool        $member  si es socia (false = recibe cesta sin serlo)
      */
     private function partner(
         int $id,
         ?string $email = null,
         bool $optOut = false,
         string $status = Partner::STATUS_ACTIVO,
+        bool $member = true,
     ): Partner {
         $partner = $this->createMock(Partner::class);
         $partner->method('getId')->willReturn($id);
         $partner->method('getEmail')->willReturn($email);
         $partner->method('isVolunteeringOptOut')->willReturn($optOut);
         $partner->method('getStatus')->willReturn($status);
+        $partner->method('isMember')->willReturn($member);
+        $partner->method('isActiveMember')->willReturn($member && Partner::STATUS_ACTIVO === $status);
 
         return $partner;
     }
