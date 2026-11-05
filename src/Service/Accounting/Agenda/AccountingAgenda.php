@@ -23,6 +23,7 @@ use App\Repository\RemittanceRepository;
 use App\Repository\RemittanceReturnRepository;
 use App\Service\Accounting\CashCount\CashCountDue;
 use App\Service\Accounting\CashCount\DayBalances;
+use App\Service\Accounting\Duplicate\DuplicateEntryRule;
 use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\AccountantPackage;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
@@ -112,6 +113,7 @@ class AccountingAgenda
             ...$this->creditMismatches(),
             $this->unidentifiedReturns(),
             $this->openReturns(),
+            ...$this->likelyDuplicates($today),
             $this->unpairedTransfers(),
             ...$this->botTransfers(),
             ...$this->cashCountMismatches(),
@@ -614,6 +616,38 @@ class AccountingAgenda
             $details,
             'accounting_returns',
         );
+    }
+
+    /**
+     * Apuntes que parecen el mismo pago anotado dos veces ({@see DuplicateEntryRule}), del
+     * último año: uno por pareja, a la ficha del anotado después, que es el que suele
+     * sobrar. Como mucho {@see MAX_BANK_PROPOSALS}. Si los dos son pagos de verdad, se
+     * deja de avisar al ligarlos a sus movimientos del banco.
+     *
+     * @return list<AgendaItem>
+     */
+    private function likelyDuplicates(\DateTimeImmutable $today): array
+    {
+        $pairs = \array_slice($this->entries->findLikelyDuplicates($today->modify('-1 year')), 0, self::MAX_BANK_PROPOSALS);
+
+        return array_map(static fn (array $pair): AgendaItem => new AgendaItem(
+            AgendaUrgency::Normal,
+            sprintf(
+                '¿Apunte repetido? %s %s € en %s, el %s y el %s',
+                $pair[1]->getConcept(),
+                number_format((float) $pair[1]->getAmount(), 2, ',', '.'),
+                $pair[1]->getAccount()?->getName(),
+                $pair[0]->getDate()?->format('d/m/Y'),
+                $pair[1]->getDate()?->format('d/m/Y'),
+            ),
+            [
+                'Mismo importe, misma cuenta y lo mismo en el concepto o el proveedor: puede ser un pago que entró por dos caminos (factura y extracto, o extracto y a mano).',
+                'Si sobra uno, bórralo. Si son dos pagos de verdad, deja de avisar al ligar cada uno a su movimiento del banco.',
+            ],
+            'accounting_entry_show',
+            ['id' => $pair[1]->getId()],
+            identity: sprintf('duplicate:%d-%d', $pair[0]->getId(), $pair[1]->getId()),
+        ), $pairs);
     }
 
     /** Traspasos a los que les falta la otra mitad: el saldo de una cuenta no cuadra. */

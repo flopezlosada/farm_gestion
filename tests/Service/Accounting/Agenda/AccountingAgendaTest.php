@@ -519,6 +519,37 @@ class AccountingAgendaTest extends TestCase
     }
 
     /**
+     * El pago del Ayuntamiento anotado dos veces (desde el libro y otra vez desde el
+     * extracto): sale una tarea por pareja que lleva a la ficha del segundo, que es el
+     * que suele sobrar, con la misma identidad mientras sean los mismos dos.
+     */
+    public function testElApunteRepetido(): void
+    {
+        $fiare = $this->account('Fiare', FinancialAccount::KIND_BANK);
+        $pair = array_map(function (string $date) use ($fiare): AccountEntry {
+            $entry = (new AccountEntry())->setAccount($fiare)->setDate(new \DateTimeImmutable($date))->setAmount('-108.95')
+                ->setConcept('TRF. AYUNTAMIENTO DE TORREMOCHA DE JARAMA');
+            $this->setId($entry);
+
+            return $entry;
+        }, ['2026-10-09', '2026-10-09']);
+
+        $items = array_values(array_filter(
+            $this->agenda(duplicates: [$pair])->items(new \DateTimeImmutable('2026-11-05')),
+            static fn (AgendaItem $i): bool => $i->route === 'accounting_entry_show',
+        ));
+
+        $item = $this->only($items);
+        $this->assertSame('¿Apunte repetido? TRF. AYUNTAMIENTO DE TORREMOCHA DE JARAMA -108,95 € en Fiare, el 09/10/2026 y el 09/10/2026', $item->title);
+        $this->assertSame(['id' => $pair[1]->getId()], $item->routeParams);
+        $this->assertSame(AgendaUrgency::Normal, $item->urgency);
+        $this->assertSame($item->key(), $this->only(array_values(array_filter(
+            $this->agenda(duplicates: [$pair])->items(new \DateTimeImmutable('2026-11-08')),
+            static fn (AgendaItem $i): bool => $i->route === 'accounting_entry_show',
+        )))->key(), 'mismos dos apuntes, misma tarea: el vigilante no repite el aviso como nuevo');
+    }
+
+    /**
      * Un arqueo que no cuadra sale con la diferencia con signo, por qué suele pasar y
      * un enlace a anotar el apunte con la caja y la fecha puestas. Si cuadra con el
      * saldo de antes o el de después de los apuntes del día, no sale.
@@ -689,6 +720,7 @@ class AccountingAgendaTest extends TestCase
         int $unlinkedBankLines = 0,
         array $bankProposals = [],
         array $creditMismatches = [],
+        array $duplicates = [],
     ): AccountingAgenda {
         $receivedRepo = $this->createStub(ReceivedInvoiceRepository::class);
         $receivedRepo->method('findOpen')->willReturn($open);
@@ -702,6 +734,7 @@ class AccountingAgendaTest extends TestCase
         $entries->method('lastDateByAccount')->willReturn($lastDates);
         $entries->method('findUnpairedTransfers')->willReturn($unpaired);
         $entries->method('findExpensesWithoutInvoice')->willReturn($withoutInvoice);
+        $entries->method('findLikelyDuplicates')->willReturn($duplicates);
         $entries->method('balanceFor')->willReturnCallback(static fn (FinancialAccount $a): string => $balances[$a->getId()] ?? '0.00');
         $entries->method('dayBalances')->willReturnCallback(static fn (FinancialAccount $a): DayBalances => $dayBalances[$a->getId()] ?? new DayBalances(0, 0));
         $latest = [];
