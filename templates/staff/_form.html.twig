@@ -9,11 +9,33 @@
 
     <div class="csa-stack-lg">
 
-        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Ficha laboral', subtitle: 'Datos de la relación laboral. El acceso para fichar se gestiona aparte.' } %}
+        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Persona', subtitle: 'Si ya es socia, elige su ficha y se rellena con sus datos. Sirven para identificarle en el registro de jornada y poder contactar.' } %}
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
                 <div class="csa-form-grid">
+                    {% if form.alreadyMember is defined %}
+                        {{ csa.field(form.alreadyMember, '¿Ya es socia?', { full: true, attr: { class: 'csa-segmented' } }) }}
+                        {{ csa.field(form.partner, 'Su ficha de socia', { full: true, show_when: 'alreadyMember=1', hint: 'rellena los datos que estén vacíos', attr: { 'data-member-data-url': path('staff_member_data', { id: 0 }) } }) }}
+                    {% else %}
+                        {# Ya tiene ficha de no socia: no hay nada que preguntar. #}
+                        <p class="csa-field--full" style="margin: 0;">
+                            <i class="fa fa-shopping-basket"></i>
+                            No es socia. Su ficha de cesta: <a href="{{ path('partner_show', { id: form.vars.data.partner.id }) }}">{{ form.vars.data.partner.legalName }}</a>
+                        </p>
+                    {% endif %}
                     {{ csa.field(form.name, 'Nombre completo', { full: true }) }}
+                    {{ csa.field(form.nif, 'DNI/NIE') }}
+                    {{ csa.field(form.phone, 'Teléfono') }}
+                    {{ csa.field(form.email, 'Correo personal', { full: true }) }}
+                    {{ csa.field(form.address, 'Dirección', { full: true }) }}
+                </div>
+            {% endblock %}
+        {% endembed %}
+
+        {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Ficha laboral', subtitle: 'Datos de la relación laboral. El acceso para fichar se gestiona aparte.' } %}
+            {% block body %}
+                {% import '_macros/csa.html.twig' as csa %}
+                <div class="csa-form-grid">
                     {{ csa.field(form.hireDate, 'Fecha de alta') }}
                     {{ csa.field(form.recordingStartDate, 'Registro en la app desde') }}
                     {{ csa.field(form.workdayType, 'Tipo de jornada') }}
@@ -23,25 +45,11 @@
             {% endblock %}
         {% endembed %}
 
-        {% embed '_components/csa_form_section.html.twig' with { num: '2', title: 'Datos personales', subtitle: 'Para identificarle en el registro de jornada y poder contactar. Todos opcionales.' } %}
-            {% block body %}
-                {% import '_macros/csa.html.twig' as csa %}
-                <div class="csa-form-grid">
-                    {{ csa.field(form.nif, 'DNI/NIE') }}
-                    {{ csa.field(form.phone, 'Teléfono') }}
-                    {{ csa.field(form.email, 'Correo personal', { full: true }) }}
-                    {{ csa.field(form.address, 'Dirección', { full: true }) }}
-                </div>
-            {% endblock %}
-        {% endembed %}
-
-        {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Cesta', subtitle: 'Mientras trabaja su cesta es gratis. Cuando se va, se decide si la paga o se le sigue regalando.' } %}
-            {% block body %}
-                {% import '_macros/csa.html.twig' as csa %}
-                <div class="csa-form-grid">
-                    {% if form.alreadyMember is defined %}
-                        {{ csa.field(form.alreadyMember, '¿Ya es socia?', { full: true, attr: { class: 'csa-segmented' } }) }}
-                        {{ csa.field(form.partner, 'Su ficha de socia', { full: true, show_when: 'alreadyMember=1' }) }}
+        {% if form.givesBasket is defined or form.basketAfterLeave is defined %}
+            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Cesta', subtitle: 'Mientras trabaja su cesta es gratis. Cuando se va, se decide si la paga o se le sigue regalando.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
                         {% if form.givesBasket is defined %}
                             <div class="csa-field csa-field--full">
                                 <label for="{{ form.givesBasket.vars.id }}" style="display:flex; gap:.6rem; align-items:flex-start; cursor:pointer;">
@@ -53,20 +61,14 @@
                                 </label>
                             </div>
                         {% endif %}
-                    {% else %}
-                        {# Ya tiene ficha de no socia: no hay nada que preguntar. #}
-                        <p class="csa-field--full" style="margin: 0;">
-                            <i class="fa fa-shopping-basket"></i>
-                            Ficha de cesta de no socia: <a href="{{ path('partner_show', { id: form.vars.data.partner.id }) }}">{{ form.vars.data.partner.legalName }}</a>
-                        </p>
-                    {% endif %}
-                    {% if form.basketAfterLeave is defined %}
-                        {{ csa.field(form.basketAfterLeave, 'Su cesta tras la baja') }}
-                        {{ csa.field(form.basketGiftUntil, 'Se le regala hasta') }}
-                    {% endif %}
-                </div>
-            {% endblock %}
-        {% endembed %}
+                        {% if form.basketAfterLeave is defined %}
+                            {{ csa.field(form.basketAfterLeave, 'Su cesta tras la baja') }}
+                            {{ csa.field(form.basketGiftUntil, 'Se le regala hasta') }}
+                        {% endif %}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
 
         <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
             <div></div>
@@ -80,3 +82,30 @@
 
     {{ form_rest(form) }}
 {{ form_end(form, { render_rest: false }) }}
+
+{% if form.partner is defined %}
+    <script>
+        /* Al elegir la ficha de socia, rellena con sus datos los campos de la
+           persona que estén vacíos: lo ya escrito no se pisa. Sin permiso para
+           ver Socixs la petición falla y no se rellena nada. */
+        (function () {
+            var select = document.getElementById('{{ form.partner.vars.id }}');
+            var base = select.dataset.memberDataUrl.replace(/0$/, '');
+            select.addEventListener('change', function () {
+                if (!select.value) {
+                    return;
+                }
+                fetch(base + select.value, { headers: { Accept: 'application/json' } })
+                    .then(function (r) { return r.ok ? r.json() : {}; })
+                    .then(function (data) {
+                        Object.keys(data).forEach(function (key) {
+                            var input = document.getElementById('{{ form.vars.id }}_' + key);
+                            if (input && !input.value.trim() && data[key]) {
+                                input.value = data[key];
+                            }
+                        });
+                    });
+            });
+        })();
+    </script>
+{% endif %}

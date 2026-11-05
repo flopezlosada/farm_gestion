@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\Absence;
+use App\Entity\Partner;
 use App\Entity\TimeEntry;
 use App\Entity\Worker;
 use App\Form\AbsenceType;
@@ -32,6 +33,7 @@ use App\Service\Staff\WorkdayBuilder;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bridge\Doctrine\Attribute\MapEntity;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -73,6 +75,31 @@ class WorkerController extends AbstractController
                 'total' => count($all),
                 'active' => count(array_filter($all, static fn (Worker $w) => $w->isActive())),
             ],
+        ]);
+    }
+
+    /**
+     * Los datos personales de la ficha de una socia, para rellenar con ellos la
+     * del trabajador que ya es socia. Se piden de uno en uno y sólo quien puede
+     * ver Socixs: no se vuelcan los de todas en el formulario.
+     *
+     * @param Partner $partner La ficha elegida.
+     * @return JsonResponse Con las claves de los campos del formulario del trabajador.
+     */
+    #[Route('/member-data/{id}', name: 'staff_member_data', methods: ['GET'], requirements: ['id' => '\d+'])]
+    #[IsGranted('ROLE_GESTION_SOCIXS')]
+    public function memberData(Partner $partner): JsonResponse
+    {
+        if (!$partner->isMember()) {
+            throw $this->createNotFoundException('Esa ficha no es de socia.');
+        }
+
+        return $this->json([
+            'name' => trim($partner->getname() . ' ' . $partner->getSurname()),
+            'nif' => $partner->getDNI(),
+            'phone' => $partner->getcelular(),
+            'email' => $partner->getemail(),
+            'address' => $partner->getAddress(),
         ]);
     }
 

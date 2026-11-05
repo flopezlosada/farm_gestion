@@ -286,6 +286,54 @@ class StaffControllerTest extends WebTestCase
         $this->em->flush();
     }
 
+    /**
+     * Los datos de una socia para rellenar los del trabajador: con las claves de
+     * su formulario y el nombre completo en uno. Las filas reales tienen huecos,
+     * que llegan como null.
+     */
+    public function testMemberDataFillsTheWorkerFields(): void
+    {
+        $member = (new Partner())->setName('Carmen')->setSurname('Ruiz García')->setDNI('12345678Z')->setAddress(null);
+        $this->em->persist($member);
+        $this->em->flush();
+
+        $this->client->request('GET', '/gestion/staff/member-data/' . $member->getId());
+        $this->assertResponseIsSuccessful();
+        $this->assertSame(
+            ['name' => 'Carmen Ruiz García', 'nif' => '12345678Z', 'phone' => null, 'email' => null, 'address' => null],
+            json_decode($this->client->getResponse()->getContent(), true),
+        );
+
+        $member->setMember(false);
+        $this->em->flush();
+        $this->client->request('GET', '/gestion/staff/member-data/' . $member->getId());
+        $this->assertResponseStatusCodeSame(404, 'De una ficha de no socia no se dan datos.');
+
+        $this->em->remove($member);
+        $this->em->flush();
+    }
+
+    /** Quien no puede ver Socixs no saca los datos de una socia. */
+    public function testMemberDataNeedsPartnersRole(): void
+    {
+        $member = (new Partner())->setName('TEST')->setSurname('Socia ' . uniqid());
+        $this->em->persist($member);
+        $staff = (new User())
+            ->setUsername('worker-test-laboral-' . uniqid())
+            ->setEmail(uniqid('laboral') . '@example.test')
+            ->setPassword('x')
+            ->setRoles(['ROLE_GESTION_LABORAL_EDIT']);
+        $this->em->persist($staff);
+        $this->em->flush();
+        $this->client->loginUser($staff);
+
+        $this->client->request('GET', '/gestion/staff/member-data/' . $member->getId());
+        $this->assertResponseStatusCodeSame(403);
+
+        $this->em->remove($member);
+        $this->em->flush();
+    }
+
     /** Con ficha de no socia no se pregunta nada: se enseña, y guardar la conserva. */
     public function testNonMemberCardIsShownAndKept(): void
     {
@@ -299,7 +347,7 @@ class StaffControllerTest extends WebTestCase
         $this->assertFalse($form->has('worker[alreadyMember]'));
         $this->assertFalse($form->has('worker[partner]'));
         $this->assertTrue($form->has('worker[basketAfterLeave]'));
-        $this->assertSelectorTextContains('form', 'Ficha de cesta de no socia');
+        $this->assertSelectorTextContains('form', 'No es socia. Su ficha de cesta');
 
         $form['worker[workdayType]'] = Worker::WORKDAY_FULL_TIME;
         $this->client->submit($form);
