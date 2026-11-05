@@ -336,6 +336,33 @@ class Partner
     }
 
     /**
+     * La ficha de cesta, sin guardar, de un trabajador que no es socio: sus datos
+     * personales y «no es socia». Lo que el trabajador no tiene (provincia,
+     * municipio, forma de pago) lo completa quien da el alta en el formulario.
+     *
+     * El trabajador guarda el nombre completo en un solo campo; se parte por el
+     * primer espacio («Carmen Ruiz García» → «Carmen» + «Ruiz García»). Con un
+     * nombre compuesto sale mal, pero se ve en el formulario antes de guardar.
+     *
+     * @param Worker $worker Quien va a recibir la cesta.
+     * @return self La ficha prerrellenada, no persistida.
+     */
+    public static function nonMemberFor(Worker $worker): self
+    {
+        [$name, $surname] = array_pad(preg_split('/\s+/', trim((string) $worker->getName()), 2), 2, null);
+
+        $partner = (new self())
+            ->setname($name)
+            ->setSurname($surname)
+            ->setDNI($worker->getNif())
+            ->setcelular($worker->getPhone())
+            ->setAddress($worker->getAddress())
+            ->setMember(false);
+
+        return $worker->getEmail() === null ? $partner : $partner->setemail($worker->getEmail());
+    }
+
+    /**
      * Categorías de voluntariado de las que este socix quiere que se le avise.
      *
      * Marcar categorías significa "avísame de esto"; no marcar ninguna significa

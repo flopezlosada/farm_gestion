@@ -42,7 +42,6 @@ parameters:
     app.gemini.models:
         - gemini-3.5-flash-lite
         - gemini-3.8-flash
-        - gemini-2.5-flash
 
     # Remitentes de los avisos de notificación electrónica oficial que, al llegar
     # al buzón de facturas, mandan un aviso urgente a quien lleva la contabilidad.

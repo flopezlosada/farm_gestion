@@ -4,6 +4,7 @@ namespace App\Tests\Controller;
 
 use App\Entity\Absence;
 use App\Entity\Notification;
+use App\Entity\Partner;
 use App\Entity\PaySchedule;
 use App\Entity\Setting;
 use App\Entity\TimeEntry;
@@ -14,6 +15,7 @@ use App\Service\AppSettings;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\DomCrawler\Field\ChoiceFormField;
 
 /**
  * Tests funcionales del área de gestión de personal (/gestion/staff). Cubren el
@@ -66,8 +68,18 @@ class StaffControllerTest extends WebTestCase
             }
         }
         $em->flush();
+        // Las fichas de cesta que crean los tests van detrás de sus trabajadores:
+        // el trabajador las referencia.
+        $basketCards = [];
         foreach ($em->getRepository(Worker::class)->findAll() as $w) {
+            if ($w->getPartner() !== null) {
+                $basketCards[] = $w->getPartner();
+            }
             $em->remove($w);
+        }
+        $em->flush();
+        foreach ($basketCards as $card) {
+            $em->remove($card);
         }
         foreach ($em->getRepository(Setting::class)->findAll() as $s) {
             $em->remove($s);
@@ -92,6 +104,26 @@ class StaffControllerTest extends WebTestCase
         $this->em->flush();
 
         return $worker;
+    }
+
+    /**
+     * Entra con un usuario que sólo tiene esos roles, ya con contraseña puesta
+     * (sin ella, la app le manda antes a elegirla).
+     *
+     * @param list<string> $roles
+     */
+    private function loginWithRoles(array $roles): void
+    {
+        $user = (new User())
+            ->setUsername('worker-test-' . uniqid())
+            ->setEmail(uniqid('worker-test-') . '@example.test')
+            ->setPassword('x')
+            ->setEnabled(true)
+            ->setPasswordSet(true)
+            ->setRoles($roles);
+        $this->em->persist($user);
+        $this->em->flush();
+        $this->client->loginUser($user);
     }
 
     private function addEntry(Worker $worker, string $type, string $at): TimeEntry
@@ -162,6 +194,234 @@ class StaffControllerTest extends WebTestCase
         $this->assertStringContainsString('12345678Z', $crawler->filter('.stf-personal')->text());
         $this->assertStringContainsString('Calle Mayor 1, 28190 Patones', $crawler->filter('.stf-personal')->text());
         $this->assertSame('alba@example.org', $crawler->filter('input[name="email"]')->attr('value'), 'El acceso se propone con su correo.');
+    }
+
+    /**
+     * «Darle cesta»: el alta sale con los datos de la ficha laboral y como no
+     * socia; al completar lo que falta y guardar, la ficha queda enlazada al
+     * trabajador y se sigue a «Añadir cesta».
+     */
+    public function testGiveBasketCreatesNonMemberCardLinkedToTheWorker(): void
+    {
+        $email = uniqid('cesta') . '@example.test';
+        $worker = $this->makeWorker('Carmen Ruiz García')
+            ->setNif('12345678Z')
+            ->setPhone('6' . random_int(10000000, 99999999))
+            ->setEmail($email)
+            ->setAddress('Calle Mayor 1, 28190 Patones');
+        $this->em->flush();
+
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $worker->getId());
+        $this->assertSame(
+            '/gestion/partner/new?worker=' . $worker->getId(),
+            $crawler->selectLink('Darle cesta')->attr('href'),
+        );
+
+        $crawler = $this->client->request('GET', '/gestion/partner/new?worker=' . $worker->getId() . '&start=2030-01-07');
+        $this->assertResponseIsSuccessful();
+        $form = $crawler->selectButton('Crear socix')->form();
+        $this->assertSame('Carmen', $form['partner[name]']->getValue());
+        $this->assertSame('Ruiz García', $form['partner[surname]']->getValue());
+        $this->assertSame('12345678Z', $form['partner[DNI]']->getValue());
+        $this->assertSame($email, $form['partner[email]']->getValue());
+        $this->assertSame('1', $form['partner[notMember]']->getValue(), 'Sale marcada «No es socia».');
+
+        $form['partner[state]']->setValue(self::firstOption($form['partner[state]']));
+        $form['partner[city]']->setValue(self::firstOption($form['partner[city]']));
+        $form['partner[share_payment]']->setValue(self::firstOption($form['partner[share_payment]']));
+        $this->client->submit($form);
+
+        $this->em->clear();
+        $card = $this->em->getRepository(Worker::class)->find($worker->getId())->getPartner();
+        $this->assertNotNull($card, 'La ficha queda enlazada al trabajador.');
+        $this->assertResponseRedirects('/gestion/partner/' . $card->getId() . '/add_basket?start=2030-01-07');
+        $this->assertFalse($card->isMember());
+        $this->assertSame('Calle Mayor 1, 28190 Patones', $card->getAddress());
+        $this->assertCount(0, $card->getPartnerBasketShares(), 'La cesta se elige en el paso siguiente.');
+    }
+
+    /**
+     * Alta de quien no es socia y recibe cesta: al guardar se sigue a dar de alta
+     * su ficha de no socia. Lo de tras la baja no sale: aún no hay cesta.
+     */
+    public function testNewWorkerWhoGetsABasketGoesOnToGiveIt(): void
+    {
+        $name = 'Nuevo con cesta ' . uniqid();
+        $form = $this->client->request('GET', '/gestion/staff/new')->selectButton('Crear trabajador')->form();
+        $this->assertFalse($form->has('worker[basketAfterLeave]'));
+        $form['worker[name]'] = $name;
+        $form['worker[hireDate]'] = '2026-01-01';
+        $form['worker[workdayType]'] = Worker::WORKDAY_FULL_TIME;
+        $form['worker[alreadyMember]'] = '0';
+        $form['worker[givesBasket]']->tick();
+        $form['worker[basketStart]'] = '2030-01-07';
+        $this->client->submit($form);
+
+        $worker = $this->em->getRepository(Worker::class)->findOneBy(['name' => $name]);
+        $this->assertNotNull($worker);
+        $this->assertResponseRedirects('/gestion/partner/new?worker=' . $worker->getId() . '&start=2030-01-07');
+    }
+
+    /** «Recibe cesta» sin fecha no se guarda: es con la que se abre «Añadir cesta». */
+    public function testGivesBasketNeedsAStartDate(): void
+    {
+        $worker = $this->makeWorker();
+        $form = $this->client->request('GET', '/gestion/staff/' . $worker->getId() . '/edit')->selectButton('Guardar cambios')->form();
+        $form['worker[workdayType]'] = Worker::WORKDAY_FULL_TIME;
+        $form['worker[alreadyMember]'] = '0';
+        $form['worker[givesBasket]']->tick();
+        $this->client->submit($form);
+
+        $this->assertResponseIsSuccessful('Se vuelve a pintar el formulario, sin redirigir.');
+        $this->assertSelectorTextContains('.csa-field__error', 'desde cuándo recibe cesta');
+    }
+
+    /** «Sí» sin elegir ficha no se guarda: se pide que se elija. */
+    public function testAlreadyMemberNeedsTheirCard(): void
+    {
+        $worker = $this->makeWorker();
+        $form = $this->client->request('GET', '/gestion/staff/' . $worker->getId() . '/edit')->selectButton('Guardar cambios')->form();
+        $form['worker[workdayType]'] = Worker::WORKDAY_FULL_TIME;
+        $form['worker[alreadyMember]'] = '1';
+        $this->client->submit($form);
+
+        $this->assertResponseIsSuccessful('Se vuelve a pintar el formulario, sin redirigir.');
+        $this->assertSelectorTextContains('.csa-field__error', 'Elige su ficha de socia');
+    }
+
+    /**
+     * Socia sin cesta en curso que recibe cesta: se enlaza su ficha y se sigue a
+     * «Añadir cesta». Al volver a «No», la ficha se desenlaza aunque el
+     * desplegable escondido siga enviándola.
+     */
+    public function testMemberWithoutBasketIsLinkedAndGoesOnToAddIt(): void
+    {
+        $member = (new Partner())->setName('TEST')->setSurname('Socia sin cesta ' . uniqid());
+        $this->em->persist($member);
+        $worker = $this->makeWorker();
+
+        $form = $this->client->request('GET', '/gestion/staff/' . $worker->getId() . '/edit')->selectButton('Guardar cambios')->form();
+        $form['worker[workdayType]'] = Worker::WORKDAY_FULL_TIME;
+        $form['worker[alreadyMember]'] = '1';
+        $form['worker[partner]'] = (string) $member->getId();
+        $form['worker[givesBasket]']->tick();
+        $form['worker[basketStart]'] = '2030-01-07';
+        $this->client->submit($form);
+        $this->assertResponseRedirects('/gestion/partner/' . $member->getId() . '/add_basket?start=2030-01-07');
+
+        $crawler = $this->client->request('GET', '/gestion/partner/' . $member->getId() . '/add_basket?start=2030-01-07');
+        $this->assertSame('2030-01-07', $crawler->filter('#partner_basket_share_start_date')->attr('value'), '«Añadir cesta» llega con la fecha puesta.');
+
+        $form = $this->client->request('GET', '/gestion/staff/' . $worker->getId() . '/edit')->selectButton('Guardar cambios')->form();
+        $this->assertSame('1', $form['worker[alreadyMember]']->getValue());
+        $this->assertTrue($form->has('worker[basketAfterLeave]'), 'Con ficha ya se puede decidir qué pasa tras la baja.');
+        $form['worker[alreadyMember]'] = '0';
+        $this->client->submit($form);
+        $this->assertResponseRedirects('/gestion/staff/' . $worker->getId());
+
+        $this->em->clear();
+        $this->assertNull($this->em->getRepository(Worker::class)->find($worker->getId())->getPartner());
+        $this->em->remove($this->em->getRepository(Partner::class)->find($member->getId()));
+        $this->em->flush();
+    }
+
+    /**
+     * Los datos de una socia para rellenar los del trabajador: con las claves de
+     * su formulario y el nombre completo en uno. Las filas reales tienen huecos,
+     * que llegan como null.
+     */
+    public function testMemberDataFillsTheWorkerFields(): void
+    {
+        $member = (new Partner())->setName('Carmen')->setSurname('Ruiz García')->setDNI('12345678Z')->setAddress(null);
+        $this->em->persist($member);
+        $this->em->flush();
+
+        $this->client->request('GET', '/gestion/staff/member-data/' . $member->getId());
+        $this->assertResponseIsSuccessful();
+        $this->assertSame(
+            ['name' => 'Carmen Ruiz García', 'nif' => '12345678Z', 'phone' => null, 'email' => null, 'address' => null],
+            json_decode($this->client->getResponse()->getContent(), true),
+        );
+
+        // La petición limpia el EntityManager: se vuelve a cargar.
+        $member = $this->em->getRepository(Partner::class)->find($member->getId());
+        $member->setMember(false);
+        $this->em->flush();
+        $this->client->request('GET', '/gestion/staff/member-data/' . $member->getId());
+        $this->assertResponseStatusCodeSame(404, 'De una ficha de no socia no se dan datos.');
+
+        $this->em->remove($this->em->getRepository(Partner::class)->find($member->getId()));
+        $this->em->flush();
+    }
+
+    /** Quien no puede ver Socixs no saca los datos de una socia. */
+    public function testMemberDataNeedsPartnersRole(): void
+    {
+        $member = (new Partner())->setName('TEST')->setSurname('Socia ' . uniqid());
+        $this->em->persist($member);
+        $this->loginWithRoles(['ROLE_GESTION_LABORAL_EDIT']);
+
+        $this->client->request('GET', '/gestion/staff/member-data/' . $member->getId());
+        $this->assertResponseStatusCodeSame(403);
+
+        $this->em->remove($this->em->getRepository(Partner::class)->find($member->getId()));
+        $this->em->flush();
+    }
+
+    /** Con ficha de no socia no se pregunta nada: se enseña, y guardar la conserva. */
+    public function testNonMemberCardIsShownAndKept(): void
+    {
+        $card = (new Partner())->setName('TEST')->setSurname('No socia ' . uniqid())->setMember(false);
+        $this->em->persist($card);
+        $worker = $this->makeWorker()->setPartner($card);
+        $this->em->flush();
+
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $worker->getId() . '/edit');
+        $form = $crawler->selectButton('Guardar cambios')->form();
+        $this->assertFalse($form->has('worker[alreadyMember]'));
+        $this->assertFalse($form->has('worker[partner]'));
+        $this->assertTrue($form->has('worker[basketAfterLeave]'));
+        $this->assertSelectorTextContains('form', 'No es socia. Su ficha de cesta');
+
+        $form['worker[workdayType]'] = Worker::WORKDAY_FULL_TIME;
+        $this->client->submit($form);
+        $this->assertResponseRedirects('/gestion/staff/' . $worker->getId());
+        $this->em->clear();
+        $this->assertSame($card->getId(), $this->em->getRepository(Worker::class)->find($worker->getId())->getPartner()?->getId());
+    }
+
+    /** Con ficha de cesta ya no se ofrece ni se crea otra: se vuelve a su ficha laboral. */
+    public function testGiveBasketTwiceDoesNotCreateASecondCard(): void
+    {
+        $card = (new Partner())->setName('TEST')->setSurname('Ya con cesta ' . uniqid())->setMember(false);
+        $this->em->persist($card);
+        $worker = $this->makeWorker()->setPartner($card);
+        $this->em->flush();
+
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $worker->getId());
+        $this->assertCount(0, $crawler->selectLink('Darle cesta'));
+
+        $this->client->request('GET', '/gestion/partner/new?worker=' . $worker->getId());
+        $this->assertResponseRedirects('/gestion/staff/' . $worker->getId());
+    }
+
+    /**
+     * Enlazar la ficha toca la ficha laboral: quien sólo gestiona socixs puede
+     * dar altas, pero no la de un trabajador.
+     */
+    public function testGiveBasketNeedsLaborEditRole(): void
+    {
+        $worker = $this->makeWorker();
+        $this->loginWithRoles(['ROLE_GESTION_SOCIXS_EDIT']);
+
+        $this->client->request('GET', '/gestion/partner/new?worker=' . $worker->getId());
+        $this->assertResponseStatusCodeSame(403);
+    }
+
+    /** @return string El primer valor no vacío de un select. */
+    private static function firstOption(ChoiceFormField $field): string
+    {
+        return array_values(array_filter($field->availableOptionValues(), static fn (string $v): bool => $v !== ''))[0];
     }
 
     /** Un DNI con la letra mal no se guarda: se avisa en el formulario. */
