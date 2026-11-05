@@ -10,6 +10,7 @@ use App\Entity\FinancialAccount;
 use App\Entity\Provider;
 use App\Entity\ReceivedInvoice;
 use App\Entity\Setting;
+use App\Repository\ReceivedInvoiceRepository;
 use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\ExtractedInvoice;
 use App\Service\Accounting\Invoice\InvoiceQuarter;
@@ -30,6 +31,9 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
 {
     /** CIF de la ferretería de las pruebas; tearDown borra el proveedor que cree. */
     private const TAX_ID = '51454945N';
+
+    /** Facturas leídas que crean los tests de la cola; tearDown las borra. */
+    private const QUEUE_FILES = ['atras.pdf', 'primera.pdf', 'segunda.pdf', 'tercera.pdf'];
 
     /** Cuenta de banco: la de los pagos que trae el extracto. */
     private ?FinancialAccount $account = null;
@@ -61,7 +65,7 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $em->flush();
         static::getContainer()->get(ClosedPeriods::class)->reset();
 
-        foreach ($em->getRepository(ReceivedInvoice::class)->findBy(['originalName' => ['factura-prueba.pdf', 'apuntes.txt', 'siguiente.pdf']]) as $invoice) {
+        foreach ($em->getRepository(ReceivedInvoice::class)->findBy(['originalName' => ['factura-prueba.pdf', 'apuntes.txt', 'siguiente.pdf', ...self::QUEUE_FILES]]) as $invoice) {
             $entry = $invoice->getAccountEntry();
             $em->remove($invoice);
             if ($entry !== null) {
@@ -555,6 +559,51 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * Al confirmar se sigue por la que venía detrás, no se vuelve a la primera: la que
+     * se dejó atrás a propósito (una aún sin pagar) no sale una y otra vez.
+     */
+    public function testAlConfirmarSigueDetrasYNoVuelveALaQueSeDejoAtras(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->createCatalogue();
+        $behind = $this->persistRead('atras.pdf');
+        $invoice = $this->uploadOne($client);
+        $next = $this->persistRead('siguiente.pdf');
+
+        $this->confirm($client, $invoice, [], '26.75');
+
+        $this->assertResponseRedirects(sprintf('/gestion/accounting/invoices/%d', $next->getId()), null, sprintf('No vuelve a la %d, que se dejó atrás.', $behind->getId()));
+    }
+
+    /** Desde una factura se va a la anterior y a la siguiente por revisar, y se ve cuántas quedan. */
+    public function testLaRevisionLlevaALaAnteriorYALaSiguiente(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $first = $this->persistRead('primera.pdf');
+        $second = $this->persistRead('segunda.pdf');
+        $third = $this->persistRead('tercera.pdf');
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $second->getId()));
+
+        $this->assertResponseIsSuccessful();
+        // Puede haber otras en la bandeja (de antes, con id menor): el puesto se cuenta
+        // con ellas, y las tres de la prueba van seguidas al final.
+        $total = \count(array_filter(
+            static::getContainer()->get(ReceivedInvoiceRepository::class)->findOpen(),
+            static fn (ReceivedInvoice $i): bool => $i->getStatus() !== ReceivedInvoice::STATUS_PENDING,
+        ));
+        $nav = $crawler->filter('nav.inv-nav');
+        $this->assertStringContainsString(sprintf('Factura %d de %d por revisar', $total - 1, $total), $nav->text());
+        $links = $nav->filter('a')->each(static fn ($a): string => (string) $a->attr('href'));
+        $this->assertSame([
+            sprintf('/gestion/accounting/invoices/%d', $first->getId()),
+            sprintf('/gestion/accounting/invoices/%d', $third->getId()),
+        ], $links);
+    }
+
+    /**
      * Un pago por banco no se anota desde la factura: llegará con el extracto, y
      * anotarlo aquí lo contaría dos veces. La factura se queda en la bandeja.
      */
@@ -719,6 +768,24 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $client->submit($crawler->filter(sprintf('form[action="/gestion/accounting/invoices/%d/discard"]', $first->getId()))->form());
         $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $second->getId()));
         $this->assertSelectorTextNotContains('body', 'este mismo fichero ya entró');
+    }
+
+    /**
+     * Una factura ya leída, lista para revisar.
+     *
+     * @param string $name Nombre del fichero.
+     */
+    private function persistRead(string $name): ReceivedInvoice
+    {
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $invoice = new ReceivedInvoice($name, $name, 'application/pdf', ReceivedInvoice::SOURCE_WEB, null);
+        // Sin partida propuesta: puede crearse antes de una subida, que reinicia el
+        // kernel, y la partida de createCatalogue ya no sería de este EntityManager.
+        $invoice->markRead(ExtractedInvoice::fromArray(['fecha' => '2026-03-06', 'total' => 12.5]), 'test', null, new \DateTimeImmutable());
+        $em->persist($invoice);
+        $em->flush();
+
+        return $invoice;
     }
 
     private function uploadOne($client): ReceivedInvoice
