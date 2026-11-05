@@ -137,6 +137,49 @@ class StaffControllerTest extends WebTestCase
         $this->assertResponseIsSuccessful();
     }
 
+    /** Los datos personales se guardan desde la ficha, normalizados, y se ven en ella. */
+    public function testPersonalDataIsSavedAndShown(): void
+    {
+        $worker = $this->makeWorker();
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $worker->getId() . '/edit');
+        $this->client->submit($crawler->selectButton('Guardar cambios')->form([
+            'worker[workdayType]' => Worker::WORKDAY_FULL_TIME,
+            'worker[nif]' => '12.345.678-z',
+            'worker[phone]' => '600 111 222',
+            'worker[email]' => 'alba@example.org',
+            'worker[address]' => 'Calle Mayor 1, 28190 Patones',
+        ]));
+        $this->assertResponseRedirects('/gestion/staff/' . $worker->getId());
+
+        $this->em->clear();
+        $saved = $this->em->getRepository(Worker::class)->find($worker->getId());
+        $this->assertSame('12345678Z', $saved->getNif());
+        $this->assertSame('600 111 222', $saved->getPhone());
+        $this->assertSame('alba@example.org', $saved->getEmail());
+        $this->assertSame('Calle Mayor 1, 28190 Patones', $saved->getAddress());
+
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $worker->getId());
+        $this->assertStringContainsString('12345678Z', $crawler->filter('.stf-personal')->text());
+        $this->assertStringContainsString('Calle Mayor 1, 28190 Patones', $crawler->filter('.stf-personal')->text());
+        $this->assertSame('alba@example.org', $crawler->filter('input[name="email"]')->attr('value'), 'El acceso se propone con su correo.');
+    }
+
+    /** Un DNI con la letra mal no se guarda: se avisa en el formulario. */
+    public function testWrongNifIsRejected(): void
+    {
+        $worker = $this->makeWorker();
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $worker->getId() . '/edit');
+        $this->client->submit($crawler->selectButton('Guardar cambios')->form([
+            'worker[workdayType]' => Worker::WORKDAY_FULL_TIME,
+            'worker[nif]' => '12345678A',
+        ]));
+
+        $this->assertResponseIsSuccessful('Se vuelve a pintar el formulario, sin redirigir.');
+        $this->assertSelectorTextContains('.csa-field__error', 'DNI/NIE no es válido');
+        $this->em->clear();
+        $this->assertNull($this->em->getRepository(Worker::class)->find($worker->getId())->getNif());
+    }
+
     public function testTimesheetPdfIsAPdf(): void
     {
         $worker = $this->makeWorker();

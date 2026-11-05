@@ -4,6 +4,7 @@ namespace App\Command;
 
 use App\Entity\Partner;
 use App\Entity\User;
+use App\Entity\Worker;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -27,7 +28,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * resultado.
  *
  * SOLO toca emails (User.email/emailCanonical, y username/usernameCanonical
- * cuando son un email; Partner.email/email2). No toca nombre, DNI, dirección
+ * cuando son un email; Partner.email/email2; Worker.email). No toca nombre, DNI, dirección
  * ni IBAN, para que admin siga reconociendo a los socios y pueda cuadrar el
  * reparto. Pensado para correr en LOCAL contra un CLON del snapshot antes de
  * exportar (nunca contra la golden: anonimizarla destruiría los emails reales
@@ -89,16 +90,18 @@ class AnonymizeStagingCommand extends Command
 
         $usersTouched = $this->anonymizeUsers($keepSet, $io, $dryRun);
         $partnersTouched = $this->anonymizePartners($keepSet, $io, $dryRun);
+        $workersTouched = $this->anonymizeWorkers($keepSet, $io, $dryRun);
 
         if (!$dryRun) {
             $this->em->flush();
         }
 
         $io->success(sprintf(
-            '%s%d User y %d Partner faketeados. Testers preservados: %d.',
+            '%s%d User, %d Partner y %d Worker faketeados. Testers preservados: %d.',
             $dryRun ? '[dry-run] ' : '',
             $usersTouched,
             $partnersTouched,
+            $workersTouched,
             count($keep)
         ));
 
@@ -179,6 +182,35 @@ class AnonymizeStagingCommand extends Command
         }
 
         $io->writeln(sprintf('  Partner a faketear: %d', $touched));
+
+        return $touched;
+    }
+
+    /**
+     * Faketea el correo personal de los trabajadores que no estén en la lista de
+     * preservados. Salta los que no tienen (no hay nada que proteger).
+     *
+     * @param array<string,true> $keepSet Emails a preservar, ya normalizados.
+     * @param SymfonyStyle $io
+     * @param bool $dryRun
+     * @return int Nº de Worker modificados.
+     */
+    private function anonymizeWorkers(array $keepSet, SymfonyStyle $io, bool $dryRun): int
+    {
+        $touched = 0;
+        foreach ($this->em->getRepository(Worker::class)->findAll() as $worker) {
+            $email = mb_strtolower((string) $worker->getEmail());
+            if ($email === '' || isset($keepSet[$email])) {
+                continue;
+            }
+
+            if (!$dryRun) {
+                $worker->setEmail(sprintf('trabajador-%d@%s', $worker->getId(), self::FAKE_DOMAIN));
+            }
+            $touched++;
+        }
+
+        $io->writeln(sprintf('  Worker a faketear: %d', $touched));
 
         return $touched;
     }

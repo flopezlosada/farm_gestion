@@ -57,4 +57,36 @@ class WorkerTest extends KernelTestCase
         $this->assertSame(['basketAfterLeave'], $paths(self::worker(null, WorkerLeaveBasket::Paid)));
         $this->assertSame(['basketGiftUntil'], $paths(self::worker('2026-08-17', WorkerLeaveBasket::Gift, '2026-08-16')));
     }
+
+    /** El DNI se guarda en una sola forma, sea como sea que se teclee; en blanco es «sin DNI». */
+    public function testElDniSeGuardaNormalizado(): void
+    {
+        $this->assertSame('12345678Z', self::worker()->setNif(' 12.345.678-z ')->getNif());
+        $this->assertSame('X1234567L', self::worker()->setNif('x-1234567-l')->getNif());
+        $this->assertNull(self::worker()->setNif('  ')->getNif());
+        $this->assertNull(self::worker()->setNif(null)->getNif());
+    }
+
+    /** Un contacto en blanco es «no lo sabemos», no un texto vacío. */
+    public function testElContactoEnBlancoEsNull(): void
+    {
+        $worker = self::worker()->setPhone('  ')->setEmail('')->setAddress(" \t");
+
+        $this->assertNull($worker->getPhone());
+        $this->assertNull($worker->getEmail());
+        $this->assertNull($worker->getAddress());
+        $this->assertSame('600 111 222', self::worker()->setPhone(' 600 111 222 ')->getPhone());
+    }
+
+    /** Un DNI con la letra mal o un correo sin arroba no pasan; sin datos personales, sí. */
+    public function testLosDatosPersonalesSeValidan(): void
+    {
+        $validator = static::getContainer()->get(ValidatorInterface::class);
+        $paths = static fn (Worker $w): array => array_map(static fn ($v): string => $v->getPropertyPath(), iterator_to_array($validator->validate($w)));
+
+        $this->assertSame([], $paths(self::worker()));
+        $this->assertSame([], $paths(self::worker()->setNif('12345678Z')->setEmail('alba@example.org')));
+        $this->assertSame(['nif'], $paths(self::worker()->setNif('12345678A')));
+        $this->assertSame(['email'], $paths(self::worker()->setEmail('alba.example.org')));
+    }
 }

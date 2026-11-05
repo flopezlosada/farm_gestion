@@ -58,6 +58,16 @@
         </p>
     {% endif %}
 
+    {# ===== Datos personales ===== #}
+    <dl class="stf-personal" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(12rem, 1fr)); gap:.8rem 1.6rem; margin:0 0 1.4rem;">
+        {% for label, value in { 'DNI/NIE': worker.nif, 'Teléfono': worker.phone, 'Correo personal': worker.email, 'Dirección': worker.address } %}
+            <div>
+                <dt style="font-size:1.2rem; color:#6b7280;">{{ label }}</dt>
+                <dd style="margin:0; overflow-wrap:anywhere;">{{ value ?? '—' }}</dd>
+            </div>
+        {% endfor %}
+    </dl>
+
     <p style="margin: 0 0 1.4rem;">
         {{ csa.btn('Horario de ' ~ worker.name, { variant: 'secondary', icon: 'fa-clock-o', href: path('staff_schedule_worker', { workerId: worker.id }) }) }}
     </p>
@@ -87,7 +97,7 @@
             </p>
             <form method="post" action="{{ path('staff_access_grant', { id: worker.id }) }}" class="csa-row" style="gap:.6rem; flex-wrap:wrap;">
                 <input type="hidden" name="_token" value="{{ csrf_token('staff_access' ~ worker.id) }}">
-                <input type="email" name="email" required placeholder="email@ejemplo.org" class="csa-input" style="max-width:280px;">
+                <input type="email" name="email" required placeholder="email@ejemplo.org" value="{{ worker.email }}" class="csa-input" style="max-width:280px;">
                 <button type="submit" class="csa-btn csa-btn--primary csa-btn--sm"><i class="fa fa-key"></i><span>Dar acceso y enviar invitación</span></button>
             </form>
         {% endif %}

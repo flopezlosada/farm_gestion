@@ -10,15 +10,18 @@ use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
+use Symfony\Component\Form\Extension\Core\Type\EmailType;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
+use Symfony\Component\Form\Extension\Core\Type\TelType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
 /**
  * Form para crear/editar un {@see Worker} (ficha laboral). Datos mínimos: nombre,
- * alta, tipo de jornada, días de vacaciones al año y baja. También su ficha de socix,
+ * alta, tipo de jornada, días de vacaciones al año y baja; y de contacto, todos
+ * opcionales: DNI/NIE, teléfono, correo y dirección. También su ficha de socix,
  * si recibe cesta, y qué pasa con ella tras la baja. El acceso de login se gestiona
  * aparte (vinculación a User), no desde aquí.
  */
@@ -29,6 +32,25 @@ class WorkerType extends AbstractType
         $builder
             ->add('name', TextType::class, [
                 'label' => 'Nombre completo',
+            ])
+            ->add('nif', TextType::class, [
+                'label' => 'DNI/NIE',
+                'required' => false,
+                'help' => 'Sale en el registro de jornada para identificarle ante la Inspección.',
+            ])
+            ->add('phone', TelType::class, [
+                'label' => 'Teléfono',
+                'required' => false,
+            ])
+            ->add('email', EmailType::class, [
+                'label' => 'Correo personal',
+                'required' => false,
+                'help' => 'Para contactar, también tras la baja. El de su acceso para fichar va aparte.',
+            ])
+            ->add('address', TextType::class, [
+                'label' => 'Dirección',
+                'required' => false,
+                'help' => 'Calle, número, código postal y localidad.',
             ])
             ->add('hireDate', DateType::class, [
                 'label' => 'Fecha de alta',
