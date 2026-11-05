@@ -3,7 +3,6 @@
 namespace App\Tests\Validator;
 
 use App\Validator\SpanishNifValidator;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -32,11 +31,12 @@ class SpanishNifValidatorTest extends TestCase
     }
 
     /**
+     * @dataProvider nifs
+     *
      * @param string $nif
      * @param bool   $expected
      * @return void
      */
-    #[DataProvider('nifs')]
     public function testLaLetraDeControl(string $nif, bool $expected): void
     {
         $this->assertSame($expected, SpanishNifValidator::isValid($nif));
