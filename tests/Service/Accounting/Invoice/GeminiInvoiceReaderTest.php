@@ -72,6 +72,40 @@ class GeminiInvoiceReaderTest extends TestCase
     }
 
     /**
+     * Un modelo retirado (404) no dice nada del documento: se prueba el siguiente. Antes
+     * se tomaba por documento ilegible y la factura iba a mano sin remedio.
+     */
+    public function testUnModeloRetiradoPruebaElSiguiente(): void
+    {
+        $reader = $this->reader([
+            new MockResponse('{"error":{"code":404,"status":"NOT_FOUND"}}', ['http_code' => 404]),
+            $this->ok(['proveedor' => 'Midori', 'total' => 204.43, 'forma_pago' => 'transferencia', 'tipo' => 'factura', 'confianza' => 'alta']),
+        ]);
+
+        $this->assertSame('modelo-b', $reader->read($this->pdf, 'application/pdf', [])->model);
+    }
+
+    /**
+     * Saturado el primero y retirado el último, la factura se aplaza para reintentarla:
+     * es lo que le pasó a una real, que acabó «ilegible» siendo un PDF normal.
+     */
+    public function testSaturadoYLuegoRetiradoSeAplaza(): void
+    {
+        $reader = $this->reader([
+            new MockResponse('', ['http_code' => 503]),
+            new MockResponse('{"error":{"code":404}}', ['http_code' => 404]),
+        ]);
+
+        try {
+            $reader->read($this->pdf, 'application/pdf', []);
+            $this->fail('Debía fallar.');
+        } catch (InvoiceReadException $e) {
+            $this->assertTrue($e->isRetryable());
+            $this->assertStringContainsString('saturado', $e->getMessage(), 'El motivo que se arregla esperando, no el del modelo retirado.');
+        }
+    }
+
+    /**
      * Un 400 es un problema del documento: los demás modelos fallarían igual y
      * gastarían cupo. No se prueba el siguiente ni se reintenta.
      */
