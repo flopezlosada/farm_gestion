@@ -167,6 +167,12 @@ class AccountEntry
      */
     private ?\DateTimeInterface $updatedAt = null;
 
+    /** Un apunte nuevo, sin partes. */
+    public function __construct()
+    {
+        $this->parts = new ArrayCollection();
+    }
+
     /**
      * La fecha no puede ser anterior a la apertura de la cuenta: el saldo empieza a
      * sumar ahí, y un apunte anterior se quedaría fuera sin avisar. Se valida en la
@@ -175,12 +181,6 @@ class AccountEntry
      * @param ExecutionContextInterface $context Contexto de validación.
      */
     #[Assert\Callback]
-    /** Un apunte nuevo, sin partes. */
-    public function __construct()
-    {
-        $this->parts = new ArrayCollection();
-    }
-
     public function validateDateWithinAccount(ExecutionContextInterface $context): void
     {
         if ($this->date === null || $this->account === null || $this->account->isOpenOn($this->date)) {
