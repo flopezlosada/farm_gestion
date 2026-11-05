@@ -220,6 +220,32 @@ class StaffControllerTest extends WebTestCase
         $this->assertCount(0, $card->getPartnerBasketShares(), 'La cesta se elige en el paso siguiente.');
     }
 
+    /**
+     * La cesta en el formulario sigue al trabajador: en el alta no sale (se da
+     * desde su ficha); sin cesta sólo se puede enlazar la ficha de una socia; con
+     * cesta, además, qué pasa con ella tras la baja.
+     */
+    public function testBasketFieldsFollowTheWorker(): void
+    {
+        $form = $this->client->request('GET', '/gestion/staff/new')->selectButton('Crear trabajador')->form();
+        $this->assertFalse($form->has('worker[partner]'));
+        $this->assertFalse($form->has('worker[basketAfterLeave]'));
+
+        $worker = $this->makeWorker();
+        $form = $this->client->request('GET', '/gestion/staff/' . $worker->getId() . '/edit')->selectButton('Guardar cambios')->form();
+        $this->assertTrue($form->has('worker[partner]'));
+        $this->assertFalse($form->has('worker[basketAfterLeave]'));
+        $this->assertFalse($form->has('worker[basketGiftUntil]'));
+
+        $card = (new Partner())->setName('TEST')->setSurname('Con cesta ' . uniqid())->setMember(false);
+        $this->em->persist($card);
+        $worker->setPartner($card);
+        $this->em->flush();
+        $form = $this->client->request('GET', '/gestion/staff/' . $worker->getId() . '/edit')->selectButton('Guardar cambios')->form();
+        $this->assertTrue($form->has('worker[basketAfterLeave]'));
+        $this->assertTrue($form->has('worker[basketGiftUntil]'));
+    }
+
     /** Con ficha de cesta ya no se ofrece ni se crea otra: se vuelve a su ficha laboral. */
     public function testGiveBasketTwiceDoesNotCreateASecondCard(): void
     {

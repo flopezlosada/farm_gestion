@@ -35,16 +35,21 @@
             {% endblock %}
         {% endembed %}
 
-        {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Cesta', subtitle: 'Mientras trabaja su cesta es gratis. Cuando se va, se decide si la paga o se le sigue regalando.' } %}
-            {% block body %}
-                {% import '_macros/csa.html.twig' as csa %}
-                <div class="csa-form-grid">
-                    {{ csa.field(form.partner, 'Su ficha de cesta', { full: true, hint: 'Si no es socia, dale antes de alta una ficha en Socixs con «No es socia» marcado y su cesta, y elígela aquí.' }) }}
-                    {{ csa.field(form.basketAfterLeave, 'Su cesta tras la baja') }}
-                    {{ csa.field(form.basketGiftUntil, 'Se le regala hasta') }}
-                </div>
-            {% endblock %}
-        {% endembed %}
+        {# En el alta no hay cesta: se le da desde su ficha («Darle cesta»). #}
+        {% if form.partner is defined %}
+            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Cesta', subtitle: 'Mientras trabaja su cesta es gratis. Cuando se va, se decide si la paga o se le sigue regalando.' } %}
+                {% block body %}
+                    {% import '_macros/csa.html.twig' as csa %}
+                    <div class="csa-form-grid">
+                        {{ csa.field(form.partner, 'Su ficha de cesta', { full: true, hint: 'Si ya es socia, elige su ficha. Si no, guarda y usa «Darle cesta» en su ficha: crea la de no socia con sus datos.' }) }}
+                        {% if form.basketAfterLeave is defined %}
+                            {{ csa.field(form.basketAfterLeave, 'Su cesta tras la baja') }}
+                            {{ csa.field(form.basketGiftUntil, 'Se le regala hasta') }}
+                        {% endif %}
+                    </div>
+                {% endblock %}
+            {% endembed %}
+        {% endif %}
 
         <div class="csa-row-between" style="padding-top: var(--csa-sp-5); border-top: 1px solid var(--csa-rule);">
             <div></div>

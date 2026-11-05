@@ -21,8 +21,8 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 /**
  * Form para crear/editar un {@see Worker} (ficha laboral). Datos mínimos: nombre,
  * alta, tipo de jornada, días de vacaciones al año y baja; y de contacto, todos
- * opcionales: DNI/NIE, teléfono, correo y dirección. También su ficha de socix,
- * si recibe cesta, y qué pasa con ella tras la baja. El acceso de login se gestiona
+ * opcionales: DNI/NIE, teléfono, correo y dirección. Al editar, también su ficha de
+ * socix, si recibe cesta, y qué pasa con ella tras la baja. El acceso de login se gestiona
  * aparte (vinculación a User), no desde aquí.
  */
 class WorkerType extends AbstractType
@@ -80,15 +80,40 @@ class WorkerType extends AbstractType
                 'required' => false,
                 'help' => 'Último día que trabaja. Desde el día siguiente conserva su histórico pero no puede fichar. Vacío = sigue trabajando.',
             ])
+        ;
+
+        $this->addBasketFields($builder, $options['data'] ?? null);
+    }
+
+    /**
+     * La cesta según en qué punto está el trabajador. En el alta no sale: la cesta
+     * se le da desde su ficha, que es donde está «Darle cesta». Ya creado, se puede
+     * enlazar la ficha de una socia. Qué pasa con la cesta tras la baja sólo sale
+     * si tiene cesta: sin ella no hay nada que decidir.
+     *
+     * @param FormBuilderInterface $builder El formulario.
+     * @param Worker|null          $worker  El trabajador que se edita.
+     */
+    private function addBasketFields(FormBuilderInterface $builder, ?Worker $worker): void
+    {
+        if ($worker?->getId() === null) {
+            return;
+        }
+        $builder
             ->add('partner', EntityType::class, [
                 'label' => 'Su ficha de cesta',
                 'class' => Partner::class,
                 'query_builder' => static fn (EntityRepository $r) => $r->createQueryBuilder('p')->orderBy('p.name')->addOrderBy('p.surname'),
                 'choice_label' => static fn (Partner $p): string => $p->getLegalName(),
                 'required' => false,
-                'placeholder' => '— no recibe cesta —',
-                'help' => 'Si recibe cesta. Mientras trabaja no se le cobra.',
-            ])
+                'placeholder' => '— sin cesta —',
+                'help' => 'Si ya es socia, elige su ficha. Si no, «Darle cesta» desde su ficha crea la de no socia.',
+            ]);
+
+        if ($worker->getPartner() === null) {
+            return;
+        }
+        $builder
             ->add('basketAfterLeave', EnumType::class, [
                 'label' => 'Su cesta tras la baja',
                 'class' => WorkerLeaveBasket::class,
@@ -102,8 +127,7 @@ class WorkerType extends AbstractType
                 'widget' => 'single_text',
                 'required' => false,
                 'help' => 'Último día del regalo. Vacío = sin fin.',
-            ])
-        ;
+            ]);
     }
 
     public function configureOptions(OptionsResolver $resolver): void
