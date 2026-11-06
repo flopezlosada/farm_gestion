@@ -74,7 +74,7 @@ class InvoiceReadQueueTest extends KernelTestCase
         $invoice = $this->reload($invoice);
         $this->assertSame(ReceivedInvoice::STATUS_READ, $invoice->getStatus());
         $this->assertSame('26.75', $invoice->getTotal());
-        $this->assertSame($this->category->getId(), $invoice->getSuggestedCategory()?->getId());
+        $this->assertSame($this->category->getId(), $invoice->getCategory()?->getId());
         $this->assertSame(1, $invoice->getAttempts());
     }
 
@@ -86,7 +86,7 @@ class InvoiceReadQueueTest extends KernelTestCase
 
         $queue->process(10, [$invoice->getId()]);
 
-        $this->assertNull($this->reload($invoice)->getSuggestedCategory());
+        $this->assertNull($this->reload($invoice)->getCategory());
     }
 
     /** Servicio saturado: la factura sigue en cola, con el motivo y la hora del siguiente intento. */

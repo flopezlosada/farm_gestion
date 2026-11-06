@@ -8,7 +8,9 @@ use App\Entity\BankStatementLine;
 use App\Entity\BudgetCategory;
 use App\Entity\BudgetCategoryGroup;
 use App\Entity\FinancialAccount;
+use App\Entity\ReceivedInvoice;
 use App\Entity\Setting;
+use App\Service\Accounting\Invoice\ExtractedInvoice;
 use App\Service\AppSettings;
 use App\Service\Accounting\Norma43\Norma43Account;
 use App\Tests\Service\Accounting\Norma43\BankSheet;
@@ -26,10 +28,17 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
 
     private ?BudgetCategoryGroup $group = null;
 
+    /** Factura aceptada que espera su pago; tearDown la borra antes que su partida. */
+    private ?int $invoiceId = null;
+
     protected function tearDown(): void
     {
         $em = static::getContainer()->get(EntityManagerInterface::class);
         $em->clear();
+        if ($this->invoiceId !== null && ($invoice = $em->find(ReceivedInvoice::class, $this->invoiceId)) !== null) {
+            $em->remove($invoice);
+            $em->flush();
+        }
         foreach ($em->getRepository(Setting::class)->findBy(['name' => AppSettings::FEATURE_CONTABILIDAD]) as $setting) {
             $em->remove($setting);
         }
@@ -109,6 +118,65 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         $line = $em->getRepository(BankStatementLine::class)->findOneBy(['account' => $this->account->getId()]);
         $this->assertNotNull($line->getEntry());
         $this->assertSame('-25.00', $line->getEntry()->getAmount());
+    }
+
+    /**
+     * Una factura aceptada que se paga por banco espera su pago. «Anotar» el movimiento
+     * de ese importe llega con los datos de la factura (partida, concepto, número) y
+     * avisando de que es su pago; al guardar, la factura queda enganchada a él. «No es
+     * ésta» lo anota como un movimiento cualquiera.
+     */
+    public function testAnotarElPagoDeUnaFacturaQueLoEsperaLaEngancha(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
+        $number = sprintf('%010d', random_int(0, 9_999_999_999));
+        $this->account = $this->bankAccount($number);
+        $category = $this->category();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $invoice = new ReceivedInvoice('pago-esperado.pdf', 'pago-esperado.pdf', 'application/pdf', ReceivedInvoice::SOURCE_WEB, null);
+        $invoice->markRead(ExtractedInvoice::fromArray([
+            'fecha' => '2091-03-28', 'total' => 25, 'proveedor' => 'Semillas del Jarama', 'numero_factura' => 'S-7', 'concepto' => 'semillas de calabaza',
+        ]), 'test', null, new \DateTimeImmutable());
+        $invoice->acceptUnpaid($category, '25.00', null, 'Semillas del Jarama', 'S-7');
+        $em->persist($invoice);
+        $em->flush();
+        $this->invoiceId = $invoice->getId();
+
+        $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
+        $form = $crawler->filter('form.inv-upload')->form();
+        $form['file']->upload($this->tempFile(N43::file(N43::account('9999', '0001', $number, '910401', '910430', 50000, [
+            ['910403', -2500, ['TRF SEMILLAS DEL JARAMA']],
+        ]))));
+        $client->submit($form);
+        $crawler = $client->followRedirect();
+        $anotar = $crawler->selectLink('Anotar')->link();
+
+        // «No es ésta»: un movimiento cualquiera, con el concepto del banco.
+        $crawler = $client->click($anotar);
+        $crawler = $client->click($crawler->selectLink('No es ésta')->link());
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorTextNotContains('body', 'Es el pago de la factura');
+        $this->assertSame('TRF SEMILLAS DEL JARAMA', $crawler->filter('#account_entry_concept')->attr('value'));
+
+        $crawler = $client->click($anotar);
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorTextContains('body', 'Es el pago de la factura');
+        $this->assertSame('Semillas del Jarama · semillas de calabaza', $crawler->filter('#account_entry_concept')->attr('value'));
+        $this->assertSame((string) $category->getId(), $crawler->filter('#account_entry_category option[selected]')->attr('value'), 'La partida es la de la factura.');
+        $this->assertSame('S-7', $crawler->filter('#account_entry_invoiceNumber')->attr('value'));
+        $client->submit($crawler->filter('form[name="account_entry"]')->form());
+
+        $this->assertResponseRedirects();
+        $client->followRedirect();
+        $this->assertSelectorTextContains('.csa-alerts', 'Es el pago de la factura S-7: ya está enganchada.');
+        $em->clear();
+        $line = $em->getRepository(BankStatementLine::class)->findOneBy(['account' => $this->account->getId()]);
+        $invoice = $em->find(ReceivedInvoice::class, $this->invoiceId);
+        $this->assertNotNull($line->getEntry(), 'El movimiento queda ligado a su apunte.');
+        $this->assertSame($line->getEntry()->getId(), $invoice->getAccountEntry()?->getId(), 'Y la factura, enganchada a ese mismo apunte.');
+        $this->assertFalse($invoice->isAwaitingPayment());
+        $this->assertSame($category->getId(), $line->getEntry()->getCategory()?->getId());
     }
 
     /**

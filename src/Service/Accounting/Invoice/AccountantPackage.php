@@ -172,7 +172,7 @@ class AccountantPackage
                     $first ? self::number($invoice->getWithholdingRate()) : null,
                     $first ? self::number($invoice->getTotal()) : null,
                     $first ? $invoice->getPaymentLabel() : null,
-                    $first ? $invoice->getAccountEntry()?->getCategory()?->getName() : null,
+                    $first ? $invoice->ledgerCategory()?->getName() : null,
                     $first ? $names[$invoice->getId()] : null,
                     $first ? implode('; ', self::warnings($invoice, $paths[$invoice->getId()] ?? null)) : null,
                 ], null, 'A'.$row, true);

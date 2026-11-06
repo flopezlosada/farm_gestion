@@ -29,7 +29,10 @@ use Doctrine\ORM\UnitOfWork;
  *    anotación si llegó tarde, la de factura o, sin ella, la de su apunte. Al
  *    confirmarla sólo cuenta dónde entra: antes no estaba en ningún paquete;
  *  - factura emitida: sólo emitida, por su fecha de emisión. Ligar el cobro no cuenta:
- *    cobrar en octubre una factura de septiembre no cambia lo entregado.
+ *    cobrar en octubre una factura de septiembre no cambia lo entregado;
+ *  - factura recibida con fecha propia (la de factura o la de anotación): ligar su
+ *    pago tampoco cuenta, por lo mismo. Sin fecha propia sí, porque entonces la
+ *    sitúa la de su apunte.
  */
 #[AsDoctrineListener(event: Events::onFlush)]
 final class ClosedPeriodGuard
@@ -37,8 +40,8 @@ final class ClosedPeriodGuard
     /** Campos cuyo cambio no toca lo entregado. */
     private const IGNORED_FIELDS = ['updatedAt'];
 
-    /** En una emitida, además: el apunte en que se cobró. */
-    private const ISSUED_IGNORED_FIELDS = ['updatedAt', 'accountEntry'];
+    /** En una factura que no depende de su apunte para la fecha, además: el apunte en que se cobró o se pagó. */
+    private const PAYMENT_IGNORED_FIELDS = ['updatedAt', 'accountEntry'];
 
     public function __construct(private readonly ClosedPeriods $closed)
     {
@@ -56,12 +59,24 @@ final class ClosedPeriodGuard
         }
         foreach ($uow->getScheduledEntityUpdates() as $entity) {
             $changes = $uow->getEntityChangeSet($entity);
-            $ignored = $entity instanceof IssuedInvoice ? self::ISSUED_IGNORED_FIELDS : self::IGNORED_FIELDS;
-            if (array_diff(array_keys($changes), $ignored) === []) {
+            if (array_diff(array_keys($changes), self::ignoredFields($entity)) === []) {
                 continue;
             }
             $this->closed->assertOpen(...$this->datesOf($entity, $changes));
         }
+    }
+
+    /**
+     * Los campos cuyo cambio no mueve la entidad de paquete ni cambia lo entregado.
+     *
+     * @return list<string>
+     */
+    private static function ignoredFields(object $entity): array
+    {
+        $datedByItself = $entity instanceof ReceivedInvoice
+            && ($entity->getBookedOn() ?? $entity->getInvoiceDate()) !== null;
+
+        return $entity instanceof IssuedInvoice || $datedByItself ? self::PAYMENT_IGNORED_FIELDS : self::IGNORED_FIELDS;
     }
 
     /**

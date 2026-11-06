@@ -43,8 +43,8 @@ class InvoiceEntryDraft
         $entry = (new AccountEntry())
             ->setDate($this->dateFor($invoice))
             ->setAccount($this->accountFor($invoice))
-            ->setCategory($invoice->getSuggestedCategory())
-            ->setConcept($this->conceptFor($invoice))
+            ->setCategory($invoice->getCategory())
+            ->setConcept(self::conceptFor($invoice))
             ->setProviderName($invoice->getProviderName())
             ->setInvoiceNumber($invoice->getInvoiceNumber());
 
@@ -103,7 +103,7 @@ class InvoiceEntryDraft
     }
 
     /** «Proveedor · lo comprado», o el nombre del fichero si no se leyó nada. */
-    private function conceptFor(ReceivedInvoice $invoice): string
+    public static function conceptFor(ReceivedInvoice $invoice): string
     {
         $parts = array_filter([$invoice->getProviderName(), $invoice->getConcept()]);
         $concept = $parts !== [] ? implode(' · ', $parts) : $invoice->getOriginalName();

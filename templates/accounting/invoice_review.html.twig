@@ -1,5 +1,6 @@
 {# ============================================================
- # Revisar una factura y convertirla en apunte.
+ # Revisar una factura y aceptarla: con su apunte si se pagó en caja o con tarjeta;
+ # si se pagó por banco, esperando a que el pago llegue con el extracto.
  #
  # El documento a un lado y el formulario de apunte de siempre al otro, ya relleno
  # con lo leído. Si está bien, se guarda tal cual; si no, se corrige mirando el
@@ -78,14 +79,19 @@
 
 {% block csa_main %}
     {% set e = form.entry %}
+    {# Las cuentas cuyo pago se anota aquí (cajas y tarjeta) y las de banco, cuyo pago
+     # trae el extracto: con éstas no hay apunte que rellenar, sólo partida e importe. #}
+    {% set accounts = e.account.vars.choices %}
+    {% set paid_here = ([''] | merge(accounts|filter(c => not c.data.bank)|map(c => c.value)))|join('|') %}
+    {% set paid_by_bank = accounts|filter(c => c.data.bank)|map(c => c.value)|join('|') %}
     {% set editable = is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
 
     {{ csa.page_header(
         'Contabilidad · Facturas',
         invoice.providerName ?? invoice.originalName,
         invoice.status == 'read'
-            ? 'Revisa lo leído mirando el documento. Si está bien, guarda: se crea el apunte.'
-            : 'Esta factura no se ha leído sola. Complétala mirando el documento y guarda.'
+            ? 'Revisa lo leído mirando el documento. Si está bien, acéptala.'
+            : 'Esta factura no se ha leído sola. Complétala mirando el documento y acéptala.'
     ) }}
 
     {# Para ir de una factura a otra de las que esperan revisión sin volver a la
@@ -151,11 +157,6 @@
                 {{ form_errors(e) }}
 
                 <div class="csa-stack-lg">
-                    {# Se paga por banco y el pago aún no está en el libro: no se anota
-                     # aquí (llegará con el extracto), la factura espera en la bandeja. #}
-                    {% if form.match is not defined and e.account.vars.data and e.account.vars.data.bank %}
-                        {{ csa.callout('Esperando el pago: esta factura se paga por ' ~ e.account.vars.data.name ~ ' y su pago todavía no está en ningún extracto subido. Déjala en la bandeja: cuando subas el extracto con el pago, al volver aquí se engancha a él. Sólo si se pagó en efectivo o con tarjeta, anótala ahora eligiendo esa cuenta.', 'info', 'hourglass-half') }}
-                    {% endif %}
                     {% if form.match is defined %}
                         {# El pago ya lo trajo el banco: la factura se engancha a él. Elegido el
                          # primero (el más cercano en fecha); el apunte nuevo sólo aparece si
@@ -173,15 +174,23 @@
                         </div>
                     {% endif %}
                     <div{% if form.match is defined %} data-csa-show-when="{{ form.match.vars.full_name }}="{% endif %}>
-                        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'El apunte', subtitle: 'Lo que entrará en el libro.' } %}
+                        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'El pago', subtitle: 'Con qué se pagó y a qué partida va.' } %}
                             {% block body %}
                                 {% import '_macros/csa.html.twig' as csa %}
+                                {# Sólo un pago en caja o con tarjeta lleva aquí su apunte (fecha,
+                                 # concepto, sentido). El de banco lo trae el extracto. #}
+                                {% set if_paid_here = { show_when: e.account.vars.full_name ~ '=' ~ paid_here } %}
                                 <div class="csa-form-grid">
-                                    {{ csa.field(e.date, 'Fecha', { hint: 'cuándo se pagó' }) }}
                                     {{ csa.field(e.account, 'Cuenta', { widget_class: 'csa-select' }) }}
-                                    {{ csa.field(e.concept, 'Concepto', { full: true }) }}
+                                    {{ csa.field(e.date, 'Fecha del pago', if_paid_here) }}
+                                    {% if paid_by_bank %}
+                                        <div class="csa-field--full" data-csa-show-when="{{ e.account.vars.full_name }}={{ paid_by_bank }}">
+                                            {{ csa.callout('Se paga por banco: al aceptarla queda esperando el pago. Cuando subas el extracto y anotes ese movimiento, se engancha solo a esta factura con su partida.', 'info', 'hourglass-half') }}
+                                        </div>
+                                    {% endif %}
+                                    {{ csa.field(e.concept, 'Concepto', if_paid_here|merge({ full: true })) }}
                                     {{ csa.field(e.category, 'Partida', { full: true, widget_class: 'csa-select' }) }}
-                                    {{ csa.field(e.direction, '¿Entra o sale?', { widget_class: 'csa-select' }) }}
+                                    {{ csa.field(e.direction, '¿Entra o sale?', if_paid_here|merge({ widget_class: 'csa-select' })) }}
                                     {{ csa.field(e.magnitude, 'Importe', { hint: 'total con IVA, menos retención' }) }}
                                 </div>
                             {% endblock %}
@@ -219,6 +228,7 @@
                                 {{ csa.field(form.providerTown, 'Municipio', if_new) }}
                                 {{ csa.field(form.providerProvince, 'Provincia', if_new) }}
                                 {{ csa.field(e.invoiceNumber, 'Nº de factura') }}
+                                {{ csa.field(form.invoiceDate, 'Fecha de la factura', { hint: 'la que pone el documento' }) }}
                                 {{ csa.field(e.notes, 'Notas', { full: true, widget_class: 'csa-textarea' }) }}
                             </div>
 
@@ -284,7 +294,7 @@
                             <div></div>
                             <div class="csa-row">
                                 {{ csa.btn('Volver', { variant: 'ghost', href: path('accounting_invoices') }) }}
-                                {{ csa.btn('Guardar el apunte', { variant: 'primary', type: 'submit', icon: 'fa-check' }) }}
+                                {{ csa.btn('Aceptar la factura', { variant: 'primary', type: 'submit', icon: 'fa-check' }) }}
                             </div>
                         </div>
                     {% endif %}

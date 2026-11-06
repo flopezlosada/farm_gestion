@@ -14,10 +14,15 @@ use Symfony\Component\Validator\Constraints as Assert;
  * que dice.
  *
  * Es a la vez la COLA y el ARCHIVO. Entra como fichero sin leer (pendiente), una
- * máquina la lee y la deja propuesta (leída), y quien lleva las cuentas la convierte
- * en un apunte del libro con un clic (confirmada). Si la lectura no sale después de
- * muchos intentos, se queda como no leída y se completa a mano: el fichero nunca se
- * pierde por un fallo de lectura.
+ * máquina la lee y la deja propuesta (leída), y quien lleva las cuentas la revisa y
+ * la acepta (confirmada). Si la lectura no sale después de muchos intentos, se queda
+ * como no leída y se completa a mano: el fichero nunca se pierde por un fallo de
+ * lectura.
+ *
+ * Aceptarla y pagarla son cosas distintas. Pagada en caja o con tarjeta, se acepta
+ * con su apunte. Pagada por banco, se acepta sin él: el pago lo trae el extracto, y
+ * al anotar ese movimiento se engancha a ella ({@see paidBy()}). Mientras, está
+ * aceptada y esperando el pago ({@see isAwaitingPayment()}).
  *
  * Los datos fiscales (CIF, número, bases, IVA y retención) viven aquí y no en el apunte porque
  * son de la factura, no del movimiento de dinero: un apunte de banco puede no tener
@@ -41,7 +46,10 @@ class ReceivedInvoice
     /** La lectura automática se rindió: hay que completar los datos a mano. */
     public const STATUS_UNREADABLE = 'unreadable';
 
-    /** Ya es un apunte del libro. */
+    /**
+     * Aceptada: sus datos están revisados y va en el paquete de la gestoría. Con su
+     * apunte, o esperando a que el pago llegue con el extracto del banco.
+     */
     public const STATUS_CONFIRMED = 'confirmed';
 
     /** Descartada: duplicada, equivocada o no era una factura. */
@@ -294,13 +302,15 @@ class ReceivedInvoice
     private ?string $paymentMethod = null;
 
     /**
-     * La partida propuesta: por lo que se hizo otras veces con este proveedor o, si
-     * es nuevo, por lo que propone quien la lee.
+     * Su partida. Mientras está en la bandeja es la propuesta: por lo que se hizo otras
+     * veces con este proveedor o, si es nuevo, por lo que propone quien la lee. Al
+     * aceptarla, la elegida: la que lleva su apunte, o la que llevará el pago cuando
+     * llegue por el banco. La columna conserva el nombre de cuando sólo era propuesta.
      *
      * @ORM\ManyToOne(targetEntity="BudgetCategory")
      * @ORM\JoinColumn(name="suggested_category_id", nullable=true, onDelete="SET NULL")
      */
-    private ?BudgetCategory $suggestedCategory = null;
+    private ?BudgetCategory $category = null;
 
     /**
      * alta, media o baja: lo segura que dice estar la lectura.
@@ -381,7 +391,7 @@ class ReceivedInvoice
         $this->concept = $data->concept;
         $this->paymentMethod = $data->paymentMethod;
         $this->confidence = $data->confidence;
-        $this->suggestedCategory = $category;
+        $this->category = $category;
         $this->readByModel = $model;
         $this->readAt = $now;
         $this->status = self::STATUS_READ;
@@ -425,7 +435,74 @@ class ReceivedInvoice
     {
         $this->providerName = $entry->getProviderName() ?? $this->providerName;
         $this->invoiceNumber = $entry->getInvoiceNumber() ?? $this->invoiceNumber;
+        $this->category = $entry->getCategory() ?? $this->category;
         $this->confirmAlongside($entry, $provider);
+    }
+
+    /**
+     * Aceptada sin apunte: se paga por banco y el pago lo traerá el extracto. Se
+     * guarda lo revisado (partida, importe, proveedor, número), que es lo que llevará
+     * el apunte del pago cuando llegue ({@see paidBy()}).
+     *
+     * @param BudgetCategory $category      Partida que se le da.
+     * @param string         $total         Lo que se paga: bases más cuotas menos retención. Un abono, en negativo.
+     * @param Provider|null  $provider      Su ficha, si la tiene.
+     * @param string|null    $providerName  Nombre del proveedor, como se corrigió.
+     * @param string|null    $invoiceNumber Número de factura, como se corrigió.
+     *
+     * @throws \LogicException Si ya no está en la bandeja.
+     */
+    public function acceptUnpaid(BudgetCategory $category, string $total, ?Provider $provider, ?string $providerName, ?string $invoiceNumber): void
+    {
+        if (!$this->isOpen()) {
+            throw new \LogicException('Esta factura ya no está en la bandeja.');
+        }
+        $this->category = $category;
+        $this->total = $total;
+        $this->provider = $provider;
+        $this->providerName = $providerName ?? $this->providerName;
+        $this->invoiceNumber = $invoiceNumber ?? $this->invoiceNumber;
+        $this->accountEntry = null;
+        $this->status = self::STATUS_CONFIRMED;
+    }
+
+    /** Aceptada y esperando a que su pago llegue con el extracto del banco. */
+    public function isAwaitingPayment(): bool
+    {
+        return $this->status === self::STATUS_CONFIRMED && $this->accountEntry === null;
+    }
+
+    /**
+     * Su pago ha llegado: el apunte del movimiento del banco. El apunte completa con
+     * ella lo que le falte de lo que la factura sabe y el banco no (partida, proveedor
+     * y número); lo que ya trae, lo eligió quien lo anotó y no se pisa.
+     *
+     * @param AccountEntry $payment Apunte del pago, del mismo importe.
+     *
+     * @throws \LogicException  Si no está esperando el pago.
+     * @throws \DomainException Si el apunte no es de lo que se paga por ella.
+     */
+    public function paidBy(AccountEntry $payment): void
+    {
+        if (!$this->isAwaitingPayment()) {
+            throw new \LogicException('Esta factura no está esperando su pago.');
+        }
+        if ($this->total === null || IssuedInvoice::toCents($payment->getAmount()) !== -IssuedInvoice::toCents($this->total)) {
+            throw new \DomainException('El apunte no es del importe de la factura.');
+        }
+        $blank = static fn (?string $v): bool => $v === null || trim($v) === '';
+        if ($payment->getCategory() === null) {
+            $payment->setCategory($this->category);
+        }
+        if ($blank($payment->getInvoiceNumber())) {
+            $payment->setInvoiceNumber($this->invoiceNumber);
+        }
+        if ($payment->getProvider() === null && $this->provider !== null) {
+            $payment->setProvider($this->provider);
+        } elseif ($blank($payment->getProviderName())) {
+            $payment->setProviderName($this->providerName);
+        }
+        $this->accountEntry = $payment;
     }
 
     /**
@@ -438,6 +515,26 @@ class ReceivedInvoice
         $this->accountEntry = $payment;
         $this->provider = $provider;
         $this->status = self::STATUS_CONFIRMED;
+    }
+
+    /**
+     * Su apunte se va a borrar. Si era un pago por banco, la factura sigue aceptada y
+     * vuelve a esperar el pago: lo que se revisó sigue valiendo, sólo falta el
+     * movimiento. Si era el apunte de caja o tarjeta creado al aceptarla, vuelve a la
+     * bandeja ({@see reopen()}).
+     *
+     * @return bool True si vuelve a la bandeja; false si sigue aceptada esperando el pago.
+     */
+    public function losePayment(): bool
+    {
+        if ($this->accountEntry?->getAccount()?->isBank() === true) {
+            $this->accountEntry = null;
+
+            return false;
+        }
+        $this->reopen();
+
+        return true;
     }
 
     /**
@@ -555,6 +652,14 @@ class ReceivedInvoice
     public function getInvoiceDate(): ?\DateTimeImmutable
     {
         return $this->invoiceDate;
+    }
+
+    /** Se corrige al revisarla, mirando el documento. */
+    public function setInvoiceDate(?\DateTimeImmutable $invoiceDate): self
+    {
+        $this->invoiceDate = $invoiceDate;
+
+        return $this;
     }
 
     /** El día en que se anotó, si llegó tarde a un trimestre ya entregado; si no, null. */
@@ -757,9 +862,18 @@ class ReceivedInvoice
         return self::PAYMENT_LABELS[$this->paymentMethod ?? self::PAYMENT_UNKNOWN] ?? self::PAYMENT_LABELS[self::PAYMENT_UNKNOWN];
     }
 
-    public function getSuggestedCategory(): ?BudgetCategory
+    public function getCategory(): ?BudgetCategory
     {
-        return $this->suggestedCategory;
+        return $this->category;
+    }
+
+    /**
+     * La partida con que va en el libro de facturas: la de su apunte, que es la que
+     * cuenta en el libro, o la suya si aún espera el pago.
+     */
+    public function ledgerCategory(): ?BudgetCategory
+    {
+        return $this->accountEntry?->getCategory() ?? $this->category;
     }
 
     public function getConfidence(): ?string
