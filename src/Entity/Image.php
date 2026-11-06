@@ -16,6 +16,8 @@ use Gedmo\Mapping\Annotation as Gedmo;
  */
 class Image
 {
+    use RemovesUploadedFile;
+
     /**
      * @var integer $id
      *
@@ -364,10 +366,7 @@ class Image
      */
     public function removeUpload()
     {
-        if ($file = $this->getAbsolutePath())
-        {
-            unlink($file);
-        }
+        $this->deleteUploadedFile($this->getAbsolutePath());
     }
 
     /**

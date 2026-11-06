@@ -24,6 +24,8 @@ use Gedmo\Mapping\Annotation as Gedmo;
 #[UniqueEntity(fields: ['mandateReference'], message: 'Esa referencia de mandato ya la tiene otrx socix: el banco no deja repetirla.', groups: ['billing'])]
 class Partner
 {
+    use RemovesUploadedFile;
+
     /**
      * @ORM\Id()
      * @ORM\GeneratedValue()
@@ -779,10 +781,7 @@ class Partner
      */
     public function removeUpload()
     {
-        if ($file = $this->getAbsolutePath())
-        {
-            unlink($file);
-        }
+        $this->deleteUploadedFile($this->getAbsolutePath());
     }
 
     /**
