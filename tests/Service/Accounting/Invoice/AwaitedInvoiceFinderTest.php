@@ -69,6 +69,8 @@ class AwaitedInvoiceFinderTest extends TestCase
     private function line(string $text): BankStatementLine
     {
         $account = (new FinancialAccount())->setName('Fiare')->setKind(FinancialAccount::KIND_BANK);
+        // La huella del movimiento lleva el id de la cuenta: tiene que estar guardada.
+        (new \ReflectionProperty($account, 'id'))->setValue($account, 1);
         $day = new \DateTimeImmutable('2026-10-08');
 
         return new BankStatementLine($account, new Norma43Movement($day, $day, '99', '000', -26553, '', '', '', [$text]), 1);
