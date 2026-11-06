@@ -1,0 +1,8 @@
+{# Franja de «estás en pruebas», lo primero del <body>. Fuera de producción
+ # nadie la puede cerrar: quien entra la ve siempre. Va en el flujo normal
+ # (no fija) para no tapar la cabecera de ninguna pantalla; al desplazarse
+ # siguen avisando el fondo teñido y el título de la pestaña. Sus estilos los
+ # pone `instance_head.html.twig`. #}
+{% if not app_instance.production %}
+    <div class="app-instance-banner" role="note">{{ app_instance.notice }}</div>
+{% endif %}

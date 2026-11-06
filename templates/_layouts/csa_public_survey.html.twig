@@ -14,13 +14,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#fbfbfa">
     {# La URL es personal: no debe acabar en ningún buscador. #}
     <meta name="robots" content="noindex, nofollow">
     <meta name="referrer" content="no-referrer">
-    <title>{% block title %}Encuesta{% endblock %} · CSA Vega de Jarama</title>
+    <title>{{ app_instance.titlePrefix }}{% block title %}Encuesta{% endblock %} · CSA Vega de Jarama</title>
 
-    <link rel="icon" type="image/x-icon" href="{{ asset('favicon.ico') }}">
+    {{ include('_components/instance_head.html.twig', {theme_color: '#fbfbfa'}) }}
     {{ encore_entry_link_tags('app') }}
     {# Los iconos: el mismo kit que carga base.html.twig para el panel. #}
     <script src="https://kit.fontawesome.com/95aa3a447a.js" crossorigin="anonymous"></script>
@@ -47,6 +46,7 @@
     {{ include('panel_survey/_styles.html.twig') }}
 </head>
 <body class="csa-app">
+{{ include('_components/instance_banner.html.twig') }}
     <main class="svy-public">
         <a class="svy-public__brand" href="https://csavegadejarama.org">
             <i class="fa fa-leaf" aria-hidden="true"></i> CSA Vega de Jarama

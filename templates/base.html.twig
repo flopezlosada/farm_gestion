@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="">
     <meta name="author" content="">
-    <title>Administración CSA Vega de Jarama. {% block title %}{% endblock %}</title>
+    <title>{{ app_instance.titlePrefix }}Administración CSA Vega de Jarama. {% block title %}{% endblock %}</title>
     {% block stylesheets %}
         <link rel="stylesheet" href="{{ asset('bundles/app/css/bootstrap.min.css') }}"/>
         <!-- MetisMenu CSS -->
@@ -19,7 +19,7 @@
     {% endblock %}
     {% block more_css %}
     {% endblock %}
-    <link rel="icon" type="image/x-icon" href="{{ asset('favicon.ico') }}"/>
+    {{ include('_components/instance_head.html.twig', {theme_color: '#4a7c3a'}) }}
 
     {# ---------- Instalación en el móvil (requisito de los avisos push) ----------
      # NO es un capricho de "app nativa": en iOS el push SÓLO existe si la web
@@ -36,13 +36,13 @@
      # rol: lleva a cada cual a su sitio y no deja a gestión aterrizando en un
      # panel de socix que no le corresponde. #}
     <link rel="manifest" href="{{ asset('manifest.json') }}"/>
-    <meta name="theme-color" content="#4a7c3a"/>
     <meta name="apple-mobile-web-app-capable" content="yes"/>
     <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
     <meta name="apple-mobile-web-app-title" content="CSA Vega"/>
     <link rel="apple-touch-icon" href="{{ asset('apple-touch-icon.png') }}"/>
 </head>
 <body>
+{{ include('_components/instance_banner.html.twig') }}
 {% block body %}{% endblock %}
 {% block javascripts %}
 

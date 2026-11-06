@@ -3,7 +3,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}CSA Vega de Jarama{% endblock %}</title>
+    <title>{{ app_instance.titlePrefix }}{% block title %}CSA Vega de Jarama{% endblock %}</title>
+    {{ include('_components/instance_head.html.twig') }}
 
     {% block analytics %}
         <script async src="https://www.googletagmanager.com/gtag/js?id=G-SW7KHJSBGQ"></script>
@@ -94,6 +95,7 @@
 </head>
 
 <body>
+{{ include('_components/instance_banner.html.twig') }}
 
     {% block topbar %}
         <div class="container-fluid">

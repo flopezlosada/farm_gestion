@@ -3,10 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Error{% endblock %} · CSA Vega de Jarama</title>
+    <title>{{ app_instance.titlePrefix }}{% block title %}Error{% endblock %} · CSA Vega de Jarama</title>
+    {{ include('_components/instance_head.html.twig') }}
     {{ encore_entry_link_tags('app') }}
 </head>
 <body>
+{{ include('_components/instance_banner.html.twig') }}
 <div class="csa-app">
     <main style="min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: var(--csa-sp-8);">
         <div style="max-width: 480px; text-align: center;">

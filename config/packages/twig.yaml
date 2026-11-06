@@ -4,6 +4,10 @@ twig:
     strict_variables: '%kernel.debug%'
     globals:
       dozen_price: 3.5
+      # Qué instalación sirve la página (producción, staging o local), para
+      # que las de pruebas lleven una marca visible y nadie las confunda con
+      # la real. Ver App\Environment\AppInstance.
+      app_instance: '%env(enum:App\Environment\AppInstance:APP_INSTANCE)%'
       # Si el servidor tiene configurados los avisos push. VACÍA = la app no
       # puede firmar ningún aviso, así que las pantallas que ofrecen activarlos
       # no deben pintar el botón: sin claves sólo puede fallar, y un botón que
