@@ -23,6 +23,8 @@ use Gedmo\Mapping\Annotation as Gedmo;
  */
 class Audio
 {
+    use RemovesUploadedFile;
+
     /**
      * @var integer $id
      *
@@ -184,10 +186,7 @@ class Audio
      */
     public function removeUpload()
     {
-        if ($file = $this->getAbsolutePath())
-        {
-            unlink($file);
-        }
+        $this->deleteUploadedFile($this->getAbsolutePath());
     }
 
     /**

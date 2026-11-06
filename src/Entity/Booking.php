@@ -11,6 +11,8 @@ use Symfony\Component\Validator\Constraints as Assert;
  */
 class Booking
 {
+    use RemovesUploadedFile;
+
     /**
      * @ORM\Column(type="integer")
      * @ORM\GeneratedValue
@@ -195,10 +197,7 @@ class Booking
      */
     public function removeUpload()
     {
-        if ($file = $this->getAbsolutePath())
-        {
-            unlink($file);
-        }
+        $this->deleteUploadedFile($this->getAbsolutePath());
     }
 
     /**

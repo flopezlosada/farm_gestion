@@ -21,6 +21,8 @@ use Gedmo\Mapping\Annotation as Gedmo;
  */
 class TaskImage
 {
+    use RemovesUploadedFile;
+
     /**
      * @var integer $id
      *
@@ -152,10 +154,7 @@ class TaskImage
      */
     public function removeUpload()
     {
-        if ($file = $this->getAbsolutePath())
-        {
-            unlink($file);
-        }
+        $this->deleteUploadedFile($this->getAbsolutePath());
     }
 
     /**
