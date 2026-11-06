@@ -35,6 +35,7 @@
         .bst-details { white-space: pre-line; }
         .bst-candidate { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 2px 0; }
         .bst-candidate form { margin: 0; display: inline-flex; }
+        .bst-relink { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 12px; }
     </style>
 {% endblock %}
 
@@ -87,6 +88,13 @@
     <section class="bst-block" id="sin-apunte">
         <h2>Movimientos del banco sin apunte</h2>
         <p class="acc-muted">El banco dice que el dinero se movió y el libro no lo tiene. «Anotar» abre el alta con la cuenta, la fecha, el importe y el concepto ya puestos, y al guardarlo queda ligado. Si sale un apunte propuesto (mismo importe exacto, a una semana como mucho), «Es éste» lo liga sin tocar el apunte.</p>
+        {% if can_edit and review.unlinked is not empty %}
+            <form method="post" action="{{ path('accounting_bank_statement_relink', { id: s.id }) }}" class="bst-relink">
+                <input type="hidden" name="_token" value="{{ csrf_token('bank_statement_relink_' ~ s.id) }}">
+                <button type="submit" class="prl-btn prl-btn--sm"><i class="fa fa-refresh"></i> Volver a cruzar con el libro</button>
+                <span class="acc-small acc-muted">Liga lo que se haya anotado después de subirlo.</span>
+            </form>
+        {% endif %}
         <div class="prl-table-wrap">
             {% if review.unlinked is empty %}
                 <div class="prl-empty">Todos los movimientos del banco de estas fechas tienen su apunte.</div>

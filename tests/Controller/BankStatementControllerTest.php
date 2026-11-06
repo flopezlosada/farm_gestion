@@ -244,6 +244,42 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         $this->assertSame($entry->getId(), $em->find(BankStatementLine::class, $line->getId())->getEntry()?->getId());
     }
 
+    /**
+     * La liquidación de la tarjeta subida antes de apuntar las compras: al volver a
+     * cruzar el extracto, las compras del día que suman el cargo se juntan y se liga.
+     */
+    public function testVolverACruzarJuntaLasComprasDeLaTarjeta(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
+        $number = sprintf('%010d', random_int(0, 9_999_999_999));
+        $this->account = $this->bankAccount($number);
+        $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
+        $form = $crawler->filter('form.inv-upload')->form();
+        $form['file']->upload($this->tempFile(N43::file(N43::account('9999', '0001', $number, '910601', '910630', 50000, [
+            ['910605', -17562, ['TARJETA TJ MIXTA PERSON']],
+        ]))));
+        $client->submit($form);
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $account = $em->find(FinancialAccount::class, $this->account->getId());
+        $category = $em->find(BudgetCategory::class, $this->category()->getId());
+        $purchases = array_map(static fn (string $amount): AccountEntry => (new AccountEntry())->setAccount($account)->setCategory($category)
+            ->setDate(new \DateTimeImmutable('2091-06-05'))->setAmount($amount)->setConcept('Compra con tarjeta'), ['-20.00', '-32.80', '-88.33', '-34.49']);
+        array_walk($purchases, $em->persist(...));
+        $em->flush();
+        $line = $em->getRepository(BankStatementLine::class)->findOneBy(['account' => $this->account->getId()]);
+        $statement = $em->getRepository(BankStatement::class)->findOneBy(['account' => $this->account->getId()]);
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/bank-statements/%d', $statement->getId()));
+        $client->submit($crawler->filter('form.bst-relink')->form());
+
+        $client->followRedirect();
+        $this->assertSelectorTextContains('.csa-alerts', 'Ligado 1 movimiento a su apunte.');
+        $em->clear();
+        $this->assertSame($purchases[0]->getId(), $em->find(BankStatementLine::class, $line->getId())->getEntry()?->getId());
+        $this->assertSame($purchases[0]->getId(), $em->find(AccountEntry::class, $purchases[3]->getId())->getSplitFrom()?->getId());
+    }
+
     /** Un fichero roto no guarda nada y dice por qué. */
     public function testUnFicheroRotoNoGuardaNada(): void
     {

@@ -6,6 +6,7 @@ use App\Entity\AccountEntry;
 use App\Entity\BankStatementLine;
 use App\Entity\IssuedInvoice;
 use App\Repository\AccountEntryRepository;
+use App\Service\Accounting\Closing\ClosedPeriods;
 
 /**
  * Empareja los movimientos del banco con los apuntes del libro que los anotan. Sólo por
@@ -29,8 +30,9 @@ use App\Repository\AccountEntryRepository;
  * días seguidos (dos recibos de la luz) nunca se cruzan por casualidad.
  *
  * Una remesa cobrada de golpe, la liquidación de la tarjeta o una devolución pueden ser
- * varios apuntes para un solo movimiento: eso no se intenta, se marca para revisarlo a
- * mano ({@see BankStatementLine::isGrouped}).
+ * varios apuntes para un solo movimiento. Sólo se juntan solos cuando son TODOS los
+ * apuntes sueltos de ese día y suman el cargo al céntimo ({@see sameDayBundles()}); si
+ * no, se marca para revisarlo a mano ({@see BankStatementLine::isGrouped}).
  */
 class BankLineMatcher
 {
@@ -40,8 +42,10 @@ class BankLineMatcher
     /** Días de diferencia hasta los que un apunte se propone. */
     public const SUGGEST_DAYS = 7;
 
-    public function __construct(private readonly AccountEntryRepository $entries)
-    {
+    public function __construct(
+        private readonly AccountEntryRepository $entries,
+        private readonly ClosedPeriods $closed,
+    ) {
     }
 
     /**
@@ -69,8 +73,62 @@ class BankLineMatcher
         foreach ($pairs as [$line, $entry]) {
             $line->linkTo($entry);
         }
+        // Juntar cambia los apuntes: en un trimestre entregado no se toca nada.
+        $rest = array_values(array_filter($lines, fn (BankStatementLine $l): bool => $l->getEntry() === null
+            && $this->closed->closingDeliveryFor($l->getOperationDate()) === null));
+        $bundles = self::sameDayBundles($rest, $this->loadOnDaysOf($rest));
+        foreach ($bundles as [$line, $entries]) {
+            $head = array_shift($entries);
+            array_walk($entries, static fn (AccountEntry $part) => $head->absorb($part));
+            $line->linkTo($head);
+        }
 
-        return \count($pairs);
+        return \count($pairs) + \count($bundles);
+    }
+
+    /**
+     * Los cargos del banco que juntan TODOS los apuntes sin movimiento de ese día: la
+     * liquidación de la tarjeta, que el día 5 cobra de una vez las compras que el libro
+     * apuntó una a una con esa fecha. Sólo cuando no hay duda: dos apuntes o más, del
+     * mismo sentido que el cargo, que suman al céntimo su importe, y un único movimiento
+     * de ese día y sentido que lo hace. Se prueba la suma de todos, no combinaciones:
+     * una combinación que cuadra por casualidad juntaría lo que no es. Los traspasos y
+     * los apuntes ya partidos no entran ({@see AccountEntry::absorb()}).
+     *
+     * @param list<BankStatementLine> $lines   Movimientos sin apunte.
+     * @param list<AccountEntry>      $entries Apuntes que no explican ningún movimiento.
+     *
+     * @return list<array{0: BankStatementLine, 1: non-empty-list<AccountEntry>}> Cada cargo con sus apuntes, por id.
+     */
+    public static function sameDayBundles(array $lines, array $entries): array
+    {
+        $byDay = [];
+        foreach ($entries as $entry) {
+            $whole = IssuedInvoice::toCents($entry->getMovementAmount()) === IssuedInvoice::toCents($entry->getAmount());
+            if ($whole && !$entry->isTransfer() && $entry->getDate() !== null) {
+                $byDay[self::bundleKey($entry->getAccount()?->getId(), $entry->isIncoming(), $entry->getDate())][] = $entry;
+            }
+        }
+        $matching = [];
+        foreach ($lines as $line) {
+            $key = self::bundleKey($line->getAccount()->getId(), $line->getAmountCents() > 0, $line->getOperationDate());
+            $dayEntries = $byDay[$key] ?? [];
+            $sum = array_sum(array_map(static fn (AccountEntry $e): int => IssuedInvoice::toCents($e->getAmount()), $dayEntries));
+            if (\count($dayEntries) >= 2 && $sum === $line->getAmountCents()) {
+                $matching[$key][] = $line;
+            }
+        }
+
+        $bundles = [];
+        foreach ($matching as $key => $dayLines) {
+            if (\count($dayLines) === 1) {
+                $dayEntries = $byDay[$key];
+                usort($dayEntries, static fn (AccountEntry $a, AccountEntry $b): int => $a->getId() <=> $b->getId());
+                $bundles[] = [$dayLines[0], $dayEntries];
+            }
+        }
+
+        return $bundles;
     }
 
     /**
@@ -237,6 +295,36 @@ class BankLineMatcher
             max($dates)->modify('+'.$window),
             array_values(array_unique(array_map(static fn (BankStatementLine $l): string => $l->getAmount(), $lines))),
         );
+    }
+
+    /**
+     * Los apuntes sin movimiento de los días y cuentas de estos movimientos, de
+     * cualquier importe, en una consulta.
+     *
+     * @param list<BankStatementLine> $lines
+     *
+     * @return list<AccountEntry>
+     */
+    private function loadOnDaysOf(array $lines): array
+    {
+        if ($lines === []) {
+            return [];
+        }
+        $accounts = [];
+        foreach ($lines as $line) {
+            $accounts[spl_object_id($line->getAccount())] = $line->getAccount();
+        }
+
+        return $this->entries->findWithoutBankLineOn(
+            array_values($accounts),
+            array_map(static fn (BankStatementLine $l): \DateTimeImmutable => $l->getOperationDate(), $lines),
+        );
+    }
+
+    /** Cuenta, sentido y día, para juntar los apuntes de un mismo cargo. */
+    private static function bundleKey(?int $accountId, bool $incoming, \DateTimeInterface $day): string
+    {
+        return $accountId.'|'.($incoming ? 'in' : 'out').'|'.$day->format('Y-m-d');
     }
 
     /** Días naturales entre el movimiento y el apunte, sin signo. */

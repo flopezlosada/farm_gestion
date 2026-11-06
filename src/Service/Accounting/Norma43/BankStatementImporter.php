@@ -181,6 +181,22 @@ class BankStatementImporter
     }
 
     /**
+     * Vuelve a cruzar un extracto ya subido con el libro, como al subirlo: lo que se
+     * anotó después, o lo que el cruce de entonces aún no sabía juntar, se liga ahora.
+     *
+     * @return int Cuántos movimientos se han ligado.
+     */
+    public function relink(BankStatement $statement): int
+    {
+        return $this->em->wrapInTransaction(function () use ($statement): int {
+            $linked = $this->matcher->linkSafe($this->unlinkedAround([$statement]));
+            $this->em->flush();
+
+            return $linked;
+        });
+    }
+
+    /**
      * Los movimientos sin apunte de estos extractos, y de unos días antes y después:
      * los vecinos sin ligar cuentan para saber si un apunte es candidato de uno solo.
      *

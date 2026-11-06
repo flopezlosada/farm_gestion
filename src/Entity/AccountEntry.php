@@ -400,6 +400,40 @@ class AccountEntry
     }
 
     /**
+     * Junta otro apunte ya anotado a éste como una parte más, sin tocar su importe: el
+     * banco trae en UN cargo lo que el libro tiene en varios. Caso que lo pide: la
+     * liquidación de la tarjeta, que el día 5 cobra de golpe las compras del mes que el
+     * libro apuntó una a una. Queda como un apunte partido ({@see splitOff()}): el
+     * movimiento entero es éste más sus partes, y cada compra conserva su partida.
+     *
+     * Sólo se juntan apuntes del mismo cargo: misma cuenta, mismo día y mismo sentido.
+     * Ni traspasos (su pareja dejaría de casar) ni apuntes ya partidos o que ya son
+     * parte de otro: la parte de una parte no tiene movimiento al que ligarse.
+     *
+     * @param AccountEntry $other El apunte que pasa a ser parte de éste.
+     *
+     * @throws \InvalidArgumentException si no son del mismo cargo o alguno no se puede juntar
+     */
+    public function absorb(AccountEntry $other): void
+    {
+        $sameCharge = $other !== $this
+            && $other->account === $this->account
+            && $other->date?->format('Y-m-d') === $this->date?->format('Y-m-d')
+            && $other->isIncoming() === $this->isIncoming();
+        if (!$sameCharge) {
+            throw new \InvalidArgumentException('Sólo se juntan apuntes de la misma cuenta, el mismo día y el mismo sentido.');
+        }
+        if ($this->isTransfer() || $other->isTransfer()) {
+            throw new \InvalidArgumentException('Un traspaso no se junta con otros apuntes: la otra mitad dejaría de casar.');
+        }
+        if ($this->splitFrom !== null || $other->splitFrom !== null || !$other->parts->isEmpty()) {
+            throw new \InvalidArgumentException('Uno de los apuntes ya es parte de otro o está partido.');
+        }
+        $other->splitFrom = $this;
+        $this->parts->add($other);
+    }
+
+    /**
      * El importe del movimiento del banco que anota este apunte: el suyo más el de las
      * partes que se separaron de él. Es lo que se compara con el extracto, porque partir
      * no cambia lo que dijo el banco. En uno sin partes, su importe.

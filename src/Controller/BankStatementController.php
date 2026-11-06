@@ -130,6 +130,30 @@ class BankStatementController extends AbstractController
     }
 
     /**
+     * Volver a cruzar un extracto ya subido con el libro, sin subirlo otra vez: liga lo
+     * que se anotó después y lo que el cruce de la subida no sabía juntar.
+     */
+    #[Route('/{id}/relink', name: 'accounting_bank_statement_relink', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
+    public function relink(Request $request, BankStatement $statement, BankStatementImporter $importer): Response
+    {
+        $back = $this->redirectToRoute('accounting_bank_statement_show', ['id' => $statement->getId(), '_fragment' => 'sin-apunte']);
+        if (!$this->isCsrfTokenValid('bank_statement_relink_'.$statement->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $back;
+        }
+        $linked = $importer->relink($statement);
+        $this->addFlash($linked > 0 ? 'success' : 'info', match ($linked) {
+            0 => 'Nada nuevo que ligar: lo que queda necesita que lo mires tú.',
+            1 => 'Ligado 1 movimiento a su apunte.',
+            default => sprintf('Ligados %d movimientos a sus apuntes.', $linked),
+        });
+
+        return $back;
+    }
+
+    /**
      * Confirmar que un apunte propuesto anota un movimiento del banco. Se vuelve a
      * comprobar todo: la misma cuenta, el mismo importe exacto, a una semana como mucho,
      * y que ninguno de los dos esté ya ligado. El apunte no cambia.
