@@ -23,11 +23,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#fbfbfa">
     <meta name="robots" content="noindex, nofollow">
-    <title>{% block title %}Acceso{% endblock %} · CSA Vega de Jarama</title>
+    <title>{{ app_instance.titlePrefix }}{% block title %}Acceso{% endblock %} · CSA Vega de Jarama</title>
 
-    <link rel="icon" type="image/x-icon" href="{{ asset('favicon.ico') }}">
+    {{ include('_components/instance_head.html.twig', {theme_color: '#fbfbfa'}) }}
 
     {# Carga solo el bundle Encore (app.css + sistema csa).
      # NO cargamos bootstrap.min.css ni sb-admin-2.css aquí. #}
@@ -36,6 +35,7 @@
     {% block auth_head_extra %}{% endblock %}
 </head>
 <body class="csa-app">
+{{ include('_components/instance_banner.html.twig') }}
 
 <div class="csa-auth">
 

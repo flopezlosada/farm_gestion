@@ -1,0 +1,43 @@
+{# ============================================================
+ # Marcas de instalación en el <head>: icono de la pestaña, color de la
+ # barra del móvil y los estilos de la franja de «estás en pruebas».
+ # ============================================================
+ # Lo incluye cada layout que abre su propio <html>, en lugar de sus
+ # <link rel="icon"> y <meta name="theme-color">: un solo sitio decide qué
+ # se pinta en producción y qué en pruebas, y ninguno se queda atrás.
+ #
+ # Parámetros:
+ #   theme_color  (opcional) color de la barra del móvil en producción. Sin
+ #                él, en producción no se emite la meta (como hasta ahora en
+ #                los layouts que no la tenían).
+ #
+ # En producción (`app_instance.production`) sólo sale lo de siempre.
+ #
+ # El fondo sólo se tiñe en las pantallas del sistema csa, que lo leen de
+ # `--csa-bg`. Las tarjetas siguen en `--csa-surface`, blancas: cambia el
+ # marco, no lo que se está probando. `:root:root` gana al token de
+ # 01-tokens.css por especificidad, cargue antes o después que esta hoja.
+ # ============================================================ #}
+{% set instance_theme_color = app_instance.themeColor ?? theme_color|default(null) %}
+{% if instance_theme_color %}
+    <meta name="theme-color" content="{{ instance_theme_color }}">
+{% endif %}
+<link rel="icon" href="{{ asset(app_instance.favicon ?? 'favicon.ico') }}">
+{% if not app_instance.production %}
+    <style>
+        :root:root { --csa-bg: {{ app_instance.backgroundTint }}; }
+        .app-instance-banner {
+            display: block;
+            margin: 0;
+            padding: 6px 16px;
+            background: {{ app_instance.themeColor }};
+            color: #fff;
+            font: 700 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+            letter-spacing: .04em;
+            text-align: center;
+            text-transform: uppercase;
+            border-bottom: 5px solid transparent;
+            border-image: repeating-linear-gradient(-45deg, #1f1f1f 0 8px, #f5c400 8px 16px) 5;
+        }
+    </style>
+{% endif %}

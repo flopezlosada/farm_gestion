@@ -14,6 +14,8 @@ composer_version: "2.2"  # LTS, compatible con la Flex 1.12.2 de la composer.loc
 nodejs_version: "16"
 web_environment:
   - APP_ENV=dev
+  # Marca de «copia local» en la web (App\Environment\AppInstance).
+  - APP_INSTANCE=local
   # DATABASE_URL ya viene de .env / .env.local; no se exporta aquí para que
   # .env.test (entorno test) pueda sobrescribirla con su propia BBDD.
   - MAILER_URL=smtp://localhost:1025
