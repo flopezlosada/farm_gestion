@@ -864,6 +864,28 @@ class AccountEntryRepository extends ServiceEntityRepository
     }
 
     /**
+     * Los apuntes de una cuenta entre dos fechas que anotó la app sola desde el banco y
+     * nadie ha corregido, con su partida, por fecha. Sin las partes: van con el suyo.
+     *
+     * @return list<AccountEntry>
+     */
+    public function findAutoBookedIn(FinancialAccount $account, \DateTimeImmutable $from, \DateTimeImmutable $to): array
+    {
+        return $this->createQueryBuilder('e')
+            ->innerJoin('e.category', 'c')->addSelect('c')
+            ->andWhere('e.account = :account')->setParameter('account', $account)
+            ->andWhere('e.autoBooked = true')
+            ->andWhere('e.splitFrom IS NULL')
+            ->andWhere('e.date BETWEEN :from AND :to')
+            ->setParameter('from', $from->format('Y-m-d'))
+            ->setParameter('to', $to->format('Y-m-d'))
+            ->orderBy('e.date', 'ASC')
+            ->addOrderBy('e.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Los apuntes de unas cuentas en unos días concretos que no explican ningún
      * movimiento del banco, de cualquier importe, en una consulta: los que pueden
      * juntarse en un solo cargo del banco de ese día ({@see BankLineMatcher}).

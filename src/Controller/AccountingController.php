@@ -24,9 +24,9 @@ use App\Service\Accounting\Amount;
 use App\Service\Accounting\BudgetTracker;
 use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\AwaitedInvoiceFinder;
-use App\Service\Accounting\Invoice\InvoiceEntryDraft;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\MonthNames;
+use App\Service\Accounting\Norma43\BankLineEntryDraft;
 use App\Service\Accounting\Split\RepeatSplit;
 use App\Service\Accounting\Suggestion\CategorySuggester;
 use App\Service\Accounting\TransferRecorder;
@@ -460,34 +460,18 @@ class AccountingController extends AbstractController
         $bankLine = $bankLineId !== null ? $bankLines->find($bankLineId) : null;
         $bankLine = $bankLine?->getEntry() === null ? $bankLine : null;
         if ($bankLine !== null) {
-            $entry->setAccount($bankLine->getAccount())
-                ->setDate($bankLine->getOperationDate())
-                ->setAmount($bankLine->getAmount())
-                ->setConcept($bankLine->getSuggestedConcept());
+            BankLineEntryDraft::fromLine($entry, $bankLine);
         }
-        // La partida, si las últimas veces que el banco dijo lo mismo llevaban la misma.
+        // La partida y el proveedor, si las últimas veces que el banco dijo lo mismo
+        // llevaban los mismos: lo casado una vez con su ficha sigue casado.
         $suggestion = $bankLine !== null ? $suggester->forLine($bankLine) : null;
-        if ($suggestion !== null && !$request->isMethod('POST')) {
-            $entry->setCategory($suggestion->category);
-        }
-        // Y el proveedor, por la misma regla: lo casado una vez con su ficha sigue casado.
         $provider = $bankLine !== null ? $suggester->providerFor($bankLine) : null;
-        if ($provider !== null && !$request->isMethod('POST')) {
-            $entry->setProvider($provider);
-        }
         // La factura que espera este pago manda sobre lo de otras veces: es de este pago.
         $awaited = $bankLine !== null && !$request->query->getBoolean('no_invoice')
             ? $awaitedInvoices->for($bankLine, $provider)
             : null;
-        if ($awaited !== null && !$request->isMethod('POST')) {
-            $entry->setConcept(InvoiceEntryDraft::conceptFor($awaited))
-                ->setCategory($awaited->getCategory() ?? $entry->getCategory())
-                ->setInvoiceNumber($awaited->getInvoiceNumber());
-            if ($awaited->getProvider() !== null) {
-                $entry->setProvider($awaited->getProvider());
-            } else {
-                $entry->setProvider(null)->setProviderName($awaited->getProviderName());
-            }
+        if (!$request->isMethod('POST')) {
+            BankLineEntryDraft::complete($entry, $suggestion?->category, $provider, $awaited);
         }
 
         $form = $this->createForm(AccountEntryType::class, $entry);
@@ -830,6 +814,8 @@ class AccountingController extends AbstractController
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
+            // Quien lo corrige lo ha mirado: si lo anotó la app, deja de ser sólo suyo.
+            $entry->markReviewed();
             $em->flush();
             $this->addFlash('success', 'Apunte corregido.');
 

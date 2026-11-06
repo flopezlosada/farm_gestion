@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Service\Accounting\Norma43\BankLineBooker;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
@@ -154,6 +155,15 @@ class AccountEntry
      * @ORM\JoinColumn(name="created_by_id", nullable=true, onDelete="SET NULL")
      */
     private ?User $createdBy = null;
+
+    /**
+     * Lo anotó la app sola al subir un extracto ({@see BankLineBooker}), con la partida
+     * de las últimas veces o la de la factura que esperaba el pago. Deja de estarlo en
+     * cuanto una persona lo corrige: entonces ya lo ha mirado alguien.
+     *
+     * @ORM\Column(name="auto_booked", type="boolean", options={"default": 0})
+     */
+    private bool $autoBooked = false;
 
     /**
      * @Gedmo\Timestampable(on="create")
@@ -493,6 +503,28 @@ class AccountEntry
     public function setCreatedBy(?User $createdBy): self
     {
         $this->createdBy = $createdBy;
+
+        return $this;
+    }
+
+    /** Si lo anotó la app sola y nadie lo ha corregido aún. */
+    public function isAutoBooked(): bool
+    {
+        return $this->autoBooked;
+    }
+
+    /** Lo anota la app sola, desde un movimiento del banco. */
+    public function markAutoBooked(): self
+    {
+        $this->autoBooked = true;
+
+        return $this;
+    }
+
+    /** Una persona lo ha corregido: ya no es sólo cosa de la app. */
+    public function markReviewed(): self
+    {
+        $this->autoBooked = false;
 
         return $this;
     }

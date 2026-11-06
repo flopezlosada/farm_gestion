@@ -21,6 +21,7 @@ final class StatementReview
      * @param list<array{line: BankStatementLine, candidates: list<AccountEntry>}> $unlinked   Movimientos sin apunte, con los que podrían serlo.
      * @param list<AccountEntry>                                                $unbanked         Apuntes de esas fechas sin movimiento ni propuesta.
      * @param int                                                               $linkedCount      Movimientos ya ligados a su apunte.
+     * @param list<AccountEntry>                                                $autoBooked       Apuntes de esas fechas que anotó la app sola y nadie ha corregido.
      */
     public function __construct(
         public readonly BankStatement $statement,
@@ -29,6 +30,7 @@ final class StatementReview
         public readonly array $unlinked,
         public readonly array $unbanked,
         public readonly int $linkedCount,
+        public readonly array $autoBooked = [],
     ) {
     }
 

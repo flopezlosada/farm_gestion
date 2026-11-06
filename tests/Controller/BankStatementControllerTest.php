@@ -274,7 +274,7 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         $client->submit($crawler->filter('form.bst-relink')->form());
 
         $client->followRedirect();
-        $this->assertSelectorTextContains('.csa-alerts', 'Ligado 1 movimiento a su apunte.');
+        $this->assertSelectorTextContains('.csa-alerts', '1 ligado al apunte que ya lo tenía.');
         $em->clear();
         $this->assertSame($purchases[0]->getId(), $em->find(BankStatementLine::class, $line->getId())->getEntry()?->getId());
         $this->assertSame($purchases[0]->getId(), $em->find(AccountEntry::class, $purchases[3]->getId())->getSplitFrom()?->getId());

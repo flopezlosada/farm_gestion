@@ -13,8 +13,9 @@ use Doctrine\ORM\EntityManagerInterface;
 
 /**
  * Guarda un extracto ya leído: decide de qué cuenta del libro es cada cuenta del
- * fichero, guarda sus movimientos sin repetir los que ya estaban y liga los que no dejan
- * duda ({@see BankLineMatcher}).
+ * fichero, guarda sus movimientos sin repetir los que ya estaban, liga los que no dejan
+ * duda ({@see BankLineMatcher}) y anota solos los que el libro aún no tiene y no dejan
+ * duda ({@see BankLineBooker}).
  *
  * La cuenta se reconoce por el IBAN de la ficha (entidad, oficina y cuenta). Si ninguna
  * lo tiene, la elige una persona ({@see choosableAccounts()}): adivinar por los últimos
@@ -27,6 +28,7 @@ class BankStatementImporter
         private readonly BankStatementRepository $statements,
         private readonly BankStatementLineRepository $lines,
         private readonly BankLineMatcher $matcher,
+        private readonly BankLineBooker $booker,
         private readonly EntityManagerInterface $em,
     ) {
     }
@@ -166,34 +168,72 @@ class BankStatementImporter
             }
         }
 
-        // Una transacción: los movimientos, los extractos y lo ligado, o nada.
-        $linked = $this->em->wrapInTransaction(function () use ($statements, $fresh): int {
+        // Una transacción: los movimientos, los extractos, lo ligado y lo anotado, o nada.
+        [$linked, $booked] = $this->em->wrapInTransaction(function () use ($statements, $fresh, $by): array {
             array_walk($statements, fn (BankStatement $s) => $this->em->persist($s));
             array_walk($fresh, fn (BankStatementLine $l) => $this->em->persist($l));
             $this->em->flush();
-            $linked = $this->matcher->linkSafe($this->unlinkedAround($statements));
-            $this->em->flush();
 
-            return $linked;
+            return $this->crossWithBook($statements, $by);
         });
 
-        return new BankStatementImport($statements, \count($fresh), \count($candidates) - \count($fresh), $linked, $file->warnings);
+        return new BankStatementImport($statements, \count($fresh), \count($candidates) - \count($fresh), $linked, $file->warnings, $booked);
     }
 
     /**
      * Vuelve a cruzar un extracto ya subido con el libro, como al subirlo: lo que se
-     * anotó después, o lo que el cruce de entonces aún no sabía juntar, se liga ahora.
+     * anotó después, lo que el cruce de entonces aún no sabía juntar y lo que ahora sí
+     * se sabe anotar solo.
      *
-     * @return int Cuántos movimientos se han ligado.
+     * @param User|null $by Quien lo pide.
+     *
+     * @return array{0: int, 1: int} Cuántos movimientos se han ligado y cuántos anotado.
      */
-    public function relink(BankStatement $statement): int
+    public function relink(BankStatement $statement, ?User $by): array
     {
-        return $this->em->wrapInTransaction(function () use ($statement): int {
-            $linked = $this->matcher->linkSafe($this->unlinkedAround([$statement]));
-            $this->em->flush();
+        return $this->em->wrapInTransaction(fn (): array => $this->crossWithBook([$statement], $by));
+    }
 
-            return $linked;
-        });
+    /**
+     * Cruza los movimientos sin apunte de estos extractos con el libro: primero se
+     * ligan a los apuntes que ya los tenían ({@see BankLineMatcher}); con lo que queda,
+     * la app anota sola lo que no deja duda ({@see BankLineBooker}). Guarda.
+     *
+     * @param list<BankStatement> $statements
+     * @param User|null           $by         Quien sube o vuelve a cruzar.
+     *
+     * @return array{0: int, 1: int} Cuántos se han ligado y cuántos anotado.
+     */
+    private function crossWithBook(array $statements, ?User $by): array
+    {
+        $unlinked = $this->unlinkedAround($statements);
+        $linked = $this->matcher->linkSafe($unlinked);
+        $this->em->flush();
+        // Con un apunte posible a pocos días, el libro ya lo tiene: anotarlo otra vez lo
+        // duplicaría. Ése se confirma a mano («Es éste»).
+        $rest = array_values(array_filter($this->within($unlinked, $statements), static fn (BankStatementLine $l): bool => $l->getEntry() === null));
+        $bookable = array_column(array_filter($this->matcher->candidatesFor($rest), static fn (array $row): bool => $row['candidates'] === []), 'line');
+        $booked = \count($this->booker->bookSafe($bookable, $by));
+        $this->em->flush();
+
+        return [$linked, $booked];
+    }
+
+    /**
+     * De unos movimientos, los de las fechas de estos extractos: los vecinos de unos días
+     * antes y después sirven para emparejar, pero se anotan cuando se sube su extracto.
+     *
+     * @param list<BankStatementLine> $lines
+     * @param list<BankStatement>     $statements
+     *
+     * @return list<BankStatementLine>
+     */
+    private function within(array $lines, array $statements): array
+    {
+        return array_values(array_filter($lines, static fn (BankStatementLine $l): bool => array_filter(
+            $statements,
+            static fn (BankStatement $s): bool => $s->getAccount() === $l->getAccount() && $l->getOperationDate() >= $s->getFrom() && $l->getOperationDate() <= $s->getTo(),
+        ) !== []));
     }
 
     /**

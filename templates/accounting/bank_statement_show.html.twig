@@ -67,6 +67,11 @@
             <div class="l">movimientos sin apunte</div>
             <div class="s">{{ review.linkedCount }} ya ligados</div>
         </a>
+        <a class="prl-stat" href="#anotados-solos">
+            <div class="v">{{ review.autoBooked|length }}</div>
+            <div class="l">anotados solos</div>
+            <div class="s">por mirar</div>
+        </a>
         <a class="prl-stat" href="#sin-movimiento">
             <div class="v">{{ review.unbanked|length }}</div>
             <div class="l">apuntes sin movimiento</div>
@@ -139,6 +144,44 @@
                                     {% endif %}
                                     {% if suggestions[line.id] is defined %}
                                         <span class="acc-small acc-muted">en {{ suggestions[line.id].category.name }}, como las últimas veces</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+        </div>
+    </section>
+
+    {# ============ ANOTADOS SOLOS ============ #}
+    <section class="bst-block" id="anotados-solos">
+        <h2>Anotados solos</h2>
+        <p class="acc-muted">Movimientos que la app ha anotado sola, con la partida de las últimas veces o la de la factura que esperaba ese pago. Si alguno no es así, corrígelo: se puede hasta que el trimestre se manda a la gestoría. Al corregirlo deja de salir aquí.</p>
+        <div class="prl-table-wrap">
+            {% if review.autoBooked is empty %}
+                <div class="prl-empty">Nada anotado solo pendiente de mirar en estas fechas.</div>
+            {% else %}
+                <table class="prl-table">
+                    <thead>
+                        <tr>
+                            <th class="tight">Fecha</th>
+                            <th>Concepto</th>
+                            <th>Partida</th>
+                            <th class="tight acc-num">Importe</th>
+                            <th class="tight"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in review.autoBooked %}
+                            <tr>
+                                <td class="tight">{{ entry.date|date('d/m/Y') }}</td>
+                                <td><a href="{{ path('accounting_entry_show', { id: entry.id }) }}">{{ entry.concept }}</a>{% if entry.movementAmount != entry.amount %} <span class="acc-small acc-muted">(partido como la última vez)</span>{% endif %}</td>
+                                <td>{{ entry.category.name }}</td>
+                                <td class="acc-num">{{ fmt.money(entry.movementAmount) }}</td>
+                                <td class="tight">
+                                    {% if can_edit %}
+                                        <a class="prl-btn prl-btn--sm" href="{{ path('accounting_entry_edit', { id: entry.id }) }}"><i class="fa fa-pencil"></i> Corregir</a>
                                     {% endif %}
                                 </td>
                             </tr>
