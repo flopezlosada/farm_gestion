@@ -23,6 +23,8 @@ use App\Service\Accounting\Agenda\AccountingAgenda;
 use App\Service\Accounting\Amount;
 use App\Service\Accounting\BudgetTracker;
 use App\Service\Accounting\Closing\ClosedPeriods;
+use App\Service\Accounting\Invoice\AwaitedInvoiceFinder;
+use App\Service\Accounting\Invoice\InvoiceEntryDraft;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\MonthNames;
 use App\Service\Accounting\Split\RepeatSplit;
@@ -424,6 +426,9 @@ class AccountingController extends AbstractController
      * Desde un extracto del banco (`bank_line`) llega con cuenta, fecha, importe y
      * concepto del movimiento, y al guardarlo queda ligado a él. Si se cambia la cuenta
      * o el importe ya no es ese movimiento: se guarda sin ligar y se avisa.
+     *
+     * Si una factura aceptada espera ese pago, llega con su partida, proveedor y
+     * concepto, y al guardarlo se engancha a ella. `no_invoice` dice que no es ésa.
      */
     #[Route('/entry/new', name: 'accounting_entry_new', methods: ['GET', 'POST'])]
     public function entryNew(
@@ -434,6 +439,7 @@ class AccountingController extends AbstractController
         BankStatementLineRepository $bankLines,
         RepeatSplit $repeat,
         CategorySuggester $suggester,
+        AwaitedInvoiceFinder $awaitedInvoices,
     ): Response {
         $entry = new AccountEntry();
         $entry->setDate($this->parseDate($request->query->get('date')) ?? new \DateTimeImmutable('today'));
@@ -469,6 +475,20 @@ class AccountingController extends AbstractController
         if ($provider !== null && !$request->isMethod('POST')) {
             $entry->setProvider($provider);
         }
+        // La factura que espera este pago manda sobre lo de otras veces: es de este pago.
+        $awaited = $bankLine !== null && !$request->query->getBoolean('no_invoice')
+            ? $awaitedInvoices->for($bankLine, $provider)
+            : null;
+        if ($awaited !== null && !$request->isMethod('POST')) {
+            $entry->setConcept(InvoiceEntryDraft::conceptFor($awaited))
+                ->setCategory($awaited->getCategory() ?? $entry->getCategory())
+                ->setInvoiceNumber($awaited->getInvoiceNumber());
+            if ($awaited->getProvider() !== null) {
+                $entry->setProvider($awaited->getProvider());
+            } else {
+                $entry->setProvider(null)->setProviderName($awaited->getProviderName());
+            }
+        }
 
         $form = $this->createForm(AccountEntryType::class, $entry);
         $form->handleRequest($request);
@@ -482,8 +502,18 @@ class AccountingController extends AbstractController
                 $this->addFlash('warning', 'No se ha ligado al movimiento del banco: se cambió la cuenta o el importe. Si es otro movimiento, sigue en el extracto sin anotar.');
                 $bankLine = null;
             }
+            // Sólo si quedó ligado al movimiento: con otra cuenta u otro importe, no es su pago.
+            try {
+                if ($bankLine !== null) {
+                    $awaited?->paidBy($entry);
+                }
+            } catch (\DomainException) {
+                $awaited = null;
+            }
             $em->flush();
-            $this->addFlash('success', sprintf('Anotado: %s.', $entry->getConcept()));
+            $this->addFlash('success', sprintf('Anotado: %s.', $entry->getConcept()).($bankLine !== null && $awaited !== null
+                ? sprintf(' Es el pago de la factura %s: ya está enganchada.', $awaited->getInvoiceNumber() ?? 'de '.($awaited->getProviderName() ?? 'este proveedor'))
+                : ''));
             // Un cargo que la última vez se partió (el del Ayuntamiento): a su ficha,
             // donde se confirma partirlo igual, en vez de volver al extracto.
             if ($repeat->templateFor($entry) !== null) {
@@ -509,15 +539,16 @@ class AccountingController extends AbstractController
         return $this->render('accounting/entry_form.html.twig', [
             'form' => $form->createView(),
             'entry' => null,
+            'awaited' => $awaited,
             'heading' => 'Anotar un apunte',
-            'lead' => $suggestion !== null
+            'lead' => $awaited !== null ? 'Un movimiento del banco. El saldo se recalcula solo.' : ($suggestion !== null
                 ? sprintf(
                     'Un movimiento de una cuenta. La partida «%s» está puesta porque %s con el mismo concepto la llevaba%s: cámbiala si esta vez no es.',
                     $suggestion->category->getName(),
                     $suggestion->times === 1 ? 'el último apunte' : sprintf('los %d últimos apuntes', $suggestion->times),
                     $suggestion->times === 1 ? '' : 'n',
                 ).($provider !== null ? sprintf(' El proveedor «%s», por lo mismo.', $provider->getName()) : '')
-                : 'Un movimiento de una cuenta. El saldo se recalcula solo.'.($provider !== null ? sprintf(' El proveedor «%s» está puesto porque las últimas veces con el mismo concepto lo llevaban.', $provider->getName()) : ''),
+                : 'Un movimiento de una cuenta. El saldo se recalcula solo.'.($provider !== null ? sprintf(' El proveedor «%s» está puesto porque las últimas veces con el mismo concepto lo llevaban.', $provider->getName()) : '')),
             'suggestions' => AccountEntryType::suggestedDirections($categories->findActive()),
         ]);
     }
@@ -840,17 +871,20 @@ class AccountingController extends AbstractController
             $transfers->remove($entry);
             $done = 'Traspaso borrado, con sus dos mitades.';
         } else {
-            // Todas las que explicaba vuelven a la bandeja, también las de un pago agrupado.
+            // Las que explicaba, también las de un pago agrupado: las pagadas por banco
+            // vuelven a esperar su pago; las demás, a la bandeja.
             $paid = $invoices->findBy(['accountEntry' => $entry]);
-            array_walk($paid, static fn (ReceivedInvoice $i) => $i->reopen());
+            $reopened = array_filter($paid, static fn (ReceivedInvoice $i): bool => $i->losePayment());
             // El cobro de una emitida se desliga solo (SET NULL), pero sin avisar la
             // factura pasaría a «sin cobrar» sin que nadie lo supiera.
             $issued = $issuedInvoices->findOneBy(['accountEntry' => $entry]);
             $issued?->unmarkPaid();
             $em->remove($entry);
             $done = match (true) {
-                \count($paid) > 1 => sprintf('Apunte borrado. Sus %d facturas vuelven a la bandeja.', \count($paid)),
-                $paid !== [] => 'Apunte borrado. Su factura vuelve a la bandeja.',
+                \count($reopened) > 1 => sprintf('Apunte borrado. Sus %d facturas vuelven a la bandeja.', \count($reopened)),
+                $reopened !== [] => 'Apunte borrado. Su factura vuelve a la bandeja.',
+                \count($paid) > 1 => sprintf('Apunte borrado. Sus %d facturas siguen aceptadas, esperando el pago.', \count($paid)),
+                $paid !== [] => 'Apunte borrado. Su factura sigue aceptada, esperando el pago.',
                 $issued !== null => sprintf('Apunte borrado. La factura %s vuelve a estar sin cobrar.', $issued->getNumberLabel()),
                 default => 'Apunte borrado.',
             };

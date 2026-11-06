@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\AccountEntry;
 use App\Entity\BudgetCategory;
+use App\Entity\IssuedInvoice;
 use App\Entity\Provider;
 use App\Entity\ReceivedInvoice;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -105,7 +106,7 @@ class ReceivedInvoiceRepository extends ServiceEntityRepository
     public function findOpen(): array
     {
         return $this->createQueryBuilder('i')
-            ->leftJoin('i.suggestedCategory', 'c')->addSelect('c')
+            ->leftJoin('i.category', 'c')->addSelect('c')
             ->andWhere('i.status IN (:open)')
             ->setParameter('open', [ReceivedInvoice::STATUS_PENDING, ReceivedInvoice::STATUS_READ, ReceivedInvoice::STATUS_UNREADABLE])
             ->orderBy('i.id', 'ASC')
@@ -142,6 +143,33 @@ class ReceivedInvoiceRepository extends ServiceEntityRepository
             ->setMaxResults($limit)
             ->getQuery()
             ->getResult();
+    }
+
+    /**
+     * Las aceptadas que esperan a que su pago llegue con el extracto del banco, las
+     * más antiguas primero. Con importe, sólo las que se pagan con él: un movimiento
+     * del banco de −265,53 € busca las de 265,53 €.
+     *
+     * @param string|null $movement Importe del movimiento, con su signo; null para todas.
+     *
+     * @return list<ReceivedInvoice>
+     */
+    public function findAwaitingPayment(?string $movement = null): array
+    {
+        $qb = $this->createQueryBuilder('i')
+            ->leftJoin('i.provider', 'p')->addSelect('p')
+            ->leftJoin('i.category', 'c')->addSelect('c')
+            ->andWhere('i.status = :confirmed')
+            ->andWhere('i.accountEntry IS NULL')
+            ->setParameter('confirmed', ReceivedInvoice::STATUS_CONFIRMED)
+            ->orderBy('i.invoiceDate', 'ASC')
+            ->addOrderBy('i.id', 'ASC');
+        if ($movement !== null) {
+            $qb->andWhere('i.total = :total')
+                ->setParameter('total', IssuedInvoice::fromCents(-IssuedInvoice::toCents($movement)));
+        }
+
+        return $qb->getQuery()->getResult();
     }
 
     /**
@@ -236,6 +264,7 @@ class ReceivedInvoiceRepository extends ServiceEntityRepository
             ->leftJoin('i.taxLines', 't')->addSelect('t')
             ->leftJoin('i.accountEntry', 'e')->addSelect('e')
             ->leftJoin('e.category', 'c')->addSelect('c')
+            ->leftJoin('i.category', 'ic')->addSelect('ic')
             ->andWhere('i.status = :confirmed')
             ->andWhere('COALESCE(i.bookedOn, i.invoiceDate, e.date) BETWEEN :from AND :to')
             ->setParameter('confirmed', ReceivedInvoice::STATUS_CONFIRMED)

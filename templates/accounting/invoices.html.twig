@@ -127,9 +127,9 @@
                                 </span>
                             </td>
                             <td>
-                                {% if invoice.suggestedCategory %}
-                                    <span class="acc-muted acc-small">{{ invoice.suggestedCategory.group.name }}</span><br>
-                                    {{ invoice.suggestedCategory.name }}
+                                {% if invoice.category %}
+                                    <span class="acc-muted acc-small">{{ invoice.category.group.name }}</span><br>
+                                    {{ invoice.category.name }}
                                 {% else %}
                                     <span class="acc-muted">—</span>
                                 {% endif %}
@@ -148,12 +148,50 @@
         {% endif %}
     </div>
 
+    {# ============ ESPERANDO EL PAGO ============ #}
+    {# Aceptadas que se pagan por banco: su pago se engancha al anotar ese movimiento
+     # del extracto. Si alguna lleva mucho aquí, o no se ha pagado o el banco lo cobró
+     # por otro importe. #}
+    {% if awaiting is not empty %}
+        <div class="acc-section-head">
+            <div>
+                <h2 class="acc-subhead">Esperando el pago</h2>
+                <p class="acc-lead">Aceptadas y pagadas por banco. Al anotar su movimiento del extracto, se enganchan solas.</p>
+            </div>
+        </div>
+        <div class="prl-table-wrap">
+            <table class="prl-table">
+                <thead>
+                    <tr>
+                        <th>Proveedor</th>
+                        <th>Partida</th>
+                        <th class="tight">Fecha</th>
+                        <th class="tight acc-num">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for invoice in awaiting %}
+                        <tr>
+                            <td>
+                                <a href="{{ path('accounting_invoice_review', { id: invoice.id }) }}" class="acc-strong">{{ invoice.provider ? invoice.provider.name : (invoice.providerName ?? invoice.originalName) }}</a>
+                                {% if invoice.invoiceNumber %}<br><span class="acc-muted acc-small">fra. {{ invoice.invoiceNumber }}</span>{% endif %}
+                            </td>
+                            <td>{{ invoice.category ? invoice.category.name : '—' }}</td>
+                            <td class="tight">{{ invoice.invoiceDate ? invoice.invoiceDate|date('d/m/Y') : '—' }}</td>
+                            <td class="acc-num">{{ invoice.total is not null ? invoice.total|number_format(2, ',', '.') ~ ' €' : '—' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+
     {# ============ ÚLTIMAS ANOTADAS ============ #}
     {% if recent is not empty %}
         <div class="acc-section-head">
             <div>
                 <h2 class="acc-subhead">Últimas resueltas</h2>
-                <p class="acc-lead">Las que ya se anotaron en el libro o se descartaron.</p>
+                <p class="acc-lead">Las que ya se aceptaron o se descartaron.</p>
             </div>
         </div>
         <div class="prl-table-wrap">
@@ -179,6 +217,8 @@
                             <td class="tight">
                                 {% if invoice.status == 'discarded' %}
                                     <span class="prl-chip prl-chip--neutral"><span class="dot"></span>Descartada</span>
+                                {% elseif invoice.awaitingPayment %}
+                                    <span class="prl-chip prl-chip--pausado"><span class="dot"></span>Esperando el pago</span>
                                 {% else %}
                                     <span class="prl-chip prl-chip--activo"><span class="dot"></span>Anotada</span>
                                 {% endif %}

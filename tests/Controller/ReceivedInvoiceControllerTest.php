@@ -456,8 +456,9 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
 
     /**
      * Un proveedor que cobra de una vez dos facturas deja un solo pago, por la suma: se
-     * ofrece junto con la otra, al elegirlo se enganchan las dos, la ficha del apunte
-     * las nombra y al borrarlo vuelven las dos a la bandeja.
+     * ofrece junto con la otra, al elegirlo se enganchan las dos y la ficha del apunte
+     * las nombra. Al borrarlo, como era un pago por banco, siguen aceptadas y vuelven a
+     * esperar su pago: lo revisado sigue valiendo.
      */
     public function testUnPagoDeVariasFacturasLasEnganchaTodas(): void
     {
@@ -500,7 +501,7 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
         $this->assertSelectorTextContains('body', 'Este pago explica también F-2');
         $client->submit($crawler->filter(sprintf('form[action$="/entry/%d/delete"]', $bank->getId()))->form());
         foreach (['factura-prueba.pdf', 'siguiente.pdf'] as $name) {
-            $this->assertTrue($this->findInvoice($name)->isOpen(), $name . ' vuelve a la bandeja al borrar el pago.');
+            $this->assertTrue($this->findInvoice($name)->isAwaitingPayment(), $name . ' vuelve a esperar su pago al borrarlo.');
         }
     }
 
@@ -604,18 +605,20 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
-     * Un pago por banco no se anota desde la factura: llegará con el extracto, y
-     * anotarlo aquí lo contaría dos veces. La factura se queda en la bandeja.
+     * Pagada por banco, se acepta sin apunte: el pago llegará con el extracto, y
+     * anotarlo aquí lo contaría dos veces. Queda aceptada, esperando el pago, con la
+     * partida y el importe revisados. Sin apunte nada la sitúa en su trimestre, así
+     * que la fecha de la factura es obligatoria.
      */
-    public function testUnPagoPorBancoSinExtractoNoSeAnotaYLaFacturaEspera(): void
+    public function testUnPagoPorBancoSeAceptaSinApunteYEsperaSuPago(): void
     {
         $client = $this->createAuthenticatedClient();
         $this->enableModule();
         $invoice = $this->uploadOne($client);
         $this->createCatalogue();
-
-        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
-        $form = $crawler->filter('form[name="received_invoice_confirm"]')->form([
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $before = $em->getRepository(AccountEntry::class)->count([]);
+        $values = [
             'received_invoice_confirm[entry][date]' => '2026-03-05',
             'received_invoice_confirm[entry][account]' => (string) $this->account->getId(),
             'received_invoice_confirm[entry][category]' => (string) $this->category->getId(),
@@ -623,14 +626,33 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
             'received_invoice_confirm[entry][direction]' => 'out',
             'received_invoice_confirm[entry][magnitude]' => '26.75',
             'received_invoice_confirm[entry][providerName]' => 'Ferretería Torrelaguna',
-        ]);
-        $client->submit($form);
+            'received_invoice_confirm[entry][invoiceNumber]' => '2232',
+        ];
 
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
+        $client->submit($crawler->filter('form[name="received_invoice_confirm"]')->form($values));
         $this->assertResponseIsSuccessful();
-        $this->assertSelectorTextContains('body', 'Un pago por banco no se anota desde la factura');
+        $this->assertSelectorTextContains('body', 'Pon la fecha de la factura');
+        $this->assertTrue($this->findInvoice('factura-prueba.pdf')->isOpen(), 'Sin fecha no se acepta.');
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
+        $client->submit($crawler->filter('form[name="received_invoice_confirm"]')->form($values + [
+            'received_invoice_confirm[invoiceDate]' => '2026-03-04',
+        ]));
+        $this->assertResponseRedirects();
+
         $invoice = $this->findInvoice('factura-prueba.pdf');
-        $this->assertTrue($invoice->isOpen(), 'La factura sigue en la bandeja.');
-        $this->assertNull($invoice->getAccountEntry(), 'No se ha creado ningún apunte.');
+        $this->assertSame(ReceivedInvoice::STATUS_CONFIRMED, $invoice->getStatus());
+        $this->assertTrue($invoice->isAwaitingPayment());
+        $this->assertNull($invoice->getAccountEntry(), 'No se crea apunte: lo traerá el extracto.');
+        $this->assertSame($before, $em->getRepository(AccountEntry::class)->count([]));
+        $this->assertSame($this->category->getId(), $invoice->getCategory()?->getId(), 'Guarda la partida que llevará el pago.');
+        $this->assertSame('26.75', $invoice->getTotal());
+        $this->assertSame('2026-03-04', $invoice->getInvoiceDate()?->format('Y-m-d'));
+        $this->assertSame('2232', $invoice->getInvoiceNumber());
+
+        $client->request('GET', '/gestion/accounting/invoices');
+        $this->assertSelectorTextContains('body', 'Esperando el pago');
     }
 
     /** Una línea de IVA a medias no deja confirmar: la gestoría la necesita entera. */

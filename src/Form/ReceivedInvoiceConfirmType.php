@@ -12,12 +12,14 @@ use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\CollectionType;
+use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\NumberType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\FormError;
 use Symfony\Component\Form\FormEvent;
 use Symfony\Component\Form\FormEvents;
+use Symfony\Component\Form\FormInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints as Assert;
 
@@ -38,8 +40,10 @@ use Symfony\Component\Validator\Constraints as Assert;
  * También ofrece (`grouped`) el pago de esta factura junto con otras del mismo
  * proveedor que siguen en la bandeja: al elegirlo, se enganchan todas.
  *
- * Un apunte nuevo sólo puede ir a una caja o una tarjeta: lo que se paga por banco
- * lo trae el extracto, y la factura espera a engancharse a ese pago.
+ * Pagada en caja o con tarjeta, se acepta con su apunte nuevo. Pagada por banco, se
+ * acepta sin él: el pago lo trae el extracto y se engancha a ella al anotarlo. Del
+ * bloque del apunte cuentan entonces la partida y el importe; la fecha de la factura
+ * pasa a ser obligatoria, porque no hay apunte que la sitúe en su trimestre.
  *
  * Reutiliza {@see AccountEntryType} entero en vez de copiar sus campos: así el
  * signo, las partidas que se ofrecen y la validación son exactamente los mismos
@@ -76,6 +80,7 @@ class ReceivedInvoiceConfirmType extends AbstractType
                     ], static fn ($v) => $v !== null && trim((string) $v) !== '')),
                 ],
             ])
+            ->add('invoiceDate', DateType::class, ['widget' => 'single_text', 'input' => 'datetime_immutable', 'required' => false])
             ->add('providerTaxId', TextType::class, ['required' => false])
             ->add('providerAddress', TextType::class, ['required' => false])
             ->add('providerPostalCode', TextType::class, ['required' => false, 'attr' => ['inputmode' => 'numeric', 'maxlength' => 5]])
@@ -103,18 +108,13 @@ class ReceivedInvoiceConfirmType extends AbstractType
         }
         $candidates = [...$options['candidates'], ...array_map(static fn (GroupedPayment $g): AccountEntry => $g->payment, $options['grouped'])];
 
-        // Un pago por banco no se anota desde la factura: llega con el extracto, y
-        // anotarlo aquí lo contaría dos veces cuando se suba. La factura espera en la
-        // bandeja hasta que su pago esté en el libro y se engancha a él. Sólo se
-        // crea apunte en una caja o una tarjeta, cuyos pagos no trae ningún extracto
-        // (la tarjeta llega al banco liquidada de golpe, no compra a compra).
+        // Aceptada sin pago (se paga por banco), nada más la sitúa en su trimestre:
+        // sin la fecha de la factura no entraría en ningún paquete de la gestoría.
         $builder->addEventListener(FormEvents::POST_SUBMIT, static function (FormEvent $event): void {
             $form = $event->getForm();
-            $matched = $form->has('match') && $form->get('match')->getData() !== null;
-            $account = $form->get('entry')->get('account')->getData();
-            if (!$matched && $account instanceof FinancialAccount && $account->isBank()) {
-                $form->get('entry')->get('account')->addError(new FormError(
-                    'Un pago por banco no se anota desde la factura: llega con el extracto. Deja la factura en la bandeja; al subir el extracto con su pago, se enganchará a él. Si se pagó en efectivo o con tarjeta, elige esa cuenta.',
+            if (self::awaitsPayment($form) && $form->get('invoiceDate')->getData() === null) {
+                $form->get('invoiceDate')->addError(new FormError(
+                    'Pon la fecha de la factura: se paga por banco y es la que la lleva a su trimestre.',
                 ));
             }
         });
@@ -176,6 +176,22 @@ class ReceivedInvoiceConfirmType extends AbstractType
         $resolver->setAllowedTypes('provider', [Provider::class, 'null']);
         $resolver->setAllowedTypes('candidates', AccountEntry::class.'[]');
         $resolver->setAllowedTypes('grouped', GroupedPayment::class.'[]');
+    }
+
+    /**
+     * Si se acepta sin apunte, esperando el pago: no se engancha a uno que ya esté en
+     * el libro y se paga por una cuenta de banco, cuyo pago trae el extracto. Una caja
+     * o una tarjeta no la trae ningún extracto movimiento a movimiento (la tarjeta
+     * llega al banco liquidada de golpe): con ellas se crea el apunte.
+     *
+     * @param FormInterface $form El formulario entero, ya enviado.
+     */
+    public static function awaitsPayment(FormInterface $form): bool
+    {
+        $matched = $form->has('match') && $form->get('match')->getData() !== null;
+        $account = $form->get('entry')->get('account')->getData();
+
+        return !$matched && $account instanceof FinancialAccount && $account->isBank();
     }
 
     /**

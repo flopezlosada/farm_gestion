@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\AccountEntry;
+use App\Entity\IssuedInvoice;
 use App\Entity\ReceivedInvoice;
 use App\Entity\User;
 use App\EventListener\InvoiceReadListener;
@@ -34,7 +35,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * La bandeja de facturas recibidas: se suben, una máquina las lee y quien lleva las
- * cuentas las convierte en apuntes con un clic.
+ * cuentas las acepta con un clic. Pagadas en caja o con tarjeta, con su apunte;
+ * pagadas por banco, esperando a que el pago llegue con el extracto.
  *
  * La meta es que nadie teclee una factura. Lo que llega leído se confirma tal cual o
  * se corrige en el mismo formulario de apunte de siempre; lo que no se pudo leer se
@@ -63,6 +65,7 @@ class ReceivedInvoiceController extends AbstractController
             ])->createView(),
             'open' => $open,
             'queue' => $this->queueStatus($pending, $queue->isEnabled()),
+            'awaiting' => $invoices->findAwaitingPayment(),
             'recent' => $invoices->findRecentlyResolved(self::RECENT),
         ]);
     }
@@ -120,9 +123,9 @@ class ReceivedInvoiceController extends AbstractController
     }
 
     /**
-     * Revisar una factura y convertirla en apunte. El formulario llega relleno con lo
-     * leído: si está bien, basta con guardar. Una ya anotada o descartada se enseña
-     * tal como quedó, sin formulario.
+     * Revisar una factura y aceptarla. El formulario llega relleno con lo leído: si
+     * está bien, basta con guardar. Una ya aceptada o descartada se enseña tal como
+     * quedó, sin formulario.
      */
     #[Route('/{id}', name: 'accounting_invoice_review', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     public function review(
@@ -190,10 +193,11 @@ class ReceivedInvoiceController extends AbstractController
             /** @var AccountEntry|null $match */
             $match = $form->has('match') ? $form->get('match')->getData() : null;
             $others = $match !== null ? ($othersByPayment[$match->getId()] ?? []) : [];
+            $unpaid = ReceivedInvoiceConfirmType::awaitsPayment($form);
             $entry->setCreatedBy($this->currentUser());
             $today = new \DateTimeImmutable('today');
             $late = static fn (ReceivedInvoice $i): bool => $i->packageDate() !== null && $closed->closingDeliveryFor($i->packageDate()) !== null;
-            $confirmed = $this->confirmOnce($em, $invoices, [$invoice, ...$others], static function () use ($em, $invoice, $entry, $match, $others, $providers, $chosen, $closed, $late, $today): void {
+            $confirmed = $this->confirmOnce($em, $invoices, [$invoice, ...$others], static function () use ($em, $invoice, $entry, $match, $others, $unpaid, $providers, $chosen, $closed, $late, $today): void {
                 $provider = $providers->resolve($invoice, $entry, $chosen);
                 // El pago queda con la ficha del proveedor: así sale en ella con o sin factura.
                 $entry->setProvider($provider);
@@ -208,6 +212,16 @@ class ReceivedInvoiceController extends AbstractController
                     foreach ($others as $other) {
                         $other->confirmAlongside($match, $provider);
                     }
+                } elseif ($unpaid) {
+                    // Se paga por banco: el pago llegará con el extracto y, al anotarlo,
+                    // se engancha a ella. Crearlo aquí lo contaría dos veces.
+                    $invoice->acceptUnpaid(
+                        $entry->getCategory(),
+                        IssuedInvoice::fromCents(-IssuedInvoice::toCents($entry->getAmount())),
+                        $provider,
+                        $entry->getProviderName(),
+                        $entry->getInvoiceNumber(),
+                    );
                 } else {
                     $invoice->confirm($entry, $provider);
                     $em->persist($entry);
@@ -219,14 +233,15 @@ class ReceivedInvoiceController extends AbstractController
             });
             if (!$confirmed) {
                 $this->addFlash('warning', $others === []
-                    ? 'Esta factura ya estaba anotada: no se ha creado otro apunte.'
-                    : 'Alguna de esas facturas ya estaba anotada: no se ha enganchado ninguna.');
+                    ? 'Esta factura ya estaba aceptada: no se ha creado otro apunte.'
+                    : 'Alguna de esas facturas ya estaba aceptada: no se ha enganchado ninguna.');
 
                 return $this->redirectToRoute('accounting_invoices');
             }
             $done = match (true) {
                 $others !== [] => sprintf('Enganchadas %d facturas al pago que ya estaba en el libro: %s.', \count($others) + 1, $match->getConcept()),
                 $match !== null => sprintf('Enganchada al pago que ya estaba en el libro: %s.', $match->getConcept()),
+                $unpaid => sprintf('Aceptada, esperando el pago: cuando anotes ese movimiento de %s, se engancha a ella.', $entry->getAccount()?->getName()),
                 default => sprintf('Anotado: %s.', $entry->getConcept()),
             };
             if ($invoice->getBookedOn() !== null) {

@@ -78,7 +78,7 @@
                                     {{ invoice.concept ?? invoice.originalName }}
                                 {% endif %}
                             </td>
-                            <td class="tight">{{ entry and entry.category ? entry.category.name : '—' }}</td>
+                            <td class="tight">{{ invoice.ledgerCategory ? invoice.ledgerCategory.name : '—' }}{% if invoice.awaitingPayment %}<br><span class="acc-muted acc-small">esperando el pago</span>{% endif %}</td>
                             <td class="acc-num">{{ invoice.total is not null ? fmt.money(invoice.total) : '—' }}</td>
                         </tr>
                     {% endfor %}

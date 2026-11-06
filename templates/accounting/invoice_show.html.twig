@@ -36,7 +36,7 @@
     {{ csa.page_header(
         'Contabilidad · Facturas',
         providerName ~ (invoice.invoiceNumber ? ' · fra. ' ~ invoice.invoiceNumber : ''),
-        invoice.status == 'confirmed' ? 'Anotada en el libro.' : 'Descartada: no se anotó.'
+        invoice.awaitingPayment ? 'Aceptada. Esperando a que su pago llegue con el extracto del banco.' : (invoice.status == 'confirmed' ? 'Anotada en el libro.' : 'Descartada: no se anotó.')
     ) }}
 
     <div class="ent-show{{ hasDocument ? '' : ' ent-show--solo' }}">
@@ -53,7 +53,11 @@
             {% endif %}
             <dl class="ent-facts">
                 <dt>Estado</dt>
-                <dd>{{ invoice.status == 'confirmed' ? csa.badge('Anotada', 'green') : csa.badge('Descartada', 'neutral') }}</dd>
+                <dd>{{ invoice.awaitingPayment ? csa.badge('Esperando el pago', 'ochre') : (invoice.status == 'confirmed' ? csa.badge('Anotada', 'green') : csa.badge('Descartada', 'neutral')) }}</dd>
+                {% if invoice.awaitingPayment and invoice.category %}
+                    <dt>Partida</dt>
+                    <dd>{{ invoice.category.name }}</dd>
+                {% endif %}
                 <dt>Proveedor</dt>
                 <dd>
                     {% if invoice.provider %}
