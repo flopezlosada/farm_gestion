@@ -6,7 +6,6 @@ use App\Entity\AccountEntry;
 use App\Entity\BankStatementLine;
 use App\Entity\IssuedInvoice;
 use App\Repository\AccountEntryRepository;
-use App\Service\Accounting\Closing\ClosedPeriods;
 
 /**
  * Empareja los movimientos del banco con los apuntes del libro que los anotan. Sólo por
@@ -44,7 +43,6 @@ class BankLineMatcher
 
     public function __construct(
         private readonly AccountEntryRepository $entries,
-        private readonly ClosedPeriods $closed,
     ) {
     }
 
@@ -73,9 +71,9 @@ class BankLineMatcher
         foreach ($pairs as [$line, $entry]) {
             $line->linkTo($entry);
         }
-        // Juntar cambia los apuntes: en un trimestre entregado no se toca nada.
-        $rest = array_values(array_filter($lines, fn (BankStatementLine $l): bool => $l->getEntry() === null
-            && $this->closed->closingDeliveryFor($l->getOperationDate()) === null));
+        // También en un trimestre entregado: juntar no cambia importes, fechas ni partidas
+        // (lo deja pasar ClosedPeriodGuard).
+        $rest = array_values(array_filter($lines, static fn (BankStatementLine $l): bool => $l->getEntry() === null));
         $bundles = self::sameDayBundles($rest, $this->loadOnDaysOf($rest));
         foreach ($bundles as [$line, $entries]) {
             $head = array_shift($entries);
