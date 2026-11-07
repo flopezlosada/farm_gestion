@@ -38,6 +38,13 @@
                 de que ya pueden apuntarse. Hasta ahora estaba en borrador y no lo veía nadie.
                 Hazlo cuando los productos y los precios estén como quieres: el aviso sólo sale una vez.
             </p>
+            {% if round.hasNoMinimum %}
+                <p>
+                    Este productor <strong>no pide mínimo</strong>, así que el pedido queda
+                    <strong>confirmado al abrirlo</strong>: el aviso dirá que apuntarse ya es firme
+                    y que se paga al apuntarse.
+                </p>
+            {% endif %}
         {% elseif round.announcedAt %}
             <p>
                 De este pedido <strong>ya se avisó</strong> el

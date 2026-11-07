@@ -69,9 +69,13 @@
             <div class="cg-fact">
                 <span class="cg-fact__l">Mínimo</span>
                 <span class="cg-fact__v">
-                    {{ round.minimumCondition ?: (round.minimumTypeLabel ?: '—') }}
-                    {% if round.minimumTypeLabel and round.minimumCondition %}<span class="cg-fact__note">· {{ round.minimumTypeLabel }}</span>{% endif %}
-                    {% if round.minimumTypeLabel and not round.confirmed %}<span class="cg-fact__note">· se confirma sola al alcanzarlo</span>{% endif %}
+                    {{ round.minimumTypeLabel }}
+                    {% if round.minimumCondition %}<span class="cg-fact__note">· {{ round.minimumCondition }}</span>{% endif %}
+                    {% if not round.confirmed %}
+                        {% if round.hasNoMinimum %}<span class="cg-fact__note">· queda confirmado al abrirlo</span>
+                        {% elseif round.hasAutomaticMinimum %}<span class="cg-fact__note">· se confirma solo al alcanzarlo</span>
+                        {% else %}<span class="cg-fact__note">· lo confirmáis a mano</span>{% endif %}
+                    {% endif %}
                 </span>
             </div>
             {% if round.confirmedAt %}<div class="cg-fact"><span class="cg-fact__l">Confirmado</span><span class="cg-fact__v">{{ round.confirmedAt|date('d/m/Y') }}</span></div>{% endif %}

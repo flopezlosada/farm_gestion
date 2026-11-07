@@ -10,11 +10,13 @@ Qué hay:
 {% endfor %}{% if round.items|length > 10 %}Y {{ round.items|length - 10 }} producto{{ round.items|length - 10 == 1 ? '' : 's' }} más.
 {% endif %}{% endif %}
 {% if round.ordersCloseAt %}Puedes apuntarte hasta el {{ round.ordersCloseAt|format_date('full', locale='es') }}.{% else %}Ya puedes apuntarte.{% endif %}
-{% if round.deliveryDate %}Si el pedido sale adelante, se entrega el {{ round.deliveryDate|format_date('full', locale='es') }} en tu punto de recogida, junto con la cesta.{% endif %}
+{% if round.deliveryDate %}{{ round.confirmed ? 'Se entrega' : 'Si el pedido sale adelante, se entrega' }} el {{ round.deliveryDate|format_date('full', locale='es') }} en tu punto de recogida, junto con la cesta.{% endif %}
 
-Apuntarte no te compromete todavía: algunos productores piden un mínimo, y hasta que no
+{% if round.confirmed %}Este pedido ya está confirmado: sale seguro. Si te apuntas, tu pedido es firme;
+en la web verás cuánto es y cómo pagarlo.
+{% else %}Apuntarte no te compromete todavía: algunos productores piden un mínimo, y hasta que no
 sepamos que se alcanza no se pide el pago. Si no sale, no pagas nada.
-{% if can_act %}
+{% endif %}{% if can_act %}
 Apúntate aquí: {{ url }}
 {% else %}
 Para apuntarte, dínoslo en el reparto o contesta a este correo.

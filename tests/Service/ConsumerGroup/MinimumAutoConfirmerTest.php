@@ -12,10 +12,10 @@ use Doctrine\ORM\EntityManagerInterface;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Unit test del auto-confirmador: solo actúa cuando la ronda tiene un mínimo
- * automatizable configurado, no está ya confirmada, y el agregado lo alcanza.
- * Los avisos (socias + productor) van SIEMPRE juntos con la confirmación: no
- * tiene sentido confirmar sin que se entere nadie.
+ * Unit test del auto-confirmador: actúa cuando la ronda no está ya confirmada
+ * y, o no pide mínimo, o tiene uno automático que el agregado alcanza. Las
+ * socias apuntadas se enteran SIEMPRE de la confirmación; el productor, sólo
+ * cuando había un mínimo que alcanzar.
  */
 class MinimumAutoConfirmerTest extends TestCase
 {
@@ -30,9 +30,10 @@ class MinimumAutoConfirmerTest extends TestCase
         );
     }
 
-    public function testNoHaceNadaSinTipoDeMinimo(): void
+    public function testNoHaceNadaConUnMinimoQueSeConfirmaAMano(): void
     {
         $round = (new ConsumerGroupRound())->setStatus(ConsumerGroupRound::STATUS_OPEN);
+        $round->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_MANUAL);
 
         $aggregator = $this->createMock(OrderAggregator::class);
         $aggregator->expects(self::never())->method('aggregate');
@@ -41,6 +42,42 @@ class MinimumAutoConfirmerTest extends TestCase
         $notifier->expects(self::never())->method('notifyConfirmed');
 
         $this->confirmer($aggregator, new RoundStateMachine(), $notifier)->checkAndConfirm($round);
+
+        self::assertFalse($round->isConfirmed());
+    }
+
+    public function testSinMinimoConfirmaYAvisaALasSociasPeroNoAlProductor(): void
+    {
+        // Al productor su correo le dice que se alcanzó el mínimo: sin mínimo
+        // sería falso. A las socias apuntadas sí: su pedido pasa a ser firme.
+        $round = (new ConsumerGroupRound())->setStatus(ConsumerGroupRound::STATUS_OPEN);
+        $round->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_NONE);
+
+        $aggregator = $this->createMock(OrderAggregator::class);
+        $aggregator->expects(self::never())->method('aggregate');
+
+        $notifier = $this->createMock(ConsumerGroupNotifier::class);
+        $notifier->expects(self::once())->method('notifyConfirmed')->with($round);
+        $notifier->expects(self::never())->method('notifyProducerConfirmed');
+
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->expects(self::once())->method('flush');
+
+        $this->confirmer($aggregator, new RoundStateMachine(), $notifier, $em)->checkAndConfirm($round);
+
+        self::assertTrue($round->isConfirmed());
+    }
+
+    public function testSinMinimoNoConfirmaUnBorrador(): void
+    {
+        // Abrir y confirmar son el mismo paso, pero en ese orden: un borrador
+        // sin mínimo no puede salir confirmado antes de que nadie lo vea.
+        $round = new ConsumerGroupRound();
+
+        $notifier = $this->createMock(ConsumerGroupNotifier::class);
+        $notifier->expects(self::never())->method('notifyConfirmed');
+
+        $this->confirmer($this->createMock(OrderAggregator::class), new RoundStateMachine(), $notifier)->checkAndConfirm($round);
 
         self::assertFalse($round->isConfirmed());
     }

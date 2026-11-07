@@ -30,14 +30,15 @@ use Gedmo\Mapping\Annotation as Gedmo;
  * plazo, y por eso está separado: un pedido confirmado sigue admitiendo apuntes
  * hasta que se cierra.
  *
- * El MÍNIMO del productor se automatiza SOLO cuando encaja en uno de los dos
- * tipos calculables sin ambigüedad ({@see $minimumType}: importe total o nº de
- * socias con pedido — ver {@see minimumReached()}); en ese caso
- * {@see \App\Service\ConsumerGroup\MinimumAutoConfirmer} confirma la ronda sola
- * al guardar un pedido. Cuando el mínimo es de otro tipo (una cantidad de
- * producto concreto, o directamente se desconoce), se guarda como texto
- * informativo ({@see $minimumCondition}) y la comisión confirma a mano viendo
- * los agregados, como siempre. La app NO cobra en v1: las socias pagan por
+ * El MÍNIMO del productor es UNA elección entre cuatro ({@see $minimumType}):
+ *   - sin mínimo: el pedido sale seguro, así que queda confirmado al abrirlo;
+ *   - importe total o nº de socias con pedido: los dos únicos calculables sin
+ *     ambigüedad ({@see minimumReached()}); al alcanzarse,
+ *     {@see \App\Service\ConsumerGroup\MinimumAutoConfirmer} lo confirma solo;
+ *   - otro (una cantidad de un producto, algo sin concretar): se explica en
+ *     {@see $minimumCondition} y la comisión confirma a mano viendo los agregados.
+ * Antes «sin mínimo» y «a mano» compartían el mismo null, y por eso no había
+ * forma de decir que un pedido no tiene mínimo. La app NO cobra en v1: las socias pagan por
  * transferencia como hoy.
  *
  * @ORM\Table(name="consumer_group_round")
@@ -45,14 +46,23 @@ use Gedmo\Mapping\Annotation as Gedmo;
  */
 class ConsumerGroupRound
 {
+    /** El productor no pide mínimo: el pedido sale seguro desde que se abre. */
+    public const MINIMUM_TYPE_NONE = 0;
     /** Mínimo expresado como importe total (€) del agregado de la ronda. */
     public const MINIMUM_TYPE_AMOUNT = 1;
     /** Mínimo expresado como nº de socias con pedido no vacío. */
     public const MINIMUM_TYPE_PARTICIPANTS = 2;
+    /** Mínimo que no se calcula (se explica en la nota): se confirma a mano. */
+    public const MINIMUM_TYPE_MANUAL = 3;
+
+    /** Los dos tipos que la app sabe comprobar sola. */
+    public const AUTOMATIC_MINIMUM_TYPES = [self::MINIMUM_TYPE_AMOUNT, self::MINIMUM_TYPE_PARTICIPANTS];
 
     public const MINIMUM_TYPE_LABELS = [
+        self::MINIMUM_TYPE_NONE => 'Sin mínimo',
         self::MINIMUM_TYPE_AMOUNT => 'Importe total (€)',
         self::MINIMUM_TYPE_PARTICIPANTS => 'Nº de socias con pedido',
+        self::MINIMUM_TYPE_MANUAL => 'Otro mínimo',
     ];
 
     public const STATUS_OPEN = 0;
@@ -137,18 +147,19 @@ class ConsumerGroupRound
     private ?string $minimumCondition = null;
 
     /**
-     * Qué se compara para el mínimo automatizable ({@see MINIMUM_TYPE_LABELS}), o
-     * null si el mínimo de esta ronda no se automatiza (se confirma a mano, como
-     * siempre). Solo estos dos tipos son calculables sin ambigüedad a partir del
-     * agregado de la ronda: un mínimo en unidades de producto ("50 kg") no lo es,
-     * porque una ronda puede tener varios productos con unidades distintas.
-     * @ORM\Column(type="smallint", nullable=true)
+     * Qué mínimo pide el productor ({@see MINIMUM_TYPE_LABELS}). Nunca null: no
+     * saberlo no es una opción, porque decide si el pedido es firme al abrirlo.
+     * Solo importe y nº de socias se calculan solos: un mínimo en unidades de
+     * producto ("50 kg") no, porque una ronda puede tener varios productos con
+     * unidades distintas; ese va como «otro» y se confirma a mano.
+     * @ORM\Column(type="smallint")
      */
-    #[Assert\Choice(choices: [self::MINIMUM_TYPE_AMOUNT, self::MINIMUM_TYPE_PARTICIPANTS], message: 'Tipo de mínimo no válido.')]
-    private ?int $minimumType = null;
+    #[Assert\Choice(choices: [self::MINIMUM_TYPE_NONE, self::MINIMUM_TYPE_AMOUNT, self::MINIMUM_TYPE_PARTICIPANTS, self::MINIMUM_TYPE_MANUAL], message: 'Tipo de mínimo no válido.')]
+    private int $minimumType = self::MINIMUM_TYPE_NONE;
 
     /**
-     * Umbral del mínimo, en la unidad de {@see $minimumType}. Decimal como string,
+     * Umbral del mínimo, en la unidad de {@see $minimumType}; solo con los tipos
+     * automáticos, null en los demás. Decimal como string,
      * igual que el resto de importes/cantidades del módulo. Positivo estricto:
      * un umbral de 0 se cumpliría siempre (incluso con la ronda vacía), que
      * autoconfirmaría cualquier ronda con este tipo en cuanto alguien tocara un
@@ -424,14 +435,21 @@ class ConsumerGroupRound
         return $this;
     }
 
-    public function getMinimumType(): ?int
+    public function getMinimumType(): int
     {
         return $this->minimumType;
     }
 
-    public function setMinimumType(?int $minimumType): self
+    /**
+     * Fija el tipo de mínimo. Si deja de ser automático, borra el umbral: un
+     * umbral que ya no se vigila sólo confunde a quien lea la ronda después.
+     */
+    public function setMinimumType(int $minimumType): self
     {
         $this->minimumType = $minimumType;
+        if (!$this->hasAutomaticMinimum()) {
+            $this->minimumValue = null;
+        }
         return $this;
     }
 
@@ -441,16 +459,16 @@ class ConsumerGroupRound
     }
 
     /**
-     * "Importe total (€): 150" o similar, para pintar de un vistazo el mínimo
-     * automático configurado. Null si no hay uno (mínimo manual, o ninguno).
+     * El mínimo de un vistazo: "Sin mínimo", "Importe total (€): 150", "Otro
+     * mínimo"…
      */
-    public function getMinimumTypeLabel(): ?string
+    public function getMinimumTypeLabel(): string
     {
-        if ($this->minimumType === null) {
-            return null;
-        }
+        $label = self::MINIMUM_TYPE_LABELS[$this->minimumType] ?? (string) $this->minimumType;
 
-        return sprintf('%s: %s', self::MINIMUM_TYPE_LABELS[$this->minimumType] ?? $this->minimumType, $this->minimumValue ?? '—');
+        return $this->hasAutomaticMinimum()
+            ? sprintf('%s: %s', $label, $this->minimumValue ?? '—')
+            : $label;
     }
 
     public function setMinimumValue(?string $minimumValue): self
@@ -460,8 +478,25 @@ class ConsumerGroupRound
     }
 
     /**
-     * ¿Se alcanza el mínimo automatizable con este agregado? Null si la ronda no
-     * tiene un mínimo de este tipo configurado (sigue siendo manual). Lógica pura:
+     * Si el productor no pide mínimo: entonces el pedido es firme desde que se
+     * abre.
+     */
+    public function hasNoMinimum(): bool
+    {
+        return $this->minimumType === self::MINIMUM_TYPE_NONE;
+    }
+
+    /**
+     * Si el mínimo es de los que la app comprueba sola ({@see minimumReached()}).
+     */
+    public function hasAutomaticMinimum(): bool
+    {
+        return \in_array($this->minimumType, self::AUTOMATIC_MINIMUM_TYPES, true);
+    }
+
+    /**
+     * ¿Se alcanza el mínimo automatizable con este agregado? Null si el mínimo
+     * de la ronda no es automático (no hay, o se confirma a mano). Lógica pura:
      * recibe el resultado de {@see \App\Service\ConsumerGroup\OrderAggregator::aggregate()},
      * no vuelve a calcularlo.
      *
@@ -469,7 +504,7 @@ class ConsumerGroupRound
      */
     public function minimumReached(array $aggregate): ?bool
     {
-        if ($this->minimumType === null || $this->minimumValue === null) {
+        if (!$this->hasAutomaticMinimum() || $this->minimumValue === null) {
             return null;
         }
 
@@ -488,18 +523,17 @@ class ConsumerGroupRound
     }
 
     /**
-     * El mínimo automático va TODO O NADA: tipo y umbral juntos, o ninguno de
-     * los dos. Un tipo sin umbral (o al revés) no da error al guardar —cada
-     * campo por separado es válido— pero deja la ronda en un limbo donde
-     * {@see getMinimumTypeLabel()} pinta un mínimo automático que
-     * {@see minimumReached()} nunca evalúa (falta uno de los dos datos), sin
-     * ningún aviso de que no está vigilando nada.
+     * Un mínimo automático sin umbral no da error campo a campo, pero deja la
+     * ronda en un limbo: dice que vigila un mínimo que {@see minimumReached()}
+     * nunca evalúa, sin ningún aviso de que no está vigilando nada. (El caso
+     * contrario, umbral sin tipo automático, no puede darse: los setters lo
+     * borran.)
      */
     #[Assert\Callback]
-    public function validateMinimumTypeAndValueGoTogether(ExecutionContextInterface $context): void
+    public function validateAutomaticMinimumHasValue(ExecutionContextInterface $context): void
     {
-        if (($this->minimumType === null) !== ($this->minimumValue === null)) {
-            $context->buildViolation('El mínimo automático necesita tipo y umbral a la vez, o ninguno de los dos.')
+        if ($this->hasAutomaticMinimum() && $this->minimumValue === null) {
+            $context->buildViolation('Indica cuánto es el mínimo.')
                 ->atPath('minimumValue')
                 ->addViolation();
         }

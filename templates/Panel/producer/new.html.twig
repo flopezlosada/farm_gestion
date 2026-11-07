@@ -27,7 +27,9 @@
                         {{ csa.field(form.title, 'Título', { full: true }) }}
                         {{ csa.field(form.ordersCloseAt, 'Cierre de apuntes') }}
                         {{ csa.field(form.deliveryDate, 'Fecha de entrega') }}
-                        {{ csa.field(form.minimumCondition, 'Condición de mínimo (informativa)') }}
+                        {{ csa.field(form.minimumType, '¿Pides mínimo?', { full: true }) }}
+                        {{ csa.field(form.minimumValue, '¿Cuánto?', { show_when: 'minimumType=1|2' }) }}
+                        {{ csa.field(form.minimumCondition, 'Explica el mínimo', { full: true, hint: 'opcional · la app no lo calcula' }) }}
                         {{ csa.field(form.description, 'Descripción para las socias', { full: true }) }}
                     </div>
                 {% endblock %}

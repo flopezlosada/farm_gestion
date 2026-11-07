@@ -13,6 +13,8 @@ use Symfony\Component\Form\Extension\Core\Type\NumberType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Component\Form\FormEvent;
+use Symfony\Component\Form\FormEvents;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
 /**
@@ -56,24 +58,25 @@ class ConsumerGroupRoundType extends AbstractType
                 'help'     => 'Si todavía no se sabe, se puede añadir más adelante.',
             ])
             ->add('minimumType', ChoiceType::class, [
-                'label'    => 'Mínimo automático',
-                'required' => false,
-                'placeholder' => 'Sin mínimo automático (se confirma a mano)',
-                'choices'  => array_flip(ConsumerGroupRound::MINIMUM_TYPE_LABELS),
-                'help'     => 'Al alcanzarse, el pedido se confirma solo y se avisa a las socias y al productor.',
+                'label'    => '¿Pide mínimo el productor?',
+                'choices'  => [
+                    'No: el pedido sale seguro (queda confirmado al abrirlo)' => ConsumerGroupRound::MINIMUM_TYPE_NONE,
+                    'Sí, un importe total en €: se confirma solo al llegar' => ConsumerGroupRound::MINIMUM_TYPE_AMOUNT,
+                    'Sí, un número de socias: se confirma solo al llegar' => ConsumerGroupRound::MINIMUM_TYPE_PARTICIPANTS,
+                    'Sí, otro (kilos de un producto…): lo confirmáis a mano' => ConsumerGroupRound::MINIMUM_TYPE_MANUAL,
+                ],
             ])
             ->add('minimumValue', NumberType::class, [
-                'label'    => 'Umbral del mínimo',
+                'label'    => '¿Cuánto?',
                 'required' => false,
                 'html5'    => true,
                 'scale'    => 2,
                 'attr'     => ['step' => '0.01', 'min' => '0', 'placeholder' => 'p. ej. 150'],
             ])
             ->add('minimumCondition', TextType::class, [
-                'label'    => 'Nota del mínimo (informativa)',
+                'label'    => 'Explica el mínimo (opcional)',
                 'required' => false,
                 'attr'     => ['placeholder' => 'p. ej. mínimo 50 kg de aceitunas, sujeto a disponibilidad…'],
-                'help'     => 'Para mínimos que no encajan arriba (una cantidad de un producto, algo aún sin concretar…). No se calcula: solo se muestra.',
             ])
             ->add('description', TextareaType::class, [
                 'label'    => 'Descripción para las socias',
@@ -85,6 +88,17 @@ class ConsumerGroupRoundType extends AbstractType
                 'required' => false,
                 'attr'     => ['rows' => 3],
             ]);
+
+        // El campo del umbral se oculta en pantalla para los tipos que no lo
+        // usan, pero su valor viaja igual en el envío: sin esto, cambiar de
+        // «importe» a «sin mínimo» dejaría guardado un umbral que ya nadie
+        // vigila. Antes que la validación, para que valide lo que se guarda.
+        $builder->addEventListener(FormEvents::POST_SUBMIT, static function (FormEvent $event): void {
+            $round = $event->getData();
+            if ($round instanceof ConsumerGroupRound && !$round->hasAutomaticMinimum()) {
+                $round->setMinimumValue(null);
+            }
+        }, 10);
     }
 
     public function configureOptions(OptionsResolver $resolver): void
