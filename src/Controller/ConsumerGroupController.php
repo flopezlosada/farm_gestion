@@ -28,7 +28,6 @@ use App\Service\ConsumerGroup\RoundStateMachine;
 use App\Service\Notification\NotificationPreferences;
 use App\Service\Notification\NotificationTopic;
 use Doctrine\ORM\EntityManagerInterface;
-use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -107,7 +106,8 @@ class ConsumerGroupController extends AbstractController
     }
 
     /**
-     * Crear un pedido. Nace abierto y se siembra con los productos activos del
+     * Crear un pedido. Nace en BORRADOR (las socias no lo ven ni se avisa a
+     * nadie) y se siembra con los productos activos del
      * catálogo del productor (al precio de referencia); luego se ajustan en la
      * pantalla de productos del pedido.
      */
@@ -124,7 +124,7 @@ class ConsumerGroupController extends AbstractController
             $em->persist($round);
             $recorder->record(ConsumerGroupEventLog::KIND_ROUND_CREATED, $round, $this->getUser(), 'Pedido creado.');
             $em->flush();
-            $this->addFlash('success', 'Pedido creado. Revisa los productos y precios de este pedido.');
+            $this->addFlash('success', 'Pedido creado en borrador. Revisa los productos y precios: las socias no lo verán hasta que lo abras.');
 
             return $this->redirectToRoute('consumer_group_items', ['id' => $round->getId()]);
         }
@@ -165,6 +165,7 @@ class ConsumerGroupController extends AbstractController
             'aggregate'   => $aggregator->aggregate($round),
             'transitions' => $machine->allowedTransitions($round),
             'can_confirm' => $machine->canConfirm($round),
+            'can_open'    => $machine->canOpen($round),
             // La regla de cuándo tiene sentido avisar vive en el announcer, no
             // repetida en la plantilla: si cambia, cambia en un sitio.
             'can_announce' => $announcer->canAnnounce($round),
@@ -227,8 +228,6 @@ class ConsumerGroupController extends AbstractController
         ConsumerGroupOrderLineRepository $orderLines,
         ConsumerGroupOrderRepository $orders,
         ItemsChangeNotifier $itemsChangeNotifier,
-        ConsumerGroupAnnouncer $announcer,
-        LoggerInterface $logger,
         ConsumerGroupRoundItemRepository $roundItemRepo,
         ValidatorInterface $validator,
     ): Response {
@@ -380,7 +379,9 @@ class ConsumerGroupController extends AbstractController
             // Avisar a quien ya tenía pedido en esta ronda: a quien pierde un
             // producto que había pedido, siempre; a todo el que ya tenía algo
             // pedido, si se ha añadido un producto nuevo (puede interesarle).
-            if ($removedProductNames !== [] || $addedProductNames !== []) {
+            // En borrador no: la socia aún no puede ver el pedido, y el aviso la
+            // mandaría a una pantalla que no existe para ella.
+            if (!$round->isDraft() && ($removedProductNames !== [] || $addedProductNames !== [])) {
                 $affected = $removedAffectedPartners;
                 if ($addedProductNames !== []) {
                     foreach ($orders->findWithLinesForRound($round) as $order) {
@@ -401,31 +402,9 @@ class ConsumerGroupController extends AbstractController
                 $itemsChangeNotifier->notify($round, array_values($affected), ucfirst(implode('; ', $parts)).'. Revisa tu pedido.');
             }
 
-            // Primera vez que el pedido queda presentable (tiene productos): se
-            // avisa sola, sin esperar a que alguien pulse "avisar" ({@see
-            // ConsumerGroupAnnouncer}). Solo la PRIMERA vez —$round->getAnnouncedAt()
-            // es la marca—, para no reabrir el aviso cada vez que se retocan precios.
-            //
-            // Los PRODUCTOS YA ESTÁN GUARDADOS (flush de arriba): un fallo al avisar
-            // no puede tumbar la respuesta ni dar a entender que no se guardó nada,
-            // así que se atrapa y se degrada al flash plano.
+            // NO SE AVISA DESDE AQUÍ: guardar productos es preparar el pedido, no
+            // abrirlo. El aviso sale al abrirlo a mano ({@see self::announce()}).
             $this->addFlash('success', 'Productos del pedido actualizados.');
-            if ($round->getAnnouncedAt() === null && $announcer->canAnnounce($round)) {
-                try {
-                    $result = $announcer->announce($round);
-                    $this->addFlash('success', sprintf(
-                        'Avisado a la asociación de que el pedido está abierto: %d en la bandeja, %d por correo, %d al móvil.',
-                        $result['inbox'],
-                        $result['email'],
-                        $result['push'],
-                    ));
-                } catch (\Throwable $e) {
-                    $logger->error('No se pudo avisar de la apertura del pedido tras guardar sus productos.', [
-                        'round' => $round->getId(),
-                        'exception' => $e,
-                    ]);
-                }
-            }
 
             return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
         }
@@ -583,19 +562,26 @@ class ConsumerGroupController extends AbstractController
     }
 
     /**
-     * Avisar a la asociación de que el pedido está abierto, con paso intermedio:
-     * a cuánta gente llega por cada vía antes de mandar nada.
+     * Abrir el borrador y avisar a la asociación, o volver a avisar de uno ya
+     * abierto, con paso intermedio: a cuánta gente llega por cada vía antes de
+     * mandar nada.
      *
-     * Esta pantalla YA NO es el disparador normal: el primer guardado de
-     * productos en {@see self::items()} avisa solo. Esta acción queda para
-     * reenviar a conciencia (`$resend`) y para el caso raro de una ronda que
-     * quedó sin productos al guardar por primera vez. Ver {@see ConsumerGroupAnnouncer}.
+     * ABRIR Y AVISAR SON UN SOLO PASO A PROPÓSITO: el borrador existe para que
+     * la comisión decida cuándo sale el aviso, y un pedido abierto sin avisar
+     * es justo el que no ve nadie. Primero se abre y se guarda, luego se avisa:
+     * un aviso de un pedido que aún no admite apuntes mandaría a la gente a un
+     * «no está abierto».
+     *
+     * Ver {@see ConsumerGroupAnnouncer}.
      */
     #[Route('/{id}/announce', name: 'consumer_group_announce', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function announce(Request $request, ConsumerGroupRound $round, ConsumerGroupAnnouncer $announcer): Response
+    public function announce(Request $request, ConsumerGroupRound $round, ConsumerGroupAnnouncer $announcer, RoundStateMachine $machine, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
-        if (!$announcer->canAnnounce($round)) {
-            $this->addFlash('warning', 'Sólo se avisa de un pedido abierto y con productos.');
+        $opening = $round->isDraft();
+        if ($opening ? !$machine->canOpen($round) : !$announcer->canAnnounce($round)) {
+            $this->addFlash('warning', $opening
+                ? 'Para abrir el pedido hace falta que tenga productos y que la fecha de cierre no haya pasado.'
+                : 'Sólo se avisa de un pedido abierto y con productos.');
 
             return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
         }
@@ -607,13 +593,19 @@ class ConsumerGroupController extends AbstractController
                 return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
             }
 
+            if ($opening) {
+                $machine->open($round);
+                $recorder->record(ConsumerGroupEventLog::KIND_ROUND_TRANSITIONED, $round, $this->getUser(), 'Pedido abierto a las socias.');
+                $em->flush();
+            }
+
             // El reenvío sólo se ofrece si ya se avisó: es una orden humana
             // ("ese correo no llegó"), no algo que se marque de paso.
             $resend = null !== $round->getAnnouncedAt() && $request->request->getBoolean('resend');
             $result = $announcer->announce($round, $resend);
 
             $this->addFlash('success', sprintf(
-                'Aviso enviado: %d en la bandeja, %d por correo, %d al móvil.',
+                ($opening ? 'Pedido abierto. ' : '') . 'Aviso enviado: %d en la bandeja, %d por correo, %d al móvil.',
                 $result['inbox'],
                 $result['email'],
                 $result['push'],

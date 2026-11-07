@@ -10,6 +10,7 @@
 {% import '_macros/csa.html.twig' as csa %}
 
 {% set status_badge = {
+    5: { label: 'Borrador',   cls: 'warn'    },
     0: { label: 'Abierto',    cls: 'activo'  },
     1: { label: 'Cerrado',    cls: 'pausado' },
     3: { label: 'Cancelado',  cls: 'baja'    },
@@ -97,6 +98,11 @@
                 {% if round.canManageOrders %}
                     <a href="{{ path('consumer_group_edit', { id: round.id }) }}" class="prt-btn prt-btn--primary"><i class="fa fa-pencil"></i> Editar</a>
                     <a href="{{ path('consumer_group_items', { id: round.id }) }}" class="prt-btn"><i class="fa fa-list"></i> Productos del pedido</a>
+                {% endif %}
+                {% if can_open %}
+                    <a href="{{ path('consumer_group_announce', { id: round.id }) }}" class="prt-btn prt-btn--primary"><i class="fa fa-bullhorn"></i> Abrir y avisar a las socias</a>
+                {% elseif round.draft %}
+                    <span class="csa-muted">En borrador: para abrirlo hace falta que tenga productos y que la fecha de cierre no haya pasado.</span>
                 {% endif %}
                 {% if can_confirm %}
                     <a href="{{ path('consumer_group_confirm', { id: round.id }) }}" class="prt-btn prt-btn--primary"><i class="fa fa-check"></i> Confirmar pedido</a>

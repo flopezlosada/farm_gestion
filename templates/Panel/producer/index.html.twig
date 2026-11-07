@@ -7,6 +7,7 @@
 {% import '_macros/csa.html.twig' as csa %}
 
 {% set status_chip = {
+    5: { label: 'Borrador',   cls: 'warn'     },
     0: { label: 'Abierto',    cls: 'activo'   },
     1: { label: 'Cerrado',    cls: 'pausado'  },
     3: { label: 'Cancelado',  cls: 'baja'     },
