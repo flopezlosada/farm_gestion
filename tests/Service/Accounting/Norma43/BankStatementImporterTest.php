@@ -176,7 +176,7 @@ class BankStatementImporterTest extends KernelTestCase
     /** Mismas fechas con otros saldos: uno de los dos está mal, se rechaza. */
     public function testMismoPeriodoConOtrosSaldosSeRechaza(): void
     {
-        [, $number] = $this->bankAccount();
+        [$account, $number] = $this->bankAccount();
         $this->import($account, N43::file(N43::account('9999', '0001', $number, '910301', '910331', 1000, [])));
 
         $this->expectException(Norma43Exception::class);
