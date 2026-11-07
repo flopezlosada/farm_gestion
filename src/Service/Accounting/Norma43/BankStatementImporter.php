@@ -15,7 +15,8 @@ use Doctrine\ORM\EntityManagerInterface;
  * Guarda un extracto ya leído: decide de qué cuenta del libro es cada cuenta del
  * fichero, guarda sus movimientos sin repetir los que ya estaban, liga los que no dejan
  * duda ({@see BankLineMatcher}) y anota solos los que el libro aún no tiene y no dejan
- * duda ({@see BankLineBooker}).
+ * duda: el abono de una remesa enviada ({@see RemittanceCreditBooker}) y lo demás
+ * ({@see BankLineBooker}).
  *
  * La cuenta se reconoce por el IBAN de la ficha (entidad, oficina y cuenta). Si ninguna
  * lo tiene, la elige una persona ({@see choosableAccounts()}): adivinar por los últimos
@@ -29,6 +30,7 @@ class BankStatementImporter
         private readonly BankStatementLineRepository $lines,
         private readonly BankLineMatcher $matcher,
         private readonly BankLineBooker $booker,
+        private readonly RemittanceCreditBooker $remittanceCredits,
         private readonly EntityManagerInterface $em,
     ) {
     }
@@ -213,7 +215,9 @@ class BankStatementImporter
         // duplicaría. Ése se confirma a mano («Es éste»).
         $rest = array_values(array_filter($this->within($unlinked, $statements), static fn (BankStatementLine $l): bool => $l->getEntry() === null));
         $bookable = array_column(array_filter($this->matcher->candidatesFor($rest), static fn (array $row): bool => $row['candidates'] === []), 'line');
-        $booked = \count($this->booker->bookSafe($bookable, $by));
+        // El abono de una remesa, por la remesa: su concepto no dice la partida.
+        $credited = \count($this->remittanceCredits->bookSafe($bookable, $by));
+        $booked = $credited + \count($this->booker->bookSafe(array_values(array_filter($bookable, static fn (BankStatementLine $l): bool => $l->getEntry() === null)), $by));
         $this->em->flush();
 
         return [$linked, $booked];
