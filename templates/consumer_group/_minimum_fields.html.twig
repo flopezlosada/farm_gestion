@@ -1,0 +1,31 @@
+{# ============================================================
+ # El mínimo del productor, por pasos: si lo hay, y si lo hay, si
+ # el pedido se confirma solo al llegar (importe o nº de socias +
+ # cifra) o a mano (se explica en texto). Debajo, una frase que
+ # dice qué va a pasar.
+ #
+ # Lo usan el formulario de gestión y el del productor.
+ #   - form   ConsumerGroupRoundType
+ # ============================================================ #}
+{% import '_macros/csa.html.twig' as csa %}
+
+{{ csa.field(form.hasMinimum, '¿El productor pide un mínimo?', { full: true, attr: { class: 'csa-segmented' } }) }}
+
+<p class="csa-field--full csa-muted" style="margin: 0;"{{ csa.reveal(form.hasMinimum, 'hasMinimum=no') }}>
+    Queda <strong>confirmado al abrirlo</strong>: quien se apunte, tiene su pedido asegurado desde el primer momento.
+</p>
+
+{{ csa.field(form.autoConfirm, '¿Quieres que el pedido se confirme solo al llegar al mínimo?', { full: true, show_when: 'hasMinimum=yes', attr: { class: 'csa-segmented' } }) }}
+
+{{ csa.field(form.minimumKind, 'El mínimo es', { show_when: 'hasMinimum=yes;autoConfirm=yes' }) }}
+{{ csa.field(form.minimumValue, '¿Cuánto?', { show_when: 'hasMinimum=yes;autoConfirm=yes' }) }}
+
+<p class="csa-field--full csa-muted" style="margin: 0;"{{ csa.reveal(form.hasMinimum, 'hasMinimum=yes;autoConfirm=yes') }}>
+    Cuando se llegue, el pedido <strong>se confirma solo</strong> y se avisa a las socias y al productor.
+</p>
+
+{{ csa.field(form.minimumCondition, '¿Cuál es el mínimo?', { full: true, show_when: 'hasMinimum=yes;autoConfirm=no' }) }}
+
+<p class="csa-field--full csa-muted" style="margin: 0;"{{ csa.reveal(form.hasMinimum, 'hasMinimum=yes;autoConfirm=no') }}>
+    Cuando veáis que se llega, lo <strong>confirmáis a mano</strong> desde la ficha del pedido.
+</p>

@@ -189,7 +189,7 @@ class ConsumerGroupController extends AbstractController
      * haciendo falta —de hecho es justo entonces cuando se habla con él—.
      */
     #[Route('/{id}/edit', name: 'consumer_group_edit', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function edit(Request $request, ConsumerGroupRound $round, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
+    public function edit(Request $request, ConsumerGroupRound $round, ConsumerGroupEventRecorder $recorder, MinimumAutoConfirmer $autoConfirmer, EntityManagerInterface $em): Response
     {
         if (!$round->canManageOrders()) {
             $this->addFlash('warning', 'Este pedido ya no se puede editar.');
@@ -203,7 +203,14 @@ class ConsumerGroupController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             $recorder->record(ConsumerGroupEventLog::KIND_ROUND_UPDATED, $round, $this->getUser(), 'Datos del pedido actualizados.');
             $em->flush();
-            $this->addFlash('success', 'Pedido actualizado.');
+
+            // Cambiar el mínimo puede dejarlo cumplido (o quitarlo del todo): se
+            // confirma igual que si lo hubiera movido un apunte.
+            $wasConfirmed = $round->isConfirmed();
+            $autoConfirmer->checkAndConfirm($round);
+            $this->addFlash('success', !$wasConfirmed && $round->isConfirmed()
+                ? 'Pedido actualizado y confirmado: ya no queda mínimo que esperar. Se ha avisado a las socias apuntadas.'
+                : 'Pedido actualizado.');
 
             return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
         }
@@ -575,7 +582,7 @@ class ConsumerGroupController extends AbstractController
      * Ver {@see ConsumerGroupAnnouncer}.
      */
     #[Route('/{id}/announce', name: 'consumer_group_announce', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
-    public function announce(Request $request, ConsumerGroupRound $round, ConsumerGroupAnnouncer $announcer, RoundStateMachine $machine, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
+    public function announce(Request $request, ConsumerGroupRound $round, ConsumerGroupAnnouncer $announcer, RoundStateMachine $machine, ConsumerGroupEventRecorder $recorder, MinimumAutoConfirmer $autoConfirmer, EntityManagerInterface $em): Response
     {
         $opening = $round->isDraft();
         if ($opening ? !$machine->canOpen($round) : !$announcer->canAnnounce($round)) {
@@ -597,6 +604,10 @@ class ConsumerGroupController extends AbstractController
                 $machine->open($round);
                 $recorder->record(ConsumerGroupEventLog::KIND_ROUND_TRANSITIONED, $round, $this->getUser(), 'Pedido abierto a las socias.');
                 $em->flush();
+                // Sin mínimo, abrir y confirmar son el mismo paso: tiene que
+                // estar confirmado ANTES del aviso, que es el que cuenta a la
+                // gente que apuntarse ya es firme.
+                $autoConfirmer->checkAndConfirm($round);
             }
 
             // El reenvío sólo se ofrece si ya se avisó: es una orden humana

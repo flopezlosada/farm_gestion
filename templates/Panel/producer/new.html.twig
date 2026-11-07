@@ -27,7 +27,7 @@
                         {{ csa.field(form.title, 'Título', { full: true }) }}
                         {{ csa.field(form.ordersCloseAt, 'Cierre de apuntes') }}
                         {{ csa.field(form.deliveryDate, 'Fecha de entrega') }}
-                        {{ csa.field(form.minimumCondition, 'Condición de mínimo (informativa)') }}
+                        {% include 'consumer_group/_minimum_fields.html.twig' with { form: form } only %}
                         {{ csa.field(form.description, 'Descripción para las socias', { full: true }) }}
                     </div>
                 {% endblock %}

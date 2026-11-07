@@ -67,11 +67,50 @@ class ConsumerGroupRoundTest extends TestCase
         self::assertFalse($round->canReceiveOrders());
     }
 
-    public function testSinTipoDeMinimoNoHayNadaQueComprobar(): void
+    public function testUnPedidoNuevoNoPideMinimo(): void
+    {
+        $round = new ConsumerGroupRound();
+
+        self::assertTrue($round->hasNoMinimum());
+        self::assertFalse($round->hasAutomaticMinimum());
+        self::assertSame('Sin mínimo', $round->getMinimumTypeLabel());
+    }
+
+    public function testSinMinimoNiMinimoManualHayNadaQueComprobar(): void
+    {
+        foreach ([ConsumerGroupRound::MINIMUM_TYPE_NONE, ConsumerGroupRound::MINIMUM_TYPE_MANUAL] as $type) {
+            $round = $this->round(null)->setMinimumType($type);
+
+            self::assertNull($round->minimumReached(['total' => 1000.0, 'participantCount' => 50]));
+        }
+    }
+
+    public function testMinimoPorSociasSeLeeEnSocias(): void
+    {
+        $round = $this->round(null)->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_PARTICIPANTS)->setMinimumValue('10.00');
+
+        self::assertSame('10 socias', $round->getMinimumTypeLabel());
+    }
+
+    public function testElMinimoManualNoEsSinMinimo(): void
+    {
+        $round = $this->round(null)->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_MANUAL);
+
+        self::assertFalse($round->hasNoMinimum());
+        self::assertFalse($round->hasAutomaticMinimum());
+        self::assertSame('Otro mínimo', $round->getMinimumTypeLabel());
+    }
+
+    public function testElUmbralSeBorraAlDejarDeSerAutomatico(): void
     {
         $round = $this->round(null);
+        $round->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_AMOUNT);
+        $round->setMinimumValue('150.00');
+        self::assertSame('150,00 €', $round->getMinimumTypeLabel());
 
-        self::assertNull($round->minimumReached(['total' => 1000.0, 'participantCount' => 50]));
+        $round->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_NONE);
+
+        self::assertNull($round->getMinimumValue());
     }
 
     public function testMinimoPorImporteNoAlcanzado(): void
@@ -130,15 +169,6 @@ class ConsumerGroupRoundTest extends TestCase
         self::assertTrue($this->violatesMinimumTogetherRule($round), 'Tipo sin umbral tiene que violar la regla.');
     }
 
-    public function testValorSinTipoNoEsUnMinimoAutomaticoValido(): void
-    {
-        $round = $this->round(null);
-        $round->setMinimumValue('150.00');
-        // minimumType se queda a null a propósito: umbral sin tipo.
-
-        self::assertTrue($this->violatesMinimumTogetherRule($round));
-    }
-
     public function testMinimoConTipoYValorNoViolaLaRegla(): void
     {
         $round = $this->round(null);
@@ -148,13 +178,14 @@ class ConsumerGroupRoundTest extends TestCase
         self::assertFalse($this->violatesMinimumTogetherRule($round));
     }
 
-    public function testSinMinimoNoViolaLaRegla(): void
+    public function testSinMinimoNiMinimoManualNecesitanUmbral(): void
     {
         self::assertFalse($this->violatesMinimumTogetherRule($this->round(null)));
+        self::assertFalse($this->violatesMinimumTogetherRule($this->round(null)->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_MANUAL)));
     }
 
     /**
-     * Ejecuta directamente el callback de "tipo y umbral van juntos" (no la
+     * Ejecuta directamente el callback de "un mínimo automático lleva umbral" (no la
      * validación completa de la entidad, que exigiría rellenar title/producer/
      * etc. sin relación con esta regla) y dice si añadió alguna violación.
      */
@@ -170,7 +201,7 @@ class ConsumerGroupRoundTest extends TestCase
         $context = $this->createMock(ExecutionContextInterface::class);
         $context->method('buildViolation')->willReturn($violationBuilder);
 
-        $round->validateMinimumTypeAndValueGoTogether($context);
+        $round->validateAutomaticMinimumHasValue($context);
 
         return $violated;
     }
