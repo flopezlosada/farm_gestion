@@ -107,7 +107,7 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
 
         $this->assertSame(
             sprintf('/gestion/accounting/bank-statements/%d#sin-apunte', $statement->getId()),
-            $crawler->selectLink('Anotar lo que falta')->attr('href'),
+            $crawler->selectLink('Ver lo que falta')->attr('href'),
         );
     }
 

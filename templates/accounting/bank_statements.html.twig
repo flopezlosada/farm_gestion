@@ -81,7 +81,7 @@
                                 {% endif %}
                             </td>
                             <td class="tight">{{ s.importedAt|date('d/m/Y') }}</td>
-                            <td class="tight"><a class="prl-btn prl-btn--sm{{ pending > 0 ? ' prl-btn--primary' : '' }}" href="{{ pending > 0 ? pending_url : show_url }}">{{ pending > 0 ? 'Anotar lo que falta' : 'Ver' }}</a></td>
+                            <td class="tight"><a class="prl-btn prl-btn--sm{{ pending > 0 ? ' prl-btn--primary' : '' }}" href="{{ pending > 0 ? pending_url : show_url }}">{{ pending > 0 ? 'Ver lo que falta' : 'Ver' }}</a></td>
                         </tr>
                     {% endfor %}
                 </tbody>
