@@ -35,6 +35,9 @@
         .bst-details { white-space: pre-line; }
         .bst-candidate { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 2px 0; }
         .bst-candidate form { margin: 0; display: inline-flex; }
+        .bst-book { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 2px 0; }
+        .bst-book__category { width: auto; max-width: 220px; padding: 5px 8px; font-size: 12.5px; }
+        .bst-book__invoice { display: inline-flex; align-items: center; gap: 4px; margin: 0; font-weight: 400; }
         .bst-relink { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 12px; }
     </style>
 {% endblock %}
@@ -92,7 +95,7 @@
     {# ============ MOVIMIENTOS SIN APUNTE ============ #}
     <section class="bst-block" id="sin-apunte">
         <h2>Movimientos del banco sin apunte</h2>
-        <p class="acc-muted">El banco dice que el dinero se movió y el libro no lo tiene. «Anotar» abre el alta con la cuenta, la fecha, el importe y el concepto ya puestos, y al guardarlo queda ligado. Si sale un apunte propuesto (mismo importe exacto, a una semana como mucho), «Es éste» lo liga sin tocar el apunte.</p>
+        <p class="acc-muted">El banco dice que el dinero se movió y el libro no lo tiene. Para anotarlo basta con elegir la partida: la cuenta, la fecha, el importe y el concepto son los del banco, y queda ligado. Si sale un apunte propuesto (mismo importe exacto, a una semana como mucho), «Es éste» lo liga sin tocar el apunte.</p>
         {% if can_edit and review.unlinked is not empty %}
             <form method="post" action="{{ path('accounting_bank_statement_relink', { id: s.id }) }}" class="bst-relink">
                 <input type="hidden" name="_token" value="{{ csrf_token('bank_statement_relink_' ~ s.id) }}">
@@ -139,10 +142,33 @@
                                             {% endif %}
                                         </div>
                                     {% endfor %}
+                                    {% set invoice = awaited[line.id] ?? null %}
+                                    {% set proposed = invoice and invoice.category ? invoice.category : (suggestions[line.id].category ?? null) %}
                                     {% if can_edit %}
-                                        <a class="prl-btn prl-btn--sm{{ row.candidates is empty ? ' prl-btn--primary' : '' }}" href="{{ path('accounting_entry_new', { bank_line: line.id, statement: s.id }) }}"><i class="fa fa-plus"></i> Anotar</a>
+                                        {# Sólo la partida: lo demás es del banco. El formulario
+                                         # entero queda para corregir el apunte después. #}
+                                        <form method="post" action="{{ path('accounting_bank_line_book', { id: line.id }) }}" class="bst-book">
+                                            <input type="hidden" name="_token" value="{{ csrf_token('bank_line_book_' ~ line.id) }}">
+                                            <input type="hidden" name="statement" value="{{ s.id }}">
+                                            <select name="category" class="csa-input bst-book__category" required aria-label="Partida">
+                                                <option value="">Partida…</option>
+                                                {% for groupName, categories in categoryGroups %}
+                                                    <optgroup label="{{ groupName }}">
+                                                        {% for category in categories %}
+                                                            <option value="{{ category.id }}" {{ proposed and proposed.id == category.id ? 'selected' }}>{{ category.name }}</option>
+                                                        {% endfor %}
+                                                    </optgroup>
+                                                {% endfor %}
+                                            </select>
+                                            <button type="submit" class="prl-btn prl-btn--sm{{ row.candidates is empty ? ' prl-btn--primary' : '' }}"><i class="fa fa-plus"></i> Anotar</button>
+                                            {% if invoice %}
+                                                <label class="acc-small bst-book__invoice"><input type="checkbox" name="no_invoice" value="1"> no es esa factura</label>
+                                            {% endif %}
+                                        </form>
                                     {% endif %}
-                                    {% if suggestions[line.id] is defined %}
+                                    {% if invoice %}
+                                        <span class="acc-small acc-muted">es el pago de la factura <a href="{{ path('accounting_invoice_review', { id: invoice.id }) }}">{{ invoice.provider ? invoice.provider.name : (invoice.providerName ?? invoice.originalName) }}{{ invoice.invoiceNumber ? ' · fra. ' ~ invoice.invoiceNumber : '' }}</a>, que lo espera: se engancha</span>
+                                    {% elseif suggestions[line.id] is defined %}
                                         <span class="acc-small acc-muted">en {{ suggestions[line.id].category.name }}, como las últimas veces</span>
                                     {% endif %}
                                 </td>

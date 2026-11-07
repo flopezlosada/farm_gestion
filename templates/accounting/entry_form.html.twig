@@ -5,8 +5,7 @@
  # la cantidad en positivo. La conversión la hace AccountEntryType.
  #
  # El controller pasa: form, entry (null al crear), heading, lead, suggestions
- # (id de partida => 'in'|'out', para preseleccionar el sentido) y, al anotar un
- # movimiento del banco, awaited: la factura aceptada que espera ese pago, o null.
+ # (id de partida => 'in'|'out', para preseleccionar el sentido).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -26,20 +25,6 @@
 
 {% block csa_main %}
     {{ csa.page_header('Contabilidad', heading, lead) }}
-
-    {% set awaited = awaited|default(null) %}
-    {% if awaited %}
-        {# El pago de una factura ya aceptada: llega con sus datos y se engancha a ella. #}
-        <p class="csa-callout csa-callout--success">
-            <i class="csa-callout__icon fa fa-link"></i>
-            <span>
-                Es el pago de la factura
-                <a href="{{ path('accounting_invoice_review', { id: awaited.id }) }}" target="_blank" rel="noopener">{{ awaited.provider ? awaited.provider.name : (awaited.providerName ?? awaited.originalName) }}{{ awaited.invoiceNumber ? ' · fra. ' ~ awaited.invoiceNumber : '' }}{{ awaited.invoiceDate ? ' del ' ~ awaited.invoiceDate|date('d/m/Y') : '' }}</a>,
-                que esperaba este pago: partida, proveedor y concepto vienen de ella, y al guardar queda enganchada.
-                <a href="{{ path(app.request.attributes.get('_route'), app.request.query.all|merge({ no_invoice: 1 })) }}">No es ésta</a>
-            </span>
-        </p>
-    {% endif %}
 
     {{ form_start(form, { attr: { class: 'csa-form-narrow', 'data-csa-dropdowns': '1' } }) }}
 
