@@ -11,6 +11,7 @@ use App\Entity\ConsumerGroupRound;
  * responsabilidad del controller, no de aquí.
  *
  * Grafo de transiciones:
+ *   DRAFT     → OPEN (sólo con {@see open()}, que es lo que avisa) | CANCELLED
  *   OPEN      → CLOSED (cerrar apuntes) | CANCELLED (anular)
  *   CLOSED    → CONFIRMED (supera el mínimo) | CANCELLED (no llega) | OPEN (reabrir)
  *   CONFIRMED → DELIVERED (entregada) | CANCELLED (se cae después)
@@ -26,6 +27,13 @@ class RoundStateMachine
      * Transiciones permitidas: estado actual => lista de estados destino válidos.
      */
     private const TRANSITIONS = [
+        // Abrir NO está en la lista: no es un cambio de estado más, es el
+        // momento en que se avisa a toda la asociación, y eso sólo lo hace
+        // {@see open()}. Si estuviera aquí, el botón genérico de transiciones
+        // (gestión y panel del productor) abriría el pedido sin avisar a nadie.
+        ConsumerGroupRound::STATUS_DRAFT => [
+            ConsumerGroupRound::STATUS_CANCELLED,
+        ],
         ConsumerGroupRound::STATUS_OPEN => [
             ConsumerGroupRound::STATUS_CLOSED,
             ConsumerGroupRound::STATUS_CANCELLED,
@@ -83,6 +91,35 @@ class RoundStateMachine
             ConsumerGroupRound::STATUS_CANCELLED => $round->setCancelledAt($now),
             default => null,
         };
+    }
+
+    /**
+     * ¿Se puede abrir ya este borrador a las socias? Hace falta que tenga
+     * productos (un aviso de un pedido vacío manda a la gente a una lista sin
+     * nada que pedir) y que no haya vencido la fecha de cierre (abriría un
+     * pedido en el que ya no se puede apuntar nadie).
+     */
+    public function canOpen(ConsumerGroupRound $round): bool
+    {
+        return $round->isDraft()
+            && \count($round->getItems()) > 0
+            && !$round->isOrdersDeadlinePassed();
+    }
+
+    /**
+     * Abre el borrador a las socias. NO persiste ni avisa: lo hace quien llama,
+     * en este orden —abrir, guardar, avisar—, porque un aviso de un pedido que
+     * aún no admite apuntes mandaría a la gente a un «no está abierto».
+     *
+     * @throws InvalidRoundTransition si no está en borrador o aún no se puede abrir.
+     */
+    public function open(ConsumerGroupRound $round): void
+    {
+        if (!$this->canOpen($round)) {
+            throw new InvalidRoundTransition('Este pedido no se puede abrir: tiene que estar en borrador, con productos y con la fecha de cierre sin vencer.');
+        }
+
+        $round->setStatus(ConsumerGroupRound::STATUS_OPEN);
     }
 
     /**

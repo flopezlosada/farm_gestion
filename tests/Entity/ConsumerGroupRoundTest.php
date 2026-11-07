@@ -177,7 +177,7 @@ class ConsumerGroupRoundTest extends TestCase
 
     private function round(?\DateTime $closesAt): ConsumerGroupRound
     {
-        $round = new ConsumerGroupRound();
+        $round = (new ConsumerGroupRound())->setStatus(ConsumerGroupRound::STATUS_OPEN);
         $round->setOrdersCloseAt($closesAt);
 
         return $round;

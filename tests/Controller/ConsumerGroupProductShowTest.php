@@ -120,7 +120,7 @@ class ConsumerGroupProductShowTest extends AbstractAuthenticatedTest
         $naranjas = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit($this->unidadGlobal('kg'));
         $producer->addProduct($naranjas);
 
-        $round = new ConsumerGroupRound();
+        $round = (new ConsumerGroupRound())->setStatus(ConsumerGroupRound::STATUS_OPEN);
         $round->setTitle('Ronda de test')->setProducer($producer)->setOrdersCloseAt(new \DateTime('tomorrow'));
         $item = new ConsumerGroupRoundItem($round, $naranjas, '2.50');
         $round->addItem($item);

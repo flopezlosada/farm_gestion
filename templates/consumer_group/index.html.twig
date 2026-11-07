@@ -11,6 +11,7 @@
 {% import '_macros/csa.html.twig' as csa %}
 
 {% set status_chip = {
+    5: { label: 'Borrador',   cls: 'warn'     },
     0: { label: 'Abierto',    cls: 'activo'   },
     1: { label: 'Cerrado',    cls: 'pausado'  },
     3: { label: 'Cancelado',  cls: 'baja'     },
@@ -42,11 +43,15 @@
     {{ csa.page_header(
         'Grupo de consumo',
         'Pedidos',
-        'Pedidos colectivos de productos de terceros que se reparten con la cesta. Abre un pedido, las socias se apuntan y, al superar el mínimo del productor, se confirma.'
+        'Pedidos colectivos de productos de terceros que se reparten con la cesta. Prepara el pedido en borrador, ábrelo cuando esté listo (es lo que avisa a las socias), ellas se apuntan y, al superar el mínimo del productor, se confirma.'
     ) }}
 
     {# ============ STAT STRIP (siempre sobre el total, no lo filtrado) ============ #}
     <div class="prl-stats">
+        <div class="prl-stat prl-stat--paused">
+            <div class="v">{{ all_rounds|filter(r => r.status == 5)|length }}</div>
+            <div class="l">en borrador</div>
+        </div>
         <div class="prl-stat prl-stat--active">
             <div class="v">{{ all_rounds|filter(r => r.status == 0)|length }}</div>
             <div class="l">abiertos</div>

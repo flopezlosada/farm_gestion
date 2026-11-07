@@ -106,6 +106,13 @@ class PanelConsumerGroupController extends AbstractController
             return $this->redirectToRoute('dashboard');
         }
 
+        // Un borrador no existe para las socias: la comisión todavía lo está
+        // preparando, y enseñarlo por la URL adelantaría el aviso que el
+        // borrador está para retener.
+        if ($round->isDraft()) {
+            throw $this->createNotFoundException();
+        }
+
         $order = $orders->findOneByRoundAndPartner($round, $partner);
 
         // Cantidades ya pedidas por item de ronda (round_item.id => cantidad).

@@ -49,6 +49,7 @@ class ConsumerGroupAnnouncerTest extends TestCase
         $producer = new Producer();
         $round = new ConsumerGroupRound();
         $round->setProducer($producer);
+        $round->setStatus(ConsumerGroupRound::STATUS_OPEN);
         $round->setTitle('Aceite de la cooperativa');
         // Relativa y no absoluta: con una fecha escrita a mano, el día que pasara
         // el plazo estos tests se pondrían rojos solos —y por un motivo que no
@@ -69,6 +70,15 @@ class ConsumerGroupAnnouncerTest extends TestCase
         $round->setProducer(new Producer());
 
         self::assertFalse($this->announcer()->canAnnounce($round));
+    }
+
+    public function testNoSeAvisaDeUnBorrador(): void
+    {
+        // Un borrador se avisa abriéndolo, no con el botón de avisar: si no, el
+        // aviso mandaría a la gente a un pedido que todavía no ve.
+        $this->round->setStatus(ConsumerGroupRound::STATUS_DRAFT);
+
+        self::assertFalse($this->announcer()->canAnnounce($this->round));
     }
 
     public function testNoSeAvisaDeUnPedidoQueYaNoAdmiteApuntes(): void

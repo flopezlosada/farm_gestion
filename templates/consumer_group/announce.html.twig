@@ -5,14 +5,17 @@
  # suelto de la ficha.
  #
  # El controller pasa:
- #   - round     ConsumerGroupRound abierto y con productos
+ #   - round     ConsumerGroupRound con productos: en borrador (se abre
+ #               y se avisa en el mismo paso) o ya abierto (se avisa)
  #   - audience  { total, email, push, emailEnabled }
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 
-{% block title %}Avisar del pedido · Grupo de consumo{% endblock %}
+{% set opening = round.draft %}
+
+{% block title %}{{ opening ? 'Abrir el pedido' : 'Avisar del pedido' }} · Grupo de consumo{% endblock %}
 
 {% block csa_crumbs %}
     <a href="{{ path('dashboard') }}">Inicio</a>
@@ -21,15 +24,21 @@
     <span class="csa-topbar__crumbs-sep">/</span>
     <a href="{{ path('consumer_group_show', { id: round.id }) }}">{{ round.title }}</a>
     <span class="csa-topbar__crumbs-sep">/</span>
-    <span class="csa-topbar__crumb-active">Avisar</span>
+    <span class="csa-topbar__crumb-active">{{ opening ? 'Abrir' : 'Avisar' }}</span>
 {% endblock %}
 
 {% block csa_main %}
 
-    {{ csa.page_header('Grupo de consumo', 'Avisar del pedido', round.title) }}
+    {{ csa.page_header('Grupo de consumo', opening ? 'Abrir el pedido' : 'Avisar del pedido', round.title) }}
 
     <div class="csa-card csa-form-narrow">
-        {% if round.announcedAt %}
+        {% if opening %}
+            <p>
+                Vas a <strong>abrir el pedido</strong> y avisar a <strong>toda la asociación</strong>
+                de que ya pueden apuntarse. Hasta ahora estaba en borrador y no lo veía nadie.
+                Hazlo cuando los productos y los precios estén como quieres: el aviso sólo sale una vez.
+            </p>
+        {% elseif round.announcedAt %}
             <p>
                 De este pedido <strong>ya se avisó</strong> el
                 {{ round.announcedAt|format_datetime('long', 'short', locale='es') }}.
@@ -73,7 +82,7 @@
             <div class="csa-row" style="justify-content: flex-end; margin-top: var(--csa-sp-4);">
                 {{ csa.btn('Cancelar', { variant: 'ghost', href: path('consumer_group_show', { id: round.id }) }) }}
                 <button type="submit" class="csa-btn csa-btn--primary">
-                    {{ round.announcedAt ? 'Volver a avisar' : 'Avisar a las socias' }}
+                    {{ opening ? 'Abrir y avisar a las socias' : (round.announcedAt ? 'Volver a avisar' : 'Avisar a las socias') }}
                 </button>
             </div>
         </form>

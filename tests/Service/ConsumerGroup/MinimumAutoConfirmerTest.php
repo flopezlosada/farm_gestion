@@ -32,7 +32,27 @@ class MinimumAutoConfirmerTest extends TestCase
 
     public function testNoHaceNadaSinTipoDeMinimo(): void
     {
+        $round = (new ConsumerGroupRound())->setStatus(ConsumerGroupRound::STATUS_OPEN);
+
+        $aggregator = $this->createMock(OrderAggregator::class);
+        $aggregator->expects(self::never())->method('aggregate');
+
+        $notifier = $this->createMock(ConsumerGroupNotifier::class);
+        $notifier->expects(self::never())->method('notifyConfirmed');
+
+        $this->confirmer($aggregator, new RoundStateMachine(), $notifier)->checkAndConfirm($round);
+
+        self::assertFalse($round->isConfirmed());
+    }
+
+    public function testNoConfirmaUnBorradorAunqueElMinimoSeCumpla(): void
+    {
+        // La comisión puede apuntar el pedido del local en borrador: eso no
+        // puede confirmar (y avisar de que hay que pagar) un pedido que las
+        // socias aún no han visto.
         $round = new ConsumerGroupRound();
+        $round->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_AMOUNT);
+        $round->setMinimumValue('10.00');
 
         $aggregator = $this->createMock(OrderAggregator::class);
         $aggregator->expects(self::never())->method('aggregate');
@@ -47,7 +67,7 @@ class MinimumAutoConfirmerTest extends TestCase
 
     public function testNoHaceNadaSiYaEstaConfirmada(): void
     {
-        $round = new ConsumerGroupRound();
+        $round = (new ConsumerGroupRound())->setStatus(ConsumerGroupRound::STATUS_OPEN);
         $round->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_AMOUNT);
         $round->setMinimumValue('10.00');
         $round->setConfirmed(true);
@@ -61,7 +81,7 @@ class MinimumAutoConfirmerTest extends TestCase
 
     public function testNoConfirmaSiNoSeAlcanzaElMinimo(): void
     {
-        $round = new ConsumerGroupRound();
+        $round = (new ConsumerGroupRound())->setStatus(ConsumerGroupRound::STATUS_OPEN);
         $round->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_AMOUNT);
         $round->setMinimumValue('150.00');
 
@@ -78,7 +98,7 @@ class MinimumAutoConfirmerTest extends TestCase
 
     public function testConfirmaYAvisaCuandoSeAlcanzaElMinimo(): void
     {
-        $round = new ConsumerGroupRound();
+        $round = (new ConsumerGroupRound())->setStatus(ConsumerGroupRound::STATUS_OPEN);
         $round->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_AMOUNT);
         $round->setMinimumValue('150.00');
 

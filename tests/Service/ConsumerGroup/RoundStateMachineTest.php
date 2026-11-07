@@ -2,7 +2,10 @@
 
 namespace App\Tests\Service\ConsumerGroup;
 
+use App\Entity\ConsumerGroupProduct;
 use App\Entity\ConsumerGroupRound;
+use App\Entity\ConsumerGroupRoundItem;
+use App\Entity\Producer;
 use App\Service\ConsumerGroup\InvalidRoundTransition;
 use App\Service\ConsumerGroup\RoundStateMachine;
 use PHPUnit\Framework\TestCase;
@@ -51,6 +54,7 @@ class RoundStateMachineTest extends TestCase
             'cerrado → reabrir'      => [ConsumerGroupRound::STATUS_CLOSED, ConsumerGroupRound::STATUS_OPEN],
             'cerrado → entregado'    => [ConsumerGroupRound::STATUS_CLOSED, ConsumerGroupRound::STATUS_DELIVERED],
             'cerrado → cancelado'    => [ConsumerGroupRound::STATUS_CLOSED, ConsumerGroupRound::STATUS_CANCELLED],
+            'borrador → cancelado'   => [ConsumerGroupRound::STATUS_DRAFT, ConsumerGroupRound::STATUS_CANCELLED],
         ];
     }
 
@@ -80,6 +84,10 @@ class RoundStateMachineTest extends TestCase
             'abierto → entregado (salta cierre)' => [ConsumerGroupRound::STATUS_OPEN, ConsumerGroupRound::STATUS_DELIVERED],
             'entregado es terminal'              => [ConsumerGroupRound::STATUS_DELIVERED, ConsumerGroupRound::STATUS_OPEN],
             'cancelado es terminal'              => [ConsumerGroupRound::STATUS_CANCELLED, ConsumerGroupRound::STATUS_OPEN],
+            // Abrir sólo por open(): la vía genérica abriría sin avisar a nadie.
+            'borrador → abierto por la vía genérica' => [ConsumerGroupRound::STATUS_DRAFT, ConsumerGroupRound::STATUS_OPEN],
+            'borrador → cerrado (salta la apertura)' => [ConsumerGroupRound::STATUS_DRAFT, ConsumerGroupRound::STATUS_CLOSED],
+            'nada vuelve a borrador'                 => [ConsumerGroupRound::STATUS_OPEN, ConsumerGroupRound::STATUS_DRAFT],
         ];
     }
 
@@ -113,5 +121,79 @@ class RoundStateMachineTest extends TestCase
 
         $this->expectException(InvalidRoundTransition::class);
         $this->machine->confirm($cancelado);
+    }
+
+    public function testUnPedidoNuevoNaceEnBorrador(): void
+    {
+        $round = new ConsumerGroupRound();
+
+        self::assertTrue($round->isDraft());
+        self::assertFalse($round->canReceiveOrders(), 'Un borrador no admite apuntes de socias');
+        self::assertTrue($round->canManageOrders(), 'La comisión sí prepara el borrador');
+        self::assertFalse($this->machine->canConfirm($round), 'Un borrador no se confirma: nadie se ha podido apuntar');
+        self::assertSame([ConsumerGroupRound::STATUS_CANCELLED], $this->machine->allowedTransitions($round));
+    }
+
+    public function testAbrirUnBorradorConProductosLoDejaAbierto(): void
+    {
+        $round = $this->draftWithItem();
+        $round->setOrdersCloseAt(new \DateTime('+5 days'));
+
+        self::assertTrue($this->machine->canOpen($round));
+        $this->machine->open($round);
+
+        self::assertSame(ConsumerGroupRound::STATUS_OPEN, $round->getStatus());
+        self::assertTrue($round->canReceiveOrders());
+    }
+
+    public function testSePuedeAbrirElMismoDiaDelCierre(): void
+    {
+        $round = $this->draftWithItem();
+        $round->setOrdersCloseAt(new \DateTime('today'));
+
+        self::assertTrue($this->machine->canOpen($round));
+    }
+
+    public function testNoSeAbreUnBorradorSinProductos(): void
+    {
+        $round = new ConsumerGroupRound();
+        $round->setOrdersCloseAt(new \DateTime('+5 days'));
+
+        self::assertFalse($this->machine->canOpen($round));
+        $this->expectException(InvalidRoundTransition::class);
+        $this->machine->open($round);
+    }
+
+    public function testNoSeAbreUnBorradorConElCierreVencido(): void
+    {
+        $round = $this->draftWithItem();
+        $round->setOrdersCloseAt(new \DateTime('-1 day'));
+
+        self::assertFalse($this->machine->canOpen($round));
+        $this->expectException(InvalidRoundTransition::class);
+        $this->machine->open($round);
+    }
+
+    public function testNoSeAbreLoQueYaNoEsBorrador(): void
+    {
+        $round = $this->draftWithItem();
+        $round->setStatus(ConsumerGroupRound::STATUS_CLOSED);
+
+        self::assertFalse($this->machine->canOpen($round), 'Reabrir un cerrado es otra transición, no la apertura que avisa');
+    }
+
+    /**
+     * Borrador con un producto, como queda tras crearlo desde un catálogo con
+     * algo dentro.
+     */
+    private function draftWithItem(): ConsumerGroupRound
+    {
+        $producer = new Producer();
+        $product = (new ConsumerGroupProduct())->setName('Aceite');
+        $producer->addProduct($product);
+        $round = (new ConsumerGroupRound())->setProducer($producer);
+        $round->addItem(new ConsumerGroupRoundItem($round, $product, '25.00'));
+
+        return $round;
     }
 }

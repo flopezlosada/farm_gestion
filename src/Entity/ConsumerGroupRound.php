@@ -17,6 +17,8 @@ use Gedmo\Mapping\Annotation as Gedmo;
  * producto llega con la cesta del socio en su nodo.
  *
  * Estado del PLAZO (ver {@see canReceiveOrders()} y el servicio de transiciones):
+ *   DRAFT      borrador: la comisión prepara productos y precios; las socias no
+ *              lo ven. Se abre a mano, y abrirlo es lo que avisa a la asociación.
  *   OPEN       apuntes abiertos; las socias añaden/editan sus líneas.
  *   CLOSED     cerrado el plazo de apuntes; se agregan cantidades por producto.
  *   CANCELLED  no se alcanzó el mínimo (o se anula); nadie paga.
@@ -59,13 +61,22 @@ class ConsumerGroupRound
     public const STATUS_CONFIRMED = 2;
     public const STATUS_CANCELLED = 3;
     public const STATUS_DELIVERED = 4;
+    /**
+     * Recién creado, sin abrir. EXISTE PARA QUE EL AVISO SALGA CUANDO LA COMISIÓN
+     * QUIERE: antes el pedido nacía abierto y el aviso a toda la asociación salía
+     * solo al guardar los productos por primera vez, con precios a medio ajustar
+     * o el día que no tocaba. Y uno creado desde el panel del productor ni
+     * siquiera avisaba: aparecía en el panel de las socias sin más.
+     */
+    public const STATUS_DRAFT = 5;
 
     /**
-     * Etiquetas del ESTADO DEL PLAZO (abierto/cerrado/cancelado/entregado). El
+     * Etiquetas del ESTADO DEL PLAZO (borrador/abierto/cerrado/cancelado/entregado). El
      * "confirmado" es un flag aparte, no un estado (un pedido puede estar confirmado
      * y aún abierto).
      */
     public const STATUS_LABELS = [
+        self::STATUS_DRAFT => 'Borrador',
         self::STATUS_OPEN => 'Abierto',
         self::STATUS_CLOSED => 'Cerrado',
         self::STATUS_CANCELLED => 'Cancelado',
@@ -100,12 +111,13 @@ class ConsumerGroupRound
      * @ORM\Column(type="smallint")
      */
     #[Assert\Choice(choices: [
+        self::STATUS_DRAFT,
         self::STATUS_OPEN,
         self::STATUS_CLOSED,
         self::STATUS_CANCELLED,
         self::STATUS_DELIVERED,
     ])]
-    private int $status = self::STATUS_OPEN;
+    private int $status = self::STATUS_DRAFT;
 
     /**
      * ¿Confirmado? Se ha alcanzado el mínimo del productor y el pedido se hará. Flag
@@ -317,20 +329,37 @@ class ConsumerGroupRound
      */
     public function canReceiveOrders(): bool
     {
-        if ($this->status !== self::STATUS_OPEN) {
-            return false;
-        }
-
-        return $this->ordersCloseAt === null || $this->ordersCloseAt >= new \DateTime('today');
+        return $this->status === self::STATUS_OPEN && !$this->isOrdersDeadlinePassed();
     }
 
     /**
-     * ¿Puede la comisión gestionar (crear/editar) pedidos de socias? Mientras la
-     * ronda esté abierto o cerrado (antes de confirmar/cancelar/entregar).
+     * ¿Ha vencido ya la fecha de cierre de apuntes? Sin fecha, no: es un pedido
+     * al que no le han puesto plazo todavía, no uno vencido. El día del cierre
+     * aún cuenta como dentro de plazo.
+     */
+    public function isOrdersDeadlinePassed(): bool
+    {
+        return $this->ordersCloseAt !== null && $this->ordersCloseAt < new \DateTime('today');
+    }
+
+    /**
+     * ¿Sigue en borrador, sin abrir a las socias?
+     */
+    public function isDraft(): bool
+    {
+        return $this->status === self::STATUS_DRAFT;
+    }
+
+    /**
+     * ¿Puede la comisión gestionar (crear/editar) pedidos de socias y la
+     * cabecera y productos de la ronda? En borrador, abierta o cerrada (antes de
+     * cancelar/entregar). En borrador la comisión ya puede apuntar el pedido del
+     * local o el de una socia que se lo ha pedido en persona: no se avisa a
+     * nadie por ello.
      */
     public function canManageOrders(): bool
     {
-        return in_array($this->status, [self::STATUS_OPEN, self::STATUS_CLOSED], true);
+        return in_array($this->status, [self::STATUS_DRAFT, self::STATUS_OPEN, self::STATUS_CLOSED], true);
     }
 
     /**

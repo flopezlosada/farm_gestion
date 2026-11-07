@@ -21,6 +21,10 @@
 
     <div class="csa-stack-lg">
 
+        {% if round.draft %}
+            <p class="csa-muted">Está en borrador: las socias todavía no lo ven. La comisión lo abrirá y les avisará cuando esté listo.</p>
+        {% endif %}
+
         <div class="prt-actionbar">
             <a href="{{ path('panel_producer_round_items', { id: round.id }) }}" class="prt-btn"><i class="fa fa-list"></i> Productos del pedido</a>
             <a href="{{ path('panel_producer_round_export', { id: round.id }) }}" class="prt-btn"><i class="fa fa-download"></i> Descargar CSV</a>
