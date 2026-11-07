@@ -8,8 +8,9 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Form\FormInterface;
 
 /**
- * El mínimo del productor se pregunta en dos pasos (¿hay mínimo? / ¿en qué se
- * mide?) y el formulario lo traduce a un solo tipo en la ronda.
+ * El mínimo del productor se pregunta por pasos (¿hay mínimo? / ¿se confirma
+ * solo al llegar? / importe o socias y cuánto) y el formulario lo traduce a un
+ * solo tipo en la ronda.
  *
  * Se blinda la traducción y, sobre todo, la limpieza: los campos escondidos en
  * pantalla viajan igual en el envío, y un umbral o una nota de un mínimo que ya
@@ -27,6 +28,7 @@ class ConsumerGroupRoundTypeMinimumTest extends KernelTestCase
         $form = $this->open(new ConsumerGroupRound());
 
         self::assertNull($form->get('hasMinimum')->getData(), 'Un «no» por defecto confirmaría el pedido al abrirlo sin que nadie lo decida.');
+        self::assertNull($form->get('autoConfirm')->getData());
         self::assertNull($form->get('minimumKind')->getData());
     }
 
@@ -40,24 +42,31 @@ class ConsumerGroupRoundTypeMinimumTest extends KernelTestCase
     public function testSinMinimoLimpiaLoQueQuedabaEscondido(): void
     {
         $round = new ConsumerGroupRound();
-        $this->submit($round, ['hasMinimum' => 'no', 'minimumKind' => '1', 'minimumValue' => '150', 'minimumCondition' => '50 kg']);
+        $this->submit($round, ['hasMinimum' => 'no', 'autoConfirm' => 'yes', 'minimumKind' => '1', 'minimumValue' => '150', 'minimumCondition' => '50 kg']);
 
         self::assertSame(ConsumerGroupRound::MINIMUM_TYPE_NONE, $round->getMinimumType());
         self::assertNull($round->getMinimumValue());
         self::assertNull($round->getMinimumCondition());
     }
 
-    public function testConMinimoHayQueDecirEnQueSeMide(): void
+    public function testConMinimoHayQueDecirSiSeConfirmaSolo(): void
     {
         $form = $this->submit(new ConsumerGroupRound(), ['hasMinimum' => 'yes']);
 
-        self::assertSame('Elige en qué se mide el mínimo.', (string) $form->get('minimumKind')->getErrors()[0]->getMessage());
+        self::assertCount(1, $form->get('autoConfirm')->getErrors());
+    }
+
+    public function testSiSeConfirmaSoloHayQueDecirSiEsImporteOSocias(): void
+    {
+        $form = $this->submit(new ConsumerGroupRound(), ['hasMinimum' => 'yes', 'autoConfirm' => 'yes']);
+
+        self::assertCount(1, $form->get('minimumKind')->getErrors());
     }
 
     public function testMinimoEnEurosSeConfirmaraSolo(): void
     {
         $round = new ConsumerGroupRound();
-        $this->submit($round, ['hasMinimum' => 'yes', 'minimumKind' => '1', 'minimumValue' => '150', 'minimumCondition' => 'sobra']);
+        $this->submit($round, ['hasMinimum' => 'yes', 'autoConfirm' => 'yes', 'minimumKind' => '1', 'minimumValue' => '150', 'minimumCondition' => 'sobra']);
 
         self::assertSame(ConsumerGroupRound::MINIMUM_TYPE_AMOUNT, $round->getMinimumType());
         self::assertTrue($round->hasAutomaticMinimum());
@@ -65,17 +74,17 @@ class ConsumerGroupRoundTypeMinimumTest extends KernelTestCase
         self::assertNull($round->getMinimumCondition(), 'La nota sólo explica los mínimos que se confirman a mano.');
     }
 
-    public function testOtroMinimoExigeExplicarlo(): void
+    public function testConfirmarAManoExigeExplicarElMinimo(): void
     {
-        $form = $this->submit(new ConsumerGroupRound(), ['hasMinimum' => 'yes', 'minimumKind' => '3', 'minimumCondition' => '  ']);
+        $form = $this->submit(new ConsumerGroupRound(), ['hasMinimum' => 'yes', 'autoConfirm' => 'no', 'minimumCondition' => '  ']);
 
         self::assertCount(1, $form->get('minimumCondition')->getErrors());
     }
 
-    public function testOtroMinimoGuardaLaNotaYNoElUmbral(): void
+    public function testConfirmarAManoGuardaLaNotaYNoElUmbral(): void
     {
         $round = new ConsumerGroupRound();
-        $form = $this->submit($round, ['hasMinimum' => 'yes', 'minimumKind' => '3', 'minimumValue' => '150', 'minimumCondition' => '50 kg de aceitunas']);
+        $form = $this->submit($round, ['hasMinimum' => 'yes', 'autoConfirm' => 'no', 'minimumKind' => '1', 'minimumValue' => '150', 'minimumCondition' => '50 kg de aceitunas']);
 
         self::assertCount(0, $form->get('minimumCondition')->getErrors());
         self::assertSame(ConsumerGroupRound::MINIMUM_TYPE_MANUAL, $round->getMinimumType());
@@ -91,7 +100,19 @@ class ConsumerGroupRoundTypeMinimumTest extends KernelTestCase
         $form = $this->open($round);
 
         self::assertSame('yes', $form->get('hasMinimum')->getData());
+        self::assertSame('yes', $form->get('autoConfirm')->getData());
         self::assertSame(ConsumerGroupRound::MINIMUM_TYPE_PARTICIPANTS, $form->get('minimumKind')->getData());
+    }
+
+    public function testAlEditarUnMinimoAManoSaleMarcadoQueNoSeConfirmaSolo(): void
+    {
+        $round = (new ConsumerGroupRound())->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_MANUAL);
+        $this->setId($round, 7);
+
+        $form = $this->open($round);
+
+        self::assertSame('no', $form->get('autoConfirm')->getData());
+        self::assertNull($form->get('minimumKind')->getData());
     }
 
     public function testAlEditarUnPedidoSinMinimoSaleMarcadoNo(): void

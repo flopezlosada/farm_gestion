@@ -31,9 +31,9 @@ use Symfony\Component\Validator\Constraints as Assert;
  */
 class ConsumerGroupRoundType extends AbstractType
 {
-    /** Valores de la pregunta «¿pide mínimo?». */
-    private const HAS_MINIMUM_NO = 'no';
-    private const HAS_MINIMUM_YES = 'yes';
+    /** Valores de las preguntas de sí o no del mínimo. */
+    private const NO = 'no';
+    private const YES = 'yes';
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
@@ -66,34 +66,41 @@ class ConsumerGroupRoundType extends AbstractType
                 'required' => false,
                 'help'     => 'Si todavía no se sabe, se puede añadir más adelante.',
             ])
-            // El mínimo se pregunta en DOS PASOS y no como un tipo: primero si
-            // lo hay, luego en qué se mide. La comisión sabe cómo es el mínimo
-            // del productor («150 €», «50 kg de aceitunas»), no si la app lo
-            // puede automatizar; eso lo deduce la pantalla de la unidad y se lo
-            // cuenta. Ninguno de los dos campos se mapea: se traducen al tipo
-            // de la ronda al enviar ({@see self::applyMinimum()}).
+            // El mínimo se pregunta POR PASOS y no como un tipo: ¿hay mínimo?,
+            // y si lo hay, ¿quieres que el pedido se confirme solo al llegar?
+            // Sólo entonces se pide en qué se mide (importe o nº de socias, lo
+            // único que la app sabe contar) y cuánto; si no, se explica en
+            // texto y se confirma a mano. Las preguntas no se mapean: se
+            // traducen al tipo de la ronda al enviar ({@see self::applyMinimum()}).
             ->add('hasMinimum', ChoiceType::class, [
                 'mapped'      => false,
                 'expanded'    => true,
                 'label'       => '¿El productor pide un mínimo?',
-                'choices'     => ['No, el pedido sale seguro' => self::HAS_MINIMUM_NO, 'Sí' => self::HAS_MINIMUM_YES],
+                'choices'     => ['No, el pedido sale seguro' => self::NO, 'Sí' => self::YES],
                 'data'        => $this->initialHasMinimum($round),
                 'constraints' => [new Assert\NotNull(message: 'Di si el productor pide un mínimo.')],
             ])
-            ->add('minimumKind', ChoiceType::class, [
-                'mapped'   => false,
-                'expanded' => true,
-                'required' => false,
+            ->add('autoConfirm', ChoiceType::class, [
+                'mapped'      => false,
+                'expanded'    => true,
+                'required'    => false,
                 // Sin esto, un radio no obligatorio trae una opción «None» de
-                // regalo. La obligatoriedad real depende de la otra pregunta.
+                // regalo. La obligatoriedad real depende de la pregunta anterior.
                 'placeholder' => false,
-                'label'    => '¿En qué se mide?',
-                'choices'  => [
-                    'Euros' => ConsumerGroupRound::MINIMUM_TYPE_AMOUNT,
-                    'Socias' => ConsumerGroupRound::MINIMUM_TYPE_PARTICIPANTS,
-                    'Otra cosa' => ConsumerGroupRound::MINIMUM_TYPE_MANUAL,
+                'label'       => '¿Quieres que el pedido se confirme solo al llegar al mínimo?',
+                'choices'     => ['Sí' => self::YES, 'No, lo confirmamos a mano' => self::NO],
+                'data'        => $this->initialAutoConfirm($round),
+            ])
+            ->add('minimumKind', ChoiceType::class, [
+                'mapped'      => false,
+                'required'    => false,
+                'label'       => 'El mínimo es',
+                'placeholder' => 'Elige…',
+                'choices'     => [
+                    'Un importe total (€)' => ConsumerGroupRound::MINIMUM_TYPE_AMOUNT,
+                    'Un número de socias' => ConsumerGroupRound::MINIMUM_TYPE_PARTICIPANTS,
                 ],
-                'data'     => $round instanceof ConsumerGroupRound && !$round->hasNoMinimum() ? $round->getMinimumType() : null,
+                'data'        => $round instanceof ConsumerGroupRound && $round->hasAutomaticMinimum() ? $round->getMinimumType() : null,
             ])
             ->add('minimumValue', NumberType::class, [
                 'label'    => '¿Cuánto?',
@@ -134,7 +141,20 @@ class ConsumerGroupRoundType extends AbstractType
             return null;
         }
 
-        return $round->hasNoMinimum() ? self::HAS_MINIMUM_NO : self::HAS_MINIMUM_YES;
+        return $round->hasNoMinimum() ? self::NO : self::YES;
+    }
+
+    /**
+     * Qué respuesta sale marcada en «¿se confirma solo?»: sólo tiene sentido si
+     * la ronda ya tiene un mínimo.
+     */
+    private function initialAutoConfirm(?ConsumerGroupRound $round): ?string
+    {
+        if (null === $round || null === $round->getId() || $round->hasNoMinimum()) {
+            return null;
+        }
+
+        return $round->hasAutomaticMinimum() ? self::YES : self::NO;
     }
 
     /**
@@ -153,21 +173,50 @@ class ConsumerGroupRoundType extends AbstractType
             return;
         }
 
-        $kind = $form->get('minimumKind')->getData();
-        if (self::HAS_MINIMUM_YES === $hasMinimum && null === $kind) {
-            $form->get('minimumKind')->addError(new FormError('Elige en qué se mide el mínimo.'));
-
+        $type = $this->minimumTypeFrom($form, $hasMinimum);
+        if (null === $type) {
             return;
         }
 
         // setMinimumType() ya borra el umbral si el tipo deja de usarlo.
-        $round->setMinimumType(self::HAS_MINIMUM_NO === $hasMinimum ? ConsumerGroupRound::MINIMUM_TYPE_NONE : (int) $kind);
+        $round->setMinimumType($type);
 
         if (ConsumerGroupRound::MINIMUM_TYPE_MANUAL !== $round->getMinimumType()) {
             $round->setMinimumCondition(null);
         } elseif ('' === trim((string) $round->getMinimumCondition())) {
             $form->get('minimumCondition')->addError(new FormError('Explica cuál es el mínimo: sin eso nadie sabrá cuándo confirmarlo.'));
         }
+    }
+
+    /**
+     * El tipo de mínimo según las respuestas, o null si falta una (y entonces
+     * deja el error en el campo que falta).
+     */
+    private function minimumTypeFrom(FormInterface $form, string $hasMinimum): ?int
+    {
+        if (self::NO === $hasMinimum) {
+            return ConsumerGroupRound::MINIMUM_TYPE_NONE;
+        }
+
+        $autoConfirm = $form->get('autoConfirm')->getData();
+        if (null === $autoConfirm) {
+            $form->get('autoConfirm')->addError(new FormError('Di si el pedido se confirma solo o a mano.'));
+
+            return null;
+        }
+
+        if (self::NO === $autoConfirm) {
+            return ConsumerGroupRound::MINIMUM_TYPE_MANUAL;
+        }
+
+        $kind = $form->get('minimumKind')->getData();
+        if (null === $kind) {
+            $form->get('minimumKind')->addError(new FormError('Elige si el mínimo es un importe o un número de socias.'));
+
+            return null;
+        }
+
+        return (int) $kind;
     }
 
     public function configureOptions(OptionsResolver $resolver): void
