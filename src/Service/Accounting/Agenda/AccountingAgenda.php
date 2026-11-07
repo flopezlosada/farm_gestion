@@ -13,6 +13,7 @@ use App\Entity\RemittanceReturn;
 use App\Entity\ReturnStatus;
 use App\Repository\AccountEntryRepository;
 use App\Repository\BankStatementLineRepository;
+use App\Repository\BankStatementRepository;
 use App\Repository\CashCountRepository;
 use App\Repository\FinancialAccountRepository;
 use App\Repository\IssuedInvoiceRepository;
@@ -85,6 +86,7 @@ class AccountingAgenda
         private readonly BankStatementLineRepository $bankLines,
         private readonly BankLineMatcher $matcher,
         private readonly RemittanceCredits $credits,
+        private readonly BankStatementRepository $statements,
     ) {
     }
 
@@ -310,7 +312,9 @@ class AccountingAgenda
     /**
      * Los movimientos de los extractos subidos que el libro aún no tiene: el banco dice
      * que el dinero se movió y no hay apunte que lo diga. Va junto al libro atrasado
-     * porque es lo mismo visto desde el banco.
+     * porque es lo mismo visto desde el banco. Si están todos en un mismo extracto, la
+     * tarea lleva directa a lo que le falta en su ficha; si están repartidos, al listado,
+     * que dice cuántos tiene cada uno.
      */
     private function unlinkedBankLines(): ?AgendaItem
     {
@@ -318,13 +322,24 @@ class AccountingAgenda
         if ($count === 0) {
             return null;
         }
+        $title = $count === 1 ? '1 movimiento del banco sin anotar' : sprintf('%d movimientos del banco sin anotar', $count);
+        $pending = array_keys($this->statements->unlinkedCounts(activeAccountsOnly: true));
 
-        return new AgendaItem(
-            AgendaUrgency::Normal,
-            $count === 1 ? '1 movimiento del banco sin anotar' : sprintf('%d movimientos del banco sin anotar', $count),
-            ['Vienen de los extractos subidos. En la ficha de cada extracto se anotan, o se ligan al apunte que ya los tenía.'],
-            'accounting_bank_statements',
-        );
+        return \count($pending) === 1
+            ? new AgendaItem(
+                AgendaUrgency::Normal,
+                $title,
+                ['En la ficha del extracto se anotan, o se ligan al apunte que ya los tenía.'],
+                'accounting_bank_statement_show',
+                ['id' => $pending[0]],
+                'sin-apunte',
+            )
+            : new AgendaItem(
+                AgendaUrgency::Normal,
+                $title,
+                ['Están en varios extractos: el listado dice cuántos le faltan a cada uno, y en su ficha se anotan o se ligan al apunte que ya los tenía.'],
+                'accounting_bank_statements',
+            );
     }
 
     /**
