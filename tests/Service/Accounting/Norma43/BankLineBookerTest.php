@@ -63,6 +63,7 @@ class BankLineBookerTest extends TestCase
     {
         $advisory = $this->category('Gestoría');
         $provider = (new Provider())->setName('Asesoría Caymuz');
+        $this->setId($provider);
         $this->history = [
             $this->entry('2026-09-05', '-170.00', 'rcbo.caymuz, s.l.', $advisory)->setProvider($provider),
             $this->entry('2026-08-05', '-170.00', 'rcbo.caymuz, s.l.', $advisory)->setProvider($provider),
