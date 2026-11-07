@@ -1,0 +1,33 @@
+{# ============================================================
+ # El mínimo del productor, en dos pasos: si lo hay, y en qué se
+ # mide. Debajo de cada respuesta, una frase que dice qué va a
+ # pasar: la comisión no tiene por qué saber qué se automatiza,
+ # se lo cuenta la pantalla según la unidad que elija.
+ #
+ # Lo usan el formulario de gestión y el del productor.
+ #   - form   ConsumerGroupRoundType
+ # ============================================================ #}
+{% import '_macros/csa.html.twig' as csa %}
+
+{{ csa.field(form.hasMinimum, '¿El productor pide un mínimo?', { full: true, attr: { class: 'csa-segmented' } }) }}
+
+<p class="csa-field--full csa-muted" style="margin: 0;"{{ csa.reveal(form.hasMinimum, 'hasMinimum=no') }}>
+    Queda <strong>confirmado al abrirlo</strong>: quien se apunte, tiene su pedido asegurado desde el primer momento.
+</p>
+
+{{ csa.field(form.minimumKind, '¿En qué se mide?', { full: true, show_when: 'hasMinimum=yes', attr: { class: 'csa-segmented' } }) }}
+
+{{ csa.field(form.minimumValue, '¿Cuánto?', { show_when: 'hasMinimum=yes;minimumKind=1|2' }) }}
+
+<p class="csa-field--full csa-muted" style="margin: 0;"{{ csa.reveal(form.hasMinimum, 'hasMinimum=yes;minimumKind=1') }}>
+    En euros, sumando todos los pedidos. Cuando se llegue, el pedido <strong>se confirma solo</strong> y se avisa a las socias y al productor.
+</p>
+<p class="csa-field--full csa-muted" style="margin: 0;"{{ csa.reveal(form.hasMinimum, 'hasMinimum=yes;minimumKind=2') }}>
+    Número de socias apuntadas. Cuando se llegue, el pedido <strong>se confirma solo</strong> y se avisa a las socias y al productor.
+</p>
+
+{{ csa.field(form.minimumCondition, '¿Cuál es el mínimo?', { full: true, show_when: 'hasMinimum=yes;minimumKind=3' }) }}
+
+<p class="csa-field--full csa-muted" style="margin: 0;"{{ csa.reveal(form.hasMinimum, 'hasMinimum=yes;minimumKind=3') }}>
+    Esto la app no lo puede contar. Cuando veáis que se llega, lo <strong>confirmáis a mano</strong> desde la ficha del pedido.
+</p>

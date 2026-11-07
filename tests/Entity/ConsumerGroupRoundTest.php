@@ -85,6 +85,13 @@ class ConsumerGroupRoundTest extends TestCase
         }
     }
 
+    public function testMinimoPorSociasSeLeeEnSocias(): void
+    {
+        $round = $this->round(null)->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_PARTICIPANTS)->setMinimumValue('10.00');
+
+        self::assertSame('10 socias', $round->getMinimumTypeLabel());
+    }
+
     public function testElMinimoManualNoEsSinMinimo(): void
     {
         $round = $this->round(null)->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_MANUAL);
@@ -99,7 +106,7 @@ class ConsumerGroupRoundTest extends TestCase
         $round = $this->round(null);
         $round->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_AMOUNT);
         $round->setMinimumValue('150.00');
-        self::assertSame('Importe total (€): 150.00', $round->getMinimumTypeLabel());
+        self::assertSame('150,00 €', $round->getMinimumTypeLabel());
 
         $round->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_NONE);
 

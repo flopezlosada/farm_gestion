@@ -166,7 +166,7 @@ class ConsumerGroupRound
      * apunte, sin que nadie lo haya pedido de verdad.
      * @ORM\Column(type="decimal", precision=8, scale=2, nullable=true)
      */
-    #[Assert\Positive(message: 'El umbral del mínimo tiene que ser mayor que cero.')]
+    #[Assert\Positive(message: 'El mínimo tiene que ser mayor que cero.')]
     private ?string $minimumValue = null;
 
     /**
@@ -459,16 +459,21 @@ class ConsumerGroupRound
     }
 
     /**
-     * El mínimo de un vistazo: "Sin mínimo", "Importe total (€): 150", "Otro
-     * mínimo"…
+     * El mínimo de un vistazo, como lo diría una persona: "Sin mínimo",
+     * "150,00 €", "10 socias", "Otro mínimo" (este último, con su nota al lado
+     * en la pantalla).
      */
     public function getMinimumTypeLabel(): string
     {
-        $label = self::MINIMUM_TYPE_LABELS[$this->minimumType] ?? (string) $this->minimumType;
+        if (null === $this->minimumValue) {
+            return self::MINIMUM_TYPE_LABELS[$this->minimumType] ?? (string) $this->minimumType;
+        }
 
-        return $this->hasAutomaticMinimum()
-            ? sprintf('%s: %s', $label, $this->minimumValue ?? '—')
-            : $label;
+        return match ($this->minimumType) {
+            self::MINIMUM_TYPE_AMOUNT => number_format((float) $this->minimumValue, 2, ',', '.') . ' €',
+            self::MINIMUM_TYPE_PARTICIPANTS => sprintf('%d socias', (int) $this->minimumValue),
+            default => self::MINIMUM_TYPE_LABELS[$this->minimumType] ?? (string) $this->minimumType,
+        };
     }
 
     public function setMinimumValue(?string $minimumValue): self
