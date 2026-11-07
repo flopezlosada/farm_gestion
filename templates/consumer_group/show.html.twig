@@ -199,7 +199,7 @@
                 <p class="csa-muted" style="margin-top: var(--csa-sp-2);">
                     «Para el local» es lo que encarga la asociación además de lo que piden las socias: se suma
                     al pedido del productor, no se le cobra a nadie y no sale en el reparto.
-                    Importes informativos: la app no cobra. La comisión decide si se supera el mínimo del productor.
+                    Importes informativos: la app no cobra.{% if not round.hasNoMinimum and not round.confirmed %} {{ round.hasAutomaticMinimum ? 'Al alcanzarse el mínimo del productor, el pedido se confirma solo.' : 'La comisión decide si se supera el mínimo del productor.' }}{% endif %}
                 </p>
             {% endif %}
             </div>
