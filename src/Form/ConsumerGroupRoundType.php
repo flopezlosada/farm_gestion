@@ -84,6 +84,9 @@ class ConsumerGroupRoundType extends AbstractType
                 'mapped'   => false,
                 'expanded' => true,
                 'required' => false,
+                // Sin esto, un radio no obligatorio trae una opción «None» de
+                // regalo. La obligatoriedad real depende de la otra pregunta.
+                'placeholder' => false,
                 'label'    => '¿En qué se mide?',
                 'choices'  => [
                     'Euros' => ConsumerGroupRound::MINIMUM_TYPE_AMOUNT,
