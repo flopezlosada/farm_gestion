@@ -2,12 +2,15 @@
 
 namespace App\Tests\Service\Accounting\Norma43;
 
+use App\Entity\AccountantDelivery;
 use App\Entity\AccountEntry;
 use App\Entity\BankStatementLine;
 use App\Entity\BudgetCategory;
 use App\Entity\BudgetCategoryGroup;
 use App\Entity\FinancialAccount;
 use App\Repository\AccountEntryRepository;
+use App\Service\Accounting\Closing\ClosedPeriods;
+use App\Service\Accounting\Invoice\InvoiceQuarter;
 use App\Service\Accounting\Norma43\BankLineMatcher;
 use App\Service\Accounting\Norma43\Norma43Movement;
 use PHPUnit\Framework\TestCase;
@@ -159,7 +162,7 @@ class BankLineMatcherTest extends TestCase
             ->with([$bank], new \DateTimeImmutable('2026-09-24'), new \DateTimeImmutable('2026-11-06'), $this->countOf(30))
             ->willReturn([$entry]);
 
-        $linked = (new BankLineMatcher($repo))->linkSafe($lines);
+        $linked = (new BankLineMatcher($repo, $this->openPeriods()))->linkSafe($lines);
 
         $this->assertSame(1, $linked);
         $this->assertSame($entry, $lines[4]->getEntry());
@@ -186,7 +189,7 @@ class BankLineMatcherTest extends TestCase
             $this->entry($bank, '2026-10-22', '-15.00'),
         ]);
 
-        $proposals = (new BankLineMatcher($repo))->proposalsFor([$clear, $twoEntries, $first, $second]);
+        $proposals = (new BankLineMatcher($repo, $this->openPeriods()))->proposalsFor([$clear, $twoEntries, $first, $second]);
 
         $this->assertSame([[$clear, $clearEntry]], $proposals);
         $this->assertNull($clear->getEntry());
@@ -242,6 +245,133 @@ class BankLineMatcherTest extends TestCase
 
         $this->expectException(\DomainException::class);
         $line->linkTo($part);
+    }
+
+    /**
+     * La liquidación de la tarjeta (el caso real de julio, abreviado): el banco cobra el
+     * día 5 lo que el libro apuntó en compras sueltas con esa fecha. Suman al céntimo:
+     * se juntan en un apunte partido y el cargo se liga a él.
+     */
+    public function testLasComprasDelDiaQueSumanElCargoSeJuntan(): void
+    {
+        $bank = $this->account();
+        $card = $this->line($bank, '2026-07-05', -45325);
+        $vet = $this->entry($bank, '2026-07-05', '-326.40');
+        $feed = $this->entry($bank, '2026-07-05', '-110.00');
+        $shop = $this->entry($bank, '2026-07-05', '-16.85');
+
+        $this->assertSame([[$card, [$vet, $feed, $shop]]], BankLineMatcher::sameDayBundles([$card], [$shop, $vet, $feed]));
+    }
+
+    /** Por un céntimo, o con un apunte del día de más, ya no es el cargo: nada se junta. */
+    public function testSiNoSumanAlCentimoNoSeJuntan(): void
+    {
+        $bank = $this->account();
+        $card = $this->line($bank, '2026-07-05', -45325);
+        $vet = $this->entry($bank, '2026-07-05', '-326.40');
+
+        $this->assertSame([], BankLineMatcher::sameDayBundles([$card], [$vet, $this->entry($bank, '2026-07-05', '-126.84')]));
+        $exact = [$vet, $this->entry($bank, '2026-07-05', '-126.85')];
+        $this->assertSame([], BankLineMatcher::sameDayBundles([$card], [...$exact, $this->entry($bank, '2026-07-05', '-1.00')]));
+    }
+
+    /**
+     * Sólo cuentan los apuntes de ese día, esa cuenta y ese sentido: un ingreso del
+     * mismo día o una compra del día 4 no entran en la suma.
+     */
+    public function testSoloCuentaElMismoDiaCuentaYSentido(): void
+    {
+        $bank = $this->account();
+        $card = $this->line($bank, '2026-07-05', -5000);
+        $a = $this->entry($bank, '2026-07-05', '-30.00');
+        $b = $this->entry($bank, '2026-07-05', '-20.00');
+        $noise = [$this->entry($bank, '2026-07-05', '75.00'), $this->entry($bank, '2026-07-04', '-9.00'), $this->entry($this->account(), '2026-07-05', '-1.00')];
+
+        $this->assertSame([[$card, [$a, $b]]], BankLineMatcher::sameDayBundles([$card], [...$noise, $a, $b]));
+    }
+
+    /** Un solo apunte no es un grupo: eso es la pareja de siempre. */
+    public function testUnSoloApunteNoEsUnGrupo(): void
+    {
+        $bank = $this->account();
+
+        $this->assertSame([], BankLineMatcher::sameDayBundles([$this->line($bank, '2026-07-05', -5000)], [$this->entry($bank, '2026-07-05', '-50.00')]));
+    }
+
+    /** Dos cargos del mismo día que podrían ser esa suma: hay duda, no se junta ninguno. */
+    public function testDosCargosQuePodrianSerLaSumaNoSeJuntan(): void
+    {
+        $bank = $this->account();
+        $lines = [$this->line($bank, '2026-07-05', -5000), $this->line($bank, '2026-07-05', -5000)];
+
+        $this->assertSame([], BankLineMatcher::sameDayBundles($lines, [$this->entry($bank, '2026-07-05', '-30.00'), $this->entry($bank, '2026-07-05', '-20.00')]));
+    }
+
+    /** Un traspaso del día no se junta con las compras (su pareja dejaría de casar). */
+    public function testUnTraspasoNoEntraEnLaSuma(): void
+    {
+        $bank = $this->account();
+        $card = $this->line($bank, '2026-07-05', -5000);
+        $transfer = $this->entry($bank, '2026-07-05', '-100.00')->setCategory($this->transferCategory());
+        $a = $this->entry($bank, '2026-07-05', '-30.00');
+        $b = $this->entry($bank, '2026-07-05', '-20.00');
+
+        $this->assertSame([[$card, [$a, $b]]], BankLineMatcher::sameDayBundles([$card], [$transfer, $a, $b]));
+    }
+
+    /**
+     * Al ligar, primero las parejas de siempre; con lo que queda, los grupos. El cargo
+     * queda ligado al primer apunte, y los demás pasan a ser partes suyas.
+     */
+    public function testLigarJuntaElGrupoYLoLiga(): void
+    {
+        $bank = $this->account();
+        $card = $this->line($bank, '2026-07-05', -5000);
+        $a = $this->entry($bank, '2026-07-05', '-30.00');
+        $b = $this->entry($bank, '2026-07-05', '-20.00');
+        $repo = $this->createStub(AccountEntryRepository::class);
+        $repo->method('findWithoutBankLine')->willReturn([]);
+        $repo->method('findWithoutBankLineOn')->willReturn([$a, $b]);
+
+        $linked = (new BankLineMatcher($repo, $this->openPeriods()))->linkSafe([$card]);
+
+        $this->assertSame(1, $linked);
+        $this->assertSame($a, $card->getEntry());
+        $this->assertSame($a, $b->getSplitFrom());
+        $this->assertSame('-50.00', $a->getMovementAmount());
+    }
+
+    /** En un trimestre entregado a la gestoría no se toca nada: ni se junta ni se liga. */
+    public function testEnUnTrimestreEntregadoNoSeJunta(): void
+    {
+        $bank = $this->account();
+        $card = $this->line($bank, '2026-07-05', -5000);
+        $a = $this->entry($bank, '2026-07-05', '-30.00');
+        $b = $this->entry($bank, '2026-07-05', '-20.00');
+        $repo = $this->createStub(AccountEntryRepository::class);
+        $repo->method('findWithoutBankLine')->willReturn([]);
+        $repo->method('findWithoutBankLineOn')->willReturn([$a, $b]);
+        $closed = $this->createStub(ClosedPeriods::class);
+        $closed->method('closingDeliveryFor')->willReturn(new AccountantDelivery(InvoiceQuarter::of(2026, 3), null, new \DateTimeImmutable('2026-10-04')));
+
+        $this->assertSame(0, (new BankLineMatcher($repo, $closed))->linkSafe([$card]));
+        $this->assertNull($card->getEntry());
+        $this->assertNull($b->getSplitFrom());
+    }
+
+    private function openPeriods(): ClosedPeriods
+    {
+        $closed = $this->createStub(ClosedPeriods::class);
+        $closed->method('closingDeliveryFor')->willReturn(null);
+
+        return $closed;
+    }
+
+    private function transferCategory(): BudgetCategory
+    {
+        $group = (new BudgetCategoryGroup())->setName('TRASPASOS')->setKind(BudgetCategoryGroup::KIND_TRANSFER);
+
+        return (new BudgetCategory())->setGroup($group)->setName('Traspaso entre cuentas');
     }
 
     private function category(): BudgetCategory

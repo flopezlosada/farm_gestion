@@ -53,6 +53,7 @@ class StatementReviewer
                 static fn (AccountEntry $e): bool => !isset($proposed[spl_object_id($e)]),
             )),
             $this->lines->countLinkedIn($account, $from, $to),
+            $this->entries->findAutoBookedIn($account, $from, $to),
         );
     }
 }

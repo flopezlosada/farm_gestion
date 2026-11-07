@@ -10,6 +10,7 @@ use App\Http\QueryId;
 use App\Repository\AccountEntryRepository;
 use App\Repository\BankStatementLineRepository;
 use App\Repository\BankStatementRepository;
+use App\Service\Accounting\Norma43\BankLineBooker;
 use App\Service\Accounting\Norma43\BankLineMatcher;
 use App\Service\Accounting\Norma43\BankStatementImporter;
 use App\Service\Accounting\Norma43\BankStatementReader;
@@ -29,8 +30,9 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * con el libro. El banco es la fuente de los movimientos de una cuenta de banco; aquí se
  * ve qué movimientos le faltan al libro y qué apuntes no trae el banco.
  *
- * Nada de aquí crea ni borra apuntes por su cuenta: se anotan desde el alta de siempre
- * (prerrellenada) o se ligan al apunte que ya los tenía.
+ * Al subirlo, lo que el libro ya tenía se liga a su apunte y lo que no deja duda lo
+ * anota la app sola ({@see BankLineBooker}); el resto se anota desde el alta de
+ * siempre (prerrellenada) o se liga al apunte que ya lo tenía. Nada se borra.
  */
 #[Route('/gestion/accounting/bank-statements')]
 #[IsGranted('FEATURE_CONTABILIDAD')]
@@ -101,11 +103,11 @@ class BankStatementController extends AbstractController
         }
 
         $this->addFlash('success', sprintf(
-            'Extracto guardado: %d %s nuevos%s, %d ligados solos a su apunte.',
+            'Extracto guardado: %d %s nuevos%s. %s',
             $import->added,
             $import->added === 1 ? 'movimiento' : 'movimientos',
             $import->alreadyThere > 0 ? sprintf(' (%d ya estaban de otro extracto)', $import->alreadyThere) : '',
-            $import->linked,
+            self::crossed($import->linked, $import->booked),
         ));
         foreach ($import->warnings as $warning) {
             $this->addFlash('warning', $warning);
@@ -127,6 +129,39 @@ class BankStatementController extends AbstractController
             // La partida que se propondrá al anotar cada movimiento, para verlo de un vistazo.
             'suggestions' => $suggester->forLines(array_column($review->unlinked, 'line')),
         ]);
+    }
+
+    /**
+     * Volver a cruzar un extracto ya subido con el libro, sin subirlo otra vez: liga lo
+     * que se anotó después y lo que el cruce de la subida no sabía juntar.
+     */
+    #[Route('/{id}/relink', name: 'accounting_bank_statement_relink', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
+    public function relink(Request $request, BankStatement $statement, BankStatementImporter $importer): Response
+    {
+        $back = $this->redirectToRoute('accounting_bank_statement_show', ['id' => $statement->getId(), '_fragment' => 'sin-apunte']);
+        if (!$this->isCsrfTokenValid('bank_statement_relink_'.$statement->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $back;
+        }
+        [$linked, $booked] = $importer->relink($statement, $this->currentUser());
+        $this->addFlash($linked + $booked > 0 ? 'success' : 'info', $linked + $booked > 0
+            ? self::crossed($linked, $booked)
+            : 'Nada nuevo: lo que queda necesita que lo mires tú.');
+
+        return $back;
+    }
+
+    /** Lo que hizo el cruce con el libro, en una o dos frases. */
+    private static function crossed(int $linked, int $booked): string
+    {
+        $said = array_filter([
+            $linked > 0 ? sprintf('%d %s al apunte que ya %s.', $linked, $linked === 1 ? 'ligado' : 'ligados', $linked === 1 ? 'lo tenía' : 'los tenía') : null,
+            $booked > 0 ? sprintf('%d %s por la app: los tienes en «Anotados solos».', $booked, $booked === 1 ? 'anotado solo' : 'anotados solos') : null,
+        ]);
+
+        return $said !== [] ? implode(' ', $said) : 'Nada que ligar ni anotar solo.';
     }
 
     /**

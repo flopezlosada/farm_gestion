@@ -42,17 +42,7 @@ class CategorySuggester
      */
     public function forLines(array $lines): array
     {
-        if ($lines === []) {
-            return [];
-        }
-        $accounts = [];
-        $earliest = null;
-        foreach ($lines as $line) {
-            $accounts[$line->getAccount()->getId()] = $line->getAccount();
-            $earliest = $earliest === null || $line->getOperationDate() < $earliest ? $line->getOperationDate() : $earliest;
-        }
-        $history = $this->entries->findCategorizedSince(array_values($accounts), $earliest->modify(self::HISTORY));
-
+        $history = $this->historyFor($lines);
         $suggestions = [];
         foreach ($lines as $line) {
             $suggestion = self::suggest($line, $history);
@@ -62,6 +52,52 @@ class CategorySuggester
         }
 
         return $suggestions;
+    }
+
+    /**
+     * El proveedor de cada pago, con la misma regla que {@see providerFor()} y una sola
+     * consulta para todos.
+     *
+     * @param list<BankStatementLine> $lines Los movimientos.
+     *
+     * @return array<int, Provider> Por id del movimiento; sin entrada, nada que proponer.
+     */
+    public function providersFor(array $lines): array
+    {
+        $payments = array_values(array_filter($lines, static fn (BankStatementLine $l): bool => $l->getAmountCents() < 0));
+        $history = $this->historyFor($payments);
+        $providers = [];
+        foreach ($payments as $line) {
+            $provider = self::suggestProvider($line, $history);
+            if ($provider !== null) {
+                $providers[(int) $line->getId()] = $provider;
+            }
+        }
+
+        return $providers;
+    }
+
+    /**
+     * Los apuntes con partida de las cuentas de estos movimientos, desde
+     * {@see HISTORY} antes del más antiguo, en una consulta.
+     *
+     * @param list<BankStatementLine> $lines
+     *
+     * @return list<AccountEntry> Los más recientes primero.
+     */
+    private function historyFor(array $lines): array
+    {
+        if ($lines === []) {
+            return [];
+        }
+        $accounts = [];
+        $earliest = null;
+        foreach ($lines as $line) {
+            $accounts[$line->getAccount()->getId()] = $line->getAccount();
+            $earliest = $earliest === null || $line->getOperationDate() < $earliest ? $line->getOperationDate() : $earliest;
+        }
+
+        return $this->entries->findCategorizedSince(array_values($accounts), $earliest->modify(self::HISTORY));
     }
 
     /** La propuesta de un movimiento, o null. */

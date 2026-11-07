@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Service\Accounting\Norma43\BankLineBooker;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
@@ -154,6 +155,15 @@ class AccountEntry
      * @ORM\JoinColumn(name="created_by_id", nullable=true, onDelete="SET NULL")
      */
     private ?User $createdBy = null;
+
+    /**
+     * Lo anotó la app sola al subir un extracto ({@see BankLineBooker}), con la partida
+     * de las últimas veces o la de la factura que esperaba el pago. Deja de estarlo en
+     * cuanto una persona lo corrige: entonces ya lo ha mirado alguien.
+     *
+     * @ORM\Column(name="auto_booked", type="boolean", options={"default": 0})
+     */
+    private bool $autoBooked = false;
 
     /**
      * @Gedmo\Timestampable(on="create")
@@ -400,6 +410,40 @@ class AccountEntry
     }
 
     /**
+     * Junta otro apunte ya anotado a éste como una parte más, sin tocar su importe: el
+     * banco trae en UN cargo lo que el libro tiene en varios. Caso que lo pide: la
+     * liquidación de la tarjeta, que el día 5 cobra de golpe las compras del mes que el
+     * libro apuntó una a una. Queda como un apunte partido ({@see splitOff()}): el
+     * movimiento entero es éste más sus partes, y cada compra conserva su partida.
+     *
+     * Sólo se juntan apuntes del mismo cargo: misma cuenta, mismo día y mismo sentido.
+     * Ni traspasos (su pareja dejaría de casar) ni apuntes ya partidos o que ya son
+     * parte de otro: la parte de una parte no tiene movimiento al que ligarse.
+     *
+     * @param AccountEntry $other El apunte que pasa a ser parte de éste.
+     *
+     * @throws \InvalidArgumentException si no son del mismo cargo o alguno no se puede juntar
+     */
+    public function absorb(AccountEntry $other): void
+    {
+        $sameCharge = $other !== $this
+            && $other->account === $this->account
+            && $other->date?->format('Y-m-d') === $this->date?->format('Y-m-d')
+            && $other->isIncoming() === $this->isIncoming();
+        if (!$sameCharge) {
+            throw new \InvalidArgumentException('Sólo se juntan apuntes de la misma cuenta, el mismo día y el mismo sentido.');
+        }
+        if ($this->isTransfer() || $other->isTransfer()) {
+            throw new \InvalidArgumentException('Un traspaso no se junta con otros apuntes: la otra mitad dejaría de casar.');
+        }
+        if ($this->splitFrom !== null || $other->splitFrom !== null || !$other->parts->isEmpty()) {
+            throw new \InvalidArgumentException('Uno de los apuntes ya es parte de otro o está partido.');
+        }
+        $other->splitFrom = $this;
+        $this->parts->add($other);
+    }
+
+    /**
      * El importe del movimiento del banco que anota este apunte: el suyo más el de las
      * partes que se separaron de él. Es lo que se compara con el extracto, porque partir
      * no cambia lo que dijo el banco. En uno sin partes, su importe.
@@ -459,6 +503,28 @@ class AccountEntry
     public function setCreatedBy(?User $createdBy): self
     {
         $this->createdBy = $createdBy;
+
+        return $this;
+    }
+
+    /** Si lo anotó la app sola y nadie lo ha corregido aún. */
+    public function isAutoBooked(): bool
+    {
+        return $this->autoBooked;
+    }
+
+    /** Lo anota la app sola, desde un movimiento del banco. */
+    public function markAutoBooked(): self
+    {
+        $this->autoBooked = true;
+
+        return $this;
+    }
+
+    /** Una persona lo ha corregido: ya no es sólo cosa de la app. */
+    public function markReviewed(): self
+    {
+        $this->autoBooked = false;
 
         return $this;
     }

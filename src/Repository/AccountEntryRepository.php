@@ -849,21 +849,10 @@ class AccountEntryRepository extends ServiceEntityRepository
         if ($accounts === [] || $amounts === []) {
             return [];
         }
-        // Las partes, en la misma consulta: con ellas se sabe el movimiento entero de
-        // un apunte partido. Una parte no se busca: su movimiento es el del original.
-        $qb = $this->createQueryBuilder('e')
-            ->innerJoin('e.account', 'a')
-            ->leftJoin('e.parts', 'p')->addSelect('p')
-            ->leftJoin(BankStatementLine::class, 'l', 'WITH', 'l.entry = e')
-            ->andWhere('l.id IS NULL')
-            ->andWhere('e.splitFrom IS NULL')
-            ->andWhere('e.account IN (:accounts)')->setParameter('accounts', $accounts)
+        $qb = $this->withoutBankLine($accounts)
             ->andWhere('e.date BETWEEN :from AND :to')
-            ->andWhere('e.date >= a.openingDate')
             ->setParameter('from', $from->format('Y-m-d'))
-            ->setParameter('to', $to->format('Y-m-d'))
-            ->orderBy('e.date', 'ASC')
-            ->addOrderBy('e.id', 'ASC');
+            ->setParameter('to', $to->format('Y-m-d'));
         if ($amounts !== null) {
             // Uno partido no tiene ya el importe del banco: entra siempre y lo filtra
             // quien compara el movimiento entero.
@@ -872,6 +861,73 @@ class AccountEntryRepository extends ServiceEntityRepository
         }
 
         return $qb->getQuery()->getResult();
+    }
+
+    /**
+     * Los apuntes de una cuenta entre dos fechas que anotó la app sola desde el banco y
+     * nadie ha corregido, con su partida, por fecha. Sin las partes: van con el suyo.
+     *
+     * @return list<AccountEntry>
+     */
+    public function findAutoBookedIn(FinancialAccount $account, \DateTimeImmutable $from, \DateTimeImmutable $to): array
+    {
+        return $this->createQueryBuilder('e')
+            ->innerJoin('e.category', 'c')->addSelect('c')
+            ->andWhere('e.account = :account')->setParameter('account', $account)
+            ->andWhere('e.autoBooked = true')
+            ->andWhere('e.splitFrom IS NULL')
+            ->andWhere('e.date BETWEEN :from AND :to')
+            ->setParameter('from', $from->format('Y-m-d'))
+            ->setParameter('to', $to->format('Y-m-d'))
+            ->orderBy('e.date', 'ASC')
+            ->addOrderBy('e.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Los apuntes de unas cuentas en unos días concretos que no explican ningún
+     * movimiento del banco, de cualquier importe, en una consulta: los que pueden
+     * juntarse en un solo cargo del banco de ese día ({@see BankLineMatcher}).
+     *
+     * @param list<FinancialAccount>   $accounts
+     * @param list<\DateTimeImmutable> $days
+     *
+     * @return list<AccountEntry>
+     */
+    public function findWithoutBankLineOn(array $accounts, array $days): array
+    {
+        if ($accounts === [] || $days === []) {
+            return [];
+        }
+
+        return $this->withoutBankLine($accounts)
+            ->andWhere('e.date IN (:days)')
+            ->setParameter('days', array_values(array_unique(array_map(static fn (\DateTimeImmutable $d): string => $d->format('Y-m-d'), $days))))
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Apuntes de unas cuentas, desde su apertura, que no explican ningún movimiento del
+     * banco, por fecha. Trae las partes en la misma consulta: con ellas se sabe el
+     * movimiento entero de un apunte partido. Una parte no sale: su movimiento es el
+     * del original.
+     *
+     * @param list<FinancialAccount> $accounts
+     */
+    private function withoutBankLine(array $accounts): QueryBuilder
+    {
+        return $this->createQueryBuilder('e')
+            ->innerJoin('e.account', 'a')
+            ->leftJoin('e.parts', 'p')->addSelect('p')
+            ->leftJoin(BankStatementLine::class, 'l', 'WITH', 'l.entry = e')
+            ->andWhere('l.id IS NULL')
+            ->andWhere('e.splitFrom IS NULL')
+            ->andWhere('e.account IN (:accounts)')->setParameter('accounts', $accounts)
+            ->andWhere('e.date >= a.openingDate')
+            ->orderBy('e.date', 'ASC')
+            ->addOrderBy('e.id', 'ASC');
     }
 
     /** Redondea a dos decimales con punto, como los espera una columna DECIMAL. */
