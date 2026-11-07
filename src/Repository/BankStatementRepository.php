@@ -45,22 +45,28 @@ class BankStatementRepository extends ServiceEntityRepository
     /**
      * Cuántos movimientos sin apunte tiene cada extracto, en una consulta:
      * `[id del extracto => nº]`. Cuentan los de su cuenta entre sus fechas, desde la
-     * apertura de la cuenta y distintos de cero, como en la ficha.
+     * apertura de la cuenta y distintos de cero, como en la ficha. Sólo salen los que
+     * tienen alguno.
+     *
+     * @param bool $activeAccountsOnly Contar sólo las cuentas activas, como la portada
+     *                                 ({@see BankStatementLineRepository::countUnlinked}).
      *
      * @return array<int, int>
      */
-    public function unlinkedCounts(): array
+    public function unlinkedCounts(bool $activeAccountsOnly = false): array
     {
-        $rows = $this->createQueryBuilder('s')
+        $qb = $this->createQueryBuilder('s')
             ->select('s.id AS id, COUNT(l.id) AS n')
             ->innerJoin('s.account', 'a')
             ->innerJoin(BankStatementLine::class, 'l', 'WITH', 'l.account = s.account AND l.operationDate BETWEEN s.from AND s.to')
             ->andWhere('l.entry IS NULL')
             ->andWhere('l.amount != 0')
             ->andWhere('l.operationDate >= a.openingDate')
-            ->groupBy('s.id')
-            ->getQuery()
-            ->getArrayResult();
+            ->groupBy('s.id');
+        if ($activeAccountsOnly) {
+            $qb->andWhere('a.active = true');
+        }
+        $rows = $qb->getQuery()->getArrayResult();
 
         return array_column(array_map(static fn (array $r): array => ['id' => (int) $r['id'], 'n' => (int) $r['n']], $rows), 'n', 'id');
     }

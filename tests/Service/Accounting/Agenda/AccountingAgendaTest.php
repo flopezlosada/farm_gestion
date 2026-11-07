@@ -19,6 +19,7 @@ use App\Entity\RemittanceReturn;
 use App\Entity\User;
 use App\Repository\AccountEntryRepository;
 use App\Repository\BankStatementLineRepository;
+use App\Repository\BankStatementRepository;
 use App\Repository\CashCountRepository;
 use App\Repository\FinancialAccountRepository;
 use App\Repository\IssuedInvoiceRepository;
@@ -80,18 +81,34 @@ class AccountingAgendaTest extends TestCase
     }
 
     /**
-     * Los movimientos de los extractos que el libro no tiene: una tarea que lleva a los
-     * extractos, en singular y en plural; sin ninguno, no sale.
+     * Los movimientos de los extractos que el libro no tiene, todos en un mismo extracto:
+     * la tarea lleva directa a lo que le falta en su ficha, en singular y en plural.
      */
-    public function testLosMovimientosDelBancoSinAnotar(): void
+    public function testLosMovimientosDelBancoSinAnotarDeUnExtractoVanASuFicha(): void
     {
-        $one = $this->only($this->agenda(unlinkedBankLines: 1)->items(new \DateTimeImmutable('2026-11-15')));
+        $one = $this->only($this->agenda(unlinkedBankLines: 1, unlinkedByStatement: [14 => 1])->items(new \DateTimeImmutable('2026-11-15')));
         $this->assertSame('1 movimiento del banco sin anotar', $one->title);
-        $this->assertSame('accounting_bank_statements', $one->route);
+        $this->assertSame('accounting_bank_statement_show', $one->route);
+        $this->assertSame(['id' => 14], $one->routeParams);
+        $this->assertSame('sin-apunte', $one->fragment);
         $this->assertSame(AgendaUrgency::Normal, $one->urgency);
 
-        $many = $this->only($this->agenda(unlinkedBankLines: 12)->items(new \DateTimeImmutable('2026-11-15')));
+        $many = $this->only($this->agenda(unlinkedBankLines: 12, unlinkedByStatement: [14 => 12])->items(new \DateTimeImmutable('2026-11-15')));
         $this->assertSame('12 movimientos del banco sin anotar', $many->title);
+        $this->assertSame(['id' => 14], $many->routeParams);
+    }
+
+    /**
+     * Repartidos entre varios extractos (uno de cada banco), la tarea lleva al listado,
+     * que dice cuántos le faltan a cada uno.
+     */
+    public function testLosMovimientosDelBancoSinAnotarDeVariosExtractosVanAlListado(): void
+    {
+        $item = $this->only($this->agenda(unlinkedBankLines: 7, unlinkedByStatement: [14 => 5, 15 => 2])->items(new \DateTimeImmutable('2026-11-15')));
+        $this->assertSame('7 movimientos del banco sin anotar', $item->title);
+        $this->assertSame('accounting_bank_statements', $item->route);
+        $this->assertSame([], $item->routeParams);
+        $this->assertNull($item->fragment);
     }
 
     /** Entregado, el trimestre ya no es una tarea: ni dentro del plazo ni después. */
@@ -718,6 +735,7 @@ class AccountingAgendaTest extends TestCase
         array $dayBalances = [],
         array $officialNotices = [],
         int $unlinkedBankLines = 0,
+        array $unlinkedByStatement = [],
         array $bankProposals = [],
         array $creditMismatches = [],
         array $duplicates = [],
@@ -765,6 +783,8 @@ class AccountingAgendaTest extends TestCase
         $bankLines->method('findUnlinked')->willReturn(array_map(static fn (array $pair): BankStatementLine => $pair[0], $bankProposals));
         $matcher = $this->createStub(BankLineMatcher::class);
         $matcher->method('proposalsFor')->willReturn($bankProposals);
+        $statements = $this->createStub(BankStatementRepository::class);
+        $statements->method('unlinkedCounts')->willReturn($unlinkedByStatement);
         $credits = $this->createStub(RemittanceCredits::class);
         $credits->method('unidentifiedReturns')->willReturn($unlinkedReturns);
         $credits->method('mismatches')->willReturn($creditMismatches);
@@ -787,6 +807,7 @@ class AccountingAgendaTest extends TestCase
             $bankLines,
             $matcher,
             $credits,
+            $statements,
         );
     }
 

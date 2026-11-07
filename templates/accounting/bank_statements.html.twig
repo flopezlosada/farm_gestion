@@ -59,19 +59,29 @@
                         <th class="tight acc-num">Saldo final</th>
                         <th class="tight acc-num">Sin anotar</th>
                         <th class="tight">Subido</th>
+                        <th class="tight"></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for s in statements %}
                         {% set pending = unlinked[s.id] ?? 0 %}
+                        {% set show_url = path('accounting_bank_statement_show', { id: s.id }) %}
+                        {% set pending_url = path('accounting_bank_statement_show', { id: s.id, _fragment: 'sin-apunte' }) %}
                         <tr>
-                            <td><a class="acc-strong" href="{{ path('accounting_bank_statement_show', { id: s.id }) }}">{{ s.account.name }}</a><br><span class="acc-muted acc-small">{{ s.fileName }}</span></td>
+                            <td><a class="acc-strong" href="{{ show_url }}">{{ s.account.name }}</a><br><span class="acc-muted acc-small">{{ s.fileName }}</span></td>
                             <td class="tight">{{ s.from|date('d/m/Y') }}</td>
                             <td class="tight">{{ s.to|date('d/m/Y') }}</td>
                             <td class="acc-num">{{ fmt.money(s.openingBalance) }}</td>
                             <td class="acc-num">{{ fmt.money(s.closingBalance) }}</td>
-                            <td class="acc-num {{ pending > 0 ? 'acc-neg' : '' }}">{{ pending }}</td>
+                            <td class="acc-num">
+                                {% if pending > 0 %}
+                                    <a class="acc-neg acc-strong" href="{{ pending_url }}">{{ pending }}</a>
+                                {% else %}
+                                    0
+                                {% endif %}
+                            </td>
                             <td class="tight">{{ s.importedAt|date('d/m/Y') }}</td>
+                            <td class="tight"><a class="prl-btn prl-btn--sm{{ pending > 0 ? ' prl-btn--primary' : '' }}" href="{{ pending > 0 ? pending_url : show_url }}">{{ pending > 0 ? 'Ver lo que falta' : 'Ver' }}</a></td>
                         </tr>
                     {% endfor %}
                 </tbody>
