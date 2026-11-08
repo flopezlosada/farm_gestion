@@ -132,10 +132,24 @@
             return menu.querySelector('.csa-dropdown__option[data-index="' + i + '"]');
         }
 
+        /* El grupo (<optgroup>) de una opción, o ''. Sin él, «Varios» de
+           ingresos y «Varios» de gastos se leen igual en el menú y en el campo. */
+        function groupOf(opt) {
+            return opt && opt.parentNode && 'OPTGROUP' === opt.parentNode.tagName
+                ? (opt.parentNode.label || '').trim()
+                : '';
+        }
+
+        function labelOf(opt) {
+            var group = groupOf(opt);
+
+            return opt.textContent.trim() + (group ? ' · ' + group : '');
+        }
+
         function selectedLabel() {
             var opt = select.options[select.selectedIndex];
 
-            return opt && '' !== opt.value ? opt.textContent.trim() : '';
+            return opt && '' !== opt.value ? labelOf(opt) : '';
         }
 
         function syncValueLabel() {
@@ -146,7 +160,7 @@
             }
 
             var opt = select.options[select.selectedIndex];
-            value.textContent = opt ? opt.textContent.trim() : '';
+            value.textContent = opt ? ('' !== opt.value ? labelOf(opt) : opt.textContent.trim()) : '';
             value.classList.toggle(
                 'csa-dropdown__value--placeholder',
                 !opt || '' === opt.value
@@ -155,6 +169,7 @@
 
         function buildMenu() {
             menu.innerHTML = '';
+            var lastGroup = '';
 
             Array.prototype.forEach.call(select.options, function (opt, i) {
                 // En modo búsqueda la opción vacía no se ofrece: ya vive en el
@@ -163,8 +178,21 @@
                     return;
                 }
 
+                // Cada <optgroup> lleva su cabecera, que no se elige.
+                var group = groupOf(opt);
+                if (group && group !== lastGroup) {
+                    var head = document.createElement('li');
+                    head.className = 'csa-dropdown__group';
+                    head.setAttribute('role', 'presentation');
+                    head.dataset.group = group;
+                    head.textContent = group;
+                    menu.appendChild(head);
+                }
+                lastGroup = group;
+
                 var li = document.createElement('li');
-                li.className = 'csa-dropdown__option';
+                li.className = 'csa-dropdown__option' + (group ? ' csa-dropdown__option--grouped' : '');
+                li.dataset.group = group;
                 li.setAttribute('role', 'option');
                 li.textContent = opt.textContent.trim();
                 li.setAttribute('aria-selected', i === select.selectedIndex ? 'true' : 'false');
@@ -193,11 +221,13 @@
          * porque nadie recuerda si la lista pone antes el nombre o el apellido.
          */
         function filterMenu(query) {
-            var terms = fold(query).split(/\s+/).filter(Boolean);
+            // El «·» separa la opción de su grupo en la etiqueta: no es algo que buscar.
+            var terms = fold(query).split(/[\s·]+/).filter(Boolean);
             var shown = 0;
 
             optionItems().forEach(function (li) {
-                var haystack = fold(li.textContent);
+                // Escribir el grupo («huerta») enseña todo lo suyo.
+                var haystack = fold(li.textContent + ' ' + (li.dataset.group || ''));
                 var match = terms.every(function (term) {
                     return -1 !== haystack.indexOf(term);
                 });
@@ -205,6 +235,13 @@
                 if (match) {
                     shown++;
                 }
+            });
+
+            // Una cabecera sin ninguna opción a la vista sobra.
+            Array.prototype.forEach.call(menu.querySelectorAll('.csa-dropdown__group'), function (head) {
+                head.hidden = !optionItems().some(function (li) {
+                    return !li.hidden && li.dataset.group === head.dataset.group;
+                });
             });
 
             // Sin resultados se dice: una lista vacía sin explicación parece el
