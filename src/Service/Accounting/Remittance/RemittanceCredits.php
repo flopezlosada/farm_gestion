@@ -3,6 +3,7 @@
 namespace App\Service\Accounting\Remittance;
 
 use App\Entity\AccountEntry;
+use App\Entity\BankStatementLine;
 use App\Entity\IssuedInvoice;
 use App\Entity\Remittance;
 use App\Entity\RemittanceReturn;
@@ -147,20 +148,61 @@ class RemittanceCredits
      */
     public static function pickLots(array $credits, \DateTimeImmutable $from, \DateTimeImmutable $to, Remittance $remittance): array
     {
+        return self::pickDay(
+            $credits, $from, $to, $remittance,
+            static fn (AccountEntry $e): ?\DateTimeInterface => $e->getDate(),
+            static fn (AccountEntry $e): string => $e->getConcept(),
+            static fn (AccountEntry $e): int => IssuedInvoice::toCents($e->getAmount()),
+        );
+    }
+
+    /**
+     * Lo mismo que {@see pickLots()} con los movimientos del banco, antes de que tengan
+     * apunte: así el abono se anota sabiendo de qué remesa es. Puro.
+     *
+     * @param list<BankStatementLine> $lines Movimientos del banco; sólo cuentan los abonos de remesa dentro del periodo.
+     *
+     * @return list<BankStatementLine>
+     */
+    public static function pickLines(array $lines, \DateTimeImmutable $from, \DateTimeImmutable $to, Remittance $remittance): array
+    {
+        return self::pickDay(
+            $lines, $from, $to, $remittance,
+            static fn (BankStatementLine $l): \DateTimeInterface => $l->getOperationDate(),
+            static fn (BankStatementLine $l): string => $l->getSuggestedConcept(),
+            static fn (BankStatementLine $l): int => $l->getAmountCents(),
+        );
+    }
+
+    /**
+     * Los abonos de remesa del día del periodo cuya suma más se acerca a lo pedido; a
+     * igual distancia, el primer día.
+     *
+     * @template T of object
+     *
+     * @param list<T>                              $credits
+     * @param callable(T): ?\DateTimeInterface     $date
+     * @param callable(T): string                  $concept
+     * @param callable(T): int                     $cents
+     *
+     * @return list<T>
+     */
+    private static function pickDay(array $credits, \DateTimeImmutable $from, \DateTimeImmutable $to, Remittance $remittance, callable $date, callable $concept, callable $cents): array
+    {
         $byDay = [];
-        foreach ($credits as $e) {
-            if ($e->getDate() !== null
-                && BankReturns::reference($e->getConcept(), BankReturns::CREDIT_PREFIX) !== null
-                && self::day($e) >= $from->format('Y-m-d') && self::day($e) <= $to->format('Y-m-d')) {
-                $byDay[self::day($e)][] = $e;
+        foreach ($credits as $credit) {
+            $day = $date($credit)?->format('Y-m-d');
+            if ($day !== null
+                && BankReturns::reference($concept($credit), BankReturns::CREDIT_PREFIX) !== null
+                && $day >= $from->format('Y-m-d') && $day <= $to->format('Y-m-d')) {
+                $byDay[$day][] = $credit;
             }
         }
         if ($byDay === []) {
             return [];
         }
         $asked = IssuedInvoice::toCents($remittance->getTotal());
-        $distance = static fn (array $lots): int => abs($asked - array_sum(array_map(static fn (AccountEntry $e): int => IssuedInvoice::toCents($e->getAmount()), $lots)));
-        // A igual distancia, el primer día: los días van en orden.
+        $distance = static fn (array $lots): int => abs($asked - array_sum(array_map($cents, $lots)));
         ksort($byDay);
         $best = null;
         foreach ($byDay as $lots) {
@@ -228,11 +270,5 @@ class RemittanceCredits
     public static function isSettled(\DateTimeImmutable $to, ?\DateTimeImmutable $bookUpTo): bool
     {
         return $bookUpTo !== null && $bookUpTo->format('Y-m-d') > $to->format('Y-m-d');
-    }
-
-    /** El día de un apunte, «2026-09-09». */
-    private static function day(AccountEntry $entry): string
-    {
-        return $entry->getDate()->format('Y-m-d');
     }
 }
