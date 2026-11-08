@@ -235,7 +235,6 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
         $this->assertNotNull($this->remittance('2096-09'), 'Una enviada desde aquí no se tira.');
     }
 
-    /** Un recibo nuevo propone el siguiente número de mandato libre y FRST. */
     /**
      * Una importada sin día de cargo cuyo abono ya está en el libro (y el libro pasa de
      * su mes): no hay nada que vigilar, así que no se avisa de que falta el día.
@@ -267,6 +266,7 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
         $this->assertSelectorTextNotContains('body', 'Sin fecha de cargo');
     }
 
+    /** Un recibo nuevo propone el siguiente número de mandato libre y FRST. */
     public function testUnReciboNuevoProponeElSiguienteMandato(): void
     {
         $client = $this->createAuthenticatedClient();
