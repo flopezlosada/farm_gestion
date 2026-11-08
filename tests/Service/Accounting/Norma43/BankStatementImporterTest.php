@@ -262,6 +262,35 @@ class BankStatementImporterTest extends KernelTestCase
     }
 
     /**
+     * Un mes anterior a lo ya subido: su saldo final tiene que ser el inicial del
+     * siguiente. Si no, falta algo y no se guarda; si lleva a él, sí.
+     */
+    public function testUnMesAnteriorAcabaConElSaldoInicialDelSiguiente(): void
+    {
+        [$account, $number] = $this->bankAccount();
+        $this->import($account, N43::file(N43::account('9999', '0001', $number, '910401', '910430', 7500, [])));
+
+        try {
+            $this->import($account, N43::file(N43::account('9999', '0001', $number, '910301', '910331', 10000, [['910305', -2000, ['RECIBO']]])));
+            $this->fail('Tenía que rechazarse.');
+        } catch (Norma43Exception $e) {
+            $this->assertStringContainsString('el extracto siguiente', $e->getMessage());
+            $this->assertStringContainsString('80,00 €', $e->getMessage());
+        }
+        $this->assertCount(1, $this->import($account, N43::file(N43::account('9999', '0001', $number, '910301', '910331', 10000, [['910305', -2500, ['RECIBO']]])))->statements);
+    }
+
+    /** Un mes que cae dentro del fichero del año ya subido no se compara con nada. */
+    public function testUnMesDentroDelFicheroDelAnoNoSeComparaConElSiguiente(): void
+    {
+        [$account, $number] = $this->bankAccount();
+        $this->import($account, N43::file(N43::account('9999', '0001', $number, '910101', '910430', 10000, [['910305', -2500, ['RECIBO']]])));
+        $this->import($account, N43::file(N43::account('9999', '0001', $number, '910501', '910531', 7500, [])));
+
+        $this->assertCount(1, $this->import($account, N43::file(N43::account('9999', '0001', $number, '910301', '910331', 10000, [['910305', -2500, ['RECIBO']]])))->statements);
+    }
+
+    /**
      * El cargo con el concepto de la liquidación de una tarjeta se anota solo como
      * traspaso del banco a la tarjeta, con sus dos mitades, y queda ligado.
      */

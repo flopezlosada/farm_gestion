@@ -19,13 +19,20 @@ use Doctrine\Persistence\ManagerRegistry;
  */
 class BankStatementLineRepository extends ServiceEntityRepository
 {
+    /**
+     * Huellas por consulta: un extracto de un año por todas las demás cuentas son miles,
+     * y un IN tan largo pasa del tamaño de paquete de MySQL.
+     */
+    private const FINGERPRINT_CHUNK = 500;
+
     public function __construct(ManagerRegistry $registry)
     {
         parent::__construct($registry, BankStatementLine::class);
     }
 
     /**
-     * De estas huellas, las que ya están guardadas, en una consulta.
+     * De estas huellas, las que ya están guardadas, en una consulta por cada
+     * {@see FINGERPRINT_CHUNK}.
      *
      * @param list<string> $fingerprints
      *
@@ -33,17 +40,17 @@ class BankStatementLineRepository extends ServiceEntityRepository
      */
     public function existingFingerprints(array $fingerprints): array
     {
-        if ($fingerprints === []) {
-            return [];
-        }
-        $found = $this->createQueryBuilder('l')
-            ->select('l.fingerprint')
-            ->andWhere('l.fingerprint IN (:fingerprints)')
-            ->setParameter('fingerprints', $fingerprints)
-            ->getQuery()
-            ->getSingleColumnResult();
+        $found = array_map(
+            fn (array $chunk): array => $this->createQueryBuilder('l')
+                ->select('l.fingerprint')
+                ->andWhere('l.fingerprint IN (:fingerprints)')
+                ->setParameter('fingerprints', $chunk)
+                ->getQuery()
+                ->getSingleColumnResult(),
+            array_chunk($fingerprints, self::FINGERPRINT_CHUNK),
+        );
 
-        return array_fill_keys($found, true);
+        return array_fill_keys(array_merge(...$found), true);
     }
 
     /**

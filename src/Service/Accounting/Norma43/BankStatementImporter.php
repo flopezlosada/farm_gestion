@@ -102,8 +102,9 @@ class BankStatementImporter
      *    cuenta del libro ni contradice el de ésta.
      *  - Mismas fechas que uno ya subido: los mismos saldos. Si no, el saldo inicial es
      *    el del último extracto: el final, si éste acaba antes; el inicial, si empieza el
-     *    mismo día (el fichero del año, ahora más largo). Si se solapan a medias no hay
-     *    con qué compararlo.
+     *    mismo día (el fichero del año, ahora más largo). Si es de antes que lo ya
+     *    subido, su saldo final es el inicial del siguiente. Si se solapan a medias no
+     *    hay con qué compararlo.
      *  - Más de la mitad de sus movimientos no están ya en otra cuenta: sería el
      *    fichero de esa otra.
      *
@@ -164,6 +165,7 @@ class BankStatementImporter
             return;
         }
         $previous = $this->statements->findLatestStartingBy($account, $read->from);
+        $this->assertFollowedBy($read, $account, $previous);
         if ($previous === null) {
             return;
         }
@@ -179,6 +181,32 @@ class BankStatementImporter
                 $previous->getFrom()->format('d/m/Y'), $previous->getTo()->format('d/m/Y'),
                 $continues ? 'acaba' : 'empieza ese mismo día', self::money($expected),
                 $continues ? 'Falta algún movimiento entre los dos o el fichero no es de esta cuenta.' : 'El fichero no es de esta cuenta o uno de los dos está mal.',
+            ));
+        }
+    }
+
+    /**
+     * Un mes ANTERIOR a lo ya subido: su saldo final es el inicial del extracto que le
+     * sigue. Sólo si no se solapa con ninguno: dentro del fichero del año no hay con qué
+     * compararlo.
+     *
+     * @param BankStatement|null $previous El último que empieza el mismo día o antes.
+     *
+     * @throws Norma43Exception Si el saldo final no lleva al del extracto siguiente.
+     */
+    private function assertFollowedBy(Norma43Account $read, FinancialAccount $account, ?BankStatement $previous): void
+    {
+        $next = $this->statements->findFirstStartingAfter($account, $read->from);
+        $overlaps = ($previous !== null && $previous->getTo() >= $read->from) || ($next !== null && $next->getFrom() <= $read->to);
+        if ($next === null || $overlaps) {
+            return;
+        }
+        $expected = IssuedInvoice::toCents($next->getOpeningBalance());
+        if ($expected !== $read->closingCents) {
+            throw new Norma43Exception(sprintf(
+                'El fichero acaba el %s con %s, y el extracto siguiente de «%s» (del %s al %s) empieza con %s. Falta algún movimiento entre los dos o el fichero no es de esta cuenta.',
+                $read->to->format('d/m/Y'), self::money($read->closingCents), $account->getName(),
+                $next->getFrom()->format('d/m/Y'), $next->getTo()->format('d/m/Y'), self::money($expected),
             ));
         }
     }
