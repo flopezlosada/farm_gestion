@@ -30,6 +30,9 @@ class RemittanceReview
     public const CHANGE_GONE = 'gone';
     public const CHANGE_AMOUNT = 'amount';
 
+    /** Por qué falta el recibo de quien tiene todo para cobrarle. */
+    public const NOTHING_MISSING = 'Tiene todo para cobrarle: falta su recibo en esta remesa.';
+
     /**
      * Avisos de cada recibo de un borrador, por id de recibo. Una remesa enviada no se
      * revisa: las cestas de hoy no dicen nada de lo que se cobró hace meses.
@@ -64,12 +67,12 @@ class RemittanceReview
 
     /**
      * Familias con cesta activa en el mes que no tienen recibo en esta remesa de
-     * cuotas. No es un error (hay quien paga por transferencia), pero un alta nueva
-     * aparece aquí hasta que se le añade su recibo.
+     * cuotas, con el porqué: lo que le falta para cobrarle (casi siempre el mandato) o,
+     * si no le falta nada, que se quitó su recibo a mano o la remesa se copió de otra.
      *
      * @param array<int, FeeStatement> $expected La cuota calculada del mes, por quien encabeza la familia.
      *
-     * @return list<array{partner: Partner, amount: string}>
+     * @return list<array{partner: Partner, amount: string, reasons: non-empty-list<string>}>
      */
     public function familiesWithoutLine(Remittance $remittance, array $expected): array
     {
@@ -84,7 +87,11 @@ class RemittanceReview
             ARRAY_FILTER_USE_BOTH,
         );
         $rows = array_map(
-            static fn (FeeStatement $fee): array => ['partner' => $fee->payer, 'amount' => $fee->getTotal()],
+            static fn (FeeStatement $fee): array => [
+                'partner' => $fee->payer,
+                'amount' => $fee->getTotal(),
+                'reasons' => $fee->getProblems() ?: [self::NOTHING_MISSING],
+            ],
             array_values($missing),
         );
         usort($rows, static fn (array $a, array $b): int => strcmp($a['partner']->getLegalName(), $b['partner']->getLegalName()));

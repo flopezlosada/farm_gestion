@@ -144,6 +144,35 @@ class RemittanceReviewTest extends TestCase
     }
 
     /**
+     * Cada fila dice por qué no va en la remesa: lo que le falta para cobrarle, y si no
+     * le falta nada, que falta su recibo. Sin mandato, el partner de prueba no lo tiene.
+     */
+    public function testCadaFamiliaSinReciboDiceElMotivo(): void
+    {
+        $sinMandato = self::partner(1, 'ANA', 'LOPEZ');
+        $conMandato = self::partner(2, 'BEA', 'RUIZ');
+        $conMandato->setIban('ES9121000418450200051332')->setMandateReference('M-2')->setMandateSignedOn(new \DateTimeImmutable('2024-01-10'));
+        $sinPrecio = self::partner(3, 'CARMEN', 'ALONSO');
+        $sinPrecio->setIban('ES9121000418450200051332')->setMandateReference('M-3')->setMandateSignedOn(new \DateTimeImmutable('2024-01-10'));
+        $expected = [
+            1 => self::fee($sinMandato, 6500),
+            2 => self::fee($conMandato, 4350),
+            3 => self::fee($sinPrecio, 3000, [FeeConcept::VegBiweekly]),
+        ];
+
+        $rows = (new RemittanceReview())->familiesWithoutLine(self::draft([]), $expected);
+
+        $this->assertSame([
+            'Ana Lopez' => ['No tiene mandato de domiciliación completo (cuenta, referencia y fecha).'],
+            'Bea Ruiz' => [RemittanceReview::NOTHING_MISSING],
+            'Carmen Alonso' => ['Falta el precio de cesta quincenal.'],
+        ], array_combine(
+            array_map(static fn (array $r): string => $r['partner']->getLegalName(), $rows),
+            array_column($rows, 'reasons'),
+        ));
+    }
+
+    /**
      * De un mes a otro: quien entra, quien sale y a quien le cambia el importe, por
      * familia (o por mandato sin socix). Lo que no cambia no aparece.
      */
