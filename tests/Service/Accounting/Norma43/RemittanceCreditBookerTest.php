@@ -95,14 +95,53 @@ class RemittanceCreditBookerTest extends TestCase
     }
 
     /**
-     * @param list<Remittance> $remittances
+     * Un cobro suelto anterior a la remesa (97,00 el 4 de agosto) es lo único que se ve
+     * si el extracto acaba antes de que entre: no es la remesa y no se anota.
      */
-    private function booker(BudgetCategory $fees, array $remittances): RemittanceCreditBooker
+    public function testUnCobroSueltoAnteriorALaRemesaNoSeAnota(): void
     {
+        $line = $this->line('2026-08-04', 9700, 'AB.REM.20260020101');
+
+        $this->assertSame([], $this->booker($this->category('Cuotas de socixs'), [$this->remittance('2026-08-01', '7472.40')])->bookSafe([$line], null));
+        $this->assertNull($line->getEntry());
+    }
+
+    /**
+     * Dos remesas del mismo mes, la de cuotas de cesta y la de cuota de socix: cada abono
+     * va a la partida de la suya, aunque las dos busquen en las mismas fechas.
+     */
+    public function testDosRemesasDelMismoMesVaCadaAbonoASuPartida(): void
+    {
+        $fees = $this->category('Cuotas de socixs');
+        $membership = $this->category('Cuota de mantenimiento');
+        $basketLot = $this->line('2026-10-13', 723840, 'AB.REM.20260020180');
+        $membershipLot = $this->line('2026-10-20', 58000, 'AB.REM.20260020190');
+        $remittances = [
+            $this->remittance('2026-10-01', '600.00', Remittance::KIND_MEMBERSHIP),
+            $this->remittance('2026-10-01', '7626.40'),
+        ];
+
+        $booked = $this->booker([$fees, $membership], $remittances)->bookSafe([$basketLot, $membershipLot], null);
+
+        $this->assertCount(2, $booked);
+        $this->assertSame($fees, $basketLot->getEntry()?->getCategory());
+        $this->assertSame($membership, $membershipLot->getEntry()?->getCategory());
+    }
+
+    /**
+     * @param BudgetCategory|list<BudgetCategory> $categories Las partidas que existen.
+     * @param list<Remittance>                    $remittances
+     */
+    private function booker(BudgetCategory|array $categories, array $remittances): RemittanceCreditBooker
+    {
+        $byName = [];
+        foreach (\is_array($categories) ? $categories : [$categories] as $category) {
+            $byName[$category->getName()] = $category;
+        }
         $repo = $this->createStub(RemittanceRepository::class);
         $repo->method('findAllNewestFirst')->willReturn($remittances);
-        $categories = $this->createStub(BudgetCategoryRepository::class);
-        $categories->method('findOneByGroupAndName')->willReturnCallback(static fn (string $g, string $n): ?BudgetCategory => $n === $fees->getName() ? $fees : null);
+        $categoryRepo = $this->createStub(BudgetCategoryRepository::class);
+        $categoryRepo->method('findOneByGroupAndName')->willReturnCallback(static fn (string $g, string $n): ?BudgetCategory => $byName[$n] ?? null);
         $closed = $this->createStub(ClosedPeriods::class);
         $closed->method('closingDeliveryFor')->willReturnCallback(fn (): ?AccountantDelivery => $this->closedBy);
         $em = $this->createStub(EntityManagerInterface::class);
@@ -110,15 +149,15 @@ class RemittanceCreditBookerTest extends TestCase
             $this->persisted[] = $o;
         });
 
-        return new RemittanceCreditBooker($repo, $categories, $closed, $em);
+        return new RemittanceCreditBooker($repo, $categoryRepo, $closed, $em);
     }
 
-    private function remittance(string $period, string $total): Remittance
+    private function remittance(string $period, string $total, string $kind = Remittance::KIND_BASKET): Remittance
     {
         $line = (new RemittanceLine())->setDebtorName('ZZTEST')->setAmount($total);
         $this->setId($line);
 
-        return Remittance::fromImport(Remittance::KIND_BASKET, new \DateTimeImmutable($period), 'Recibos', 'recibos.xlsx', [$line], null);
+        return Remittance::fromImport($kind, new \DateTimeImmutable($period), 'Recibos', 'recibos.xlsx', [$line], null);
     }
 
     private function category(string $name): BudgetCategory
