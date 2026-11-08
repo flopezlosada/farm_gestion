@@ -7,6 +7,7 @@ use App\Entity\IssuedInvoice;
 use App\Entity\ReceivedInvoice;
 use App\Entity\User;
 use App\EventListener\InvoiceReadListener;
+use App\Http\QueryId;
 use App\Form\AccountEntryType;
 use App\Form\ReceivedInvoiceConfirmType;
 use App\Form\ReceivedInvoiceUploadType;
@@ -154,6 +155,7 @@ class ReceivedInvoiceController extends AbstractController
             return $this->render('accounting/invoice_show.html.twig', [
                 'invoice' => $invoice,
                 'hasDocument' => $files->pathTo($invoice->getFileName()) !== null,
+                'payments' => self::paymentCandidates($invoice, $entries),
             ]);
         }
 
@@ -318,6 +320,55 @@ class ReceivedInvoiceController extends AbstractController
         $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
 
         return $response;
+    }
+
+    /**
+     * Enganchar una factura que espera su pago a un apunte que ya lo anota: el pago se
+     * anotó antes de aceptarla, o entero en un cargo que se partió después (el del
+     * Ayuntamiento). Se vuelve a comprobar todo: que la factura sigue esperando, que el
+     * apunte es del importe de la factura y que no explica ya otra.
+     */
+    #[Route('/{id}/link-payment', name: 'accounting_invoice_link_payment', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
+    public function linkPayment(Request $request, ReceivedInvoice $invoice, AccountEntryRepository $entries, EntityManagerInterface $em): Response
+    {
+        $back = $this->redirectToRoute('accounting_invoice_review', ['id' => $invoice->getId()]);
+        if (!$this->isCsrfTokenValid('invoice-link-payment-'.$invoice->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('danger', 'La petición ha caducado; vuelve a intentarlo.');
+
+            return $back;
+        }
+        $entryId = QueryId::from($request->request, 'entry');
+        $entry = $entryId !== null ? $entries->find($entryId) : null;
+        $fits = $entry !== null && $invoice->isAwaitingPayment() && $invoice->getTotal() !== null
+            && IssuedInvoice::toCents($entry->getAmount()) === -IssuedInvoice::toCents($invoice->getTotal())
+            && $entries->canBePayment($entry);
+        if (!$fits) {
+            $this->addFlash('warning', 'Ese apunte ya no puede ser el pago de esta factura: o la factura ya no espera, o el apunte cambió de importe o ya explica otra.');
+
+            return $back;
+        }
+        $invoice->paidBy($entry);
+        $em->flush();
+        $this->addFlash('success', sprintf('Enganchada: el pago es el apunte del %s «%s».', $entry->getDate()?->format('d/m/Y'), $entry->getConcept()));
+
+        return $back;
+    }
+
+    /**
+     * Los apuntes que pueden ser el pago de una factura que lo espera: de su importe,
+     * desde una semana antes de su fecha y sin otra factura. Ninguno si no espera.
+     *
+     * @return list<AccountEntry>
+     */
+    private static function paymentCandidates(ReceivedInvoice $invoice, AccountEntryRepository $entries): array
+    {
+        $date = $invoice->getInvoiceDate() ?? $invoice->getCreatedAt();
+        if (!$invoice->isAwaitingPayment() || $invoice->getTotal() === null || $date === null) {
+            return [];
+        }
+
+        return $entries->findPaymentCandidates(IssuedInvoice::fromCents(-IssuedInvoice::toCents($invoice->getTotal())), $date, 5);
     }
 
     /**

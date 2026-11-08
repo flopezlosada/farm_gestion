@@ -208,6 +208,113 @@ class BankLineBookerTest extends TestCase
         $this->assertTrue($this->persisted[1]->isAutoBooked());
     }
 
+    /**
+     * El cargo del Ayuntamiento (158,95) que nunca se partió, y su factura del alquiler
+     * (108,95) esperando: se parte en lo de la factura, enganchado a ella y con su
+     * partida, y el resto (50) con la partida de siempre.
+     */
+    public function testLaFacturaQueEsperaParteDelCargoLoParte(): void
+    {
+        $local = $this->category('Local');
+        $rent = $this->category('Alquiler');
+        $this->history = [
+            $this->entry('2026-09-09', '-158.95', 'trf. ayuntamiento de torremocha', $local),
+            $this->entry('2026-08-09', '-158.95', 'trf. ayuntamiento de torremocha', $local),
+        ];
+        $invoice = $this->awaiting('108.95', $rent, 'Ayuntamiento de Torremocha de Jarama');
+        $this->awaiting = [$invoice];
+        $line = $this->line('2026-10-09', -15895, 'TRF. AYUNTAMIENTO DE TORREMOCHA');
+
+        $booked = $this->booker()->bookSafe([$line], null);
+
+        $this->assertCount(1, $booked);
+        $this->assertSame($booked[0], $line->getEntry());
+        $this->assertSame('-108.95', $booked[0]->getAmount());
+        $this->assertSame('-158.95', $booked[0]->getMovementAmount());
+        $this->assertSame($rent, $booked[0]->getCategory());
+        $this->assertSame($booked[0], $invoice->getAccountEntry());
+        $this->assertCount(2, $this->persisted);
+        $this->assertSame('-50.00', $this->persisted[1]->getAmount());
+        $this->assertSame($local, $this->persisted[1]->getCategory());
+        $this->assertTrue($this->persisted[1]->isAutoBooked());
+    }
+
+    /**
+     * Si la última vez se partió con otro total, el resto toma la partida y el concepto
+     * de lo que se separó entonces, aunque el importe haya cambiado.
+     */
+    public function testElRestoLlevaLoQueSeSeparoLaUltimaVez(): void
+    {
+        $rent = $this->category('Alquiler');
+        $supplies = $this->category('Suministros');
+        $previous = $this->entry('2026-09-09', '-155.88', 'trf. ayuntamiento de torremocha', $rent);
+        $part = $previous->splitOff('50.00', $supplies, 'Suministros del local');
+        $this->setId($part);
+        $this->splits = [$previous];
+        $this->parts = [$part];
+        $this->awaiting = [$this->awaiting('108.95', $rent, 'Ayuntamiento de Torremocha de Jarama')];
+
+        $booked = $this->booker()->bookSafe([$this->line('2026-10-09', -15895, 'TRF. AYUNTAMIENTO DE TORREMOCHA')], null);
+
+        $this->assertCount(1, $booked);
+        $this->assertSame('-50.00', $this->persisted[1]->getAmount());
+        $this->assertSame($supplies, $this->persisted[1]->getCategory());
+        $this->assertSame('Suministros del local', $this->persisted[1]->getConcept());
+    }
+
+    /** Una factura más pequeña de otro proveedor no es parte de este cargo: se anota entero. */
+    public function testLaFacturaDeOtroProveedorNoParteElCargo(): void
+    {
+        $local = $this->category('Local');
+        $this->history = [
+            $this->entry('2026-09-09', '-158.95', 'trf. ayuntamiento de torremocha', $local),
+            $this->entry('2026-08-09', '-158.95', 'trf. ayuntamiento de torremocha', $local),
+        ];
+        $invoice = $this->awaiting('108.95', $local, 'Ferretería Torrelaguna');
+        $this->awaiting = [$invoice];
+
+        $booked = $this->booker()->bookSafe([$this->line('2026-10-09', -15895, 'TRF. AYUNTAMIENTO DE TORREMOCHA')], null);
+
+        $this->assertSame('-158.95', $booked[0]->getAmount());
+        $this->assertNull($invoice->getAccountEntry());
+    }
+
+    /** Sin partida de otras veces para el resto, no se adivina: se queda para una persona. */
+    public function testSinPartidaParaElRestoNoSeAnota(): void
+    {
+        $invoice = $this->awaiting('108.95', $this->category('Alquiler'), 'Ayuntamiento de Torremocha de Jarama');
+        $this->awaiting = [$invoice];
+        $line = $this->line('2026-10-09', -15895, 'TRF. AYUNTAMIENTO DE TORREMOCHA');
+
+        $this->assertSame([], $this->booker()->bookSafe([$line], null));
+        $this->assertNull($line->getEntry());
+        $this->assertNull($invoice->getAccountEntry());
+    }
+
+    /**
+     * Partido como la última vez, la factura que espera justo uno de los trozos queda
+     * enganchada a ése (antes sólo se buscaba por el total, sin partir).
+     */
+    public function testAlPartirComoLaUltimaVezLaFacturaVaASuTrozo(): void
+    {
+        $rent = $this->category('Local');
+        $supplies = $this->category('Suministros');
+        $previous = $this->entry('2026-09-09', '-158.95', 'trf. ayuntamiento de torremocha', $rent);
+        $part = $previous->splitOff('50.00', $supplies, 'Suministros del local');
+        $this->setId($part);
+        $this->history = [$previous, $this->entry('2026-08-09', '-158.95', 'trf. ayuntamiento de torremocha', $rent)];
+        $this->splits = [$previous];
+        $this->parts = [$part];
+        $invoice = $this->awaiting('108.95', $rent, 'Ayuntamiento de Torremocha de Jarama');
+        $this->awaiting = [$invoice];
+
+        $booked = $this->booker()->bookSafe([$this->line('2026-10-09', -15895, 'TRF. AYUNTAMIENTO DE TORREMOCHA')], null);
+
+        $this->assertSame('-108.95', $booked[0]->getAmount());
+        $this->assertSame($booked[0], $invoice->getAccountEntry());
+        $this->assertSame($supplies, $this->persisted[1]->getCategory());
+    }
+
     private function booker(): BankLineBooker
     {
         $entries = $this->createStub(AccountEntryRepository::class);
@@ -262,11 +369,11 @@ class BankLineBookerTest extends TestCase
         return $entry;
     }
 
-    private function awaiting(string $total, BudgetCategory $category): ReceivedInvoice
+    private function awaiting(string $total, BudgetCategory $category, string $provider = 'Semilleros Álvarez'): ReceivedInvoice
     {
         $invoice = new ReceivedInvoice('f.pdf', 'f.pdf', 'application/pdf', ReceivedInvoice::SOURCE_WEB, null);
-        $invoice->markRead(ExtractedInvoice::fromArray(['fecha' => '2026-10-01', 'total' => (float) $total, 'proveedor' => 'Semilleros Álvarez']), 'test', null, new \DateTimeImmutable());
-        $invoice->acceptUnpaid($category, $total, null, 'Semilleros Álvarez', 'F-1');
+        $invoice->markRead(ExtractedInvoice::fromArray(['fecha' => '2026-10-01', 'total' => (float) $total, 'proveedor' => $provider]), 'test', null, new \DateTimeImmutable());
+        $invoice->acceptUnpaid($category, $total, null, $provider, 'F-1');
 
         return $invoice;
     }

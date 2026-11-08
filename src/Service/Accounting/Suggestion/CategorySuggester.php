@@ -18,8 +18,8 @@ use App\Service\Accounting\ConceptKey;
  * y quien anota sólo confirma. Si las últimas veces no coinciden, no se propone nada:
  * mejor nada que una partida equivocada que se acepta sin mirar.
  *
- * El concepto se compara con {@see ConceptKey}: sin cifras, tildes, espacios ni
- * signos.
+ * El concepto se compara con {@see ConceptKey}: sin tildes, espacios, signos ni
+ * cifras, salvo los números sueltos de tres (el modelo 111 o 303 de Hacienda).
  */
 class CategorySuggester
 {

@@ -12,12 +12,12 @@ use App\Entity\ReceivedInvoice;
 use App\Entity\Setting;
 use App\Service\Accounting\Invoice\ExtractedInvoice;
 use App\Service\AppSettings;
-use App\Service\Accounting\Norma43\Norma43Account;
 use App\Tests\Service\Accounting\Norma43\BankSheet;
 use App\Tests\Service\Accounting\Norma43\N43;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\DomCrawler\Crawler;
+use Symfony\Component\DomCrawler\Form;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
@@ -72,7 +72,7 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
 
         $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
         $this->assertResponseIsSuccessful();
-        $form = $crawler->filter('form.inv-upload')->form();
+        $form = $this->uploadForm($crawler);
         $form['file']->upload($this->tempFile(N43::file(N43::account('9999', '0001', $number, '910401', '910430', 50000, [
             ['910403', -2500, ['COMPRA SEMILLAS']],
         ]))));
@@ -87,6 +87,30 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         $this->assertSelectorTextContains('body', '25,00 € de más');
     }
 
+    /** En el listado, un extracto con movimientos sin anotar lleva directo a lo que le falta. */
+    public function testElListadoLlevaALoQueFaltaEnLaFicha(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
+        $number = sprintf('%010d', random_int(0, 9_999_999_999));
+        $this->account = $this->bankAccount($number);
+        $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
+        $form = $crawler->filter('form.inv-upload')->form();
+        $form['file']->upload($this->tempFile(N43::file(N43::account('9999', '0001', $number, '910401', '910430', 50000, [
+            ['910403', -2500, ['COMPRA SEMILLAS']],
+        ]))));
+        $client->submit($form);
+        $statement = static::getContainer()->get(EntityManagerInterface::class)
+            ->getRepository(BankStatement::class)->findOneBy(['account' => $this->account->getId()]);
+
+        $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
+
+        $this->assertSame(
+            sprintf('/gestion/accounting/bank-statements/%d#sin-apunte', $statement->getId()),
+            $crawler->selectLink('Ver lo que falta')->attr('href'),
+        );
+    }
+
     /** «Anotar» llega con cuenta, fecha, importe y concepto, y al guardar queda ligado. */
     public function testAnotarDesdeElExtractoLoLiga(): void
     {
@@ -96,7 +120,7 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         $this->account = $this->bankAccount($number);
         $category = $this->category();
         $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
-        $form = $crawler->filter('form.inv-upload')->form();
+        $form = $this->uploadForm($crawler);
         $form['file']->upload($this->tempFile(N43::file(N43::account('9999', '0001', $number, '910401', '910430', 50000, [
             ['910403', -2500, ['COMPRA SEMILLAS']],
         ]))));
@@ -219,7 +243,7 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
             ->setDate(new \DateTimeImmutable('2091-03-05'))->setConcept('rcbo.caymuz, s.l.')->setAmount('-170.00'));
         $em->flush();
         $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
-        $form = $crawler->filter('form.inv-upload')->form();
+        $form = $this->uploadForm($crawler);
         $form['file']->upload($this->tempFile(N43::file(N43::account('9999', '0001', $number, '910401', '910430', 50000, [
             ['910405', -17000, ['RCBO.CAYMUZ SL']],
         ]))));
@@ -245,7 +269,7 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         $number = sprintf('%010d', random_int(0, 9_999_999_999));
         $this->account = $this->bankAccount($number);
         $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
-        $form = $crawler->filter('form.inv-upload')->form();
+        $form = $this->uploadForm($crawler);
         $form['file']->upload($this->tempFile(N43::file(N43::account('9999', '0001', $number, '910401', '910430', 50000, [
             ['910403', -2500, ['COMPRA SEMILLAS']],
         ]))));
@@ -278,7 +302,7 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         $number = sprintf('%010d', random_int(0, 9_999_999_999));
         $this->account = $this->bankAccount($number);
         $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
-        $form = $crawler->filter('form.inv-upload')->form();
+        $form = $this->uploadForm($crawler);
         $form['file']->upload($this->tempFile(N43::file(N43::account('9999', '0001', $number, '910601', '910630', 50000, [
             ['910605', -17562, ['TARJETA TJ MIXTA PERSON']],
         ]))));
@@ -308,8 +332,9 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
     {
         $client = $this->createAuthenticatedClient();
         static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
+        $this->account = $this->bankAccount(sprintf('%010d', random_int(0, 9_999_999_999)));
         $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
-        $form = $crawler->filter('form.inv-upload')->form();
+        $form = $this->uploadForm($crawler);
         $form['file']->upload($this->tempFile("esto no es un extracto\n"));
         $client->submit($form);
 
@@ -318,35 +343,54 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
-     * La hoja de Excel del banco sin IBAN: se pide la cuenta (la clave no puede ir vacía
-     * en el formulario) y, elegida, el extracto se guarda con sus movimientos. Como en
-     * Fiare, la cuenta del libro ya tiene su IBAN: el fichero no lo contradice, así que
-     * se puede elegir igual.
+     * Se elige la cuenta antes que el fichero: la hoja de Excel de Fiare, que no trae
+     * IBAN, se guarda sin preguntar nada más en la cuenta elegida, aunque ésta tenga
+     * su IBAN (el fichero no lo contradice).
      */
-    public function testHojaDeExcelSinIbanPideLaCuentaYSeGuarda(): void
+    public function testHojaDeExcelSinIbanSeGuardaEnLaCuentaElegida(): void
     {
         $client = $this->createAuthenticatedClient();
         static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
         $this->account = $this->bankAccount(sprintf('%010d', random_int(0, 9_999_999_999)));
 
         $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
-        $form = $crawler->filter('form.inv-upload')->form();
+        $form = $this->uploadForm($crawler);
         $form['file']->upload($this->tempFile(BankSheet::fiareLike(500.00, [
             ['2091-04-03', -25.00, 'COMPRA SEMILLAS'],
             ['2091-04-09', 40.00, 'TRF. CUOTA INVENTADA'],
         ]), 'movimientos.xls'));
-        $crawler = $client->submit($form);
-
-        $this->assertResponseIsSuccessful();
-        $this->assertSelectorTextContains('body', 'cuenta sin IBAN en el fichero');
-        $choose = $crawler->filter('form.csa-form-narrow')->form();
-        $choose['account['.Norma43Account::UNKNOWN_KEY.']']->select((string) $this->account->getId());
-        $client->submit($choose);
+        $client->submit($form);
 
         $this->assertResponseRedirects();
         $client->followRedirect();
         $this->assertSelectorTextContains('h1', $this->account->getName());
         $this->assertSelectorTextContains('#sin-apunte', 'COMPRA SEMILLAS');
+    }
+
+    /** Sin cuenta elegida (o una que no se puede elegir) no se sube nada. */
+    public function testSinCuentaNoSeSubeNada(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
+        $number = sprintf('%010d', random_int(0, 9_999_999_999));
+        $this->account = $this->bankAccount($number);
+
+        $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
+        $form = $this->uploadForm($crawler);
+        $form['account']->setValue('999999999');
+        $form['file']->upload($this->tempFile(N43::file(N43::account('9999', '0001', $number, '910401', '910430', 50000, [['910403', -2500, ['COMPRA']]]))));
+        $client->submit($form);
+
+        $client->followRedirect();
+        $this->assertSelectorTextContains('body', 'Elige primero de qué cuenta es el extracto');
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $this->assertSame(0, $em->getRepository(BankStatement::class)->count(['account' => $this->account->getId()]));
+    }
+
+    /** El formulario de subida de la cuenta del test, entre las de todas las cuentas. */
+    private function uploadForm(Crawler $crawler): Form
+    {
+        return $crawler->filter(sprintf('form.inv-upload input[name="account"][value="%d"]', $this->account->getId()))->closest('form')->form();
     }
 
     private function bankAccount(string $number): FinancialAccount
@@ -401,7 +445,7 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
     private function upload(KernelBrowser $client, string $number, string $text): Crawler
     {
         $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
-        $form = $crawler->filter('form.inv-upload')->form();
+        $form = $this->uploadForm($crawler);
         $form['file']->upload($this->tempFile(N43::file(N43::account('9999', '0001', $number, '910401', '910430', 50000, [
             ['910403', -2500, [$text]],
         ]))));
