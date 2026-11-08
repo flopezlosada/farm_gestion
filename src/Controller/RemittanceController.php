@@ -550,11 +550,11 @@ class RemittanceController extends AbstractController
     /**
      * Añadir un recibo a un borrador. Desde la lista de «con cesta y sin recibo» llega
      * con el socix: se rellena con su nombre, su cuenta, lo que suman sus cestas y el
-     * siguiente número de mandato libre.
+     * mandato de su ficha, si lo tiene.
      */
     #[Route('/{id}/lines/new', name: 'accounting_remittance_line_new', methods: ['GET', 'POST'], requirements: ['id' => '\d+'])]
     #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
-    public function lineNew(Request $request, Remittance $remittance, RemittanceRepository $remittances, MonthlyFeeCalculator $fees, EntityManagerInterface $em): Response
+    public function lineNew(Request $request, Remittance $remittance, MonthlyFeeCalculator $fees, EntityManagerInterface $em): Response
     {
         if (!$remittance->isDraft()) {
             return $this->sentRedirect($remittance);
@@ -562,7 +562,7 @@ class RemittanceController extends AbstractController
 
         $line = new RemittanceLine();
         if (!$request->isMethod('POST')) {
-            $this->prefill($line, $remittance, $request->query->getInt('partner'), $remittances, $fees, $em);
+            $this->prefill($line, $remittance, $request->query->getInt('partner'), $fees, $em);
         }
 
         return $this->handleLine($request, $remittance, $line, $em, 'Recibo añadido.');
@@ -640,21 +640,15 @@ class RemittanceController extends AbstractController
     }
 
     /**
-     * Rellena un recibo nuevo: el mandato nuevo lleva el siguiente número libre con el
-     * prefijo de la remesa, y es su primer adeudo (FRST). Con socix, además su nombre,
-     * su cuenta y su cuota calculada.
+     * Rellena un recibo nuevo, primer adeudo (FRST). Con socix, su nombre, su cuenta,
+     * su cuota calculada y, si su ficha lo tiene, su mandato: la referencia y la fecha
+     * son las del papel firmado. Sin mandato en la ficha no se inventa ninguno (ni el
+     * siguiente número libre ni «firmado hoy»): quien hace el recibo copia los del
+     * papel, y si no hay papel, no hay recibo.
      */
-    private function prefill(RemittanceLine $line, Remittance $remittance, int $partnerId, RemittanceRepository $remittances, MonthlyFeeCalculator $fees, EntityManagerInterface $em): void
+    private function prefill(RemittanceLine $line, Remittance $remittance, int $partnerId, MonthlyFeeCalculator $fees, EntityManagerInterface $em): void
     {
-        $sample = $remittance->getLines()->first() ?: null;
-        $prefix = $sample !== null ? rtrim((string) preg_replace('/\d+\s*$/', '', $sample->getMandateReference())) : '';
-        $mandate = $remittances->nextMandateReference($prefix !== '' ? $prefix : RemittanceRepository::DEFAULT_MANDATE_PREFIX);
-
-        $line->setMandateReference($mandate)
-            ->setMandateSignedOn(new \DateTimeImmutable('today'))
-            ->setSequenceType(RemittanceLine::SEQUENCE_FIRST)
-            ->setDebitReference(mb_substr($mandate . ' ' . $remittance->getPeriod()->format('Ym'), 0, RemittanceLine::MAX_REFERENCE));
-
+        $line->setSequenceType(RemittanceLine::SEQUENCE_FIRST);
         $partner = $partnerId > 0 ? $em->find(Partner::class, $partnerId) : null;
         if ($partner === null) {
             return;
@@ -665,6 +659,12 @@ class RemittanceController extends AbstractController
             ->setIban($partner->getIban())
             // Sin algún precio la cuota sale corta: mejor que lo teclee quien revisa.
             ->setAmount($fee !== null && $fee->describeMissing() === null ? $fee->getTotal() : '0');
+        $mandate = $partner->getMandateReference();
+        if ($mandate !== null && $partner->getMandateSignedOn() !== null) {
+            $line->setMandateReference($mandate)
+                ->setMandateSignedOn($partner->getMandateSignedOn())
+                ->setDebitReference(mb_substr($mandate . ' ' . $remittance->getPeriod()->format('Ym'), 0, RemittanceLine::MAX_REFERENCE));
+        }
     }
 
     /**

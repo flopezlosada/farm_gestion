@@ -214,15 +214,18 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
         $this->assertNotNull($this->remittance('2096-09'), 'Una enviada desde aquí no se tira.');
     }
 
-    /** Un recibo nuevo propone el siguiente número de mandato libre y FRST. */
-    public function testUnReciboNuevoProponeElSiguienteMandato(): void
+    /**
+     * Un recibo nuevo no inventa el mandato: sin socix (o con uno sin mandato en su
+     * ficha) llega vacío para copiarlo del papel firmado; con mandato en la ficha, el de
+     * la ficha con su fecha de firma.
+     */
+    public function testUnReciboNuevoNoInventaElMandato(): void
     {
         $client = $this->createAuthenticatedClient();
         $this->enableModule();
         $this->importAugust($client);
         $crawler = $client->request('GET', '/gestion/accounting/remittances');
         $prepare = $crawler->filter('button[formaction="/gestion/accounting/remittances/prepare"]')->first()->form();
-
         $prepare['period'] = '2096-10';
         $client->submit($prepare);
         $draft = $this->remittance('2096-10');
@@ -230,10 +233,19 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
 
         $crawler = $client->request('GET', sprintf('/gestion/accounting/remittances/%d/lines/new', $draft->getId()));
         $this->assertResponseIsSuccessful();
-        $mandate = (string) $crawler->filter('#remittance_line_mandateReference')->attr('value');
-        $this->assertMatchesRegularExpression('/^\S.* \d+$/', $mandate);
+        $this->assertSame('', (string) $crawler->filter('#remittance_line_mandateReference')->attr('value'));
+        $this->assertSame('', (string) $crawler->filter('#remittance_line_mandateSignedOn')->attr('value'), 'Ni «firmado hoy».');
         $this->assertSame('FRST', $crawler->filter('#remittance_line_sequenceType option[selected]')->attr('value'));
-        $this->assertStringEndsWith(' 209610', (string) $crawler->filter('#remittance_line_debitReference')->attr('value'));
+
+        $member = $this->em()->getRepository(Partner::class)->findOneBy(['status' => Partner::STATUS_ACTIVO]);
+        $this->mandatePartnerId = $member->getId();
+        $member->setIban(self::GOOD_IBAN)->setMandateReference('ZZTEST FICHA 7')->setMandateSignedOn(new \DateTimeImmutable('2022-11-01'));
+        static::getContainer()->get(EntityManagerInterface::class)->flush();
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/remittances/%d/lines/new?partner=%d', $draft->getId(), $member->getId()));
+        $this->assertSame('ZZTEST FICHA 7', $crawler->filter('#remittance_line_mandateReference')->attr('value'));
+        $this->assertSame('2022-11-01', $crawler->filter('#remittance_line_mandateSignedOn')->attr('value'));
+        $this->assertSame('ZZTEST FICHA 7 209610', $crawler->filter('#remittance_line_debitReference')->attr('value'));
     }
 
     /**
