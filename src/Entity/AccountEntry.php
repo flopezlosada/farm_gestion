@@ -458,6 +458,16 @@ class AccountEntry
         return IssuedInvoice::fromCents($cents);
     }
 
+    /**
+     * Las partes que se separaron de éste al partirlo, en el orden en que se separaron.
+     *
+     * @return list<AccountEntry>
+     */
+    public function getParts(): array
+    {
+        return array_values($this->parts->toArray());
+    }
+
     /** El apunte del que se separó éste al partirlo, o null. */
     public function getSplitFrom(): ?AccountEntry
     {

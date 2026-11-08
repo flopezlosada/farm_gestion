@@ -195,6 +195,60 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * Lo anotado solo se revisa en su fila: se cambia la partida y se guarda, sin ir al
+     * formulario del apunte. Guardado, deja de salir en «Anotados solos».
+     */
+    public function testLoAnotadoSoloSeCorrigeEnLaFilaEligiendoLaPartida(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
+        $number = sprintf('%010d', random_int(0, 9_999_999_999));
+        $this->account = $this->bankAccount($number);
+        $category = $this->category();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $tools = (new BudgetCategory())->setGroup($em->find(BudgetCategoryGroup::class, $this->group->getId()))->setName('Herramientas')->setSortOrder(2);
+        $em->persist($tools);
+        $em->flush();
+        $this->awaitingInvoice($category, 'Semillas del Jarama', 'S-8', 'semillas de calabaza');
+
+        $crawler = $this->upload($client, $number, 'TRF SEMILLAS DEL JARAMA');
+        $entryId = $this->lineEntry()->getId();
+        $this->assertSelectorNotExists(sprintf('#anotados-solos a[href="/gestion/accounting/entry/%d/edit"]', $entryId), 'Ya no lleva al formulario entero.');
+        $form = $crawler->filter(sprintf('form#bst-review-%d', $entryId))->form();
+        $form[sprintf('category[%d]', $entryId)]->select((string) $tools->getId());
+        $client->submit($form);
+
+        $this->assertResponseRedirects();
+        $client->followRedirect();
+        $this->assertSelectorTextContains('.csa-alerts', 'en «Herramientas».');
+        $this->assertSelectorTextContains('#anotados-solos', 'Nada anotado solo pendiente de mirar');
+        $entry = $this->lineEntry();
+        $this->assertSame($tools->getId(), $entry->getCategory()?->getId());
+        $this->assertFalse($entry->isAutoBooked());
+    }
+
+    /** Guardar sin elegir nada (el trozo no viene en el envío) lo da por mirado y no le quita la partida. */
+    public function testRevisarSinPartidaEnElEnvioLaDejaComoEstaba(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
+        $number = sprintf('%010d', random_int(0, 9_999_999_999));
+        $this->account = $this->bankAccount($number);
+        $category = $this->category();
+        $this->awaitingInvoice($category, 'Semillas del Jarama', 'S-9', 'semillas de calabaza');
+        $crawler = $this->upload($client, $number, 'TRF SEMILLAS DEL JARAMA');
+        $entryId = $this->lineEntry()->getId();
+        $token = $crawler->filter(sprintf('form#bst-review-%d input[name="_token"]', $entryId))->attr('value');
+
+        $client->request('POST', sprintf('/gestion/accounting/bank-statements/entry/%d/review', $entryId), ['_token' => $token]);
+
+        $this->assertResponseRedirects();
+        $entry = $this->lineEntry();
+        $this->assertSame($category->getId(), $entry->getCategory()?->getId());
+        $this->assertFalse($entry->isAutoBooked());
+    }
+
+    /**
      * Con dos facturas esperando el mismo importe, elegir es de una persona: el
      * movimiento se queda sin anotar. Su fila dice de qué factura es el pago (la que
      * nombra el banco) y trae su partida puesta; al anotar, esa factura queda
