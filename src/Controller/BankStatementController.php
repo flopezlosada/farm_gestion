@@ -24,6 +24,7 @@ use App\Service\Accounting\Norma43\Norma43Exception;
 use App\Service\Accounting\Norma43\StatementReviewer;
 use App\Service\Accounting\Split\RepeatSplit;
 use App\Service\Accounting\Suggestion\CategorySuggester;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -173,7 +174,15 @@ class BankStatementController extends AbstractController
         $em->persist($entry);
         $line->linkTo($entry);
         $awaited?->paidBy($entry);
-        $em->flush();
+        try {
+            $em->flush();
+        } catch (UniqueConstraintViolationException) {
+            // Doble clic: la primera petición lo anotó entre la comprobación de arriba y
+            // ésta, y el movimiento sólo admite un apunte. No se guarda nada de ésta.
+            $this->addFlash('info', 'Ese movimiento ya estaba anotado.');
+
+            return $back;
+        }
         $this->addFlash('success', sprintf('Anotado en «%s»: %s.', $category->getName(), $entry->getConcept()).($awaited !== null
             ? sprintf(' Es el pago de la factura %s: ya está enganchada.', $awaited->getInvoiceNumber() ?? 'de '.($awaited->getProviderName() ?? 'este proveedor'))
             : ''));
