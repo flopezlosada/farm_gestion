@@ -92,6 +92,13 @@
         {% endif %}
     {% endif %}
 
+    {% if can_upload %}
+        {# Otro extracto de esta misma cuenta: la cuenta va puesta, sólo se elige el fichero. #}
+        <div class="prl-toolbar">
+            {% include 'accounting/_statement_upload_modal.html.twig' with { accounts: [s.account], label: 'Subir otro extracto de ' ~ s.account.name, back: s } only %}
+        </div>
+    {% endif %}
+
     {# ============ MOVIMIENTOS SIN APUNTE ============ #}
     <section class="bst-block" id="sin-apunte">
         <h2>Movimientos del banco sin apunte</h2>

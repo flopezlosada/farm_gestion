@@ -70,7 +70,11 @@ class BankStatementController extends AbstractController
     #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
     public function upload(Request $request, BankStatementReader $reader, BankStatementImporter $importer): Response
     {
-        $back = $this->redirectToRoute('accounting_bank_statements');
+        // Subido desde la ficha de un extracto: si algo falla, se vuelve a ella.
+        $fromId = QueryId::from($request->request, 'statement');
+        $back = $fromId !== null
+            ? $this->redirectToRoute('accounting_bank_statement_show', ['id' => $fromId])
+            : $this->redirectToRoute('accounting_bank_statements');
         if (!$this->isCsrfTokenValid('bank_statement_upload', (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
 
@@ -111,15 +115,18 @@ class BankStatementController extends AbstractController
     /**
      * El cuadre de un extracto con el libro, como está hoy. Cada movimiento sin apunte
      * se anota en su fila eligiendo la partida, que llega puesta si se sabe: la de la
-     * factura que espera ese pago o la de las últimas veces.
+     * factura que espera ese pago o la de las últimas veces. Desde aquí se sube otro
+     * extracto de la misma cuenta, si se le pueden subir.
      */
     #[Route('/{id}', name: 'accounting_bank_statement_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(BankStatement $statement, StatementReviewer $reviewer, CategorySuggester $suggester, AwaitedInvoiceFinder $awaitedInvoices, BudgetCategoryRepository $categories): Response
+    public function show(BankStatement $statement, StatementReviewer $reviewer, CategorySuggester $suggester, AwaitedInvoiceFinder $awaitedInvoices, BudgetCategoryRepository $categories, BankStatementImporter $importer): Response
     {
         $review = $reviewer->review($statement);
         $lines = array_column($review->unlinked, 'line');
 
         return $this->render('accounting/bank_statement_show.html.twig', [
+            'can_upload' => $this->isGranted('ROLE_GESTION_CONTABILIDAD_EDIT')
+                && \in_array($statement->getAccount(), $importer->uploadableAccounts(), true),
             'review' => $review,
             'suggestions' => $suggester->forLines($lines),
             'awaited' => $awaitedInvoices->forLines($lines, $suggester->providersFor($lines)),
