@@ -15,7 +15,8 @@ use Doctrine\ORM\EntityManagerInterface;
 /**
  * Guarda un extracto ya leído en la cuenta del libro que eligió quien lo sube, guarda
  * sus movimientos sin repetir los que ya estaban, liga los que no dejan duda
- * ({@see BankLineMatcher}) y anota solos los que el libro aún no tiene y no dejan duda
+ * ({@see BankLineMatcher}) y anota solos los que el libro aún no tiene y no dejan duda:
+ * la liquidación de una tarjeta ({@see CardSettlementBooker}) y lo demás
  * ({@see BankLineBooker}).
  *
  * Antes de guardar nada comprueba que el fichero es de esa cuenta
@@ -31,6 +32,7 @@ class BankStatementImporter
         private readonly BankStatementLineRepository $lines,
         private readonly BankLineMatcher $matcher,
         private readonly BankLineBooker $booker,
+        private readonly CardSettlementBooker $cards,
         private readonly EntityManagerInterface $em,
     ) {
     }
@@ -260,7 +262,9 @@ class BankStatementImporter
         // duplicaría. Ése se confirma a mano («Es éste»).
         $rest = array_values(array_filter($this->within($unlinked, $statements), static fn (BankStatementLine $l): bool => $l->getEntry() === null));
         $bookable = array_column(array_filter($this->matcher->candidatesFor($rest), static fn (array $row): bool => $row['candidates'] === []), 'line');
-        $booked = \count($this->booker->bookSafe($bookable, $by));
+        // La liquidación de la tarjeta es un traspaso: va antes que lo demás, que no los anota.
+        $settled = \count($this->cards->bookSafe($bookable, $by));
+        $booked = $settled + \count($this->booker->bookSafe(array_values(array_filter($bookable, static fn (BankStatementLine $l): bool => $l->getEntry() === null)), $by));
         $this->em->flush();
 
         return [$linked, $booked];
