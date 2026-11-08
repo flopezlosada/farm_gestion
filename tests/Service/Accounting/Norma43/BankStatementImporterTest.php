@@ -2,12 +2,14 @@
 
 namespace App\Tests\Service\Accounting\Norma43;
 
+use App\Entity\AccountantDelivery;
 use App\Entity\AccountEntry;
 use App\Entity\BankStatement;
 use App\Entity\BankStatementLine;
 use App\Entity\BudgetCategory;
 use App\Entity\BudgetCategoryGroup;
 use App\Entity\FinancialAccount;
+use App\Service\Accounting\Invoice\InvoiceQuarter;
 use App\Service\Accounting\Norma43\BankStatementImport;
 use App\Service\Accounting\Norma43\BankStatementImporter;
 use App\Service\Accounting\Norma43\BankStatementReader;
@@ -296,6 +298,49 @@ class BankStatementImporterTest extends KernelTestCase
         $this->transferCategory();
         $this->entry($bank, $this->category(), '2091-10-05', '-100.00', 'FERRETERIA PAGO CON TARJETA');
         $this->em->flush();
+
+        $import = $this->import($bank, N43::file(N43::account('9999', '0001', $number, '911001', '911031', 100000, [
+            ['911005', -24690, ['TARJETA TJ MIXTA PERSON']],
+        ])));
+
+        $this->assertSame(0, $import->booked);
+        $this->em->clear();
+        $this->assertNull($this->em->getRepository(BankStatementLine::class)->findOneBy(['account' => $bank->getId()])->getEntry());
+    }
+
+    /**
+     * En un trimestre entregado a la gestoría la liquidación no se anota: el traspaso
+     * cambiaría lo entregado. El movimiento se guarda sin apunte.
+     */
+    public function testEnUnTrimestreEntregadoNoSeHaceElTraspaso(): void
+    {
+        [$bank, $number] = $this->bankAccount();
+        $this->card('TARJETA TJ MIXTA PERSON');
+        $this->transferCategory();
+        $delivery = new AccountantDelivery(InvoiceQuarter::of(2091, 4), null, new \DateTimeImmutable('2092-01-04'));
+        $this->em->persist($delivery);
+        $this->em->flush();
+        $this->created[] = $delivery;
+
+        $import = $this->import($bank, N43::file(N43::account('9999', '0001', $number, '911001', '911031', 100000, [
+            ['911005', -24690, ['TARJETA TJ MIXTA PERSON']],
+        ])));
+
+        $this->assertSame(0, $import->booked);
+        $this->em->clear();
+        $this->assertNull($this->em->getRepository(BankStatementLine::class)->findOneBy(['account' => $bank->getId()])->getEntry());
+    }
+
+    /**
+     * Dos tarjetas con el mismo concepto de liquidación: no se sabe a cuál va el
+     * traspaso, no se anota.
+     */
+    public function testDosTarjetasConElMismoConceptoNoSeHaceElTraspaso(): void
+    {
+        [$bank, $number] = $this->bankAccount();
+        $this->card('TARJETA TJ MIXTA PERSON');
+        $this->card('tarjeta tj mixta person');
+        $this->transferCategory();
 
         $import = $this->import($bank, N43::file(N43::account('9999', '0001', $number, '911001', '911031', 100000, [
             ['911005', -24690, ['TARJETA TJ MIXTA PERSON']],
