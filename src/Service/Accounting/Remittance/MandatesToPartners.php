@@ -17,7 +17,9 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
  * pisa: lo cuenta como diferencia para que lo mire una persona. La remesa puede ser
  * vieja, y la ficha, lo que se corrigió después. La excepción es una cuenta de ficha
  * que ni siquiera es un IBAN válido cuando la del recibo sí lo es: es una errata al
- * copiarla, y la buena es con la que el banco cobró.
+ * copiarla, y la buena es con la que el banco cobró. Al revés nunca: una cuenta del
+ * recibo que no es un IBAN válido (le faltan cifras ya en el Excel) no va a ninguna
+ * ficha, ni para rellenar un hueco.
  *
  * En dos pasos: {@see plan()} dice qué haría sin tocar nada (la ficha de la remesa lo
  * enseña siempre) y {@see apply()} lo hace.
@@ -33,6 +35,10 @@ class MandatesToPartners
     public const FIELD_MANDATE_TAKEN = 'mandate_taken';
     public const FIELD_MANDATE_UNDATED = 'mandate_undated';
     public const FIELD_IBAN = 'iban';
+    public const FIELD_IBAN_INVALID = 'iban_invalid';
+
+    /** Largo del IBAN de España, el único país de las cuentas de las remesas. */
+    private const SPANISH_IBAN_LENGTH = 24;
 
     public function __construct(private readonly ValidatorInterface $validator)
     {
@@ -82,7 +88,9 @@ class MandatesToPartners
             }
 
             $current = $partner->getIban() ?? $gettingIban[spl_object_id($partner)] ?? null;
-            if ($current === null) {
+            if ($current !== $line->getIban() && !$this->isIban($line->getIban())) {
+                $plan['differences'][] = ['partner' => $partner, 'line' => $line, 'field' => self::FIELD_IBAN_INVALID, 'text' => self::invalidReceiptIban($line, $current)];
+            } elseif ($current === null) {
                 $plan['ibans'][] = ['partner' => $partner, 'line' => $line];
                 $gettingIban[spl_object_id($partner)] = $line->getIban();
             } elseif ($current !== $line->getIban()) {
@@ -112,7 +120,10 @@ class MandatesToPartners
             $partner->setMandateReference($line->getMandateReference())->setMandateSignedOn($line->getMandateSignedOn());
         }
         foreach ([...$plan['ibans'], ...$plan['repairs']] as ['partner' => $partner, 'line' => $line]) {
-            $partner->setIban($line->getIban());
+            // El plan ya no las propone; esto es por si llega uno hecho a mano.
+            if ($this->isIban($line->getIban())) {
+                $partner->setIban($line->getIban());
+            }
         }
     }
 
@@ -180,6 +191,29 @@ class MandatesToPartners
         return sprintf(
             'La cuenta de la ficha (%s) no es la del recibo (%s)%s.',
             $mine, $theirs, $mine === $theirs ? ': cambian cifras del medio' : '',
+        );
+    }
+
+    /**
+     * Por qué la cuenta del recibo no se pone en la ficha: no es un IBAN válido. Si es
+     * de España y le faltan o le sobran cifras, cuántas: es lo que se ve en el Excel.
+     *
+     * @param string|null $current La de la ficha, que es la que se queda.
+     */
+    private static function invalidReceiptIban(RemittanceLine $line, ?string $current): string
+    {
+        $iban = $line->getIban();
+        $gap = str_starts_with($iban, 'ES') ? self::SPANISH_IBAN_LENGTH - \strlen($iban) : 0;
+        $why = match (true) {
+            $gap > 0 => sprintf('le %s %d %s', $gap === 1 ? 'falta' : 'faltan', $gap, $gap === 1 ? 'cifra' : 'cifras'),
+            $gap < 0 => sprintf('le %s %d %s', $gap === -1 ? 'sobra' : 'sobran', -$gap, $gap === -1 ? 'cifra' : 'cifras'),
+            default => 'el dígito de control no cuadra',
+        };
+
+        return sprintf(
+            'La cuenta del recibo (%s) no es un IBAN válido: %s. No se pone en la ficha; %s',
+            $line->getMaskedIban(), $why,
+            $current !== null ? 'se queda la de la ficha, que es con la que salen los próximos recibos.' : 'pídele la cuenta a la persona.',
         );
     }
 
