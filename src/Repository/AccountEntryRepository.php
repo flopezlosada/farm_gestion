@@ -481,6 +481,19 @@ class AccountEntryRepository extends ServiceEntityRepository
     }
 
     /**
+     * Si el apunte puede ser el pago de una factura: lo mismo que pide
+     * {@see findPaymentCandidates()} salvo importe y fechas, que mira quien llama.
+     */
+    public function canBePayment(AccountEntry $entry): bool
+    {
+        return $entry->getDate() !== null && (int) $this->unexplainedPayments($entry->getDate(), null)
+            ->select('COUNT(e.id)')
+            ->andWhere('e = :entry')->setParameter('entry', $entry)
+            ->getQuery()
+            ->getSingleScalarResult() === 1;
+    }
+
+    /**
      * Apuntes que pueden ser el pago de varias facturas a la vez: uno de esos importes,
      * entre dos fechas, y que aún no explica ninguna factura. Los más antiguos primero.
      *

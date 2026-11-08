@@ -2,7 +2,8 @@
  # Una factura que ya salió de la bandeja: anotada (con su apunte) o descartada.
  # Se enseña tal como quedó, con el documento al lado; ya no se revisa.
  #
- # El controller pasa: invoice, hasDocument (si el fichero está en el servidor).
+ # El controller pasa: invoice, hasDocument (si el fichero está en el servidor) y
+ # payments (los apuntes que pueden ser su pago, si espera el pago).
  # ============================================================ #}
 
 {% extends '_layouts/csa_shell.html.twig' %}
@@ -87,6 +88,33 @@
                 {% endif %}
                 {{ invm.fact_rows(invoice, invoice.total is null) }}
             </dl>
+
+            {% if invoice.awaitingPayment %}
+                {# El pago ya puede estar en el libro: anotado antes de aceptarla, o
+                 # entero en un cargo que se partió después. Se engancha a mano. #}
+                <h3 class="acc-subhead" id="pago">¿El pago ya está anotado?</h3>
+                {% if payments is empty %}
+                    <p class="acc-muted acc-small">Ningún apunte sin factura es de {{ fmt.money(-invoice.total) }} desde una semana antes de la factura. Si el pago va dentro de un cargo que junta más cosas, parte primero ese apunte y vuelve aquí.</p>
+                {% else %}
+                    <div class="csa-stack">
+                        {% for payment in payments %}
+                            <div class="csa-row-between">
+                                <span>
+                                    <a href="{{ path('accounting_entry_show', { id: payment.id }) }}">{{ payment.concept }}</a><br>
+                                    <span class="acc-muted acc-small">{{ payment.date|date('d/m/Y') }} · {{ payment.account.name }} · {{ payment.category.name }} · {{ fmt.money(payment.amount) }}</span>
+                                </span>
+                                {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+                                    <form method="post" action="{{ path('accounting_invoice_link_payment', { id: invoice.id }) }}">
+                                        <input type="hidden" name="_token" value="{{ csrf_token('invoice-link-payment-' ~ invoice.id) }}">
+                                        <input type="hidden" name="entry" value="{{ payment.id }}">
+                                        <button type="submit" class="prl-btn prl-btn--sm"><i class="fa fa-link"></i> Es éste</button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endif %}
 
             <div class="ent-actions">
                 {{ csa.btn('Volver a facturas', { variant: 'ghost', href: path('accounting_invoices') }) }}

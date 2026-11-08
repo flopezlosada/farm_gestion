@@ -16,6 +16,8 @@ use App\Service\Accounting\Invoice\ExtractedInvoice;
 use App\Service\Accounting\Invoice\InvoiceQuarter;
 use App\Service\AppSettings;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\DomCrawler\Crawler;
+use Symfony\Component\DomCrawler\Form;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
@@ -653,6 +655,76 @@ class ReceivedInvoiceControllerTest extends AbstractAuthenticatedTest
 
         $client->request('GET', '/gestion/accounting/invoices');
         $this->assertSelectorTextContains('body', 'Esperando el pago');
+    }
+
+    /**
+     * Una factura que espera su pago y el pago ya está en el libro (anotado antes, o
+     * entero y partido después): la ficha lo propone y «Es éste» la engancha.
+     */
+    public function testUnaFacturaQueEsperaSeEnganchaAUnApunteQueYaExiste(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->createCatalogue();
+        $invoice = $this->awaitingInvoice('26.75', '2026-03-04');
+        $payment = $this->payment('2026-03-09', '-26.75', 'TRF. FERRETERIA TORRELAGUNA');
+        $other = $this->payment('2026-03-09', '-30.00', 'OTRO PAGO');
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
+        $this->assertSelectorTextContains('#pago', '¿El pago ya está anotado?');
+        $this->assertSelectorTextContains('body', 'TRF. FERRETERIA TORRELAGUNA');
+        $this->assertSelectorTextNotContains('body', 'OTRO PAGO');
+
+        // Uno que no es del importe no se engancha aunque llegue en el formulario.
+        $form = $this->linkForm($crawler, $payment);
+        $form['entry']->setValue((string) $other->getId());
+        $client->submit($form);
+        $client->followRedirect();
+        $this->assertSelectorTextContains('body', 'ya no puede ser el pago de esta factura');
+        $this->assertTrue($this->findInvoice('factura-prueba.pdf')->isAwaitingPayment());
+
+        $crawler = $client->request('GET', sprintf('/gestion/accounting/invoices/%d', $invoice->getId()));
+        $client->submit($this->linkForm($crawler, $payment));
+        $client->followRedirect();
+        $this->assertSelectorTextContains('body', 'Enganchada');
+        $linked = $this->findInvoice('factura-prueba.pdf');
+        $this->assertSame($payment->getId(), $linked->getAccountEntry()?->getId());
+        $this->assertSame('2232', $linked->getAccountEntry()?->getInvoiceNumber(), 'el apunte toma el número de la factura');
+    }
+
+    /** El «Es éste» de ese apunte en la ficha de la factura. */
+    private function linkForm(Crawler $crawler, AccountEntry $payment): Form
+    {
+        return $crawler->filter(sprintf('form[action$="/link-payment"] input[name="entry"][value="%d"]', $payment->getId()))->closest('form')->form();
+    }
+
+    /** Una factura aceptada que espera su pago por banco, sin apunte. */
+    private function awaitingInvoice(string $total, string $date): ReceivedInvoice
+    {
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $invoice = new ReceivedInvoice('factura-prueba.pdf', 'factura-prueba.pdf', 'application/pdf', ReceivedInvoice::SOURCE_WEB, null);
+        $invoice->markRead(ExtractedInvoice::fromArray([
+            'fecha' => $date, 'total' => (float) $total, 'proveedor' => 'Ferretería Torrelaguna', 'numero_factura' => '2232',
+        ]), 'test', null, new \DateTimeImmutable());
+        $invoice->acceptUnpaid($this->category, $total, null, 'Ferretería Torrelaguna', '2232');
+        $em->persist($invoice);
+        $em->flush();
+
+        return $invoice;
+    }
+
+    /** Un apunte en el banco de la prueba, sin factura; tearDown lo borra. */
+    private function payment(string $date, string $amount, string $concept): AccountEntry
+    {
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $entry = (new AccountEntry())->setAccount($em->find(FinancialAccount::class, $this->account->getId()))
+            ->setCategory($em->find(BudgetCategory::class, $this->category->getId()))
+            ->setDate(new \DateTimeImmutable($date))->setAmount($amount)->setConcept($concept);
+        $em->persist($entry);
+        $em->flush();
+        $this->extraEntries[] = $entry->getId();
+
+        return $entry;
     }
 
     /** Una línea de IVA a medias no deja confirmar: la gestoría la necesita entera. */
