@@ -87,6 +87,30 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         $this->assertSelectorTextContains('body', '25,00 € de más');
     }
 
+    /** En el listado, un extracto con movimientos sin anotar lleva directo a lo que le falta. */
+    public function testElListadoLlevaALoQueFaltaEnLaFicha(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
+        $number = sprintf('%010d', random_int(0, 9_999_999_999));
+        $this->account = $this->bankAccount($number);
+        $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
+        $form = $crawler->filter('form.inv-upload')->form();
+        $form['file']->upload($this->tempFile(N43::file(N43::account('9999', '0001', $number, '910401', '910430', 50000, [
+            ['910403', -2500, ['COMPRA SEMILLAS']],
+        ]))));
+        $client->submit($form);
+        $statement = static::getContainer()->get(EntityManagerInterface::class)
+            ->getRepository(BankStatement::class)->findOneBy(['account' => $this->account->getId()]);
+
+        $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
+
+        $this->assertSame(
+            sprintf('/gestion/accounting/bank-statements/%d#sin-apunte', $statement->getId()),
+            $crawler->selectLink('Ver lo que falta')->attr('href'),
+        );
+    }
+
     /** «Anotar» llega con cuenta, fecha, importe y concepto, y al guardar queda ligado. */
     public function testAnotarDesdeElExtractoLoLiga(): void
     {
