@@ -124,7 +124,8 @@ class RemittanceCases
             $fills !== [] => self::KIND_MISSING,
             default => self::KIND_BLOCKED,
         };
-        $showIbans = $repair || \in_array(MandatesToPartners::FIELD_IBAN, $fields, true);
+        $showIbans = $repair || \in_array(MandatesToPartners::FIELD_IBAN, $fields, true)
+            || (\in_array(MandatesToPartners::FIELD_IBAN_INVALID, $fields, true) && $partner->getIban() !== null);
 
         return [
             'line' => $line,

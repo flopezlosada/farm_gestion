@@ -126,6 +126,40 @@ class MandatesToPartnersTest extends TestCase
         $this->assertSame(self::IBAN_A_TYPO, $bothWrong->getIban());
     }
 
+    /**
+     * La cuenta del recibo con cifras de menos (la de la remesa de septiembre, mal ya en
+     * el Excel): no se ofrece ponerla en la ficha ni para rellenar un hueco, y el aviso
+     * dice cuántas le faltan.
+     */
+    public function testLaCuentaDelReciboQueNoEsUnIbanNoVaALaFicha(): void
+    {
+        $withIban = $this->partner('Ana')->setIban(self::IBAN_B);
+        $withoutIban = $this->partner('Bea');
+        $short = 'ES91210004184502000513';
+        $remittance = $this->sent([
+            $this->line($withIban, 'CUOTA MENSUAL 200', substr($short, 0, 20)),
+            $this->line($withoutIban, 'CUOTA MENSUAL 201', $short),
+        ]);
+        $service = $this->service();
+
+        $plan = $service->plan($remittance, []);
+
+        $this->assertSame([], $plan['ibans']);
+        $this->assertSame([], $plan['repairs']);
+        $this->assertSame([MandatesToPartners::FIELD_IBAN_INVALID, MandatesToPartners::FIELD_IBAN_INVALID], array_column($plan['differences'], 'field'));
+        $this->assertStringContainsString('no es un IBAN válido: le faltan 4 cifras', $plan['differences'][0]['text']);
+        $this->assertStringContainsString('se queda la de la ficha', $plan['differences'][0]['text']);
+        $this->assertStringContainsString('le faltan 2 cifras', $plan['differences'][1]['text']);
+        $this->assertStringContainsString('pídele la cuenta', $plan['differences'][1]['text']);
+        $forLine = $service->forLine($plan, $remittance->getLines()[0]);
+        $this->assertSame([], $forLine['ibans'], 'Resolver el recibo a mano tampoco pone esa cuenta.');
+        $this->assertSame([], $forLine['repairs']);
+
+        $service->apply($remittance, $plan);
+        $this->assertSame(self::IBAN_B, $withIban->getIban());
+        $this->assertNull($withoutIban->getIban());
+    }
+
     /** Dos cuentas válidas que enmascaradas salen iguales: el aviso dice dónde cambian. */
     public function testCuentasQueEnmascaradasSalenIguales(): void
     {
