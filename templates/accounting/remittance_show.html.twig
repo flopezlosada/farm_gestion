@@ -153,8 +153,9 @@
         {% endif %}
     {% endif %}
 
-    {% if remittance.sent %}
-        {# El día de cargo: con él se avisa en la portada si el abono no entra en el banco. #}
+    {# El día de cargo: con él se avisa en la portada si el abono no entra en el banco.
+       Sin él, si el abono ya entró (las importadas), no hay nada que vigilar ni avisar. #}
+    {% if remittance.sent and (remittance.chargeDate or bankCheck is null) %}
         <div class="csa-alert csa-alert--{{ remittance.chargeDate ? 'info' : 'warning' }} rem-box" role="status">
             <i class="csa-alert__icon fa fa-calendar" aria-hidden="true"></i>
             <div class="csa-alert__body">
