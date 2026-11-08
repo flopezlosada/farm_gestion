@@ -136,8 +136,9 @@ class RemittanceReview
     /**
      * El porqué de cada cambio según lo que sabe la app: qué cesta empieza o se deja, a
      * cuál le cambia la cuota y si hay ajustes, sacado de la cuota calculada de los dos
-     * meses. Un cambio está explicado si la app da algún porqué Y su cuota calculada
-     * cambia lo mismo que lo cobrado; si no, hay que mirarlo.
+     * meses (calculada hoy: lo que la app sabe ahora de los dos). Un cambio está
+     * explicado si la app da algún porqué Y su cuota calculada cambia lo mismo que lo
+     * cobrado, o si quien sale está de baja; si no, hay que mirarlo.
      *
      * @param list<array{name: string, partner: ?Partner, before: ?string, after: ?string, change: string}> $changes
      * @param array<int, FeeStatement> $before La cuota calculada del mes de la anterior, por quien encabeza la familia.
@@ -154,12 +155,15 @@ class RemittanceReview
             }
             $id = (int) $partner->getId();
             $reasons = self::reasonsFor($before[$id] ?? null, $now[$id] ?? null);
-            if ($row['change'] === self::CHANGE_GONE && $partner->getStatus() === Partner::STATUS_BAJA) {
+            // Quien sale y está de baja no necesita más: la cuota de antes, calculada
+            // hoy, ya no le cuenta las cestas y no se puede comparar.
+            $leftForGood = $row['change'] === self::CHANGE_GONE && $partner->getStatus() === Partner::STATUS_BAJA;
+            if ($leftForGood) {
                 $reasons[] = 'Está de baja.';
             }
             $calculated = (($now[$id] ?? null)?->getCents() ?? 0) - (($before[$id] ?? null)?->getCents() ?? 0);
             $charged = IssuedInvoice::toCents($row['after'] ?? '0') - IssuedInvoice::toCents($row['before'] ?? '0');
-            $explained = $reasons !== [] && $calculated === $charged;
+            $explained = $leftForGood || ($reasons !== [] && $calculated === $charged);
             if (!$explained) {
                 $reasons[] = $reasons === []
                     ? 'La app no lo explica: sus cestas y su cuota no cambian.'

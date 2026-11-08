@@ -224,6 +224,8 @@ class RemittanceReviewTest extends TestCase
             ['name' => 'Dani Gil', 'partner' => $dani, 'before' => null, 'after' => '60.00', 'change' => RemittanceReview::CHANGE_NEW],
             ['name' => 'Eva Sanz', 'partner' => $eva, 'before' => '30.00', 'after' => '40.00', 'change' => RemittanceReview::CHANGE_AMOUNT],
             ['name' => 'SIN FICHA', 'partner' => null, 'before' => null, 'after' => '35.00', 'change' => RemittanceReview::CHANGE_NEW],
+            // De baja: hoy no se le calcula nada en ningún mes, y basta con eso.
+            ['name' => 'Fran Ruiz', 'partner' => self::partner(7, 'FRAN', 'RUIZ', status: Partner::STATUS_BAJA), 'before' => '67.00', 'after' => null, 'change' => RemittanceReview::CHANGE_GONE],
         ];
         $evaShare = self::share($eva);
         $before = [3 => self::feeOf($bea, $beaShare, 4350), 4 => self::feeOf($carmen, $carmenShare, 3000), 6 => self::feeOf($eva, $evaShare, 3000)];
@@ -237,6 +239,7 @@ class RemittanceReviewTest extends TestCase
             [['Empieza la cesta el 03/09/2026.'], true],
             [['La app no lo explica: sus cestas y su cuota no cambian.'], false],
             [['Recibo sin socix: la app no sabe de quién es.'], false],
+            [['Está de baja.'], true],
         ], array_map(static fn (array $r): array => [$r['reasons'], $r['explained']], $rows));
     }
 
