@@ -14,6 +14,7 @@ use App\Repository\AccountEntryRepository;
 use App\Repository\BankStatementLineRepository;
 use App\Repository\BankStatementRepository;
 use App\Repository\BudgetCategoryRepository;
+use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\AwaitedInvoiceFinder;
 use App\Service\Accounting\Norma43\BankLineBooker;
 use App\Service\Accounting\Norma43\BankLineEntryDraft;
@@ -184,6 +185,53 @@ class BankStatementController extends AbstractController
 
             return $this->redirectToRoute('accounting_entry_show', ['id' => $entry->getId()]);
         }
+
+        return $back;
+    }
+
+    /**
+     * Revisar desde el extracto lo que la app anotó sola: sólo la partida de cada trozo
+     * (el apunte y, si se partió, sus partes), en la misma fila. Guardar, cambie algo o
+     * no, lo da por mirado y deja de salir en «Anotados solos». Un trozo que no viene en
+     * el envío se queda como estaba: ausente no es «sin partida». Lo demás se corrige en
+     * el formulario del apunte.
+     */
+    #[Route('/entry/{id}/review', name: 'accounting_bank_auto_booked_review', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
+    public function reviewAutoBooked(Request $request, AccountEntry $entry, BudgetCategoryRepository $categories, ClosedPeriods $closed, EntityManagerInterface $em): Response
+    {
+        $statementId = QueryId::from($request->request, 'statement');
+        $back = $statementId !== null
+            ? $this->redirectToRoute('accounting_bank_statement_show', ['id' => $statementId, '_fragment' => 'anotados-solos'])
+            : $this->redirectToRoute('accounting_entry_show', ['id' => $entry->getId()]);
+        if (!$this->isCsrfTokenValid('auto_booked_review_'.$entry->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $back;
+        }
+        if ($entry->getSplitFrom() !== null || $entry->isTransfer()) {
+            $this->addFlash('warning', 'Ese apunte no se revisa desde aquí: ábrelo en su ficha.');
+
+            return $back;
+        }
+        $closed->assertOpen($entry->getDate());
+        $allowed = [];
+        foreach ($categories->findForEntries() as $category) {
+            $allowed[$category->getId()] = $category;
+        }
+        $chosen = $request->request->all('category');
+        foreach ([$entry, ...$entry->getParts()] as $piece) {
+            $category = $allowed[(int) ($chosen[$piece->getId()] ?? 0)] ?? null;
+            if ($category !== null) {
+                $piece->setCategory($category);
+            }
+            $piece->markReviewed();
+        }
+        $em->flush();
+        $this->addFlash('success', sprintf('Revisado: %s, en %s.', $entry->getConcept(), implode(' y ', array_map(
+            static fn (AccountEntry $piece): string => '«'.$piece->getCategory()?->getName().'»',
+            [$entry, ...$entry->getParts()],
+        ))));
 
         return $back;
     }

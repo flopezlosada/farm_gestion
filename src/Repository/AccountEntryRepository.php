@@ -878,7 +878,8 @@ class AccountEntryRepository extends ServiceEntityRepository
 
     /**
      * Los apuntes de una cuenta entre dos fechas que anotó la app sola desde el banco y
-     * nadie ha corregido, con su partida, por fecha. Sin las partes: van con el suyo.
+     * nadie ha corregido, con su partida, por fecha. Sin las partes: van con el suyo,
+     * cargadas en la misma consulta con su partida.
      *
      * @return list<AccountEntry>
      */
@@ -886,6 +887,8 @@ class AccountEntryRepository extends ServiceEntityRepository
     {
         return $this->createQueryBuilder('e')
             ->innerJoin('e.category', 'c')->addSelect('c')
+            ->leftJoin('e.parts', 'p')->addSelect('p')
+            ->leftJoin('p.category', 'pc')->addSelect('pc')
             ->andWhere('e.account = :account')->setParameter('account', $account)
             ->andWhere('e.autoBooked = true')
             ->andWhere('e.splitFrom IS NULL')
@@ -894,6 +897,7 @@ class AccountEntryRepository extends ServiceEntityRepository
             ->setParameter('to', $to->format('Y-m-d'))
             ->orderBy('e.date', 'ASC')
             ->addOrderBy('e.id', 'ASC')
+            ->addOrderBy('p.id', 'ASC')
             ->getQuery()
             ->getResult();
     }
