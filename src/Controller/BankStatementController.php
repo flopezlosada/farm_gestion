@@ -2,8 +2,10 @@
 
 namespace App\Controller;
 
+use App\Entity\AccountEntry;
 use App\Entity\BankStatement;
 use App\Entity\BankStatementLine;
+use App\Entity\BudgetCategory;
 use App\Entity\FinancialAccount;
 use App\Entity\User;
 use App\Http\BackToAgenda;
@@ -11,12 +13,16 @@ use App\Http\QueryId;
 use App\Repository\AccountEntryRepository;
 use App\Repository\BankStatementLineRepository;
 use App\Repository\BankStatementRepository;
+use App\Repository\BudgetCategoryRepository;
+use App\Service\Accounting\Invoice\AwaitedInvoiceFinder;
 use App\Service\Accounting\Norma43\BankLineBooker;
+use App\Service\Accounting\Norma43\BankLineEntryDraft;
 use App\Service\Accounting\Norma43\BankLineMatcher;
 use App\Service\Accounting\Norma43\BankStatementImporter;
 use App\Service\Accounting\Norma43\BankStatementReader;
 use App\Service\Accounting\Norma43\Norma43Exception;
 use App\Service\Accounting\Norma43\StatementReviewer;
+use App\Service\Accounting\Split\RepeatSplit;
 use App\Service\Accounting\Suggestion\CategorySuggester;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -100,17 +106,103 @@ class BankStatementController extends AbstractController
         return $this->redirectToRoute('accounting_bank_statement_show', ['id' => $import->statements[0]->getId()]);
     }
 
-    /** El cuadre de un extracto con el libro, como está hoy. */
+    /**
+     * El cuadre de un extracto con el libro, como está hoy. Cada movimiento sin apunte
+     * se anota en su fila eligiendo la partida, que llega puesta si se sabe: la de la
+     * factura que espera ese pago o la de las últimas veces.
+     */
     #[Route('/{id}', name: 'accounting_bank_statement_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(BankStatement $statement, StatementReviewer $reviewer, CategorySuggester $suggester): Response
+    public function show(BankStatement $statement, StatementReviewer $reviewer, CategorySuggester $suggester, AwaitedInvoiceFinder $awaitedInvoices, BudgetCategoryRepository $categories): Response
     {
         $review = $reviewer->review($statement);
+        $lines = array_column($review->unlinked, 'line');
 
         return $this->render('accounting/bank_statement_show.html.twig', [
             'review' => $review,
-            // La partida que se propondrá al anotar cada movimiento, para verlo de un vistazo.
-            'suggestions' => $suggester->forLines(array_column($review->unlinked, 'line')),
+            'suggestions' => $suggester->forLines($lines),
+            'awaited' => $awaitedInvoices->forLines($lines, $suggester->providersFor($lines)),
+            'categoryGroups' => self::byGroup($categories->findForEntries()),
         ]);
+    }
+
+    /**
+     * Anotar un movimiento del banco desde su fila del extracto: sólo se elige la
+     * partida. La cuenta, la fecha, el importe y el sentido son los del banco y no se
+     * tocan; el concepto y el proveedor, los de las últimas veces. Si una factura
+     * aceptada espera ese pago, se engancha y pone su concepto, número y proveedor
+     * (`no_invoice` dice que no es ésa); la partida es siempre la elegida. Lo demás se
+     * corrige luego en el apunte.
+     */
+    #[Route('/lines/{id}/book', name: 'accounting_bank_line_book', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
+    public function book(
+        Request $request,
+        BankStatementLine $line,
+        BudgetCategoryRepository $categories,
+        CategorySuggester $suggester,
+        AwaitedInvoiceFinder $awaitedInvoices,
+        RepeatSplit $repeat,
+        EntityManagerInterface $em,
+    ): Response {
+        $statementId = QueryId::from($request->request, 'statement');
+        $back = $statementId !== null
+            ? $this->redirectToRoute('accounting_bank_statement_show', ['id' => $statementId, '_fragment' => 'sin-apunte'])
+            : $this->redirectToRoute('accounting_bank_statements');
+        if (!$this->isCsrfTokenValid('bank_line_book_'.$line->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $back;
+        }
+        if ($line->getEntry() !== null) {
+            $this->addFlash('info', 'Ese movimiento ya estaba anotado.');
+
+            return $back;
+        }
+        $categoryId = QueryId::from($request->request, 'category');
+        $category = array_values(array_filter($categories->findForEntries(), static fn (BudgetCategory $c): bool => $c->getId() === $categoryId))[0] ?? null;
+        if ($category === null) {
+            $this->addFlash('warning', 'Elige la partida del movimiento.');
+
+            return $back;
+        }
+        $provider = $suggester->providerFor($line);
+        $awaited = $request->request->getBoolean('no_invoice') ? null : $awaitedInvoices->for($line, $provider);
+        $entry = BankLineEntryDraft::complete(BankLineEntryDraft::fromLine(new AccountEntry(), $line), $category, $provider, $awaited)
+            ->setCategory($category)
+            ->setCreatedBy($this->currentUser());
+        $em->persist($entry);
+        $line->linkTo($entry);
+        $awaited?->paidBy($entry);
+        $em->flush();
+        $this->addFlash('success', sprintf('Anotado en «%s»: %s.', $category->getName(), $entry->getConcept()).($awaited !== null
+            ? sprintf(' Es el pago de la factura %s: ya está enganchada.', $awaited->getInvoiceNumber() ?? 'de '.($awaited->getProviderName() ?? 'este proveedor'))
+            : ''));
+        // Un cargo que la última vez se partió (el del Ayuntamiento): a su ficha, donde
+        // se confirma partirlo igual.
+        if ($repeat->templateFor($entry) !== null) {
+            $this->addFlash('info', 'Este mismo cargo se partió la última vez: confirma aquí si se parte igual.');
+
+            return $this->redirectToRoute('accounting_entry_show', ['id' => $entry->getId()]);
+        }
+
+        return $back;
+    }
+
+    /**
+     * Las partidas por grupo, en su orden, para el desplegable.
+     *
+     * @param list<BudgetCategory> $categories Ya ordenadas por grupo.
+     *
+     * @return array<string, list<BudgetCategory>>
+     */
+    private static function byGroup(array $categories): array
+    {
+        $groups = [];
+        foreach ($categories as $category) {
+            $groups[$category->getGroup()?->getName() ?? ''][] = $category;
+        }
+
+        return $groups;
     }
 
     /**

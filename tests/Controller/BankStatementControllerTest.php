@@ -111,40 +111,58 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         );
     }
 
-    /** «Anotar» llega con cuenta, fecha, importe y concepto, y al guardar queda ligado. */
-    public function testAnotarDesdeElExtractoLoLiga(): void
+    /**
+     * «Anotar» en la fila del movimiento: sólo se elige la partida. La cuenta, la fecha,
+     * el importe y el concepto son los del banco, y queda ligado.
+     */
+    public function testAnotarDesdeElExtractoSoloPideLaPartidaYLoLiga(): void
     {
         $client = $this->createAuthenticatedClient();
         static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
         $number = sprintf('%010d', random_int(0, 9_999_999_999));
         $this->account = $this->bankAccount($number);
         $category = $this->category();
-        $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
-        $form = $this->uploadForm($crawler);
-        $form['file']->upload($this->tempFile(N43::file(N43::account('9999', '0001', $number, '910401', '910430', 50000, [
-            ['910403', -2500, ['COMPRA SEMILLAS']],
-        ]))));
-        $client->submit($form);
-        $crawler = $client->followRedirect();
+        $crawler = $this->upload($client, $number, 'COMPRA SEMILLAS');
 
-        $crawler = $client->click($crawler->selectLink('Anotar')->link());
-
-        $this->assertResponseIsSuccessful();
-        $this->assertSame('COMPRA SEMILLAS', $crawler->filter('#account_entry_concept')->attr('value'));
-        $this->assertSame('2091-04-03', $crawler->filter('#account_entry_date')->attr('value'));
-        $this->assertSame((string) $this->account->getId(), $crawler->filter('#account_entry_account option[selected]')->attr('value'));
-        $form = $crawler->filter('form[name="account_entry"]')->form();
-        $form['account_entry[category]']->select((string) $category->getId());
+        $form = $crawler->filter('form.bst-book')->form();
+        $form['category']->select((string) $category->getId());
         $client->submit($form);
 
         $this->assertResponseRedirects();
         $client->followRedirect();
+        $this->assertSelectorTextContains('.csa-alerts', 'Anotado en «Semillas»: COMPRA SEMILLAS.');
         $this->assertSelectorTextContains('#sin-apunte', 'Todos los movimientos del banco de estas fechas tienen su apunte');
+        $entry = $this->lineEntry();
+        $this->assertSame('-25.00', $entry->getAmount());
+        $this->assertSame('2091-04-03', $entry->getDate()?->format('Y-m-d'));
+        $this->assertSame('COMPRA SEMILLAS', $entry->getConcept());
+        $this->assertSame($category->getId(), $entry->getCategory()?->getId());
+        $this->assertFalse($entry->isAutoBooked());
+    }
+
+    /** Sin partida no se anota; y un movimiento ya anotado no se anota dos veces. */
+    public function testAnotarSinPartidaOYaAnotadoNoHaceNada(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
+        $number = sprintf('%010d', random_int(0, 9_999_999_999));
+        $this->account = $this->bankAccount($number);
+        $category = $this->category();
+        $crawler = $this->upload($client, $number, 'COMPRA SEMILLAS');
+        $form = $crawler->filter('form.bst-book')->form();
+
+        $client->submit($form);
+        $client->followRedirect();
+        $this->assertSelectorTextContains('.csa-alerts', 'Elige la partida del movimiento.');
+        $this->assertNull($this->lineEntry());
+
+        $form['category']->select((string) $category->getId());
+        $client->submit($form);
+        $client->submit($form);
+        $client->followRedirect();
+        $this->assertSelectorTextContains('.csa-alerts', 'Ese movimiento ya estaba anotado.');
         $em = static::getContainer()->get(EntityManagerInterface::class);
-        $em->clear();
-        $line = $em->getRepository(BankStatementLine::class)->findOneBy(['account' => $this->account->getId()]);
-        $this->assertNotNull($line->getEntry());
-        $this->assertSame('-25.00', $line->getEntry()->getAmount());
+        $this->assertSame(1, $em->getRepository(AccountEntry::class)->count(['account' => $this->account->getId()]));
     }
 
     /**
@@ -164,7 +182,7 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         $crawler = $this->upload($client, $number, 'TRF SEMILLAS DEL JARAMA');
 
         $this->assertSelectorTextContains('.csa-alerts', '1 anotado solo por la app');
-        $this->assertCount(0, $crawler->selectLink('Anotar'), 'No queda nada que anotar a mano.');
+        $this->assertCount(0, $crawler->filter('form.bst-book'), 'No queda nada que anotar a mano.');
         $em = static::getContainer()->get(EntityManagerInterface::class);
         $em->clear();
         $line = $em->getRepository(BankStatementLine::class)->findOneBy(['account' => $this->account->getId()]);
@@ -178,10 +196,9 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
 
     /**
      * Con dos facturas esperando el mismo importe, elegir es de una persona: el
-     * movimiento se queda sin anotar. «Anotar» llega con los datos de la que nombra el
-     * banco (partida, concepto, número) y avisando de que es su pago; al guardar, esa
-     * factura queda enganchada y la otra sigue esperando. «No es ésta» lo anota como un
-     * movimiento cualquiera.
+     * movimiento se queda sin anotar. Su fila dice de qué factura es el pago (la que
+     * nombra el banco) y trae su partida puesta; al anotar, esa factura queda
+     * enganchada y la otra sigue esperando.
      */
     public function testAnotarElPagoDeUnaFacturaQueLoEsperaLaEngancha(): void
     {
@@ -194,41 +211,46 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         $invoiceId = $this->awaitingInvoice($category, 'Semillas del Jarama', 'S-7', 'semillas de calabaza');
 
         $crawler = $this->upload($client, $number, 'TRF SEMILLAS DEL JARAMA');
-        $anotar = $crawler->selectLink('Anotar')->link();
-
-        // «No es ésta»: un movimiento cualquiera, con el concepto del banco.
-        $crawler = $client->click($anotar);
-        $crawler = $client->click($crawler->selectLink('No es ésta')->link());
-        $this->assertResponseIsSuccessful();
-        $this->assertSelectorTextNotContains('body', 'Es el pago de la factura');
-        $this->assertSame('TRF SEMILLAS DEL JARAMA', $crawler->filter('#account_entry_concept')->attr('value'));
-
-        $crawler = $client->click($anotar);
-        $this->assertResponseIsSuccessful();
-        $this->assertSelectorTextContains('body', 'Es el pago de la factura');
-        $this->assertSame('Semillas del Jarama · semillas de calabaza', $crawler->filter('#account_entry_concept')->attr('value'));
-        $this->assertSame((string) $category->getId(), $crawler->filter('#account_entry_category option[selected]')->attr('value'), 'La partida es la de la factura.');
-        $this->assertSame('S-7', $crawler->filter('#account_entry_invoiceNumber')->attr('value'));
-        $client->submit($crawler->filter('form[name="account_entry"]')->form());
+        $this->assertSelectorTextContains('#sin-apunte', 'es el pago de la factura Semillas del Jarama · fra. S-7');
+        $this->assertSame((string) $category->getId(), $crawler->filter('form.bst-book option[selected]')->attr('value'), 'La partida es la de la factura.');
+        $client->submit($crawler->filter('form.bst-book')->form());
 
         $this->assertResponseRedirects();
         $client->followRedirect();
         $this->assertSelectorTextContains('.csa-alerts', 'Es el pago de la factura S-7: ya está enganchada.');
+        $entry = $this->lineEntry();
         $em = static::getContainer()->get(EntityManagerInterface::class);
-        $em->clear();
-        $line = $em->getRepository(BankStatementLine::class)->findOneBy(['account' => $this->account->getId()]);
-        $invoice = $em->find(ReceivedInvoice::class, $invoiceId);
-        $this->assertNotNull($line->getEntry(), 'El movimiento queda ligado a su apunte.');
-        $this->assertFalse($line->getEntry()->isAutoBooked());
-        $this->assertSame($line->getEntry()->getId(), $invoice->getAccountEntry()?->getId(), 'Y la factura, enganchada a ese mismo apunte.');
-        $this->assertFalse($invoice->isAwaitingPayment());
-        $this->assertSame($category->getId(), $line->getEntry()->getCategory()?->getId());
+        $this->assertSame('Semillas del Jarama · semillas de calabaza', $entry->getConcept());
+        $this->assertSame('S-7', $entry->getInvoiceNumber());
+        $this->assertSame($entry->getId(), $em->find(ReceivedInvoice::class, $invoiceId)->getAccountEntry()?->getId());
         $this->assertTrue($em->find(ReceivedInvoice::class, $otherId)->isAwaitingPayment(), 'La otra sigue esperando su pago.');
+    }
+
+    /** «No es esa factura»: se anota como un movimiento cualquiera y la factura sigue esperando. */
+    public function testAnotarDiciendoQueNoEsEsaFactura(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
+        $number = sprintf('%010d', random_int(0, 9_999_999_999));
+        $this->account = $this->bankAccount($number);
+        $category = $this->category();
+        $this->awaitingInvoice($category, 'Ferretería Talamanca', 'F-3', 'tornillería');
+        $invoiceId = $this->awaitingInvoice($category, 'Semillas del Jarama', 'S-7', 'semillas de calabaza');
+
+        $crawler = $this->upload($client, $number, 'TRF SEMILLAS DEL JARAMA');
+        $form = $crawler->filter('form.bst-book')->form();
+        $form['no_invoice']->tick();
+        $client->submit($form);
+
+        $client->followRedirect();
+        $this->assertSelectorTextNotContains('.csa-alerts', 'Es el pago de la factura');
+        $this->assertSame('TRF SEMILLAS DEL JARAMA', $this->lineEntry()->getConcept());
+        $this->assertTrue(static::getContainer()->get(EntityManagerInterface::class)->find(ReceivedInvoice::class, $invoiceId)->isAwaitingPayment());
     }
 
     /**
      * Si el mes anterior el mismo concepto se anotó en una partida, el extracto lo dice
-     * y «Anotar» llega con esa partida puesta.
+     * y la fila llega con esa partida puesta.
      */
     public function testAnotarProponeLaPartidaDeLasUltimasVeces(): void
     {
@@ -250,12 +272,7 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         $client->submit($form);
         $crawler = $client->followRedirect();
         $this->assertSelectorTextContains('#sin-apunte', sprintf('en %s, como las últimas veces', $category->getName()));
-
-        $crawler = $client->click($crawler->selectLink('Anotar')->link());
-
-        $this->assertResponseIsSuccessful();
-        $this->assertSame((string) $category->getId(), $crawler->filter('#account_entry_category option[selected]')->attr('value'));
-        $this->assertSelectorTextContains('body', 'porque el último apunte con el mismo concepto la llevaba');
+        $this->assertSame((string) $category->getId(), $crawler->filter('form.bst-book option[selected]')->attr('value'), 'La partida llega puesta.');
     }
 
     /**
@@ -452,6 +469,15 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         $client->submit($form);
 
         return $client->followRedirect();
+    }
+
+    /** El apunte del (único) movimiento de la cuenta de la prueba, recién leído. */
+    private function lineEntry(): ?AccountEntry
+    {
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $em->clear();
+
+        return $em->getRepository(BankStatementLine::class)->findOneBy(['account' => $this->account->getId()])?->getEntry();
     }
 
     private function tempFile(string $content, string $name = 'extracto.n43'): UploadedFile
