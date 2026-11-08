@@ -23,6 +23,19 @@
     {{ parent() }}
     {% include 'partner/_listing_styles.html.twig' %}
     {% include 'accounting/_styles.html.twig' %}
+    <style>
+        .acc-upload { position: relative; }
+        .acc-upload > summary { list-style: none; cursor: pointer; }
+        .acc-upload > summary::-webkit-details-marker { display: none; }
+        .acc-upload__menu {
+            position: absolute; z-index: 10; top: calc(100% + 4px); left: 0; min-width: 220px; padding: 6px;
+            background: var(--prl-surface, #fff); border: 1px solid var(--prl-line-2, #d8d2c2); border-radius: 8px;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, .08);
+        }
+        .acc-upload__hint { margin: 4px 8px 6px; font-size: 12px; color: var(--prl-ink-soft, #5a564a); }
+        .acc-upload__item { display: block; margin: 0; padding: 8px 10px; border-radius: 6px; font-weight: 500; cursor: pointer; }
+        .acc-upload__item:hover, .acc-upload__item:focus-within { background: var(--prl-line, #efeadd); }
+    </style>
 {% endblock %}
 
 {% block csa_main %}
@@ -35,13 +48,32 @@
     ) }}
 
     {% if is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+        {# Un solo botón: se elige la cuenta y se abre el explorador; al elegir el
+         # fichero, sube. Cada cuenta es su propio formulario con su <label> del
+         # fichero, así el explorador lo abre el navegador sin depender de JS. Las
+         # comprobaciones (IBAN, saldo inicial, otra cuenta) sólo se ven si fallan. #}
         <div class="prl-toolbar">
-            <form method="post" action="{{ path('accounting_bank_statement_upload') }}" enctype="multipart/form-data" class="inv-upload">
-                <input type="hidden" name="_token" value="{{ csrf_token('bank_statement_upload') }}">
-                <input type="file" name="file" required>
-                <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-upload"></i> Subir extracto</button>
-                <span class="acc-muted acc-small">Si algo del fichero no cuadra, no se guarda nada. Volver a subir uno ya subido no duplica movimientos.</span>
-            </form>
+            {% if accounts is empty %}
+                <span class="acc-muted acc-small">No hay ninguna cuenta de banco activa a la que subir un extracto (Ajustes → Cuentas).</span>
+            {% else %}
+                <details class="acc-upload">
+                    <summary class="prl-btn prl-btn--primary"><i class="fa fa-upload"></i> Subir extracto <i class="fa fa-caret-down"></i></summary>
+                    <div class="acc-upload__menu">
+                        <p class="acc-upload__hint">¿De qué cuenta es?</p>
+                        {% for account in accounts %}
+                            <form method="post" action="{{ path('accounting_bank_statement_upload') }}" enctype="multipart/form-data" class="inv-upload">
+                                <input type="hidden" name="_token" value="{{ csrf_token('bank_statement_upload') }}">
+                                <input type="hidden" name="account" value="{{ account.id }}">
+                                <label class="acc-upload__item">
+                                    <input type="file" name="file" required hidden onchange="if (this.files.length) { this.form.submit(); }">
+                                    {{ account.name }}
+                                </label>
+                            </form>
+                        {% endfor %}
+                    </div>
+                </details>
+                <span class="acc-muted acc-small">El fichero Norma 43 o la hoja de Excel del banco. Si algo no cuadra, no se guarda nada; volver a subir uno ya subido no duplica movimientos.</span>
+            {% endif %}
         </div>
     {% endif %}
 

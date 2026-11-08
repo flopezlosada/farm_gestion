@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\BankStatement;
 use App\Entity\BankStatementLine;
+use App\Entity\FinancialAccount;
 use App\Entity\User;
 use App\Http\BackToAgenda;
 use App\Http\QueryId;
@@ -30,7 +31,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * con el libro. El banco es la fuente de los movimientos de una cuenta de banco; aquí se
  * ve qué movimientos le faltan al libro y qué apuntes no trae el banco.
  *
- * Al subirlo, lo que el libro ya tenía se liga a su apunte y lo que no deja duda lo
+ * Se sube eligiendo primero la cuenta y luego el fichero. Al subirlo, lo que el libro ya tenía se liga a su apunte y lo que no deja duda lo
  * anota la app sola ({@see BankLineBooker}); el resto se anota desde el alta de
  * siempre (prerrellenada) o se liga al apunte que ya lo tenía. Nada se borra.
  */
@@ -44,18 +45,18 @@ class BankStatementController extends AbstractController
 
     /** Los extractos subidos, los más recientes primero, y el sitio para subir otro. */
     #[Route('', name: 'accounting_bank_statements', methods: ['GET'])]
-    public function index(BankStatementRepository $statements): Response
+    public function index(BankStatementRepository $statements, BankStatementImporter $importer): Response
     {
         return $this->render('accounting/bank_statements.html.twig', [
             'statements' => $statements->findLatestFirst(),
             'unlinked' => $statements->unlinkedCounts(),
+            'accounts' => $importer->uploadableAccounts(),
         ]);
     }
 
     /**
-     * Subir un extracto. Si alguna cuenta del fichero no casa por IBAN con ninguna del
-     * libro, se pide elegirla y el fichero viaja en el mismo formulario (se vuelve a leer
-     * y validar entero al enviarlo: no se confía en nada de lo que vuelve).
+     * Subir un extracto a la cuenta que se eligió antes del fichero. Lo que comprueba
+     * que el fichero es de esa cuenta lo hace {@see BankStatementImporter::import()}.
      */
     #[Route('/upload', name: 'accounting_bank_statement_upload', methods: ['POST'])]
     #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
@@ -67,7 +68,10 @@ class BankStatementController extends AbstractController
 
             return $back;
         }
+        $accountId = QueryId::from($request->request, 'account');
+        $account = array_values(array_filter($importer->uploadableAccounts(), static fn (FinancialAccount $a): bool => $a->getId() === $accountId))[0] ?? null;
         [$raw, $fileName, $problem] = self::uploaded($request);
+        $problem ??= $account === null ? 'Elige primero de qué cuenta es el extracto.' : null;
         if ($problem !== null) {
             $this->addFlash('danger', $problem);
 
@@ -75,27 +79,7 @@ class BankStatementController extends AbstractController
         }
 
         try {
-            $file = $reader->read($raw);
-            $chosen = array_map('intval', array_filter($request->request->all('account'), 'is_numeric'));
-            ['resolved' => $resolved, 'unresolved' => $unresolved] = $importer->resolve($file, $chosen);
-            if ($unresolved !== []) {
-                $choosable = [];
-                foreach ($unresolved as $read) {
-                    $choosable[$read->key()] = $importer->choosableAccounts($read)
-                        ?: throw new Norma43Exception($read->isKnown()
-                            ? sprintf('Ninguna cuenta del libro tiene el IBAN de la %s, y no hay cuentas de banco sin IBAN para elegir. Pon el IBAN en la ficha de su cuenta (Ajustes → Cuentas) y vuelve a subirlo.', $read->label())
-                            : 'El fichero no dice de qué cuenta es y no hay ninguna cuenta de banco activa para elegir (Ajustes → Cuentas).');
-                }
-
-                return $this->render('accounting/bank_statement_choose.html.twig', [
-                    'unresolved' => $unresolved,
-                    'accounts' => $choosable,
-                    'content' => base64_encode($raw),
-                    'fileName' => $fileName,
-                    'chosen' => $chosen,
-                ]);
-            }
-            $import = $importer->import($file, $resolved, $fileName, $this->currentUser());
+            $import = $importer->import($reader->read($raw), $account, $fileName, $this->currentUser());
         } catch (Norma43Exception $e) {
             $this->addFlash('danger', 'No se ha guardado nada. '.$e->getMessage());
 
@@ -113,9 +97,7 @@ class BankStatementController extends AbstractController
             $this->addFlash('warning', $warning);
         }
 
-        return \count($import->statements) === 1
-            ? $this->redirectToRoute('accounting_bank_statement_show', ['id' => $import->statements[0]->getId()])
-            : $back;
+        return $this->redirectToRoute('accounting_bank_statement_show', ['id' => $import->statements[0]->getId()]);
     }
 
     /** El cuadre de un extracto con el libro, como está hoy. */
@@ -199,28 +181,21 @@ class BankStatementController extends AbstractController
     }
 
     /**
-     * El contenido y el nombre del fichero: de la subida, o del formulario de elegir
-     * cuenta, que lo trae en base64. El tercer valor es el problema, si lo hay.
+     * El contenido y el nombre del fichero subido. El tercer valor es el problema, si lo hay.
      *
      * @return array{0: string, 1: string, 2: ?string}
      */
     private static function uploaded(Request $request): array
     {
         $upload = $request->files->get('file');
-        if ($upload instanceof UploadedFile) {
-            if (!$upload->isValid() || $upload->getSize() > self::MAX_BYTES) {
-                return ['', '', 'El fichero no ha llegado bien o pasa de 2 MB: un extracto de un mes ocupa mucho menos.'];
-            }
-
-            return [(string) file_get_contents($upload->getPathname()), $upload->getClientOriginalName(), null];
-        }
-        $content = (string) $request->request->get('content');
-        $raw = $content !== '' ? base64_decode($content, true) : false;
-        if ($raw === false || $raw === '' || \strlen($raw) > self::MAX_BYTES) {
+        if (!$upload instanceof UploadedFile) {
             return ['', '', 'Elige el fichero del extracto (Norma 43 o la hoja de Excel del banco).'];
         }
+        if (!$upload->isValid() || $upload->getSize() > self::MAX_BYTES) {
+            return ['', '', 'El fichero no ha llegado bien o pasa de 2 MB: un extracto de un mes ocupa mucho menos.'];
+        }
 
-        return [$raw, mb_substr((string) $request->request->get('file_name'), 0, 255), null];
+        return [(string) file_get_contents($upload->getPathname()), $upload->getClientOriginalName(), null];
     }
 
     /** Quien sube el extracto, para dejar rastro. */

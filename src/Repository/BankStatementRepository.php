@@ -43,6 +43,22 @@ class BankStatementRepository extends ServiceEntityRepository
     }
 
     /**
+     * El último extracto de la cuenta que empieza el día $from o antes: el que un extracto
+     * nuevo que empieza ese día continúa (o el mismo fichero, más largo, si empieza igual).
+     */
+    public function findLatestStartingBy(FinancialAccount $account, \DateTimeImmutable $from): ?BankStatement
+    {
+        return $this->createQueryBuilder('s')
+            ->andWhere('s.account = :account')->setParameter('account', $account)
+            ->andWhere('s.from <= :from')->setParameter('from', $from)
+            ->orderBy('s.from', 'DESC')
+            ->addOrderBy('s.to', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+    /**
      * Cuántos movimientos sin apunte tiene cada extracto, en una consulta:
      * `[id del extracto => nº]`. Cuentan los de su cuenta entre sus fechas, desde la
      * apertura de la cuenta y distintos de cero, como en la ficha. Sólo salen los que

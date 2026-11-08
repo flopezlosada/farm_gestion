@@ -5,6 +5,7 @@ namespace App\Service\Accounting\Norma43;
 use App\Entity\BankStatement;
 use App\Entity\BankStatementLine;
 use App\Entity\FinancialAccount;
+use App\Entity\IssuedInvoice;
 use App\Entity\User;
 use App\Repository\BankStatementLineRepository;
 use App\Repository\BankStatementRepository;
@@ -12,14 +13,15 @@ use App\Repository\FinancialAccountRepository;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
- * Guarda un extracto ya leído: decide de qué cuenta del libro es cada cuenta del
- * fichero, guarda sus movimientos sin repetir los que ya estaban, liga los que no dejan
- * duda ({@see BankLineMatcher}) y anota solos los que el libro aún no tiene y no dejan
- * duda ({@see BankLineBooker}).
+ * Guarda un extracto ya leído en la cuenta del libro que eligió quien lo sube, guarda
+ * sus movimientos sin repetir los que ya estaban, liga los que no dejan duda
+ * ({@see BankLineMatcher}) y anota solos los que el libro aún no tiene y no dejan duda
+ * ({@see BankLineBooker}).
  *
- * La cuenta se reconoce por el IBAN de la ficha (entidad, oficina y cuenta). Si ninguna
- * lo tiene, la elige una persona ({@see choosableAccounts()}): adivinar por los últimos
- * dígitos podría meter los movimientos en otra cuenta.
+ * Antes de guardar nada comprueba que el fichero es de esa cuenta
+ * ({@see assertFits()}): el IBAN, si el fichero lo trae; que su saldo inicial sigue
+ * al del último extracto; y que sus movimientos no se subieron ya a otra cuenta. Sólo
+ * se ve si algo falla.
  */
 class BankStatementImporter
 {
@@ -34,150 +36,195 @@ class BankStatementImporter
     }
 
     /**
-     * Las cuentas que se pueden elegir para una cuenta del fichero que no casa por IBAN:
-     * de banco y activas. Si el fichero trae IBAN, además sin IBAN en la ficha: una con
-     * otro IBAN es, por definición, otra cuenta. Si no lo trae (la hoja de Excel de
-     * Fiare), nada lo contradice y vale cualquiera, también la que ya tiene su IBAN.
-     *
-     * @param Norma43Account $read La cuenta del fichero.
+     * Las cuentas a las que se puede subir un extracto: de banco y activas.
      *
      * @return list<FinancialAccount>
      */
-    public function choosableAccounts(Norma43Account $read): array
+    public function uploadableAccounts(): array
     {
-        return array_values(array_filter(
-            $this->accounts->findActive(),
-            static fn (FinancialAccount $a): bool => $a->isBank() && (!$read->isKnown() || $a->getBankKey() === null),
-        ));
+        return array_values(array_filter($this->accounts->findActive(), static fn (FinancialAccount $a): bool => $a->isBank()));
     }
 
     /**
-     * De qué cuenta del libro es cada cuenta del fichero.
-     *
-     * @param Norma43File        $file
-     * @param array<string, int> $chosen Id de cuenta elegida por la persona, por clave de la cuenta del fichero.
-     *
-     * @return array{resolved: array<string, FinancialAccount>, unresolved: list<Norma43Account>}
-     *
-     * @throws Norma43Exception Si alguna es de una cuenta retirada o que no es de banco, o la elegida no vale.
-     */
-    public function resolve(Norma43File $file, array $chosen = []): array
-    {
-        $byKey = [];
-        foreach ($this->accounts->findAll() as $account) {
-            /** @var FinancialAccount $account */
-            if (($key = $account->getBankKey()) !== null) {
-                $byKey[$key][] = $account;
-            }
-        }
-        $resolved = [];
-        $unresolved = [];
-        foreach ($file->accounts as $read) {
-            $matches = $byKey[$read->key()] ?? [];
-            if (\count($matches) > 1) {
-                throw new Norma43Exception(sprintf('Hay %d cuentas en el libro con el IBAN de la %s: deja el IBAN sólo en la buena (Ajustes → Cuentas).', \count($matches), $read->label()));
-            }
-            $account = $matches[0] ?? (isset($chosen[$read->key()]) ? $this->chosen($read, $chosen[$read->key()]) : null);
-            if ($account === null) {
-                $unresolved[] = $read;
-                continue;
-            }
-            if (!$account->isBank()) {
-                throw new Norma43Exception(sprintf('El extracto de la %s es de «%s», que en el libro no es una cuenta de banco. No se ha guardado nada.', $read->label(), $account->getName()));
-            }
-            if (!$account->isActive()) {
-                throw new Norma43Exception(sprintf('El extracto de la %s es de «%s», que está retirada. No se ha guardado nada: si vuelve a usarse, reactívala antes en Ajustes → Cuentas.', $read->label(), $account->getName()));
-            }
-            foreach ($resolved as $otherKey => $other) {
-                if ($other === $account && $otherKey !== $read->key()) {
-                    throw new Norma43Exception(sprintf('Dos cuentas del fichero irían a «%s». Elige una distinta para cada una.', $account->getName()));
-                }
-            }
-            $resolved[$read->key()] = $account;
-        }
-
-        return ['resolved' => $resolved, 'unresolved' => $unresolved];
-    }
-
-    /**
-     * La cuenta que eligió la persona para una cuenta del fichero, si se puede elegir.
-     *
-     * @param Norma43Account $read La cuenta del fichero.
-     * @param int            $id   Id de la cuenta elegida.
-     *
-     * @throws Norma43Exception Si no está entre las que se pueden elegir.
-     */
-    private function chosen(Norma43Account $read, int $id): FinancialAccount
-    {
-        foreach ($this->choosableAccounts($read) as $account) {
-            if ($account->getId() === $id) {
-                return $account;
-            }
-        }
-
-        throw new Norma43Exception(sprintf('La cuenta elegida para la %s no vale: tiene que ser una cuenta de banco activa%s.', $read->label(), $read->isKnown() ? ' y sin IBAN' : ''));
-    }
-
-    /**
-     * Guarda el extracto. Todo o nada: si una cuenta falla, no se guarda ninguna.
+     * Guarda el extracto en la cuenta elegida. Todo o nada: si algo no cuadra, no se
+     * guarda nada.
      *
      * Volver a subir el mismo extracto no crea otro ni duplica movimientos; uno que se
      * solapa con otro sólo añade los movimientos nuevos. Si ya hay un extracto de esa
      * cuenta para esas mismas fechas con OTROS saldos, se rechaza: uno de los dos está
      * mal y no se puede saber cuál.
      *
-     * @param Norma43File                     $file
-     * @param array<string, FinancialAccount> $resolved Cuenta del libro por clave de la cuenta del fichero (todas).
-     * @param string                          $fileName Nombre del fichero subido.
-     * @param User|null                       $by       Quién lo sube.
+     * @param Norma43File      $file
+     * @param FinancialAccount $account  La cuenta del libro que eligió quien lo sube.
+     * @param string           $fileName Nombre del fichero subido.
+     * @param User|null        $by       Quién lo sube.
      *
-     * @throws Norma43Exception
+     * @throws Norma43Exception Si el fichero no es de esa cuenta o no sigue a lo ya subido.
      */
-    public function import(Norma43File $file, array $resolved, string $fileName, ?User $by): BankStatementImport
+    public function import(Norma43File $file, FinancialAccount $account, string $fileName, ?User $by): BankStatementImport
     {
-        $statements = [];
-        $candidates = [];
-        foreach ($file->accounts as $read) {
-            $account = $resolved[$read->key()] ?? throw new \LogicException('Falta la cuenta del libro de la '.$read->label().'.');
-            $existing = $this->statements->findSamePeriod($account, $read->from, $read->to);
-            if ($existing !== null && !$existing->agreesWith($read)) {
-                throw new Norma43Exception(sprintf(
-                    'Ya hay un extracto de «%s» del %s al %s con otros saldos (empieza en %s y acaba en %s). Uno de los dos está mal: no se ha guardado nada.',
-                    $account->getName(),
-                    $read->from->format('d/m/Y'),
-                    $read->to->format('d/m/Y'),
-                    number_format((float) $existing->getOpeningBalance(), 2, ',', '.'),
-                    number_format((float) $existing->getClosingBalance(), 2, ',', '.'),
-                ));
-            }
-            $statements[] = $existing ?? new BankStatement($account, $read, $fileName, $by);
+        [$read, $existing] = $this->assertFits($file, $account);
+        $statement = $existing ?? new BankStatement($account, $read, $fileName, $by);
 
-            $ordinals = [];
-            foreach ($read->movements as $movement) {
-                $ordinal = $ordinals[$movement->identity()] = ($ordinals[$movement->identity()] ?? 0) + 1;
-                $candidates[] = [$account, $movement, BankStatementLine::fingerprint($account, $movement, $ordinal), $ordinal];
-            }
-        }
-
-        $known = $this->lines->existingFingerprints(array_column($candidates, 2));
+        $candidates = self::fingerprints($account, $read);
+        $known = $this->lines->existingFingerprints(array_column($candidates, 1));
         $fresh = [];
-        foreach ($candidates as [$account, $movement, $fingerprint, $ordinal]) {
+        foreach ($candidates as [$movement, $fingerprint, $ordinal]) {
             if (!isset($known[$fingerprint])) {
                 $known[$fingerprint] = true;
                 $fresh[] = new BankStatementLine($account, $movement, $ordinal);
             }
         }
 
-        // Una transacción: los movimientos, los extractos, lo ligado y lo anotado, o nada.
-        [$linked, $booked] = $this->em->wrapInTransaction(function () use ($statements, $fresh, $by): array {
-            array_walk($statements, fn (BankStatement $s) => $this->em->persist($s));
+        // Una transacción: los movimientos, el extracto, lo ligado y lo anotado, o nada.
+        [$linked, $booked] = $this->em->wrapInTransaction(function () use ($statement, $fresh, $by): array {
+            $this->em->persist($statement);
             array_walk($fresh, fn (BankStatementLine $l) => $this->em->persist($l));
             $this->em->flush();
 
-            return $this->crossWithBook($statements, $by);
+            return $this->crossWithBook([$statement], $by);
         });
 
-        return new BankStatementImport($statements, \count($fresh), \count($candidates) - \count($fresh), $linked, $file->warnings, $booked);
+        return new BankStatementImport([$statement], \count($fresh), \count($candidates) - \count($fresh), $linked, $file->warnings, $booked);
+    }
+
+    /**
+     * Que el fichero es de esa cuenta y sigue a lo ya subido. Devuelve la cuenta leída
+     * y el extracto ya subido de esas mismas fechas, si lo hay.
+     *
+     *  - Una sola cuenta en el fichero: con varias no se sabe cuál es la elegida.
+     *  - De banco y activa.
+     *  - IBAN: si el fichero lo trae (Caixa sí, la hoja de Fiare no), ni es el de otra
+     *    cuenta del libro ni contradice el de ésta.
+     *  - Mismas fechas que uno ya subido: los mismos saldos. Si no, el saldo inicial es
+     *    el del último extracto: el final, si éste acaba antes; el inicial, si empieza el
+     *    mismo día (el fichero del año, ahora más largo). Si se solapan a medias no hay
+     *    con qué compararlo.
+     *  - Más de la mitad de sus movimientos no están ya en otra cuenta: sería el
+     *    fichero de esa otra.
+     *
+     * @return array{0: Norma43Account, 1: ?BankStatement}
+     *
+     * @throws Norma43Exception
+     */
+    private function assertFits(Norma43File $file, FinancialAccount $account): array
+    {
+        if (\count($file->accounts) !== 1) {
+            throw new Norma43Exception(sprintf('El fichero trae %d cuentas. Bájalo de una sola, la de «%s».', \count($file->accounts), $account->getName()));
+        }
+        $read = $file->accounts[0];
+        if (!$account->isBank() || !$account->isActive()) {
+            throw new Norma43Exception(sprintf('«%s» no es una cuenta de banco activa: no se le puede subir un extracto.', $account->getName()));
+        }
+        $this->assertSameIban($read, $account);
+        $same = $this->statements->findSamePeriod($account, $read->from, $read->to);
+        $this->assertContinues($read, $account, $same);
+        $this->assertNotInOtherAccount($read, $account);
+
+        return [$read, $same];
+    }
+
+    /** @throws Norma43Exception Si el IBAN del fichero es de otra cuenta o no es el de ésta. */
+    private function assertSameIban(Norma43Account $read, FinancialAccount $account): void
+    {
+        if (!$read->isKnown()) {
+            return;
+        }
+        foreach ($this->accounts->findAll() as $other) {
+            /** @var FinancialAccount $other */
+            if ($other->getId() !== $account->getId() && $other->getBankKey() === $read->key()) {
+                throw new Norma43Exception(sprintf('El fichero es de la %s, que en el libro es «%s», no «%s». Súbelo en «%s».', $read->label(), $other->getName(), $account->getName(), $other->getName()));
+            }
+        }
+        if ($account->getBankKey() !== null && $account->getBankKey() !== $read->key()) {
+            throw new Norma43Exception(sprintf('El fichero es de la %s, y «%s» tiene otro IBAN. ¿Es el extracto de otra cuenta?', $read->label(), $account->getName()));
+        }
+    }
+
+    /**
+     * @param BankStatement|null $same El ya subido de esta cuenta con las mismas fechas.
+     *
+     * @throws Norma43Exception Si el saldo inicial no sigue al de lo ya subido de esta cuenta.
+     */
+    private function assertContinues(Norma43Account $read, FinancialAccount $account, ?BankStatement $same): void
+    {
+        if ($same !== null) {
+            if (!$same->agreesWith($read)) {
+                throw new Norma43Exception(sprintf(
+                    'Ya hay un extracto de «%s» del %s al %s con otros saldos (empieza en %s y acaba en %s). Uno de los dos está mal.',
+                    $account->getName(), $read->from->format('d/m/Y'), $read->to->format('d/m/Y'),
+                    self::money(IssuedInvoice::toCents($same->getOpeningBalance())), self::money(IssuedInvoice::toCents($same->getClosingBalance())),
+                ));
+            }
+
+            return;
+        }
+        $previous = $this->statements->findLatestStartingBy($account, $read->from);
+        if ($previous === null) {
+            return;
+        }
+        $continues = $previous->getTo() < $read->from;
+        if (!$continues && $previous->getFrom() != $read->from) {
+            return;
+        }
+        $expected = IssuedInvoice::toCents($continues ? $previous->getClosingBalance() : $previous->getOpeningBalance());
+        if ($expected !== $read->openingCents) {
+            throw new Norma43Exception(sprintf(
+                'El fichero empieza el %s con %s, y el último extracto de «%s» (del %s al %s) %s con %s. %s',
+                $read->from->format('d/m/Y'), self::money($read->openingCents), $account->getName(),
+                $previous->getFrom()->format('d/m/Y'), $previous->getTo()->format('d/m/Y'),
+                $continues ? 'acaba' : 'empieza ese mismo día', self::money($expected),
+                $continues ? 'Falta algún movimiento entre los dos o el fichero no es de esta cuenta.' : 'El fichero no es de esta cuenta o uno de los dos está mal.',
+            ));
+        }
+    }
+
+    /** @throws Norma43Exception Si más de la mitad de los movimientos ya están en otra cuenta. */
+    private function assertNotInOtherAccount(Norma43Account $read, FinancialAccount $account): void
+    {
+        $others = array_values(array_filter($this->uploadableAccounts(), static fn (FinancialAccount $a): bool => $a->getId() !== $account->getId()));
+        if ($read->movements === [] || $others === []) {
+            return;
+        }
+        $byFingerprint = [];
+        foreach ($others as $other) {
+            foreach (self::fingerprints($other, $read) as [, $fingerprint]) {
+                $byFingerprint[$fingerprint] = $other;
+            }
+        }
+        $hits = [];
+        foreach (array_keys($this->lines->existingFingerprints(array_keys($byFingerprint))) as $fingerprint) {
+            $other = $byFingerprint[$fingerprint];
+            $hits[spl_object_id($other)] = [$other, ($hits[spl_object_id($other)][1] ?? 0) + 1];
+        }
+        foreach ($hits as [$other, $count]) {
+            if ($count * 2 > \count($read->movements)) {
+                throw new Norma43Exception(sprintf('%d de los %d movimientos del fichero ya se subieron a «%s». ¿Es el extracto de «%s» y no de «%s»?', $count, \count($read->movements), $other->getName(), $other->getName(), $account->getName()));
+            }
+        }
+    }
+
+    /**
+     * Cada movimiento con su huella en esa cuenta y su posición entre los idénticos del
+     * mismo día ({@see BankStatementLine::fingerprint()}).
+     *
+     * @return list<array{0: Norma43Movement, 1: string, 2: int}>
+     */
+    private static function fingerprints(FinancialAccount $account, Norma43Account $read): array
+    {
+        $ordinals = [];
+
+        return array_map(static function (Norma43Movement $movement) use ($account, &$ordinals): array {
+            $ordinal = $ordinals[$movement->identity()] = ($ordinals[$movement->identity()] ?? 0) + 1;
+
+            return [$movement, BankStatementLine::fingerprint($account, $movement, $ordinal), $ordinal];
+        }, $read->movements);
+    }
+
+    /** Un saldo en céntimos, para los mensajes: «1.234,56 €». */
+    private static function money(int $cents): string
+    {
+        return number_format($cents / 100, 2, ',', '.').' €';
     }
 
     /**
