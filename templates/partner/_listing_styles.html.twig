@@ -298,6 +298,9 @@ input.prl-filt { line-height: 28px; }
 .prl-table th.prl-sortable a.asc::after  { content: '↑'; opacity: 0.9; }
 .prl-table th.prl-sortable a.desc::after { content: '↓'; opacity: 0.9; }
 .prl-table .actions { text-align: right; white-space: nowrap; width: 84px; }
+/* Acciones con un botón con texto además de los iconos: con table-layout fixed
+   los 84px los recortan y el botón se sale de la tabla. */
+.prl-table .actions--with-button { width: 160px; }
 .prl-table .actions a {
     display: inline-flex; align-items: center; justify-content: center;
     width: 28px; height: 28px; border-radius: 5px;
