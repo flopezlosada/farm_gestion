@@ -233,18 +233,37 @@
                             <th class="tight">Qué</th>
                             <th class="tight acc-num">Antes</th>
                             <th class="tight acc-num">Ahora</th>
+                            {% if changes[0].reasons is defined %}<th>Por qué</th>{% endif %}
                         </tr>
                     </thead>
                     <tbody>
                         {% for c in changes %}
                             <tr>
-                                <td>{{ c.name }}</td>
+                                <td>{% if c.partner and can_see_partners %}<a href="{{ path('partner_show', { id: c.partner.id }) }}">{{ c.name }}</a>{% else %}{{ c.name }}{% endif %}</td>
                                 <td class="tight">{{ { new: 'Entra', gone: 'Sale', amount: 'Cambia' }[c.change] }}</td>
                                 <td class="acc-num">{{ c.before is not null ? fmt.money(c.before) : '—' }}</td>
                                 <td class="acc-num">{{ c.after is not null ? fmt.money(c.after) : '—' }}</td>
+                                {% if c.reasons is defined %}
+                                    {# En rojo lo que la app no explica: eso es lo que hay que mirar. #}
+                                    <td class="{{ c.explained ? '' : 'acc-neg' }}">{% for reason in c.reasons %}<div>{{ reason }}</div>{% endfor %}</td>
+                                {% endif %}
                             </tr>
                         {% endfor %}
                     </tbody>
+                    {% if changesTotals %}
+                        {% set t = changesTotals %}
+                        <tfoot>
+                            <tr>
+                                <th colspan="{{ changes[0].reasons is defined ? 5 : 4 }}">
+                                    Entran {{ fmt.money(t.new) }} · salen {{ fmt.money(t.gone) }} · suben {{ fmt.money(t.up) }} · bajan {{ fmt.money(t.down|abs) }}
+                                    → la remesa {{ t.net >= 0 ? 'sube' : 'baja' }} <b>{{ fmt.money(t.net|abs) }}</b>
+                                    {% if not t.addsUp %}
+                                        <div class="acc-neg">No cuadra: de una remesa a otra van {{ fmt.money(t.expectedNet) }}. La comparación se ha dejado algo.</div>
+                                    {% endif %}
+                                </th>
+                            </tr>
+                        </tfoot>
+                    {% endif %}
                 </table>
             </div>
         {% endif %}
