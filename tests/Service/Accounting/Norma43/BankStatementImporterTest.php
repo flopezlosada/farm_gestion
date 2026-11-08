@@ -12,7 +12,6 @@ use App\Service\Accounting\Norma43\BankStatementImport;
 use App\Service\Accounting\Norma43\BankStatementImporter;
 use App\Service\Accounting\Norma43\BankStatementReader;
 use App\Service\Accounting\Norma43\Norma43Exception;
-use App\Service\Accounting\Norma43\Norma43Reader;
 use App\Service\Accounting\Norma43\StatementReviewer;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -74,7 +73,7 @@ class BankStatementImporterTest extends KernelTestCase
             ['910312', 3000, ['TRANSFERENCIA']],
             ['910312', 3000, ['TRANSFERENCIA']],
         ]));
-        $import = $this->import($march);
+        $import = $this->import($account, $march);
 
         $this->assertSame(3, $import->added);
         $this->assertSame(0, $import->alreadyThere);
@@ -92,13 +91,13 @@ class BankStatementImporterTest extends KernelTestCase
         $this->assertSame($light->getId(), $this->em->getRepository(BankStatementLine::class)->findOneBy(['account' => $account, 'amount' => '-45.50'])->getEntry()->getId());
 
         // El mismo fichero otra vez: ni extracto nuevo ni movimientos nuevos.
-        $again = $this->import($march);
+        $again = $this->import($account, $march);
         $this->assertSame(0, $again->added);
         $this->assertSame(3, $again->alreadyThere);
         $this->assertSame($statement->getId(), $again->statements[0]->getId());
 
         // Uno que se solapa (del 12 al 15): sólo entra el movimiento nuevo.
-        $overlap = $this->import(N43::file(N43::account('9999', '0001', $number, '910312', '910315', 120000 - 4550, [
+        $overlap = $this->import($account, N43::file(N43::account('9999', '0001', $number, '910312', '910315', 120000 - 4550, [
             ['910312', 3000, ['TRANSFERENCIA']],
             ['910312', 3000, ['TRANSFERENCIA']],
             ['910314', -120, ['COMISION']],
@@ -122,7 +121,7 @@ class BankStatementImporterTest extends KernelTestCase
         $this->em->flush();
         $this->em->clear();
 
-        $import = $this->import(N43::file(N43::account('9999', '0001', $number, '911001', '911031', 0, [
+        $import = $this->import($account, N43::file(N43::account('9999', '0001', $number, '911001', '911031', 0, [
             ['911009', -15895, ['TRF. AYUNTAMIENTO']],
         ])));
 
@@ -141,13 +140,13 @@ class BankStatementImporterTest extends KernelTestCase
     public function testNorma43YHojaDelMismoMesNoDuplican(): void
     {
         [$account, $number] = $this->bankAccount(openingBalance: '1200.00');
-        $this->import(N43::file(N43::account('9999', '0001', $number, '910301', '910331', 120000, [
+        $this->import($account, N43::file(N43::account('9999', '0001', $number, '910301', '910331', 120000, [
             ['910305', -4550, ['RECIBO LUZ']],
             ['910312', 3000, ['TRANSFERENCIA']],
             ['910312', 3000, ['TRANSFERENCIA']],
         ])));
 
-        $sheet = $this->import(BankSheet::caixaLike('ES00'.'9999'.'0001'.'00'.$number, 1200.00, [
+        $sheet = $this->import($account, BankSheet::caixaLike('ES00'.'9999'.'0001'.'00'.$number, 1200.00, [
             ['2091-03-05', -45.50, 'RECIBO LUZ'],
             ['2091-03-12', 30.00, 'TRANSFERENCIA'],
             ['2091-03-12', 30.00, 'TRANSFERENCIA'],
@@ -165,7 +164,7 @@ class BankStatementImporterTest extends KernelTestCase
         [$account, $number] = $this->bankAccount(openingBalance: '50.00', openingDate: '2091-03-10');
 
         $review = static::getContainer()->get(StatementReviewer::class)->review(
-            $this->import(N43::file(N43::account('9999', '0001', $number, '910301', '910331', 2000, [['910305', 3000]])))->statements[0],
+            $this->import($account, N43::file(N43::account('9999', '0001', $number, '910301', '910331', 2000, [['910305', 3000]])))->statements[0],
         );
 
         $this->assertNull($review->bookOpeningCents);
@@ -177,15 +176,15 @@ class BankStatementImporterTest extends KernelTestCase
     /** Mismas fechas con otros saldos: uno de los dos está mal, se rechaza. */
     public function testMismoPeriodoConOtrosSaldosSeRechaza(): void
     {
-        [, $number] = $this->bankAccount();
-        $this->import(N43::file(N43::account('9999', '0001', $number, '910301', '910331', 1000, [])));
+        [$account, $number] = $this->bankAccount();
+        $this->import($account, N43::file(N43::account('9999', '0001', $number, '910301', '910331', 1000, [])));
 
         $this->expectException(Norma43Exception::class);
         $this->expectExceptionMessage('con otros saldos');
-        $this->import(N43::file(N43::account('9999', '0001', $number, '910301', '910331', 2000, [])));
+        $this->import($account, N43::file(N43::account('9999', '0001', $number, '910301', '910331', 2000, [])));
     }
 
-    /** Una cuenta retirada o que no es de banco: se rechaza el fichero entero. */
+    /** A una cuenta retirada o que no es de banco no se sube nada, ni se ofrece. */
     public function testCuentaRetiradaONoBancariaSeRechaza(): void
     {
         [$retired, $number] = $this->bankAccount();
@@ -193,60 +192,71 @@ class BankStatementImporterTest extends KernelTestCase
         [$cash, $cashNumber] = $this->bankAccount();
         $cash->setKind(FinancialAccount::KIND_CASH);
         $this->em->flush();
-        $importer = static::getContainer()->get(BankStatementImporter::class);
-        $reader = new Norma43Reader();
 
-        foreach ([[$number, 'está retirada'], [$cashNumber, 'no es una cuenta de banco']] as [$n, $message]) {
+        foreach ([[$retired, $number], [$cash, $cashNumber]] as [$account, $n]) {
             try {
-                $importer->resolve($reader->read(N43::file(N43::account('9999', '0001', $n, '910301', '910331', 0, []))));
+                $this->import($account, N43::file(N43::account('9999', '0001', $n, '910301', '910331', 0, [])));
                 $this->fail('Tenía que rechazarse.');
             } catch (Norma43Exception $e) {
-                $this->assertStringContainsString($message, $e->getMessage());
+                $this->assertStringContainsString('no es una cuenta de banco activa', $e->getMessage());
             }
         }
+        $offered = array_map(static fn (FinancialAccount $a): ?int => $a->getId(), $this->importer()->uploadableAccounts());
+        $this->assertNotContains($retired->getId(), $offered);
+        $this->assertNotContains($cash->getId(), $offered);
     }
 
-    /** Sin IBAN que case, se pide elegir; sólo vale una cuenta de banco activa sin IBAN. */
-    public function testSinIbanSeEligeEntreLasCuentasSinIban(): void
+    /** El fichero trae el IBAN de otra cuenta del libro: se dice cuál y no se guarda. */
+    public function testElIbanDeOtraCuentaSeRechaza(): void
+    {
+        [$owner, $number] = $this->bankAccount();
+        [$chosen] = $this->bankAccount();
+        $chosen->setIban(null);
+        $this->em->flush();
+
+        $this->expectException(Norma43Exception::class);
+        $this->expectExceptionMessage('que en el libro es «'.$owner->getName().'»');
+        $this->import($chosen, N43::file(N43::account('9999', '0001', $number, '910301', '910331', 0, [])));
+    }
+
+    /**
+     * Un IBAN que no es de ninguna cuenta del libro: si la elegida tiene otro, se
+     * rechaza; si no tiene ninguno, nada lo contradice y se guarda.
+     */
+    public function testUnIbanQueNoEsElDeLaCuenta(): void
     {
         [$withIban] = $this->bankAccount();
         [$noIban] = $this->bankAccount();
         $noIban->setIban(null);
         $this->em->flush();
-        $file = (new Norma43Reader())->read(N43::file(N43::account('9999', '0001', $this->randomNumber(), '910301', '910331', 0, [])));
-        $key = $file->accounts[0]->key();
-        $importer = static::getContainer()->get(BankStatementImporter::class);
+        $file = N43::file(N43::account('9999', '0001', $this->randomNumber(), '910301', '910331', 0, [['910305', -100, ['COMISION']]]));
 
-        $this->assertCount(1, $importer->resolve($file)['unresolved']);
-        $this->assertContains($noIban, $importer->choosableAccounts($file->accounts[0]));
-        $this->assertNotContains($withIban, $importer->choosableAccounts($file->accounts[0]));
-        $this->assertSame($noIban, $importer->resolve($file, [$key => $noIban->getId()])['resolved'][$key]);
-
-        $this->expectException(Norma43Exception::class);
-        $importer->resolve($file, [$key => $withIban->getId()]);
+        try {
+            $this->import($withIban, $file);
+            $this->fail('Tenía que rechazarse.');
+        } catch (Norma43Exception $e) {
+            $this->assertStringContainsString('tiene otro IBAN', $e->getMessage());
+        }
+        $this->assertSame(1, $this->import($noIban, $file)->added);
     }
 
     /**
-     * Si el fichero no dice de qué cuenta es (la hoja de Excel de Fiare), nada contradice
-     * a una cuenta que ya tiene su IBAN: se puede elegir. Una retirada, no.
+     * El saldo inicial sigue al final del último extracto. Si no, falta algo entre los
+     * dos (o el fichero es de otra cuenta) y no se guarda; si sigue, sí.
      */
-    public function testFicheroSinIbanDejaElegirUnaCuentaConIban(): void
+    public function testElSaldoInicialSigueAlDelUltimoExtracto(): void
     {
-        [$withIban] = $this->bankAccount();
-        [$retired] = $this->bankAccount();
-        $retired->setActive(false);
-        $this->em->flush();
-        $file = static::getContainer()->get(BankStatementReader::class)->read(BankSheet::fiareLike(500.00, [['2091-03-05', -10.00, 'COMPRA INVENTADA']]));
-        $read = $file->accounts[0];
-        $importer = static::getContainer()->get(BankStatementImporter::class);
+        [$account, $number] = $this->bankAccount();
+        $this->import($account, N43::file(N43::account('9999', '0001', $number, '910301', '910331', 10000, [['910305', -2500, ['RECIBO']]])));
 
-        $this->assertFalse($read->isKnown());
-        $this->assertContains($withIban, $importer->choosableAccounts($read));
-        $this->assertNotContains($retired, $importer->choosableAccounts($read));
-        $this->assertSame($withIban, $importer->resolve($file, [$read->key() => $withIban->getId()])['resolved'][$read->key()]);
-
-        $this->expectException(Norma43Exception::class);
-        $importer->resolve($file, [$read->key() => $retired->getId()]);
+        try {
+            $this->import($account, N43::file(N43::account('9999', '0001', $number, '910401', '910430', 9000, [])));
+            $this->fail('Tenía que rechazarse.');
+        } catch (Norma43Exception $e) {
+            $this->assertStringContainsString('Falta algún movimiento entre los dos', $e->getMessage());
+            $this->assertStringContainsString('75,00 €', $e->getMessage());
+        }
+        $this->assertCount(1, $this->import($account, N43::file(N43::account('9999', '0001', $number, '910401', '910430', 7500, [])))->statements);
     }
 
     /**
@@ -259,7 +269,7 @@ class BankStatementImporterTest extends KernelTestCase
         $card = $this->card('TARJETA TJ MIXTA PERSON');
         $this->transferCategory();
 
-        $import = $this->import(N43::file(N43::account('9999', '0001', $number, '911001', '911031', 100000, [
+        $import = $this->import($bank, N43::file(N43::account('9999', '0001', $number, '911001', '911031', 100000, [
             ['911005', -24690, ['TARJETA TJ MIXTA PERSON']],
         ])));
 
@@ -287,7 +297,7 @@ class BankStatementImporterTest extends KernelTestCase
         $this->entry($bank, $this->category(), '2091-10-05', '-100.00', 'FERRETERIA PAGO CON TARJETA');
         $this->em->flush();
 
-        $import = $this->import(N43::file(N43::account('9999', '0001', $number, '911001', '911031', 100000, [
+        $import = $this->import($bank, N43::file(N43::account('9999', '0001', $number, '911001', '911031', 100000, [
             ['911005', -24690, ['TARJETA TJ MIXTA PERSON']],
         ])));
 
@@ -321,12 +331,71 @@ class BankStatementImporterTest extends KernelTestCase
         $this->created[] = $category;
     }
 
-    private function import(string $raw): BankStatementImport
+    /**
+     * El fichero del año, bajado otra vez más largo, empieza el mismo día: su saldo
+     * inicial tiene que ser el mismo. Uno que se solapa a medias no se compara.
+     */
+    public function testElMismoFicheroMasLargoEmpiezaConElMismoSaldo(): void
     {
-        $importer = static::getContainer()->get(BankStatementImporter::class);
-        $file = static::getContainer()->get(BankStatementReader::class)->read($raw);
+        [$account, $number] = $this->bankAccount();
+        $this->import($account, N43::file(N43::account('9999', '0001', $number, '910101', '910331', 10000, [])));
 
-        return $importer->import($file, $importer->resolve($file)['resolved'], 'extracto', null);
+        try {
+            $this->import($account, N43::file(N43::account('9999', '0001', $number, '910101', '910430', 20000, [])));
+            $this->fail('Tenía que rechazarse.');
+        } catch (Norma43Exception $e) {
+            $this->assertStringContainsString('empieza ese mismo día', $e->getMessage());
+        }
+        $this->import($account, N43::file(N43::account('9999', '0001', $number, '910101', '910430', 10000, [])));
+        $this->import($account, N43::file(N43::account('9999', '0001', $number, '910315', '910415', 55555, [])));
+        $this->assertSame(3, $this->em->getRepository(BankStatement::class)->count(['account' => $account->getId()]));
+    }
+
+    /** La hoja sin IBAN ya subida a otra cuenta: es el extracto de aquélla, no se guarda. */
+    public function testLosMovimientosYaSubidosAOtraCuentaSeRechazan(): void
+    {
+        [$fiare] = $this->bankAccount();
+        [$other] = $this->bankAccount();
+        $sheet = BankSheet::fiareLike(500.00, [['2091-03-05', -10.00, 'COMPRA INVENTADA'], ['2091-03-07', 25.00, 'TRF INVENTADA']]);
+        $this->import($fiare, $sheet);
+
+        $this->expectException(Norma43Exception::class);
+        $this->expectExceptionMessage('2 de los 2 movimientos del fichero ya se subieron a «'.$fiare->getName().'»');
+        $this->import($other, $sheet);
+    }
+
+    /** Un fichero Norma 43 con dos cuentas: no se sabe cuál es la elegida. */
+    public function testUnFicheroConDosCuentasSeRechaza(): void
+    {
+        [$account, $number] = $this->bankAccount();
+        $two = N43::file([
+            ...N43::account('9999', '0001', $number, '910301', '910331', 0, []),
+            ...N43::account('9999', '0001', $this->randomNumber(), '910301', '910331', 0, []),
+        ]);
+
+        try {
+            $this->import($account, $two);
+            $this->fail('Tenía que rechazarse.');
+        } catch (Norma43Exception $e) {
+            $this->assertStringContainsString('El fichero trae 2 cuentas', $e->getMessage());
+        }
+        $this->assertSame(0, $this->em->getRepository(BankStatement::class)->count(['account' => $account->getId()]));
+    }
+
+    private function importer(): BankStatementImporter
+    {
+        return static::getContainer()->get(BankStatementImporter::class);
+    }
+
+    /** Sube el extracto a la cuenta, como quien la elige antes del fichero. */
+    private function import(FinancialAccount $account, string $raw): BankStatementImport
+    {
+        return $this->importer()->import(
+            static::getContainer()->get(BankStatementReader::class)->read($raw),
+            $this->em->find(FinancialAccount::class, $account->getId()),
+            'extracto',
+            null,
+        );
     }
 
     /**

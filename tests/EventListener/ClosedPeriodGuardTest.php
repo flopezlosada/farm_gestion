@@ -121,6 +121,38 @@ class ClosedPeriodGuardTest extends KernelTestCase
         $this->em->flush();
     }
 
+    /**
+     * La liquidación de la tarjeta de un trimestre entregado: juntar sus compras en el
+     * cargo del banco no cambia importes, fechas ni partidas, así que se puede.
+     */
+    public function testJuntarApuntesDelMismoCargoEnUnTrimestreEntregadoSePuede(): void
+    {
+        $head = $this->entry('2094-08-05', '-30.00');
+        $part = $this->entry('2094-08-05', '-20.00');
+        $this->persist($head, $part);
+        $this->closed->deliver($this->quarter, null);
+
+        $head->absorb($part);
+        $this->em->flush();
+
+        $this->em->clear();
+        $this->assertSame($head->getId(), $this->em->find(AccountEntry::class, $part->getId())->getSplitFrom()?->getId());
+    }
+
+    /** Juntar no abre la puerta a lo demás: cambiar además el importe sigue parado. */
+    public function testJuntarYCambiarElImporteEnUnTrimestreEntregadoNoSePuede(): void
+    {
+        $head = $this->entry('2094-08-05', '-30.00');
+        $part = $this->entry('2094-08-05', '-20.00');
+        $this->persist($head, $part);
+        $this->closed->deliver($this->quarter, null);
+
+        $head->absorb($part);
+        $part->setAmount('-25.00');
+        $this->expectException(ClosedPeriodException::class);
+        $this->em->flush();
+    }
+
     /** Reabierto, se corrige; y queda escrito que se reabrió. */
     public function testReabiertoSeCorrige(): void
     {
