@@ -316,6 +316,16 @@ class RemittanceController extends AbstractController
         $remittances->loadLinesWithPartners($remittance, $previous);
         $expected = $remittance->isDraft() && $remittance->isBasketFees() ? $fees->forMonth($remittance->getPeriod())->getStatementsByPayerId() : [];
         $returns = $remittance->isSent() ? $returnRepository->findByRemittance($remittance) : [];
+        // Los cambios respecto a la anterior, con su porqué sacado de la cuota calculada
+        // de los dos meses (sólo en las de cuotas de cesta: las otras no salen de cestas).
+        $changes = $review->changesFrom($previous, $remittance);
+        if ($previous !== null && $changes !== [] && $remittance->isBasketFees()) {
+            $changes = $review->explainChanges(
+                $changes,
+                $fees->forMonth($previous->getPeriod())->getStatementsByPayerId(),
+                $expected ?: $fees->forMonth($remittance->getPeriod())->getStatementsByPayerId(),
+            );
+        }
 
         return $this->render('accounting/remittance_show.html.twig', [
             'remittance' => $remittance,
@@ -323,7 +333,8 @@ class RemittanceController extends AbstractController
             'problems' => $remittance->isDraft() ? $this->sendProblems($remittance, $validator) : [],
             'warnings' => $review->lineWarnings($remittance, $expected),
             'withoutLine' => $review->familiesWithoutLine($remittance, $expected),
-            'changes' => $review->changesFrom($previous, $remittance),
+            'changes' => $changes,
+            'changesTotals' => $previous !== null && $changes !== [] ? $review->changesTotals($changes, $previous, $remittance) : null,
             // Una enviada dice con qué cuenta y mandato se cobró: cada recibo que no
             // casa con su ficha, para resolverlo a mano, y todas las fichas para
             // enlazar el que no tiene.
