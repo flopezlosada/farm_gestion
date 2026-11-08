@@ -58,21 +58,55 @@ class RepeatSplit
      */
     public static function pick(AccountEntry $entry, array $previous, array $parts): ?array
     {
+        $wanted = IssuedInvoice::toCents($entry->getAmount());
+
+        return array_values(array_filter(
+            self::sameConcept($entry, $previous, $parts),
+            static fn (array $split): bool => IssuedInvoice::toCents($split['previous']->getAmount())
+                + array_sum(array_map(static fn (AccountEntry $p): int => IssuedInvoice::toCents($p->getAmount()), $split['parts'])) === $wanted,
+        ))[0] ?? null;
+    }
+
+    /**
+     * La única parte que se separó la última vez que se partió el mismo cargo, aunque el
+     * total fuera otro: lo que no era la factura (los suministros del Ayuntamiento),
+     * con su partida y su concepto. Null si nunca se partió o se partió en más de dos.
+     * Puro.
+     *
+     * @param list<AccountEntry> $previous Partidos de la misma cuenta, más recientes primero.
+     * @param list<AccountEntry> $parts    Sus partes.
+     */
+    public static function lastPartOf(AccountEntry $entry, array $previous, array $parts): ?AccountEntry
+    {
+        $last = self::sameConcept($entry, $previous, $parts)[0] ?? null;
+
+        return $last !== null && \count($last['parts']) === 1 ? $last['parts'][0] : null;
+    }
+
+    /**
+     * Los partidos de antes con el mismo concepto que éste, en el mismo orden, cada uno
+     * con sus partes.
+     *
+     * @param list<AccountEntry> $previous
+     * @param list<AccountEntry> $parts
+     *
+     * @return list<array{previous: AccountEntry, parts: non-empty-list<AccountEntry>}>
+     */
+    private static function sameConcept(AccountEntry $entry, array $previous, array $parts): array
+    {
         $key = ConceptKey::of($entry->getConcept());
         if ($key === '') {
-            return null;
+            return [];
         }
-        $wanted = IssuedInvoice::toCents($entry->getAmount());
+        $found = [];
         foreach ($previous as $candidate) {
             $own = array_values(array_filter($parts, static fn (AccountEntry $p): bool => $p->getSplitFrom() === $candidate));
-            $total = IssuedInvoice::toCents($candidate->getAmount())
-                + array_sum(array_map(static fn (AccountEntry $p): int => IssuedInvoice::toCents($p->getAmount()), $own));
-            if ($own !== [] && $total === $wanted && ConceptKey::of($candidate->getConcept()) === $key) {
-                return ['previous' => $candidate, 'parts' => $own];
+            if ($own !== [] && ConceptKey::of($candidate->getConcept()) === $key) {
+                $found[] = ['previous' => $candidate, 'parts' => $own];
             }
         }
 
-        return null;
+        return $found;
     }
 
     /**
