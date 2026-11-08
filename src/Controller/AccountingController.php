@@ -13,7 +13,6 @@ use App\Form\AccountEntryType;
 use App\Form\AccountTransferType;
 use App\Http\QueryId;
 use App\Repository\AccountEntryRepository;
-use App\Repository\BankStatementLineRepository;
 use App\Repository\BudgetCategoryRepository;
 use App\Repository\BudgetRepository;
 use App\Repository\FinancialAccountRepository;
@@ -23,12 +22,9 @@ use App\Service\Accounting\Agenda\AccountingAgenda;
 use App\Service\Accounting\Amount;
 use App\Service\Accounting\BudgetTracker;
 use App\Service\Accounting\Closing\ClosedPeriods;
-use App\Service\Accounting\Invoice\AwaitedInvoiceFinder;
 use App\Service\Accounting\Invoice\InvoiceFileStore;
 use App\Service\Accounting\MonthNames;
-use App\Service\Accounting\Norma43\BankLineEntryDraft;
 use App\Service\Accounting\Split\RepeatSplit;
-use App\Service\Accounting\Suggestion\CategorySuggester;
 use App\Service\Accounting\TransferRecorder;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
@@ -423,12 +419,8 @@ class AccountingController extends AbstractController
      * como llega quien acaba de guardar otro apunte del mismo extracto; e importe y
      * concepto, que es como llega el descuadre de un arqueo desde la portada.
      *
-     * Desde un extracto del banco (`bank_line`) llega con cuenta, fecha, importe y
-     * concepto del movimiento, y al guardarlo queda ligado a él. Si se cambia la cuenta
-     * o el importe ya no es ese movimiento: se guarda sin ligar y se avisa.
-     *
-     * Si una factura aceptada espera ese pago, llega con su partida, proveedor y
-     * concepto, y al guardarlo se engancha a ella. `no_invoice` dice que no es ésa.
+     * Un movimiento del banco no se anota aquí: en su extracto basta con elegir la
+     * partida ({@see BankStatementController::book()}).
      */
     #[Route('/entry/new', name: 'accounting_entry_new', methods: ['GET', 'POST'])]
     public function entryNew(
@@ -436,10 +428,7 @@ class AccountingController extends AbstractController
         EntityManagerInterface $em,
         FinancialAccountRepository $accounts,
         BudgetCategoryRepository $categories,
-        BankStatementLineRepository $bankLines,
         RepeatSplit $repeat,
-        CategorySuggester $suggester,
-        AwaitedInvoiceFinder $awaitedInvoices,
     ): Response {
         $entry = new AccountEntry();
         $entry->setDate($this->parseDate($request->query->get('date')) ?? new \DateTimeImmutable('today'));
@@ -456,23 +445,6 @@ class AccountingController extends AbstractController
         if ($concept !== '') {
             $entry->setConcept(mb_substr($concept, 0, 255));
         }
-        $bankLineId = QueryId::from($request->query, 'bank_line');
-        $bankLine = $bankLineId !== null ? $bankLines->find($bankLineId) : null;
-        $bankLine = $bankLine?->getEntry() === null ? $bankLine : null;
-        if ($bankLine !== null) {
-            BankLineEntryDraft::fromLine($entry, $bankLine);
-        }
-        // La partida y el proveedor, si las últimas veces que el banco dijo lo mismo
-        // llevaban los mismos: lo casado una vez con su ficha sigue casado.
-        $suggestion = $bankLine !== null ? $suggester->forLine($bankLine) : null;
-        $provider = $bankLine !== null ? $suggester->providerFor($bankLine) : null;
-        // La factura que espera este pago manda sobre lo de otras veces: es de este pago.
-        $awaited = $bankLine !== null && !$request->query->getBoolean('no_invoice')
-            ? $awaitedInvoices->for($bankLine, $provider)
-            : null;
-        if (!$request->isMethod('POST')) {
-            BankLineEntryDraft::complete($entry, $suggestion?->category, $provider, $awaited);
-        }
 
         $form = $this->createForm(AccountEntryType::class, $entry);
         $form->handleRequest($request);
@@ -480,34 +452,14 @@ class AccountingController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             $entry->setCreatedBy($this->currentUser());
             $em->persist($entry);
-            try {
-                $bankLine?->linkTo($entry);
-            } catch (\DomainException) {
-                $this->addFlash('warning', 'No se ha ligado al movimiento del banco: se cambió la cuenta o el importe. Si es otro movimiento, sigue en el extracto sin anotar.');
-                $bankLine = null;
-            }
-            // Sólo si quedó ligado al movimiento: con otra cuenta u otro importe, no es su pago.
-            try {
-                if ($bankLine !== null) {
-                    $awaited?->paidBy($entry);
-                }
-            } catch (\DomainException) {
-                $awaited = null;
-            }
             $em->flush();
-            $this->addFlash('success', sprintf('Anotado: %s.', $entry->getConcept()).($bankLine !== null && $awaited !== null
-                ? sprintf(' Es el pago de la factura %s: ya está enganchada.', $awaited->getInvoiceNumber() ?? 'de '.($awaited->getProviderName() ?? 'este proveedor'))
-                : ''));
+            $this->addFlash('success', sprintf('Anotado: %s.', $entry->getConcept()));
             // Un cargo que la última vez se partió (el del Ayuntamiento): a su ficha,
-            // donde se confirma partirlo igual, en vez de volver al extracto.
+            // donde se confirma partirlo igual.
             if ($repeat->templateFor($entry) !== null) {
                 $this->addFlash('info', 'Este mismo cargo se partió la última vez: confirma aquí si se parte igual.');
 
                 return $this->redirectToRoute('accounting_entry_show', ['id' => $entry->getId()]);
-            }
-            $statementId = QueryId::from($request->query, 'statement');
-            if ($bankLine !== null && $statementId !== null) {
-                return $this->redirectToRoute('accounting_bank_statement_show', ['id' => $statementId, '_fragment' => 'sin-apunte']);
             }
 
             if ($request->request->has('and_new')) {
@@ -523,16 +475,8 @@ class AccountingController extends AbstractController
         return $this->render('accounting/entry_form.html.twig', [
             'form' => $form->createView(),
             'entry' => null,
-            'awaited' => $awaited,
             'heading' => 'Anotar un apunte',
-            'lead' => $awaited !== null ? 'Un movimiento del banco. El saldo se recalcula solo.' : ($suggestion !== null
-                ? sprintf(
-                    'Un movimiento de una cuenta. La partida «%s» está puesta porque %s con el mismo concepto la llevaba%s: cámbiala si esta vez no es.',
-                    $suggestion->category->getName(),
-                    $suggestion->times === 1 ? 'el último apunte' : sprintf('los %d últimos apuntes', $suggestion->times),
-                    $suggestion->times === 1 ? '' : 'n',
-                ).($provider !== null ? sprintf(' El proveedor «%s», por lo mismo.', $provider->getName()) : '')
-                : 'Un movimiento de una cuenta. El saldo se recalcula solo.'.($provider !== null ? sprintf(' El proveedor «%s» está puesto porque las últimas veces con el mismo concepto lo llevaban.', $provider->getName()) : '')),
+            'lead' => 'Un movimiento de una cuenta. El saldo se recalcula solo.',
             'suggestions' => AccountEntryType::suggestedDirections($categories->findActive()),
         ]);
     }

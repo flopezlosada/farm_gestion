@@ -68,6 +68,15 @@ class FinancialAccount
     private ?string $iban = null;
 
     /**
+     * Sólo las tarjetas: el concepto con que el banco cobra la liquidación («TARJETA TJ
+     * MIXTA PERSON»). Ese cargo, al subir el extracto, se anota solo como traspaso del
+     * banco a esta tarjeta (lo hace CardSettlementBooker).
+     * @ORM\Column(name="settlement_concept", type="string", length=255, nullable=true)
+     */
+    #[Assert\Length(max: 255)]
+    private ?string $settlementConcept = null;
+
+    /**
      * Saldo con el que la cuenta entra en la aplicación. Es el punto de partida del
      * cálculo del saldo, así que se fija UNA vez, al migrar desde el Excel, y no se
      * vuelve a tocar: corregirlo después movería todos los saldos históricos.
@@ -153,6 +162,21 @@ class FinancialAccount
     public function isCard(): bool
     {
         return $this->kind === self::KIND_CARD;
+    }
+
+    /** El concepto de la liquidación en el banco; sólo lo tiene una tarjeta. */
+    public function getSettlementConcept(): ?string
+    {
+        return $this->isCard() ? $this->settlementConcept : null;
+    }
+
+    /** Vacío no es un concepto: se guarda null. */
+    public function setSettlementConcept(?string $concept): self
+    {
+        $concept = $concept !== null ? trim($concept) : null;
+        $this->settlementConcept = $concept !== '' ? $concept : null;
+
+        return $this;
     }
 
     public function getIban(): ?string

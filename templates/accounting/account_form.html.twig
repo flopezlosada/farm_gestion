@@ -49,6 +49,7 @@
                         {{ csa.field(form.name, 'Nombre', { full: true, hint: 'como la llamáis entre vosotras' }) }}
                         {{ csa.field(form.kind, 'Tipo', { widget_class: 'csa-select' }) }}
                         {{ csa.field(form.iban, 'IBAN', { hint: 'sólo si es bancaria' }) }}
+                        {{ csa.field(form.settlementConcept, 'Concepto con que el banco la cobra', { full: true, hint: 'sólo si es una tarjeta: tal como sale en el extracto (p. ej. TARJETA TJ MIXTA PERSON). Ese cargo se anota solo como traspaso a esta tarjeta' }) }}
                     </div>
                 {% endblock %}
             {% endembed %}

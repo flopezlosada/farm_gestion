@@ -3,6 +3,7 @@
 namespace App\Service\Accounting\Invoice;
 
 use App\Entity\BankStatementLine;
+use App\Entity\IssuedInvoice;
 use App\Entity\Provider;
 use App\Entity\ReceivedInvoice;
 use App\Repository\ReceivedInvoiceRepository;
@@ -35,6 +36,35 @@ class AwaitedInvoiceFinder
     public function for(BankStatementLine $line, ?Provider $provider): ?ReceivedInvoice
     {
         return self::pick($line, $provider, $this->invoices->findAwaitingPayment($line->getAmount()));
+    }
+
+    /**
+     * La factura que paga cada movimiento, para un extracto entero: una consulta, no
+     * una por movimiento. Sólo los que tienen una.
+     *
+     * @param list<BankStatementLine> $lines     Movimientos sin apunte.
+     * @param array<int, Provider>    $providers Proveedor que se le supone a cada uno, por id del movimiento.
+     *
+     * @return array<int, ReceivedInvoice> Por id del movimiento.
+     */
+    public function forLines(array $lines, array $providers): array
+    {
+        $charges = array_values(array_filter($lines, static fn (BankStatementLine $l): bool => $l->getAmountCents() < 0));
+        if ($charges === []) {
+            return [];
+        }
+        $awaiting = $this->invoices->findAwaitingPayment();
+        $found = [];
+        foreach ($charges as $line) {
+            $candidates = array_values(array_filter($awaiting, static fn (ReceivedInvoice $i): bool => $i->getTotal() !== null
+                && IssuedInvoice::toCents($i->getTotal()) === -$line->getAmountCents()));
+            $invoice = self::pick($line, $providers[(int) $line->getId()] ?? null, $candidates);
+            if ($invoice !== null) {
+                $found[(int) $line->getId()] = $invoice;
+            }
+        }
+
+        return $found;
     }
 
     /**

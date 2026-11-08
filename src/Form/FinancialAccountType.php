@@ -16,7 +16,7 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
- * Una cuenta donde vive el dinero: un banco o una caja de efectivo.
+ * Una cuenta donde vive el dinero: un banco, una caja de efectivo o una tarjeta.
  *
  * El saldo de apertura es el punto de partida de todo lo que la aplicación calcula. En
  * cuanto la cuenta tiene apuntes, cambiarlo movería todos los saldos históricos de golpe
@@ -41,6 +41,10 @@ class FinancialAccountType extends AbstractType
             ->add('iban', TextType::class, [
                 'required' => false,
                 'constraints' => [new Assert\Length(max: 34)],
+            ])
+            ->add('settlementConcept', TextType::class, [
+                'required' => false,
+                'constraints' => [new Assert\Length(max: 255)],
             ])
             ->add('openingBalance', NumberType::class, [
                 'scale' => 2,

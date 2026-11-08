@@ -260,6 +260,78 @@ class BankStatementImporterTest extends KernelTestCase
     }
 
     /**
+     * El cargo con el concepto de la liquidación de una tarjeta se anota solo como
+     * traspaso del banco a la tarjeta, con sus dos mitades, y queda ligado.
+     */
+    public function testLaLiquidacionDeLaTarjetaSeAnotaSolaComoTraspaso(): void
+    {
+        [$bank, $number] = $this->bankAccount();
+        $card = $this->card('TARJETA TJ MIXTA PERSON');
+        $this->transferCategory();
+
+        $import = $this->import($bank, N43::file(N43::account('9999', '0001', $number, '911001', '911031', 100000, [
+            ['911005', -24690, ['TARJETA TJ MIXTA PERSON']],
+        ])));
+
+        $this->assertSame(1, $import->booked);
+        $this->em->clear();
+        $out = $this->em->getRepository(BankStatementLine::class)->findOneBy(['account' => $bank->getId()])->getEntry();
+        $this->assertNotNull($out);
+        $this->assertSame('-246.90', $out->getAmount());
+        $this->assertTrue($out->isTransfer());
+        $this->assertTrue($out->isAutoBooked());
+        $this->assertSame($card->getId(), $out->getTransferPeer()?->getAccount()?->getId());
+        $this->assertSame('246.90', $out->getTransferPeer()?->getAmount());
+        $this->assertSame('2091-10-05', $out->getTransferPeer()?->getDate()?->format('Y-m-d'));
+    }
+
+    /**
+     * Si ese día el banco ya tiene gastos sueltos (las compras apuntadas en el banco,
+     * a la antigua), un traspaso las contaría dos veces: no se anota.
+     */
+    public function testConLasComprasApuntadasEnElBancoNoSeHaceElTraspaso(): void
+    {
+        [$bank, $number] = $this->bankAccount();
+        $this->card('TARJETA TJ MIXTA PERSON');
+        $this->transferCategory();
+        $this->entry($bank, $this->category(), '2091-10-05', '-100.00', 'FERRETERIA PAGO CON TARJETA');
+        $this->em->flush();
+
+        $import = $this->import($bank, N43::file(N43::account('9999', '0001', $number, '911001', '911031', 100000, [
+            ['911005', -24690, ['TARJETA TJ MIXTA PERSON']],
+        ])));
+
+        $this->assertSame(0, $import->booked);
+        $this->em->clear();
+        $this->assertNull($this->em->getRepository(BankStatementLine::class)->findOneBy(['account' => $bank->getId()])->getEntry());
+    }
+
+    /** Una tarjeta con el concepto con que el banco la cobra. */
+    private function card(string $settlementConcept): FinancialAccount
+    {
+        $card = (new FinancialAccount())->setName('Tarjeta extracto '.bin2hex(random_bytes(3)))->setKind(FinancialAccount::KIND_CARD)
+            ->setSettlementConcept($settlementConcept)->setOpeningBalance('0')
+            ->setOpeningDate(new \DateTimeImmutable('2091-01-01'))->setActive(true)->setSortOrder(99);
+        $this->em->persist($card);
+        $this->em->flush();
+        $this->accounts[] = $card;
+
+        return $card;
+    }
+
+    /** Una partida de traspasos, por si la base de pruebas no la tiene sembrada. */
+    private function transferCategory(): void
+    {
+        $group = (new BudgetCategoryGroup())->setName('TRASPASOS '.bin2hex(random_bytes(3)))->setKind(BudgetCategoryGroup::KIND_TRANSFER)->setSortOrder(99);
+        $category = (new BudgetCategory())->setGroup($group)->setName('Traspaso entre cuentas')->setSortOrder(1);
+        $this->em->persist($group);
+        $this->em->persist($category);
+        $this->em->flush();
+        $this->created[] = $group;
+        $this->created[] = $category;
+    }
+
+    /**
      * El fichero del año, bajado otra vez más largo, empieza el mismo día: su saldo
      * inicial tiene que ser el mismo. Uno que se solapa a medias no se compara.
      */
