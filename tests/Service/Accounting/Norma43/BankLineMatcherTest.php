@@ -2,15 +2,12 @@
 
 namespace App\Tests\Service\Accounting\Norma43;
 
-use App\Entity\AccountantDelivery;
 use App\Entity\AccountEntry;
 use App\Entity\BankStatementLine;
 use App\Entity\BudgetCategory;
 use App\Entity\BudgetCategoryGroup;
 use App\Entity\FinancialAccount;
 use App\Repository\AccountEntryRepository;
-use App\Service\Accounting\Closing\ClosedPeriods;
-use App\Service\Accounting\Invoice\InvoiceQuarter;
 use App\Service\Accounting\Norma43\BankLineMatcher;
 use App\Service\Accounting\Norma43\Norma43Movement;
 use PHPUnit\Framework\TestCase;
@@ -162,7 +159,7 @@ class BankLineMatcherTest extends TestCase
             ->with([$bank], new \DateTimeImmutable('2026-09-24'), new \DateTimeImmutable('2026-11-06'), $this->countOf(30))
             ->willReturn([$entry]);
 
-        $linked = (new BankLineMatcher($repo, $this->openPeriods()))->linkSafe($lines);
+        $linked = (new BankLineMatcher($repo))->linkSafe($lines);
 
         $this->assertSame(1, $linked);
         $this->assertSame($entry, $lines[4]->getEntry());
@@ -189,7 +186,7 @@ class BankLineMatcherTest extends TestCase
             $this->entry($bank, '2026-10-22', '-15.00'),
         ]);
 
-        $proposals = (new BankLineMatcher($repo, $this->openPeriods()))->proposalsFor([$clear, $twoEntries, $first, $second]);
+        $proposals = (new BankLineMatcher($repo))->proposalsFor([$clear, $twoEntries, $first, $second]);
 
         $this->assertSame([[$clear, $clearEntry]], $proposals);
         $this->assertNull($clear->getEntry());
@@ -333,38 +330,12 @@ class BankLineMatcherTest extends TestCase
         $repo->method('findWithoutBankLine')->willReturn([]);
         $repo->method('findWithoutBankLineOn')->willReturn([$a, $b]);
 
-        $linked = (new BankLineMatcher($repo, $this->openPeriods()))->linkSafe([$card]);
+        $linked = (new BankLineMatcher($repo))->linkSafe([$card]);
 
         $this->assertSame(1, $linked);
         $this->assertSame($a, $card->getEntry());
         $this->assertSame($a, $b->getSplitFrom());
         $this->assertSame('-50.00', $a->getMovementAmount());
-    }
-
-    /** En un trimestre entregado a la gestoría no se toca nada: ni se junta ni se liga. */
-    public function testEnUnTrimestreEntregadoNoSeJunta(): void
-    {
-        $bank = $this->account();
-        $card = $this->line($bank, '2026-07-05', -5000);
-        $a = $this->entry($bank, '2026-07-05', '-30.00');
-        $b = $this->entry($bank, '2026-07-05', '-20.00');
-        $repo = $this->createStub(AccountEntryRepository::class);
-        $repo->method('findWithoutBankLine')->willReturn([]);
-        $repo->method('findWithoutBankLineOn')->willReturn([$a, $b]);
-        $closed = $this->createStub(ClosedPeriods::class);
-        $closed->method('closingDeliveryFor')->willReturn(new AccountantDelivery(InvoiceQuarter::of(2026, 3), null, new \DateTimeImmutable('2026-10-04')));
-
-        $this->assertSame(0, (new BankLineMatcher($repo, $closed))->linkSafe([$card]));
-        $this->assertNull($card->getEntry());
-        $this->assertNull($b->getSplitFrom());
-    }
-
-    private function openPeriods(): ClosedPeriods
-    {
-        $closed = $this->createStub(ClosedPeriods::class);
-        $closed->method('closingDeliveryFor')->willReturn(null);
-
-        return $closed;
     }
 
     private function transferCategory(): BudgetCategory

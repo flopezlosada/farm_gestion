@@ -23,7 +23,9 @@ use Doctrine\ORM\UnitOfWork;
  *
  * Qué fecha cuenta en cada caso, la misma con la que entra en el paquete:
  *  - apunte: su fecha, la nueva y la de antes (sacar un apunte de un trimestre
- *    entregado también lo cambia);
+ *    entregado también lo cambia). Juntarlo a otro del mismo cargo del banco
+ *    ({@see AccountEntry::absorb()}) no cuenta: sólo cambia de qué movimiento cuelga,
+ *    no su importe, su fecha ni su partida, que es lo que se entregó;
  *  - factura recibida: sólo confirmada (antes o después del cambio), por la fecha
  *    que la pone en el paquete ({@see ReceivedInvoice::packageDate()}): la de
  *    anotación si llegó tarde, la de factura o, sin ella, la de su apunte. Al
@@ -42,6 +44,9 @@ final class ClosedPeriodGuard
 
     /** En una factura que no depende de su apunte para la fecha, además: el apunte en que se cobró o se pagó. */
     private const PAYMENT_IGNORED_FIELDS = ['updatedAt', 'accountEntry'];
+
+    /** En un apunte, además: el apunte del mismo cargo al que se juntó. */
+    private const ENTRY_IGNORED_FIELDS = ['updatedAt', 'splitFrom'];
 
     public function __construct(private readonly ClosedPeriods $closed)
     {
@@ -76,7 +81,11 @@ final class ClosedPeriodGuard
         $datedByItself = $entity instanceof ReceivedInvoice
             && ($entity->getBookedOn() ?? $entity->getInvoiceDate()) !== null;
 
-        return $entity instanceof IssuedInvoice || $datedByItself ? self::PAYMENT_IGNORED_FIELDS : self::IGNORED_FIELDS;
+        return match (true) {
+            $entity instanceof AccountEntry => self::ENTRY_IGNORED_FIELDS,
+            $entity instanceof IssuedInvoice, $datedByItself => self::PAYMENT_IGNORED_FIELDS,
+            default => self::IGNORED_FIELDS,
+        };
     }
 
     /**

@@ -76,11 +76,26 @@ class AwaitedInvoiceFinder
      */
     public static function pick(BankStatementLine $line, ?Provider $provider, array $candidates): ?ReceivedInvoice
     {
-        $text = self::normalize(implode(' ', [$line->getSuggestedConcept(), (string) $line->getDetails()]));
-        $named = static fn (ReceivedInvoice $i): bool => ($provider !== null && $i->getProvider() === $provider)
-            || self::mentions($text, $i->getProvider()?->getName() ?? $i->getProviderName());
+        return array_values(array_filter($candidates, static fn (ReceivedInvoice $i): bool => self::names($line, $provider, $i)))[0]
+            ?? $candidates[0] ?? null;
+    }
 
-        return array_values(array_filter($candidates, $named))[0] ?? $candidates[0] ?? null;
+    /**
+     * Si el movimiento nombra al proveedor de la factura: es el de su ficha de otras
+     * veces o el texto del banco lleva una palabra distintiva de su nombre.
+     *
+     * @param Provider|null $provider Proveedor que se le supone al movimiento por otras veces.
+     */
+    public static function names(BankStatementLine $line, ?Provider $provider, ReceivedInvoice $invoice): bool
+    {
+        if ($provider !== null && $invoice->getProvider() === $provider) {
+            return true;
+        }
+
+        return self::mentions(
+            self::normalize(implode(' ', [$line->getSuggestedConcept(), (string) $line->getDetails()])),
+            $invoice->getProvider()?->getName() ?? $invoice->getProviderName(),
+        );
     }
 
     /** Si el texto del banco lleva alguna palabra distintiva del nombre. */

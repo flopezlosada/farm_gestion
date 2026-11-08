@@ -27,7 +27,11 @@ class CategorySuggesterTest extends TestCase
         $this->assertSame(ConceptKey::of('rcbo.caymuz sl'), ConceptKey::of('rcbo.caymuz, s.l.'));
         $this->assertSame(ConceptKey::of('FERRETERIA TORRELAGUNA'), ConceptKey::of('Ferretería Torrelaguna'));
         $this->assertSame(ConceptKey::of('rcbo. préstamo0013104153'), ConceptKey::of('rcbo. préstamo0013104999'));
-        $this->assertSame('rcbotgsscotizacionregimengeneral', ConceptKey::of('rcbo.tgss. cotizacion 001 regimen general'));
+        $this->assertSame('rcbotgsscotizacion001regimengeneral', ConceptKey::of('rcbo.tgss. cotizacion 001 regimen general'));
+        // El modelo de Hacienda separa IRPF de IVA; la referencia larga y la de la factura, no.
+        $this->assertSame('adeudo111domiciliadoaeat', ConceptKey::of('ADEUDO 111 DOMICILIADO AEAT 2026123456789'));
+        $this->assertNotSame(ConceptKey::of('ADEUDO 111 DOMICILIADO AEAT 2026123456789'), ConceptKey::of('ADEUDO 303 DOMICILIADO AEAT 2026987654321'));
+        $this->assertSame(ConceptKey::of('Factura 002-26'), ConceptKey::of('Factura 017-26'));
         $this->assertSame('', ConceptKey::of('0013104153 / 2026'));
     }
 
