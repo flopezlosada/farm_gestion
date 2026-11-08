@@ -1,0 +1,61 @@
+{# ============================================================
+ # Subir un extracto: botón que abre un modal con la cuenta y el fichero, y «Subir».
+ #
+ # Parámetros:
+ #   accounts — las cuentas a las que se puede subir (FinancialAccount[]). Con una sola
+ #              no se pregunta: va puesta.
+ #   label    — el texto del botón (por defecto «Subir extracto»).
+ #   back     — opcional: el extracto desde cuya ficha se sube; si algo falla, se vuelve a ella.
+ #
+ # Las comprobaciones (IBAN, saldo inicial, movimientos ya en otra cuenta) las hace el
+ # servidor y sólo se ven si fallan.
+ # ============================================================ #}
+{% set label = label|default('Subir extracto') %}
+<button type="button" class="prl-btn prl-btn--primary" onclick="document.getElementById('statement-upload-dialog').showModal()">
+    <i class="fa fa-upload"></i> {{ label }}
+</button>
+<dialog id="statement-upload-dialog" class="csa-modal csa-modal--info" aria-labelledby="statement-upload-title">
+    <form method="post" action="{{ path('accounting_bank_statement_upload') }}" enctype="multipart/form-data" class="bst-upload">
+        <input type="hidden" name="_token" value="{{ csrf_token('bank_statement_upload') }}">
+        {% if back is defined %}<input type="hidden" name="statement" value="{{ back.id }}">{% endif %}
+        <button class="csa-modal__close" type="button" aria-label="Cerrar" onclick="this.closest('dialog').close()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l14 14M19 5L5 19"/></svg>
+        </button>
+        <header class="csa-modal__header">
+            <div class="csa-modal__heading">
+                <span class="csa-modal__eyebrow">Extractos del banco</span>
+                <h2 class="csa-modal__title" id="statement-upload-title">Subir extracto</h2>
+            </div>
+        </header>
+        <div class="csa-modal__body bst-upload__body">
+            {% if accounts|length == 1 %}
+                <input type="hidden" name="account" value="{{ accounts[0].id }}">
+                <p>Cuenta: <b>{{ accounts[0].name }}</b></p>
+            {% else %}
+                <fieldset class="bst-upload__accounts">
+                    <legend>¿De qué cuenta es?</legend>
+                    {% for account in accounts %}
+                        <label><input type="radio" name="account" value="{{ account.id }}" required> {{ account.name }}</label>
+                    {% endfor %}
+                </fieldset>
+            {% endif %}
+            <label class="bst-upload__file">
+                <span>Fichero</span>
+                <input type="file" name="file" required>
+            </label>
+            <p class="acc-small acc-muted">El fichero Norma 43 o la hoja de Excel del banco. Si algo no cuadra, no se guarda nada; volver a subir uno ya subido no duplica movimientos.</p>
+        </div>
+        <footer class="csa-modal__footer">
+            <button type="button" class="csa-modal__btn csa-modal__btn--ghost" onclick="this.closest('dialog').close()">Cancelar</button>
+            <button type="submit" class="csa-modal__btn csa-modal__btn--primary" data-busy-label="Subiendo…">Subir</button>
+        </footer>
+    </form>
+</dialog>
+<style>
+    .bst-upload__body { text-align: left; }
+    .bst-upload__accounts { border: 0; margin: 0 0 14px; padding: 0; }
+    .bst-upload__accounts legend { font-size: 13px; font-weight: 600; margin: 0 0 6px; border: 0; }
+    .bst-upload__accounts label { display: block; margin: 0 0 6px; font-weight: 400; cursor: pointer; }
+    .bst-upload__file { display: block; margin: 0 0 10px; font-weight: 400; }
+    .bst-upload__file span { display: block; font-size: 13px; font-weight: 600; margin: 0 0 6px; }
+</style>
