@@ -43,13 +43,44 @@
 {% endif %}
 {% set pending = problems|length + warned + unexplained + (changesTotals and not changesTotals.addsUp ? 1 : 0) %}
 
-{# Entran, salen, suben y bajan, y cuánto cambia la remesa: en el Resumen y al pie de Cambios. #}
-{% macro changes_totals(t) %}
+{# El cuadre de una remesa a la siguiente: la anterior, lo que entra, sale, sube y
+ # baja (con cuántas personas), y ésta. Se lee de arriba abajo como una suma. En el
+ # Resumen y encima de la tabla de Cambios. #}
+{% macro changes_bridge(previous, remittance, changes, t) %}
     {% import 'accounting/_money.html.twig' as fmt %}
-    Entran {{ fmt.money(t.new) }} · salen {{ fmt.money(t.gone) }} · suben {{ fmt.money(t.up) }} · bajan {{ fmt.money(t.down|abs) }}
-    → la remesa {{ t.net >= 0 ? 'sube' : 'baja' }} <b>{{ fmt.money(t.net|abs) }}</b>
+    {% set n = {
+        new: changes|filter(c => c.change == 'new')|length,
+        gone: changes|filter(c => c.change == 'gone')|length,
+        up: changes|filter(c => c.change == 'amount' and c.after * 1 > c.before * 1)|length,
+        down: changes|filter(c => c.change == 'amount' and c.after * 1 < c.before * 1)|length,
+    } %}
+    {% set rows = [
+        { key: 'new', sign: '+', label: 'Entran', amount: t.new },
+        { key: 'gone', sign: '−', label: 'Salen', amount: t.gone },
+        { key: 'up', sign: '+', label: 'Suben', amount: t.up },
+        { key: 'down', sign: '−', label: 'Bajan', amount: t.down|abs },
+    ] %}
+    <table class="rem-bridge">
+        <tbody>
+            <tr class="rem-bridge__end">
+                <td colspan="2">{{ previous.label }}</td>
+                <td class="acc-num">{{ fmt.money(previous.total) }}</td>
+            </tr>
+            {% for row in rows|filter(r => n[r.key] > 0) %}
+                <tr>
+                    <td><span class="rem-bridge__sign">{{ row.sign }}</span> {{ row.label }}</td>
+                    <td class="rem-bridge__who">{{ n[row.key] }} {{ n[row.key] == 1 ? 'persona' : 'personas' }}</td>
+                    <td class="acc-num">{{ fmt.money(row.amount) }}</td>
+                </tr>
+            {% endfor %}
+            <tr class="rem-bridge__end rem-bridge__total">
+                <td colspan="2"><span class="rem-bridge__sign">=</span> {{ remittance.label }}</td>
+                <td class="acc-num">{{ fmt.money(remittance.total) }}</td>
+            </tr>
+        </tbody>
+    </table>
     {% if not t.addsUp %}
-        <div class="acc-neg">No cuadra: de una remesa a otra van {{ fmt.money(t.expectedNet) }}. La comparación se ha dejado algo.</div>
+        <p class="acc-neg">No cuadra: entre las dos remesas van {{ fmt.money(t.expectedNet) }} y los cambios suman {{ fmt.money(t.net) }}. La comparación se ha dejado algo.</p>
     {% endif %}
 {% endmacro %}
 
@@ -120,6 +151,16 @@
         /* La pestaña Resumen avisa desde fuera de que hay cosas por mirar. */
         .rem-tab-warn, .csa-tabs__item.active .rem-tab-warn { color: var(--csa-warning-ink, #8a5a00); opacity: 1; font-weight: 600; }
         [data-csa-tabs] { margin-top: var(--csa-sp-5, 20px); }
+        .prl-stat.rem-stat-warn .v { color: var(--csa-warning-ink, #8a5a00); }
+        /* El cuadre de una remesa a otra, como una suma escrita a mano. */
+        .rem-bridge { border-collapse: collapse; font-size: 14px; min-width: min(420px, 100%); }
+        .rem-bridge td { padding: 5px 0; }
+        .rem-bridge td + td { padding-left: 24px; }
+        .rem-bridge__sign { display: inline-block; width: 1.1em; color: var(--prl-ink-faint); }
+        .rem-bridge__who { color: var(--prl-ink-soft); font-size: 13px; white-space: nowrap; }
+        .rem-bridge__end td { font-weight: 600; color: var(--prl-ink); }
+        .rem-bridge__total td { border-top: 1px solid var(--prl-line-2, #cfcac0); padding-top: 8px; }
+        .rem-bridge__more { margin: 6px 0 0; font-size: 13px; }
     </style>
 {% endblock %}
 
@@ -138,9 +179,8 @@
     <div class="prl-stats">
         <div class="prl-stat"><div class="v">{{ remittance.lines|length }}</div><div class="l">recibos</div></div>
         <div class="prl-stat"><div class="v">{{ fmt.money(remittance.total) }}</div><div class="l">en total</div></div>
-        {% if remittance.draft %}
-            <div class="prl-stat"><div class="v">{{ warned }}</div><div class="l">{{ warned == 1 ? 'recibo' : 'recibos' }} con avisos</div></div>
-        {% endif %}
+        {# Lo mismo que cuenta el aviso del Resumen y su pestaña: un único número. #}
+        <div class="prl-stat{{ pending ? ' rem-stat-warn' }}"><div class="v">{{ pending }}</div><div class="l">{{ pending == 1 ? 'cosa' : 'cosas' }} por mirar</div></div>
     </div>
 
     <div class="prl-toolbar">
@@ -215,15 +255,14 @@
             {% endif %}
 
             {% if previous %}
-                <p class="rem-box">
-                    Respecto a <a href="{{ path('accounting_remittance_show', { id: previous.id }) }}">{{ previous.label }}</a>:
+                <div class="rem-box">
                     {% if changes is empty %}
-                        <span class="acc-muted">ningún cambio, se cobra lo mismo a las mismas personas.</span>
-                    {% else %}
-                        {{ changes|length == 1 ? '1 cambio' : changes|length ~ ' cambios' }} (<a href="#cambios">ver</a>).
-                        {% if changesTotals %}{{ rem.changes_totals(changesTotals) }}{% endif %}
+                        <p class="acc-muted">Respecto a <a href="{{ path('accounting_remittance_show', { id: previous.id }) }}">{{ previous.label }}</a>, ningún cambio: se cobra lo mismo a las mismas personas.</p>
+                    {% elseif changesTotals %}
+                        {{ rem.changes_bridge(previous, remittance, changes, changesTotals) }}
+                        <p class="rem-bridge__more"><a href="#cambios">Ver quién y por qué</a></p>
                     {% endif %}
-                </p>
+                </div>
             {% endif %}
 
         {# El día de cargo: con él se avisa en la portada si el abono no entra en el banco.
@@ -303,6 +342,7 @@
                 {% if changes is empty %}
                     <p class="acc-muted rem-box">Ninguno: se cobra lo mismo a las mismas personas.</p>
                 {% else %}
+                    {% if changesTotals %}<div class="rem-box">{{ rem.changes_bridge(previous, remittance, changes, changesTotals) }}</div>{% endif %}
                     <div class="prl-table-wrap rem-box">
                         <table class="prl-table">
                             <thead>
@@ -328,13 +368,6 @@
                                     </tr>
                                 {% endfor %}
                             </tbody>
-                            {% if changesTotals %}
-                                <tfoot>
-                                    <tr>
-                                        <th colspan="{{ changes[0].reasons is defined ? 5 : 4 }}">{{ rem.changes_totals(changesTotals) }}</th>
-                                    </tr>
-                                </tfoot>
-                            {% endif %}
                         </table>
                     </div>
                 {% endif %}

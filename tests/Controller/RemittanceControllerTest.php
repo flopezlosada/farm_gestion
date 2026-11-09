@@ -208,6 +208,11 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
         $this->assertSelectorTextNotContains('#resumen', 'Los recibos están completos');
         $this->assertSelectorTextContains('[data-csa-tabs] a[href="#recibos"] .csa-tabs__count', '3');
         $this->assertSelectorExists('[data-csa-tabs] a[href="#resumen"] .rem-tab-warn');
+        // El cuadre de agosto a septiembre se lee como una suma: de un total al otro.
+        $this->assertSelectorTextContains('#resumen .rem-bridge tr:first-child', 'Recibos AGOSTO 2096');
+        $this->assertSelectorTextContains('#resumen .rem-bridge tr:last-child', 'Recibos SEPTIEMBRE 2096');
+        $this->assertSelectorTextContains('.prl-stats', 'por mirar');
+        $this->assertSelectorTextNotContains('.prl-stats', 'recibos con avisos');
         $send = $crawler->filter('form[action$="/send"]')->form();
         $client->submit($send, ['charge_date' => '']);
         $this->assertTrue($this->remittance('2096-09')->isDraft(), 'Sin día de cargo no se da por enviada.');
