@@ -200,17 +200,17 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
 
         // 6. Enviarla pide el día de cargo: sin él, o con una fecha que no existe, no se envía.
         $crawler = $client->request('GET', '/gestion/accounting/remittances/' . $september->getId());
-        $this->assertSelectorTextContains('#cambios', 'Cambia');
+        $this->assertSelectorTextContains('#cambios', 'la cuota');
         // Sin problemas, pero con recibos sin socix: se avisa, no se da por bueno.
-        $this->assertSelectorTextContains('#resumen .csa-alert--warning', 'El banco la aceptaría, pero antes de enviarla mira:');
-        $this->assertSelectorTextContains('#resumen .csa-alert--warning', 'con avisos');
-        $this->assertSelectorExists('#resumen .csa-alert--warning a[href="#recibos"]');
-        $this->assertSelectorTextNotContains('#resumen', 'Los recibos están completos');
+        $this->assertSelectorTextContains('#resumen .rem-panel--check', 'Antes de enviarla, mira');
+        $this->assertSelectorTextContains('#resumen .rem-panel--check', 'con avisos');
+        $this->assertSelectorExists('#resumen .rem-panel--check a[href="#recibos"]');
+        $this->assertSelectorNotExists('#resumen .rem-panel--ok');
         $this->assertSelectorTextContains('[data-csa-tabs] a[href="#recibos"] .csa-tabs__count', '3');
         $this->assertSelectorExists('[data-csa-tabs] a[href="#resumen"] .rem-tab-warn');
-        // El cuadre de agosto a septiembre se lee como una suma: de un total al otro.
-        $this->assertSelectorTextContains('#resumen .rem-bridge tr:first-child', 'Recibos AGOSTO 2096');
-        $this->assertSelectorTextContains('#resumen .rem-bridge tr:last-child', 'Recibos SEPTIEMBRE 2096');
+        // El cuadre de agosto a septiembre se lee como una suma: de un mes al otro.
+        $this->assertSelectorTextContains('#resumen .rem-bridge__from', 'Agosto');
+        $this->assertSelectorTextContains('#resumen .rem-bridge__to', 'Septiembre');
         $this->assertSelectorTextContains('.prl-stats', 'por mirar');
         $this->assertSelectorTextNotContains('.prl-stats', 'recibos con avisos');
         $send = $crawler->filter('form[action$="/send"]')->form();
