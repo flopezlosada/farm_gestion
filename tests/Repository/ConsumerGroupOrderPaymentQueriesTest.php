@@ -3,8 +3,12 @@
 namespace App\Tests\Repository;
 
 use App\Entity\ConsumerGroupOrder;
+use App\Entity\ConsumerGroupOrderLine;
 use App\Entity\ConsumerGroupPaymentMethod;
+use App\Entity\ConsumerGroupProduct;
 use App\Entity\ConsumerGroupRound;
+use App\Entity\ConsumerGroupRoundItem;
+use App\Entity\ConsumerGroupUnit;
 use App\Entity\Partner;
 use App\Entity\PartnerPaymentMethod;
 use App\Entity\Producer;
@@ -23,6 +27,8 @@ class ConsumerGroupOrderPaymentQueriesTest extends KernelTestCase
 {
     private Producer $producer;
 
+    private ConsumerGroupProduct $product;
+
     /** @var list<Partner> */
     private array $partners = [];
 
@@ -33,6 +39,7 @@ class ConsumerGroupOrderPaymentQueriesTest extends KernelTestCase
         $em->createQuery('DELETE FROM App\Entity\ConsumerGroupOrder o WHERE o.round IN (SELECT r.id FROM App\Entity\ConsumerGroupRound r WHERE r.producer = :p)')->execute(['p' => $this->producer->getId()]);
         $em->createQuery('DELETE FROM App\Entity\ConsumerGroupRound r WHERE r.producer = :p')->execute(['p' => $this->producer->getId()]);
         $em->createQuery('DELETE FROM App\Entity\Remittance r WHERE r.kind = :k AND r.period >= :y')->execute(['k' => Remittance::KIND_CONSUMER_GROUP, 'y' => '2097-01-01']);
+        $em->createQuery('DELETE FROM App\Entity\ConsumerGroupProduct p WHERE p.producer = :p')->execute(['p' => $this->producer->getId()]);
         $em->createQuery('DELETE FROM App\Entity\Producer p WHERE p.id = :p')->execute(['p' => $this->producer->getId()]);
         $em->createQuery('DELETE FROM App\Entity\Partner p WHERE p.id IN (:ids)')->execute(['ids' => array_map(static fn (Partner $p): ?int => $p->getId(), $this->partners)]);
         parent::tearDown();
@@ -41,7 +48,12 @@ class ConsumerGroupOrderPaymentQueriesTest extends KernelTestCase
     protected function setUp(): void
     {
         $this->producer = (new Producer())->setName('Huerta Cobro ' . uniqid());
+        $unit = $this->em()->getRepository(ConsumerGroupUnit::class)->findOneBy(['name' => 'kg']) ?? (new ConsumerGroupUnit())->setName('kg');
+        $this->product = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit($unit);
+        $this->producer->addProduct($this->product);
+        $this->em()->persist($unit);
         $this->em()->persist($this->producer);
+        $this->em()->persist($this->product);
     }
 
     private function em(): EntityManagerInterface
@@ -76,6 +88,7 @@ class ConsumerGroupOrderPaymentQueriesTest extends KernelTestCase
             ->setOrdersCloseAt(new \DateTime($delivery . ' -3 days'))
             ->setDeliveryDate(new \DateTime($delivery));
         $round->setConfirmed($confirmed);
+        $round->addItem(new ConsumerGroupRoundItem($round, $this->product, '2.50'));
         $this->em()->persist($round);
 
         return $round;
@@ -83,7 +96,9 @@ class ConsumerGroupOrderPaymentQueriesTest extends KernelTestCase
 
     private function order(ConsumerGroupRound $round, Partner $partner): ConsumerGroupOrder
     {
+        // Con algo pedido: un pedido vacío suma 0 € y no lleva recibo.
         $order = new ConsumerGroupOrder($round, $partner);
+        $order->addLine(new ConsumerGroupOrderLine($order, $round->getItems()->first(), '4'));
         $this->em()->persist($order);
 
         return $order;

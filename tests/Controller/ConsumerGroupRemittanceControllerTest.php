@@ -97,6 +97,9 @@ class ConsumerGroupRemittanceControllerTest extends AbstractAuthenticatedTest
         foreach ([$ana, $bea] as $partner) {
             $order = new ConsumerGroupOrder($round, $partner);
             $order->addLine(new ConsumerGroupOrderLine($order, $item, '4'));
+            // También en la ronda: la primera petición del test reusa esta misma
+            // ronda en memoria y, sin esto, la ficha la vería sin pedidos.
+            $round->addOrder($order);
             $em->persist($partner);
             $em->persist($order);
             $orders[] = $order;
