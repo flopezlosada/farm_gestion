@@ -200,7 +200,14 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
 
         // 6. Enviarla pide el día de cargo: sin él, o con una fecha que no existe, no se envía.
         $crawler = $client->request('GET', '/gestion/accounting/remittances/' . $september->getId());
-        $this->assertSelectorTextContains('body', 'Cambia');
+        $this->assertSelectorTextContains('#cambios', 'Cambia');
+        // Sin problemas, pero con recibos sin socix: se avisa, no se da por bueno.
+        $this->assertSelectorTextContains('#resumen .csa-alert--warning', 'El banco la aceptaría, pero antes de enviarla mira:');
+        $this->assertSelectorTextContains('#resumen .csa-alert--warning', 'con avisos');
+        $this->assertSelectorExists('#resumen .csa-alert--warning a[href="#recibos"]');
+        $this->assertSelectorTextNotContains('#resumen', 'Los recibos están completos');
+        $this->assertSelectorTextContains('[data-csa-tabs] a[href="#recibos"] .csa-tabs__count', '3');
+        $this->assertSelectorExists('[data-csa-tabs] a[href="#resumen"] .rem-tab-warn');
         $send = $crawler->filter('form[action$="/send"]')->form();
         $client->submit($send, ['charge_date' => '']);
         $this->assertTrue($this->remittance('2096-09')->isDraft(), 'Sin día de cargo no se da por enviada.');
