@@ -314,7 +314,9 @@ class RemittanceController extends AbstractController
 
         $previous = $remittances->findLatestOfKind($remittance->getKind(), $remittance->getPeriod());
         $remittances->loadLinesWithPartners($remittance, $previous);
-        $expected = $remittance->isDraft() && $remittance->isBasketFees() ? $fees->forMonth($remittance->getPeriod())->getStatementsByPayerId() : [];
+        // La cuota calculada del mes: en un borrador, para avisar recibo a recibo; en
+        // cualquiera, para ver si lo cobrado es lo que calcula la app.
+        $expected = $remittance->isBasketFees() ? $fees->forMonth($remittance->getPeriod())->getStatementsByPayerId() : [];
         $returns = $remittance->isSent() ? $returnRepository->findByRemittance($remittance) : [];
         // Los cambios respecto a la anterior, con su porqué sacado de la cuota calculada
         // de los dos meses (sólo en las de cuotas de cesta: las otras no salen de cestas).
@@ -323,7 +325,7 @@ class RemittanceController extends AbstractController
             $changes = $review->explainChanges(
                 $changes,
                 $fees->forMonth($previous->getPeriod())->getStatementsByPayerId(),
-                $expected ?: $fees->forMonth($remittance->getPeriod())->getStatementsByPayerId(),
+                $expected,
                 $previous->getPeriod(),
                 $remittance->getPeriod(),
             );
@@ -336,6 +338,7 @@ class RemittanceController extends AbstractController
             'warnings' => $review->lineWarnings($remittance, $expected),
             'withoutLine' => $review->familiesWithoutLine($remittance, $expected),
             'payingOtherwise' => $review->familiesPayingOtherwise($remittance, $expected),
+            'feeCheck' => $review->feeCheck($remittance, $expected),
             'changes' => $changes,
             'changesTotals' => $previous !== null && $changes !== [] ? $review->changesTotals($changes, $previous, $remittance) : null,
             // Una enviada dice con qué cuenta y mandato se cobró: cada recibo que no

@@ -148,6 +148,68 @@ class RemittanceReviewTest extends TestCase
         $this->assertSame([], (new RemittanceReview())->lineWarnings($remittance, [1 => self::fee($ana, 6500)]));
     }
 
+    /**
+     * El cuadre de una remesa ya enviada, como las importadas de la tesorera: la familia
+     * que paga en dos recibos a nombre de la hija cuadra; la que paga de más, la que no
+     * tiene recibo, la que paga sin cesta y la de un precio que falta no; quien paga por
+     * transferencia no cuenta; el recibo sin socix sólo se cuenta. Lo que más se aleja va
+     * primero.
+     */
+    public function testElCuadreDeUnaRemesaEnviada(): void
+    {
+        $ana = self::partner(1, 'ANA', 'LOPEZ GARCIA');
+        $hija = self::partner(2, 'LUCIA', 'MARTIN LOPEZ', null, $ana);
+        $sol = self::partner(3, 'SOL', 'MARTIN');
+        $luis = self::partner(4, 'LUIS', 'PEREZ', status: Partner::STATUS_BAJA);
+        $eva = self::partner(5, 'EVA', 'SANZ');
+        $eva->setPaymentMethod(PartnerPaymentMethod::Transfer);
+        $pio = self::partner(6, 'PIO', 'RUIZ');
+        $mar = self::partner(7, 'MAR', 'GIL');
+        $remittance = self::draft([
+            self::line($hija, 'MARTIN LOPEZ LUCIA', '50.00', 'CUOTA MENSUAL 200'),
+            self::line($hija, 'MARTIN LOPEZ LUCIA', '15.00', 'CUOTA MENSUAL 201'),
+            self::line($sol, 'MARTIN SOL', '67.00', 'CUOTA MENSUAL 203'),
+            self::line($luis, 'PEREZ LUIS', '30.00', 'CUOTA MENSUAL 204'),
+            self::line($mar, 'GIL MAR', '55.00', 'CUOTA MENSUAL 205'),
+            self::line(null, 'DESCONOCIDA', '35.00', 'CUOTA MENSUAL 206'),
+        ]);
+        $remittance->markSent(null, new \DateTimeImmutable('2026-09-18'));
+        $expected = [
+            1 => self::fee($ana, 6500),
+            3 => self::fee($sol, 1220),
+            5 => self::fee($eva, 3000),
+            6 => self::fee($pio, 2400),
+            7 => self::fee($mar, 0, [FeeConcept::VegBiweekly]),
+        ];
+
+        $check = (new RemittanceReview())->feeCheck($remittance, $expected);
+
+        $this->assertSame(1, $check['matched'], 'Sólo cuadra la familia de Ana, con sus dos recibos.');
+        $this->assertSame(5, $check['total'], 'Ana, Sol, Luis, Pío y Mar; Eva paga por transferencia y no tiene recibo.');
+        $this->assertSame(1, $check['unlinked']);
+        $this->assertSame([
+            ['Mar Gil', '55.00', null],
+            ['Sol Martin', '67.00', '12.20'],
+            ['Luis Perez', '30.00', null],
+            ['Pio Ruiz', '0.00', '24.00'],
+        ], array_map(static fn (array $r): array => [$r['partner']->getLegalName(), $r['charged'], $r['calculated']], $check['rows']));
+        $notes = array_column($check['rows'], 'note');
+        $this->assertSame('Falta el precio de cesta quincenal: no se puede contrastar.', $notes[0]);
+        $this->assertNull($notes[1], 'Un importe distinto no necesita explicación: lo dicen las cifras.');
+        $this->assertSame('La app no le calcula ninguna cesta ese mes.', $notes[2]);
+        $this->assertStringStartsWith('No tiene recibo en esta remesa.', $notes[3]);
+        $this->assertNotSame('No tiene recibo en esta remesa.', $notes[3], 'Dice además por qué no se le pudo cobrar (aquí, sin mandato).');
+    }
+
+    /** Una remesa que no es de cuotas de cesta no se cuadra con las cestas. */
+    public function testSinCuadreFueraDeLasCuotasDeCesta(): void
+    {
+        $ana = self::partner(1, 'ANA', 'LOPEZ');
+        $remittance = self::draft([self::line($ana, 'ANA LOPEZ', '25.00', 'CUOTA SOCIO 1')], Remittance::KIND_MEMBERSHIP);
+
+        $this->assertNull((new RemittanceReview())->feeCheck($remittance, [1 => self::fee($ana, 6500)]));
+    }
+
     /** Quien tiene cesta y no recibo sale en la lista, ordenado; la cesta gratis no. */
     public function testFamiliasConCestaYSinRecibo(): void
     {

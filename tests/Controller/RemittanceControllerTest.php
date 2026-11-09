@@ -94,12 +94,12 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
         return $this->em()->getRepository(Remittance::class)->findOneBy(['kind' => Remittance::KIND_MEMBERSHIP, 'period' => new \DateTimeImmutable($period . '-01')]);
     }
 
-    /** Importa el Excel de agosto como remesa de cuota de socix enviada. */
-    private function importAugust(KernelBrowser $client): void
+    /** Importa el Excel de agosto como remesa enviada, de cuota de socix si no se dice otra cosa. */
+    private function importAugust(KernelBrowser $client, string $kind = Remittance::KIND_MEMBERSHIP): void
     {
         $crawler = $client->request('GET', '/gestion/accounting/remittances/import');
         $form = $crawler->filter('form[name="remittance_import"]')->form();
-        $form['remittance_import[kind]'] = Remittance::KIND_MEMBERSHIP;
+        $form['remittance_import[kind]'] = $kind;
         $upload = ['remittance_import' => ['file' => new UploadedFile($this->augustExcel(), '08. Recibos AGOSTO 2096.xlsx', null, null, true)]];
         $client->request('POST', '/gestion/accounting/remittances/import', $form->getPhpValues(), $upload);
     }
@@ -237,6 +237,8 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
         // 7. El día de cargo sí se cambia (se volvió a subir) y se quita (no vigilarla).
         $crawler = $client->request('GET', '/gestion/accounting/remittances/' . $september->getId());
         $this->assertSelectorTextContains('body', 'Cargo pedido el ' . $chargeDate->format('d/m/Y'));
+        // Una remesa de cuota de socix no se cuadra con las cestas.
+        $this->assertSelectorNotExists('[data-csa-tabs] a[href="#cuadre"]');
         $change = $crawler->filter('form[action$="/charge-date"]')->form();
         $later = $chargeDate->modify('+7 days');
         $client->submit($change, ['charge_date' => $later->format('Y-m-d')]);
@@ -252,6 +254,25 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
         $this->assertResponseRedirects('/gestion/accounting/remittances/' . $september->getId());
         $client->request('POST', sprintf('/gestion/accounting/remittances/%d/delete', $september->getId()), ['_token' => 'x']);
         $this->assertNotNull($this->remittance('2096-09'), 'Una enviada desde aquí no se tira.');
+    }
+
+    /**
+     * Una remesa de cuotas de cesta ya enviada (la importada de la tesorera) dice si lo
+     * cobrado es lo que calcula la app, avisando de que calcula con las fichas de hoy.
+     */
+    public function testUnaEnviadaDeCuotasDeCestaSeCuadraConLaApp(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->importAugust($client, Remittance::KIND_BASKET);
+        $august = $this->em()->getRepository(Remittance::class)->findOneBy(['kind' => Remittance::KIND_BASKET, 'period' => new \DateTimeImmutable('2096-08-01')]);
+        $this->assertNotNull($august);
+        $this->assertTrue($august->isSent());
+
+        $client->request('GET', '/gestion/accounting/remittances/' . $august->getId());
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorExists('[data-csa-tabs] a[href="#cuadre"] .csa-tabs__count');
+        $this->assertSelectorTextContains('#cuadre', 'La app calcula con las fichas de hoy');
     }
 
     /**
