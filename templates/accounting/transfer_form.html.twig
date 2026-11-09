@@ -31,18 +31,17 @@
         'El dinero cambia de sitio pero no entra ni sale de la asociación.'
     ) }}
 
-    <div class="csa-form-narrow">
-        {% if pending is defined %}
-            {{ csa.callout('Lo contó ' ~ pending.sentBy.displayName ~ ' por el bot el ' ~ pending.createdAt|date('d/m/Y') ~ '. Revisa lo que entendí y corrige lo que haga falta: hasta que no lo anotes no entra en el libro.', 'warning') }}
-        {% endif %}
-        {{ csa.callout('Se anotan los dos apuntes a la vez, con el mismo importe. No suman ni restan en el presupuesto.', 'info') }}
-    </div>
-
     {{ form_start(form, { attr: { class: 'csa-form-narrow', 'data-csa-dropdowns': '1' } }) }}
 
         {{ form_errors(form) }}
 
+        {# Los avisos van dentro de la pila del formulario: fuera quedaban pegados a la
+         # tarjeta, sin el aire que separa las secciones. #}
         <div class="csa-stack-lg">
+            {% if pending is defined %}
+                {{ csa.callout('Lo contó ' ~ pending.sentBy.displayName ~ ' por el bot el ' ~ pending.createdAt|date('d/m/Y') ~ '. Revisa lo que entendí y corrige lo que haga falta: hasta que no lo anotes no entra en el libro.', 'warning') }}
+            {% endif %}
+            {{ csa.callout('Se anotan los dos apuntes a la vez, con el mismo importe. No suman ni restan en el presupuesto.', 'info') }}
 
             {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'El traspaso', subtitle: 'De dónde sale, a dónde entra y cuánto.' } %}
                 {% block body %}
