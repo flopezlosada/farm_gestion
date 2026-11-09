@@ -324,6 +324,8 @@ class RemittanceController extends AbstractController
                 $changes,
                 $fees->forMonth($previous->getPeriod())->getStatementsByPayerId(),
                 $expected ?: $fees->forMonth($remittance->getPeriod())->getStatementsByPayerId(),
+                $previous->getPeriod(),
+                $remittance->getPeriod(),
             );
         }
 

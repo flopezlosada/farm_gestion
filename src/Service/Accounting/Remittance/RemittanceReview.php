@@ -145,17 +145,20 @@ class RemittanceReview
      * cuál le cambia la cuota y si hay ajustes, sacado de la cuota calculada de los dos
      * meses (calculada hoy: lo que la app sabe ahora de los dos). Un cambio está
      * explicado si la app da algún porqué Y su cuota calculada cambia lo mismo que lo
-     * cobrado, o si quien sale está de baja; si no, hay que mirarlo.
+     * cobrado, o si quien sale está de baja; si no, hay que mirarlo, y se dice en qué
+     * mes lo cobrado no es lo que calcula la app: ahí está la diferencia.
      *
      * @param list<array{name: string, partner: ?Partner, before: ?string, after: ?string, change: string}> $changes
-     * @param array<int, FeeStatement> $before La cuota calculada del mes de la anterior, por quien encabeza la familia.
-     * @param array<int, FeeStatement> $now    La de este mes.
+     * @param array<int, FeeStatement> $before      La cuota calculada del mes de la anterior, por quien encabeza la familia.
+     * @param array<int, FeeStatement> $now         La de este mes.
+     * @param \DateTimeInterface       $beforeMonth El mes de la anterior.
+     * @param \DateTimeInterface       $nowMonth    El de ésta.
      *
      * @return list<array{name: string, partner: ?Partner, before: ?string, after: ?string, change: string, reasons: list<string>, explained: bool}>
      */
-    public function explainChanges(array $changes, array $before, array $now): array
+    public function explainChanges(array $changes, array $before, array $now, \DateTimeInterface $beforeMonth, \DateTimeInterface $nowMonth): array
     {
-        return array_map(static function (array $row) use ($before, $now): array {
+        return array_map(static function (array $row) use ($before, $now, $beforeMonth, $nowMonth): array {
             $partner = $row['partner'];
             if ($partner === null) {
                 return $row + ['reasons' => ['Recibo sin socix: la app no sabe de quién es.'], 'explained' => false];
@@ -168,13 +171,22 @@ class RemittanceReview
             if ($leftForGood) {
                 $reasons[] = 'Está de baja.';
             }
-            $calculated = (($now[$id] ?? null)?->getCents() ?? 0) - (($before[$id] ?? null)?->getCents() ?? 0);
-            $charged = IssuedInvoice::toCents($row['after'] ?? '0') - IssuedInvoice::toCents($row['before'] ?? '0');
-            $explained = $leftForGood || ($reasons !== [] && $calculated === $charged);
+            $calculatedBefore = ($before[$id] ?? null)?->getCents() ?? 0;
+            $calculatedNow = ($now[$id] ?? null)?->getCents() ?? 0;
+            $chargedBefore = IssuedInvoice::toCents($row['before'] ?? '0');
+            $chargedNow = IssuedInvoice::toCents($row['after'] ?? '0');
+            $explained = $leftForGood || ($reasons !== [] && $calculatedNow - $calculatedBefore === $chargedNow - $chargedBefore);
             if (!$explained) {
-                $reasons[] = $reasons === []
-                    ? 'La app no lo explica: sus cestas y su cuota no cambian.'
-                    : sprintf('Pero su cuota calculada cambia %s € y lo cobrado %s €.', self::signed($calculated), self::signed($charged));
+                // Lo que se entiende: en qué mes lo cobrado no es lo que calcula la app.
+                // Va delante porque es lo que hay que mirar; lo de las cestas sólo
+                // cuenta de dónde salen las cifras de la app.
+                $reasons = [
+                    ...array_filter([
+                        self::mismatch($beforeMonth, 'se le cobraron', 'no se le cobró nada', $chargedBefore, $calculatedBefore),
+                        self::mismatch($nowMonth, 'se le cobran', 'no se le cobra nada', $chargedNow, $calculatedNow),
+                    ]),
+                    ...$reasons,
+                ];
             }
 
             return $row + ['reasons' => $reasons, 'explained' => $explained];
@@ -266,10 +278,26 @@ class RemittanceReview
         return $owner instanceof Partner && $owner !== $line->share->getEffectivePayer() ? $label . ' de ' . $owner->getName() : $label;
     }
 
-    /** Céntimos con signo, «+12,00» o «-30,50». */
-    private static function signed(int $cents): string
+    /**
+     * «En octubre se le cobraron 67,00 €, pero la app calcula 12,20 €.», o null si ese
+     * mes lo cobrado es lo que calcula la app.
+     *
+     * @param string $charged Cómo se dice que se cobró algo ese mes («se le cobraron»).
+     * @param string $nothing Cómo se dice que no se cobró nada («no se le cobró nada»).
+     */
+    private static function mismatch(\DateTimeInterface $month, string $charged, string $nothing, int $chargedCents, int $calculatedCents): ?string
     {
-        return ($cents > 0 ? '+' : '') . self::euros($cents);
+        if ($chargedCents === $calculatedCents) {
+            return null;
+        }
+        $name = (new \IntlDateFormatter('es_ES', \IntlDateFormatter::NONE, \IntlDateFormatter::NONE, null, null, 'LLLL'))->format($month);
+
+        return sprintf(
+            'En %s %s, pero la app %s.',
+            $name,
+            $chargedCents === 0 ? $nothing : $charged . ' ' . self::euros($chargedCents) . ' €',
+            $calculatedCents === 0 ? 'no le calcula nada' : 'calcula ' . self::euros($calculatedCents) . ' €',
+        );
     }
 
     /**
