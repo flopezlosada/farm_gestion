@@ -407,7 +407,7 @@
                     {% set explains = changes[0].reasons is defined %}
                     <div class="rem-box" data-csa-table-filter>
                         {{ csa.table_toolbar('cam', 'Buscar por nombre o motivo…', [
-                            { key: 'kind', label: 'Qué', options: [
+                            { key: 'kind', label: 'Motivo', options: [
                                 { value: 'new', label: 'Alta de cesta' },
                                 { value: 'gone', label: 'Baja de cesta' },
                                 { value: 'up', label: 'Sube la cuota' },
@@ -419,7 +419,7 @@
                             <thead>
                                 <tr>
                                     <th class="prl-sortable" data-csa-sort="text"><a href="#">Quién</a></th>
-                                    <th class="tight prl-sortable" data-csa-sort="text"><a href="#">Qué</a></th>
+                                    <th class="tight prl-sortable" data-csa-sort="text"><a href="#">Motivo</a></th>
                                     <th class="tight acc-num prl-sortable" data-csa-sort="num"><a href="#">Antes</a></th>
                                     <th class="tight acc-num prl-sortable" data-csa-sort="num"><a href="#">Ahora</a></th>
                                     {% if explains %}<th>Por qué</th>{% endif %}
