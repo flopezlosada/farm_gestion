@@ -92,6 +92,13 @@
         {% endif %}
     {% endif %}
 
+    {% if can_upload %}
+        {# Otro extracto de esta misma cuenta: la cuenta va puesta, sólo se elige el fichero. #}
+        <div class="prl-toolbar">
+            {% include 'accounting/_statement_upload_modal.html.twig' with { accounts: [s.account], label: 'Subir otro extracto de ' ~ s.account.name, back: s } only %}
+        </div>
+    {% endif %}
+
     {# ============ MOVIMIENTOS SIN APUNTE ============ #}
     <section class="bst-block" id="sin-apunte">
         <h2>Movimientos del banco sin apunte</h2>
@@ -183,7 +190,7 @@
     {# ============ ANOTADOS SOLOS ============ #}
     <section class="bst-block" id="anotados-solos">
         <h2>Anotados solos</h2>
-        <p class="acc-muted">Movimientos que la app ha anotado sola, con la partida de las últimas veces o la de la factura que esperaba ese pago. Si alguno no es así, corrígelo: se puede hasta que el trimestre se manda a la gestoría. Al corregirlo deja de salir aquí.</p>
+        <p class="acc-muted">Movimientos que la app ha anotado sola, con la partida de las últimas veces o la de la factura que esperaba ese pago. Cambia la partida si no es ésa y guarda; si está bien, guarda tal cual. Al guardar deja de salir aquí. Se puede hasta que el trimestre se manda a la gestoría.</p>
         <div class="prl-table-wrap">
             {% if review.autoBooked is empty %}
                 <div class="prl-empty">Nada anotado solo pendiente de mirar en estas fechas.</div>
@@ -200,14 +207,47 @@
                     </thead>
                     <tbody>
                         {% for entry in review.autoBooked %}
+                            {% set pieces = [entry]|merge(entry.parts) %}
+                            {# Un traspaso (la liquidación de la tarjeta) no cambia de partida: su otra mitad está en la otra cuenta. #}
+                            {% set reviewable = can_edit and not entry.transfer %}
                             <tr>
                                 <td class="tight">{{ entry.date|date('d/m/Y') }}</td>
-                                <td><a href="{{ path('accounting_entry_show', { id: entry.id }) }}">{{ entry.concept }}</a>{% if entry.movementAmount != entry.amount %} <span class="acc-small acc-muted">(partido como la última vez)</span>{% endif %}</td>
-                                <td>{{ entry.category.name }}</td>
+                                <td><a href="{{ path('accounting_entry_show', { id: entry.id }) }}">{{ entry.concept }}</a>{% if pieces|length > 1 %} <span class="acc-small acc-muted">(partido como la última vez)</span>{% endif %}</td>
+                                <td>
+                                    {% if reviewable %}
+                                        <form method="post" action="{{ path('accounting_bank_auto_booked_review', { id: entry.id }) }}" id="bst-review-{{ entry.id }}" class="bst-review">
+                                            <input type="hidden" name="_token" value="{{ csrf_token('auto_booked_review_' ~ entry.id) }}">
+                                            <input type="hidden" name="statement" value="{{ s.id }}">
+                                        </form>
+                                    {% endif %}
+                                    {% for piece in pieces %}
+                                        <div class="bst-book">
+                                            {% if reviewable %}
+                                                <select name="category[{{ piece.id }}]" form="bst-review-{{ entry.id }}" class="csa-input bst-book__category" aria-label="Partida de {{ piece.concept }}">
+                                                    {# Una partida ya retirada no está en la lista: se enseña y, sin tocarla, se queda. #}
+                                                    {% if piece.category and not piece.category.active %}<option value="" selected>{{ piece.category.name }} (retirada)</option>{% endif %}
+                                                    {% for groupName, categories in categoryGroups %}
+                                                        <optgroup label="{{ groupName }}">
+                                                            {% for category in categories %}
+                                                                <option value="{{ category.id }}" {{ piece.category and piece.category.id == category.id ? 'selected' }}>{{ category.name }}</option>
+                                                            {% endfor %}
+                                                        </optgroup>
+                                                    {% endfor %}
+                                                </select>
+                                            {% else %}
+                                                <span>{{ piece.category ? piece.category.name : '—' }}</span>
+                                            {% endif %}
+                                            {% if pieces|length > 1 %}
+                                                <span class="acc-num acc-small">{{ fmt.money(piece.amount) }}</span>
+                                                {% if not loop.first %}<span class="acc-small acc-muted">{{ piece.concept }}</span>{% endif %}
+                                            {% endif %}
+                                        </div>
+                                    {% endfor %}
+                                </td>
                                 <td class="acc-num">{{ fmt.money(entry.movementAmount) }}</td>
                                 <td class="tight">
-                                    {% if can_edit %}
-                                        <a class="prl-btn prl-btn--sm" href="{{ path('accounting_entry_edit', { id: entry.id }) }}"><i class="fa fa-pencil"></i> Corregir</a>
+                                    {% if reviewable %}
+                                        <button type="submit" form="bst-review-{{ entry.id }}" class="prl-btn prl-btn--sm"><i class="fa fa-check"></i> Guardar</button>
                                     {% endif %}
                                 </td>
                             </tr>

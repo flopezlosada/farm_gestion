@@ -2,6 +2,10 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\AccountEntry;
+use App\Entity\BudgetCategory;
+use App\Entity\BudgetCategoryGroup;
+use App\Entity\FinancialAccount;
 use App\Entity\Partner;
 use App\Entity\Remittance;
 use App\Entity\RemittanceLine;
@@ -32,6 +36,11 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
     /** El socix al que un test le pone mandato, para quitárselo al acabar. */
     private ?int $mandatePartnerId = null;
 
+    /** La cuenta y la partida que un test crea para el abono; tearDown las borra. */
+    private ?FinancialAccount $account = null;
+
+    private ?BudgetCategoryGroup $group = null;
+
     protected function tearDown(): void
     {
         $em = static::getContainer()->get(EntityManagerInterface::class);
@@ -48,6 +57,18 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
             $em->remove($setting);
         }
         $em->flush();
+        if ($this->account !== null) {
+            $em->createQueryBuilder()->delete(AccountEntry::class, 'x')->where('x.account = :a')->setParameter('a', $this->account->getId())->getQuery()->execute();
+            $em->remove($em->find(FinancialAccount::class, $this->account->getId()));
+            $em->flush();
+        }
+        if ($this->group !== null) {
+            $group = $em->find(BudgetCategoryGroup::class, $this->group->getId());
+            array_map($em->remove(...), $em->getRepository(BudgetCategory::class)->findBy(['group' => $group]));
+            $em->flush();
+            $em->remove($group);
+            $em->flush();
+        }
         if ($this->file !== null && is_file($this->file)) {
             unlink($this->file);
         }
@@ -212,6 +233,37 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
         $this->assertResponseRedirects('/gestion/accounting/remittances/' . $september->getId());
         $client->request('POST', sprintf('/gestion/accounting/remittances/%d/delete', $september->getId()), ['_token' => 'x']);
         $this->assertNotNull($this->remittance('2096-09'), 'Una enviada desde aquí no se tira.');
+    }
+
+    /**
+     * Una importada sin día de cargo cuyo abono ya está en el libro (y el libro pasa de
+     * su mes): no hay nada que vigilar, así que no se avisa de que falta el día.
+     */
+    public function testSinFechaDeCargoNoSeAvisaSiElAbonoYaEntro(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enableModule();
+        $this->importAugust($client);
+        $august = $this->remittance('2096-08');
+
+        $client->request('GET', '/gestion/accounting/remittances/' . $august->getId());
+        $this->assertSelectorTextContains('body', 'Sin fecha de cargo: no se vigila');
+
+        $em = $this->em();
+        $this->group = (new BudgetCategoryGroup())->setName('ZZTEST ingresos')->setKind(BudgetCategoryGroup::KIND_INCOME)->setSortOrder(99);
+        $category = (new BudgetCategory())->setGroup($this->group)->setName('ZZTEST cuotas')->setSortOrder(1);
+        $this->account = (new FinancialAccount())->setName('ZZTEST banco remesa')->setKind(FinancialAccount::KIND_BANK)
+            ->setOpeningBalance('0')->setOpeningDate(new \DateTimeImmutable('2096-01-01'))->setActive(true)->setSortOrder(99);
+        $credit = (new AccountEntry())->setAccount($this->account)->setCategory($category)
+            ->setDate(new \DateTimeImmutable('2096-08-12'))->setConcept('ab.rem.20960001')->setAmount('138.50');
+        $later = (new AccountEntry())->setAccount($this->account)->setCategory($category)
+            ->setDate(new \DateTimeImmutable('2096-09-03'))->setConcept('ZZTEST otra cosa')->setAmount('1.00');
+        array_map($em->persist(...), [$this->group, $category, $this->account, $credit, $later]);
+        $em->flush();
+
+        $client->request('GET', '/gestion/accounting/remittances/' . $august->getId());
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorTextNotContains('body', 'Sin fecha de cargo');
     }
 
     /**

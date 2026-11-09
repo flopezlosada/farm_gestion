@@ -25,6 +25,12 @@ use Doctrine\ORM\EntityManagerInterface;
  * no pasa de lo pedido: los pequeños que salen el mismo día no se sabe aún si son de
  * esta remesa o de otra que no está en la app (las inscripciones), y los decide una
  * persona. Tampoco en un trimestre entregado.
+ *
+ * Y sólo si ese abono es el grueso de lo pedido (al menos la mitad): un cobro suelto
+ * anterior al abono de verdad (97,00 el 4 de agosto, con la remesa el 18) es lo único
+ * que se ve si el extracto acaba antes de que entre la remesa, y no es la remesa. Los
+ * recibos que el banco rechaza son unos pocos: el abono real ronda el 95-99 % de lo
+ * pedido.
  */
 class RemittanceCreditBooker
 {
@@ -33,6 +39,12 @@ class RemittanceCreditBooker
         Remittance::KIND_BASKET => ['INGRESOS', 'Cuotas de socixs'],
         Remittance::KIND_MEMBERSHIP => ['INGRESOS', 'Cuota de mantenimiento'],
     ];
+
+    /** Lo menos que tiene que traer el abono, en partes de lo pedido, para ser la remesa. */
+    private const MIN_SHARE_OF_ASKED = 0.5;
+
+    /** @var array<string, BudgetCategory|null> La partida de cada tipo, buscada una vez. */
+    private array $categoryByKind = [];
 
     public function __construct(
         private readonly RemittanceRepository $remittances,
@@ -78,8 +90,8 @@ class RemittanceCreditBooker
     }
 
     /**
-     * El abono mayor del día de los lotes de la remesa, si es uno solo y no pasa de lo
-     * pedido. Null si no hay o hay dos iguales. Puro.
+     * El abono mayor del día de los lotes de la remesa, si es uno solo, no pasa de lo
+     * pedido y trae al menos la mitad. Null si no hay o hay dos iguales. Puro.
      *
      * @param list<BankStatementLine> $credits Abonos sin apunte.
      */
@@ -93,16 +105,27 @@ class RemittanceCreditBooker
         usort($lots, static fn (BankStatementLine $a, BankStatementLine $b): int => $b->getAmountCents() <=> $a->getAmountCents());
         $main = $lots[0] ?? null;
         $tied = isset($lots[1]) && $lots[1]->getAmountCents() === $main?->getAmountCents();
+        $asked = IssuedInvoice::toCents($remittance->getTotal());
 
-        return $main !== null && !$tied && $main->getAmountCents() <= IssuedInvoice::toCents($remittance->getTotal()) ? $main : null;
+        return $main !== null && !$tied
+            && $main->getAmountCents() <= $asked
+            && $main->getAmountCents() >= $asked * self::MIN_SHARE_OF_ASKED
+            ? $main : null;
     }
 
-    /** La partida del tipo de remesa, si existe, está viva y no es de traspasos. */
+    /**
+     * La partida del tipo de remesa, si existe, está viva y no es de traspasos. Una
+     * consulta por tipo, no por remesa.
+     */
     private function categoryFor(Remittance $remittance): ?BudgetCategory
     {
-        [$group, $name] = self::CATEGORY_BY_KIND[$remittance->getKind()] ?? [null, null];
-        $category = $group !== null ? $this->categories->findOneByGroupAndName($group, $name) : null;
+        $kind = $remittance->getKind();
+        if (!\array_key_exists($kind, $this->categoryByKind)) {
+            [$group, $name] = self::CATEGORY_BY_KIND[$kind] ?? [null, null];
+            $category = $group !== null ? $this->categories->findOneByGroupAndName($group, $name) : null;
+            $this->categoryByKind[$kind] = $category !== null && $category->isActive() && !$category->isTransfer() ? $category : null;
+        }
 
-        return $category !== null && $category->isActive() && !$category->isTransfer() ? $category : null;
+        return $this->categoryByKind[$kind];
     }
 }

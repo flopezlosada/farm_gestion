@@ -59,6 +59,23 @@ class BankStatementRepository extends ServiceEntityRepository
     }
 
     /**
+     * El primer extracto de la cuenta que empieza después del día $from: el que sigue a
+     * un extracto nuevo que empieza ese día, o uno que se le solapa si empieza antes de
+     * que el nuevo acabe.
+     */
+    public function findFirstStartingAfter(FinancialAccount $account, \DateTimeImmutable $from): ?BankStatement
+    {
+        return $this->createQueryBuilder('s')
+            ->andWhere('s.account = :account')->setParameter('account', $account)
+            ->andWhere('s.from > :from')->setParameter('from', $from)
+            ->orderBy('s.from', 'ASC')
+            ->addOrderBy('s.to', 'ASC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
+
+    /**
      * Cuántos movimientos sin apunte tiene cada extracto, en una consulta:
      * `[id del extracto => nº]`. Cuentan los de su cuenta entre sus fechas, desde la
      * apertura de la cuenta y distintos de cero, como en la ficha. Sólo salen los que

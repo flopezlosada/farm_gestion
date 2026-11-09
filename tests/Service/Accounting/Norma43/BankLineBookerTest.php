@@ -209,39 +209,35 @@ class BankLineBookerTest extends TestCase
     }
 
     /**
-     * El cargo del Ayuntamiento (158,95) que nunca se partió, y su factura del alquiler
-     * (108,95) esperando: se parte en lo de la factura, enganchado a ella y con su
-     * partida, y el resto (50) con la partida de siempre.
+     * El cargo del Ayuntamiento (158,95) que nunca se partió, y otra factura más pequeña
+     * del mismo proveedor (108,95) esperando: sin precedente de partirlo, no se parte por
+     * ella. Se anota entero con la partida de siempre y la factura sigue esperando; se
+     * parte a mano una vez y la siguiente ya sale sola.
      */
-    public function testLaFacturaQueEsperaParteDelCargoLoParte(): void
+    public function testSinPrecedenteDePartirUnaFacturaPequenaDelMismoProveedorNoParteElCargo(): void
     {
         $local = $this->category('Local');
-        $rent = $this->category('Alquiler');
         $this->history = [
             $this->entry('2026-09-09', '-158.95', 'trf. ayuntamiento de torremocha', $local),
             $this->entry('2026-08-09', '-158.95', 'trf. ayuntamiento de torremocha', $local),
         ];
-        $invoice = $this->awaiting('108.95', $rent, 'Ayuntamiento de Torremocha de Jarama');
+        $invoice = $this->awaiting('108.95', $this->category('Alquiler'), 'Ayuntamiento de Torremocha de Jarama');
         $this->awaiting = [$invoice];
         $line = $this->line('2026-10-09', -15895, 'TRF. AYUNTAMIENTO DE TORREMOCHA');
 
         $booked = $this->booker()->bookSafe([$line], null);
 
         $this->assertCount(1, $booked);
-        $this->assertSame($booked[0], $line->getEntry());
-        $this->assertSame('-108.95', $booked[0]->getAmount());
-        $this->assertSame('-158.95', $booked[0]->getMovementAmount());
-        $this->assertSame($rent, $booked[0]->getCategory());
-        $this->assertSame($booked[0], $invoice->getAccountEntry());
-        $this->assertCount(2, $this->persisted);
-        $this->assertSame('-50.00', $this->persisted[1]->getAmount());
-        $this->assertSame($local, $this->persisted[1]->getCategory());
-        $this->assertTrue($this->persisted[1]->isAutoBooked());
+        $this->assertSame('-158.95', $booked[0]->getAmount());
+        $this->assertSame($local, $booked[0]->getCategory());
+        $this->assertCount(1, $this->persisted);
+        $this->assertNull($invoice->getAccountEntry());
     }
 
     /**
-     * Si la última vez se partió con otro total, el resto toma la partida y el concepto
-     * de lo que se separó entonces, aunque el importe haya cambiado.
+     * Si la última vez se partió con otro total, la factura que espera parte del cargo lo
+     * parte: lo suyo enganchado a ella y con su partida, y el resto con la partida y el
+     * concepto de lo que se separó entonces, aunque el importe haya cambiado.
      */
     public function testElRestoLlevaLoQueSeSeparoLaUltimaVez(): void
     {
@@ -252,11 +248,15 @@ class BankLineBookerTest extends TestCase
         $this->setId($part);
         $this->splits = [$previous];
         $this->parts = [$part];
-        $this->awaiting = [$this->awaiting('108.95', $rent, 'Ayuntamiento de Torremocha de Jarama')];
+        $invoice = $this->awaiting('108.95', $rent, 'Ayuntamiento de Torremocha de Jarama');
+        $this->awaiting = [$invoice];
 
         $booked = $this->booker()->bookSafe([$this->line('2026-10-09', -15895, 'TRF. AYUNTAMIENTO DE TORREMOCHA')], null);
 
         $this->assertCount(1, $booked);
+        $this->assertSame('-108.95', $booked[0]->getAmount());
+        $this->assertSame($rent, $booked[0]->getCategory());
+        $this->assertSame($booked[0], $invoice->getAccountEntry());
         $this->assertSame('-50.00', $this->persisted[1]->getAmount());
         $this->assertSame($supplies, $this->persisted[1]->getCategory());
         $this->assertSame('Suministros del local', $this->persisted[1]->getConcept());

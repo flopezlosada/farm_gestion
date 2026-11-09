@@ -32,6 +32,9 @@ class CategorySuggesterTest extends TestCase
         $this->assertSame('adeudo111domiciliadoaeat', ConceptKey::of('ADEUDO 111 DOMICILIADO AEAT 2026123456789'));
         $this->assertNotSame(ConceptKey::of('ADEUDO 111 DOMICILIADO AEAT 2026123456789'), ConceptKey::of('ADEUDO 303 DOMICILIADO AEAT 2026987654321'));
         $this->assertSame(ConceptKey::of('Factura 002-26'), ConceptKey::of('Factura 017-26'));
+        $this->assertSame('adeudo111domiciliadoaeat', ConceptKey::of('ADEUDO 111, DOMICILIADO AEAT'));
+        $this->assertSame('modelo303aeat', ConceptKey::of('MODELO (303) AEAT'));
+        $this->assertSame(ConceptKey::of('liq. 1.234,56 tarjeta'), ConceptKey::of('liq. 1.987,10 tarjeta'));
         $this->assertSame('', ConceptKey::of('0013104153 / 2026'));
     }
 

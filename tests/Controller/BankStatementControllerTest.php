@@ -17,6 +17,7 @@ use App\Tests\Service\Accounting\Norma43\N43;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\DomCrawler\Crawler;
+use Symfony\Component\DomCrawler\Field\ChoiceFormField;
 use Symfony\Component\DomCrawler\Form;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
@@ -95,7 +96,7 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         $number = sprintf('%010d', random_int(0, 9_999_999_999));
         $this->account = $this->bankAccount($number);
         $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
-        $form = $crawler->filter('form.inv-upload')->form();
+        $form = $this->uploadForm($crawler);
         $form['file']->upload($this->tempFile(N43::file(N43::account('9999', '0001', $number, '910401', '910430', 50000, [
             ['910403', -2500, ['COMPRA SEMILLAS']],
         ]))));
@@ -192,6 +193,60 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         $this->assertSame($line->getEntry()->getId(), $invoice->getAccountEntry()?->getId(), 'Y la factura, enganchada a ese mismo apunte.');
         $this->assertFalse($invoice->isAwaitingPayment());
         $this->assertSame($category->getId(), $line->getEntry()->getCategory()?->getId());
+    }
+
+    /**
+     * Lo anotado solo se revisa en su fila: se cambia la partida y se guarda, sin ir al
+     * formulario del apunte. Guardado, deja de salir en «Anotados solos».
+     */
+    public function testLoAnotadoSoloSeCorrigeEnLaFilaEligiendoLaPartida(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
+        $number = sprintf('%010d', random_int(0, 9_999_999_999));
+        $this->account = $this->bankAccount($number);
+        $category = $this->category();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $tools = (new BudgetCategory())->setGroup($em->find(BudgetCategoryGroup::class, $this->group->getId()))->setName('Herramientas')->setSortOrder(2);
+        $em->persist($tools);
+        $em->flush();
+        $this->awaitingInvoice($category, 'Semillas del Jarama', 'S-8', 'semillas de calabaza');
+
+        $crawler = $this->upload($client, $number, 'TRF SEMILLAS DEL JARAMA');
+        $entryId = $this->lineEntry()->getId();
+        $this->assertSelectorNotExists(sprintf('#anotados-solos a[href="/gestion/accounting/entry/%d/edit"]', $entryId), 'Ya no lleva al formulario entero.');
+        $form = $crawler->filter(sprintf('form#bst-review-%d', $entryId))->form();
+        $form[sprintf('category[%d]', $entryId)]->select((string) $tools->getId());
+        $client->submit($form);
+
+        $this->assertResponseRedirects();
+        $client->followRedirect();
+        $this->assertSelectorTextContains('.csa-alerts', 'en «Herramientas».');
+        $this->assertSelectorTextContains('#anotados-solos', 'Nada anotado solo pendiente de mirar');
+        $entry = $this->lineEntry();
+        $this->assertSame($tools->getId(), $entry->getCategory()?->getId());
+        $this->assertFalse($entry->isAutoBooked());
+    }
+
+    /** Guardar sin elegir nada (el trozo no viene en el envío) lo da por mirado y no le quita la partida. */
+    public function testRevisarSinPartidaEnElEnvioLaDejaComoEstaba(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
+        $number = sprintf('%010d', random_int(0, 9_999_999_999));
+        $this->account = $this->bankAccount($number);
+        $category = $this->category();
+        $this->awaitingInvoice($category, 'Semillas del Jarama', 'S-9', 'semillas de calabaza');
+        $crawler = $this->upload($client, $number, 'TRF SEMILLAS DEL JARAMA');
+        $entryId = $this->lineEntry()->getId();
+        $token = $crawler->filter(sprintf('form#bst-review-%d input[name="_token"]', $entryId))->attr('value');
+
+        $client->request('POST', sprintf('/gestion/accounting/bank-statements/entry/%d/review', $entryId), ['_token' => $token]);
+
+        $this->assertResponseRedirects();
+        $entry = $this->lineEntry();
+        $this->assertSame($category->getId(), $entry->getCategory()?->getId());
+        $this->assertFalse($entry->isAutoBooked());
     }
 
     /**
@@ -384,6 +439,34 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         $this->assertSelectorTextContains('#sin-apunte', 'COMPRA SEMILLAS');
     }
 
+    /**
+     * Desde la ficha de un extracto se sube otro de la misma cuenta: la cuenta va
+     * puesta y sólo se elige el fichero. Si no cuadra, se vuelve a la ficha.
+     */
+    public function testDesdeLaFichaSeSubeOtroExtractoDeLaMismaCuenta(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
+        $number = sprintf('%010d', random_int(0, 9_999_999_999));
+        $this->account = $this->bankAccount($number);
+        $crawler = $this->upload($client, $number, 'COMPRA SEMILLAS');
+        $april = static::getContainer()->get(EntityManagerInterface::class)->getRepository(BankStatement::class)->findOneBy(['account' => $this->account->getId()]);
+
+        $form = $crawler->filter('form.bst-upload')->form();
+        $this->assertSame((string) $this->account->getId(), $form['account']->getValue(), 'La cuenta va puesta.');
+        $this->assertSelectorNotExists('form.bst-upload input[type="radio"]');
+        // Mayo no empieza con lo que acabó abril (475,00): no se guarda y se vuelve aquí.
+        $form['file']->upload($this->tempFile(N43::file(N43::account('9999', '0001', $number, '910501', '910531', 40000, []))));
+        $client->submit($form);
+        $this->assertResponseRedirects(sprintf('/gestion/accounting/bank-statements/%d', $april->getId()));
+
+        $form['file']->upload($this->tempFile(N43::file(N43::account('9999', '0001', $number, '910501', '910531', 47500, [['910505', -1000, ['COMISION']]]))));
+        $client->submit($form);
+        $client->followRedirect();
+        $this->assertSelectorTextContains('.csa-alerts', 'Extracto guardado: 1 movimiento nuevos');
+        $this->assertSame(2, static::getContainer()->get(EntityManagerInterface::class)->getRepository(BankStatement::class)->count(['account' => $this->account->getId()]));
+    }
+
     /** Sin cuenta elegida (o una que no se puede elegir) no se sube nada. */
     public function testSinCuentaNoSeSubeNada(): void
     {
@@ -393,7 +476,7 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         $this->account = $this->bankAccount($number);
 
         $crawler = $client->request('GET', '/gestion/accounting/bank-statements');
-        $form = $this->uploadForm($crawler);
+        $form = $this->uploadForm($crawler)->disableValidation();
         $form['account']->setValue('999999999');
         $form['file']->upload($this->tempFile(N43::file(N43::account('9999', '0001', $number, '910401', '910430', 50000, [['910403', -2500, ['COMPRA']]]))));
         $client->submit($form);
@@ -404,10 +487,14 @@ class BankStatementControllerTest extends AbstractAuthenticatedTest
         $this->assertSame(0, $em->getRepository(BankStatement::class)->count(['account' => $this->account->getId()]));
     }
 
-    /** El formulario de subida de la cuenta del test, entre las de todas las cuentas. */
+    /** El formulario del modal de subida, con la cuenta del test elegida. */
     private function uploadForm(Crawler $crawler): Form
     {
-        return $crawler->filter(sprintf('form.inv-upload input[name="account"][value="%d"]', $this->account->getId()))->closest('form')->form();
+        $form = $crawler->filter('form.bst-upload')->form();
+        $account = $form['account'];
+        $account instanceof ChoiceFormField ? $account->select((string) $this->account->getId()) : $account->setValue((string) $this->account->getId());
+
+        return $form;
     }
 
     private function bankAccount(string $number): FinancialAccount

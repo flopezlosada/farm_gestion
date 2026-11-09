@@ -96,10 +96,16 @@ class BankLineBooker
                 continue;
             }
             // Si se parte como la última vez, manda eso: la factura va luego a su trozo.
-            $repeats = RepeatSplit::pick(BankLineEntryDraft::fromLine(new AccountEntry(), $line), $previous, $parts) !== null;
-            $partial = $candidates === [] && !$repeats ? self::partialFor($line, $provider, $awaiting) : null;
-            $entry = $partial !== null
-                ? $this->bookWithInvoicePart($line, $partial, $category, $provider, $previous, $parts, $by, $awaiting)
+            // Partir por una factura más pequeña, sólo si este cargo ya se partió alguna
+            // vez: sin ese precedente, un cargo de siempre se partiría por cualquier otra
+            // factura del mismo proveedor. Entonces se anota entero y se parte a mano.
+            $draft = BankLineEntryDraft::fromLine(new AccountEntry(), $line);
+            $lastPart = $candidates === [] && RepeatSplit::pick($draft, $previous, $parts) === null
+                ? RepeatSplit::lastPartOf($draft, $previous, $parts)
+                : null;
+            $partial = $lastPart !== null ? self::partialFor($line, $provider, $awaiting) : null;
+            $entry = $partial !== null && $lastPart !== null
+                ? $this->bookWithInvoicePart($line, $partial, $lastPart, $provider, $by, $awaiting)
                 : $this->bookWhole($line, $candidates[0] ?? null, $category, $provider, $previous, $parts, $by, $awaiting);
             if ($entry !== null) {
                 $booked[] = $entry;
@@ -145,21 +151,19 @@ class BankLineBooker
 
     /**
      * Anota el cargo partido en lo de la factura, enganchado a ella, y el resto, con la
-     * partida y el concepto de lo que se separó la última vez o, si nunca se partió, con
-     * la partida de siempre. Sin partida para el resto no se anota: lo decide una persona.
+     * partida y el concepto de lo que se separó la última vez. Sin partida viva para el
+     * resto no se anota: lo decide una persona.
      *
-     * @param list<AccountEntry> $previous Partidos de antes de la misma cuenta, más recientes primero.
-     * @param list<AccountEntry> $parts    Sus partes.
+     * @param AccountEntry $lastPart Lo que se separó la última vez que se partió este cargo.
      */
-    private function bookWithInvoicePart(BankStatementLine $line, ReceivedInvoice $invoice, ?BudgetCategory $category, ?Provider $provider, array $previous, array $parts, ?User $by, AwaitingInvoices $awaiting): ?AccountEntry
+    private function bookWithInvoicePart(BankStatementLine $line, ReceivedInvoice $invoice, AccountEntry $lastPart, ?Provider $provider, ?User $by, AwaitingInvoices $awaiting): ?AccountEntry
     {
         $draft = BankLineEntryDraft::fromLine(new AccountEntry(), $line);
-        $lastPart = RepeatSplit::lastPartOf($draft, $previous, $parts);
-        $restCategory = $lastPart?->getCategory() ?? $category;
+        $restCategory = $lastPart->getCategory();
         if (!self::canBook($restCategory) || !self::canBook($invoice->getCategory() ?? $restCategory)) {
             return null;
         }
-        $restConcept = $lastPart?->getConcept() ?? $draft->getConcept();
+        $restConcept = $lastPart->getConcept();
         $entry = BankLineEntryDraft::complete($draft, $restCategory, $provider, $invoice);
         $rest = $entry->splitOff(IssuedInvoice::fromCents(-$line->getAmountCents() - IssuedInvoice::toCents((string) $invoice->getTotal())), $restCategory, $restConcept);
         $this->book($entry, $line, $by);

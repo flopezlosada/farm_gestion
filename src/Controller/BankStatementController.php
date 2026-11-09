@@ -14,6 +14,7 @@ use App\Repository\AccountEntryRepository;
 use App\Repository\BankStatementLineRepository;
 use App\Repository\BankStatementRepository;
 use App\Repository\BudgetCategoryRepository;
+use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Invoice\AwaitedInvoiceFinder;
 use App\Service\Accounting\Norma43\BankLineBooker;
 use App\Service\Accounting\Norma43\BankLineEntryDraft;
@@ -24,6 +25,7 @@ use App\Service\Accounting\Norma43\Norma43Exception;
 use App\Service\Accounting\Norma43\StatementReviewer;
 use App\Service\Accounting\Split\RepeatSplit;
 use App\Service\Accounting\Suggestion\CategorySuggester;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -68,7 +70,11 @@ class BankStatementController extends AbstractController
     #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
     public function upload(Request $request, BankStatementReader $reader, BankStatementImporter $importer): Response
     {
-        $back = $this->redirectToRoute('accounting_bank_statements');
+        // Subido desde la ficha de un extracto: si algo falla, se vuelve a ella.
+        $fromId = QueryId::from($request->request, 'statement');
+        $back = $fromId !== null
+            ? $this->redirectToRoute('accounting_bank_statement_show', ['id' => $fromId])
+            : $this->redirectToRoute('accounting_bank_statements');
         if (!$this->isCsrfTokenValid('bank_statement_upload', (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
 
@@ -109,15 +115,18 @@ class BankStatementController extends AbstractController
     /**
      * El cuadre de un extracto con el libro, como está hoy. Cada movimiento sin apunte
      * se anota en su fila eligiendo la partida, que llega puesta si se sabe: la de la
-     * factura que espera ese pago o la de las últimas veces.
+     * factura que espera ese pago o la de las últimas veces. Desde aquí se sube otro
+     * extracto de la misma cuenta, si se le pueden subir.
      */
     #[Route('/{id}', name: 'accounting_bank_statement_show', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function show(BankStatement $statement, StatementReviewer $reviewer, CategorySuggester $suggester, AwaitedInvoiceFinder $awaitedInvoices, BudgetCategoryRepository $categories): Response
+    public function show(BankStatement $statement, StatementReviewer $reviewer, CategorySuggester $suggester, AwaitedInvoiceFinder $awaitedInvoices, BudgetCategoryRepository $categories, BankStatementImporter $importer): Response
     {
         $review = $reviewer->review($statement);
         $lines = array_column($review->unlinked, 'line');
 
         return $this->render('accounting/bank_statement_show.html.twig', [
+            'can_upload' => $this->isGranted('ROLE_GESTION_CONTABILIDAD_EDIT')
+                && \in_array($statement->getAccount(), $importer->uploadableAccounts(), true),
             'review' => $review,
             'suggestions' => $suggester->forLines($lines),
             'awaited' => $awaitedInvoices->forLines($lines, $suggester->providersFor($lines)),
@@ -173,7 +182,15 @@ class BankStatementController extends AbstractController
         $em->persist($entry);
         $line->linkTo($entry);
         $awaited?->paidBy($entry);
-        $em->flush();
+        try {
+            $em->flush();
+        } catch (UniqueConstraintViolationException) {
+            // Doble clic: la primera petición lo anotó entre la comprobación de arriba y
+            // ésta, y el movimiento sólo admite un apunte. No se guarda nada de ésta.
+            $this->addFlash('info', 'Ese movimiento ya estaba anotado.');
+
+            return $back;
+        }
         $this->addFlash('success', sprintf('Anotado en «%s»: %s.', $category->getName(), $entry->getConcept()).($awaited !== null
             ? sprintf(' Es el pago de la factura %s: ya está enganchada.', $awaited->getInvoiceNumber() ?? 'de '.($awaited->getProviderName() ?? 'este proveedor'))
             : ''));
@@ -184,6 +201,53 @@ class BankStatementController extends AbstractController
 
             return $this->redirectToRoute('accounting_entry_show', ['id' => $entry->getId()]);
         }
+
+        return $back;
+    }
+
+    /**
+     * Revisar desde el extracto lo que la app anotó sola: sólo la partida de cada trozo
+     * (el apunte y, si se partió, sus partes), en la misma fila. Guardar, cambie algo o
+     * no, lo da por mirado y deja de salir en «Anotados solos». Un trozo que no viene en
+     * el envío se queda como estaba: ausente no es «sin partida». Lo demás se corrige en
+     * el formulario del apunte.
+     */
+    #[Route('/entry/{id}/review', name: 'accounting_bank_auto_booked_review', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
+    public function reviewAutoBooked(Request $request, AccountEntry $entry, BudgetCategoryRepository $categories, ClosedPeriods $closed, EntityManagerInterface $em): Response
+    {
+        $statementId = QueryId::from($request->request, 'statement');
+        $back = $statementId !== null
+            ? $this->redirectToRoute('accounting_bank_statement_show', ['id' => $statementId, '_fragment' => 'anotados-solos'])
+            : $this->redirectToRoute('accounting_entry_show', ['id' => $entry->getId()]);
+        if (!$this->isCsrfTokenValid('auto_booked_review_'.$entry->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $back;
+        }
+        if ($entry->getSplitFrom() !== null || $entry->isTransfer()) {
+            $this->addFlash('warning', 'Ese apunte no se revisa desde aquí: ábrelo en su ficha.');
+
+            return $back;
+        }
+        $closed->assertOpen($entry->getDate());
+        $allowed = [];
+        foreach ($categories->findForEntries() as $category) {
+            $allowed[$category->getId()] = $category;
+        }
+        $chosen = $request->request->all('category');
+        foreach ([$entry, ...$entry->getParts()] as $piece) {
+            $category = $allowed[(int) ($chosen[$piece->getId()] ?? 0)] ?? null;
+            if ($category !== null) {
+                $piece->setCategory($category);
+            }
+            $piece->markReviewed();
+        }
+        $em->flush();
+        $this->addFlash('success', sprintf('Revisado: %s, en %s.', $entry->getConcept(), implode(' y ', array_map(
+            static fn (AccountEntry $piece): string => '«'.$piece->getCategory()?->getName().'»',
+            [$entry, ...$entry->getParts()],
+        ))));
 
         return $back;
     }
