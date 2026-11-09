@@ -49,7 +49,7 @@ class PartnerType extends AbstractType
 
             ->add('state',EntityType::class, array('class' => 'App\Entity\State', 'required' => true, 'placeholder' => "Selecciona provincia"))
             ->add('city', EntityType::class, array("label" => "Municipio", 'class' => 'App\Entity\City', 'required' => true))
-            ->add('share_payment', null, array('label'=>'Forma de pago', 'required'=>true))
+            ->add('share_payment', null, array('label'=>'Periodicidad de la cuota', 'required'=>true))
 
             // Cómo paga, ANTES que el motivo: el setter del motivo lo ignora con
             // recibo, y el formulario escribe los campos en este orden.

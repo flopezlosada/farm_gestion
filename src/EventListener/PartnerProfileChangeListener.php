@@ -42,7 +42,7 @@ final class PartnerProfileChangeListener
         'city' => 'Municipio',
         'weekly_basket_group' => 'Grupo de recogida',
         'inscription_date' => 'Fecha de inscripción',
-        'share_payment' => 'Forma de pago',
+        'share_payment' => 'Periodicidad de la cuota',
         'eat_meat' => 'Consume cárnicos',
         'mandateReference' => 'Referencia del mandato',
         'mandateSignedOn' => 'Firma del mandato',

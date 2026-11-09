@@ -64,11 +64,11 @@
                 {% endblock %}
             {% endembed %}
 
-            {% embed '_components/csa_form_section.html.twig' with { num: '4', title: 'Cuota y preferencias', subtitle: 'Forma de pago de la cuota y consumo.' } %}
+            {% embed '_components/csa_form_section.html.twig' with { num: '4', title: 'Cuota y preferencias', subtitle: 'Periodicidad de la cuota y consumo.' } %}
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
-                        {{ csa.field(form.share_payment, 'Forma de pago de la cuota') }}
+                        {{ csa.field(form.share_payment, 'Periodicidad de la cuota') }}
                         {{ csa.field(form.eat_meat, '¿Consume cárnicos?', { full: true }) }}
                         {{ csa.field(form.notMember, 'No es socia', { full: true, hint: 'Sólo para la cesta de una trabajadora que no es socia: recibe su cesta, pero no vota, no pide al grupo de consumo, no se le llama a voluntariado ni cuenta como socia.' }) }}
                         {{ csa.field(form.registration_form_file, 'Ficha de socix', { full: true, hint: 'opcional' }) }}
