@@ -3,6 +3,7 @@
 namespace App\Tests\Service\Accounting\Remittance;
 
 use App\Entity\Partner;
+use App\Entity\PartnerPaymentMethod;
 use App\Entity\PartnerBasketShare;
 use App\Entity\Remittance;
 use App\Entity\FeeConcept;
@@ -190,6 +191,27 @@ class RemittanceReviewTest extends TestCase
             array_map(static fn (array $r): string => $r['partner']->getLegalName(), $rows),
             array_column($rows, 'reasons'),
         ));
+    }
+
+    /**
+     * Quien paga por transferencia o no paga no es una familia sin recibo: sale aparte,
+     * con cómo paga, y no cuenta como algo que mirar.
+     */
+    public function testQuienNoPagaPorReciboSaleAparte(): void
+    {
+        $ana = self::partner(1, 'ANA', 'LOPEZ');
+        $david = self::partner(2, 'DAVID', 'SIERRA');
+        $david->setPaymentMethod(PartnerPaymentMethod::NotCharged)->setPaymentNote('cobra el transporte en cestas');
+        $eva = self::partner(3, 'EVA', 'SANZ');
+        $eva->setPaymentMethod(PartnerPaymentMethod::Transfer);
+        $expected = [1 => self::fee($ana, 6500), 2 => self::fee($david, 28800), 3 => self::fee($eva, 3000)];
+        $review = new RemittanceReview();
+
+        $this->assertSame(['Ana Lopez'], array_map(static fn (array $r): string => $r['partner']->getLegalName(), $review->familiesWithoutLine(self::draft([]), $expected)));
+        $this->assertSame([
+            ['David Sierra', '288.00', 'No paga: cobra el transporte en cestas.'],
+            ['Eva Sanz', '30.00', 'Paga por transferencia.'],
+        ], array_map(static fn (array $r): array => [$r['partner']->getLegalName(), $r['amount'], $r['how']], $review->familiesPayingOtherwise(self::draft([]), $expected)));
     }
 
     /**

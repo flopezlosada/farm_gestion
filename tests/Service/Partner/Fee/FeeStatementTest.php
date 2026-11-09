@@ -6,6 +6,7 @@ use App\Entity\FeeAdjustment;
 use App\Entity\FeeConcept;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
+use App\Entity\PartnerPaymentMethod;
 use App\Service\Partner\Fee\FeeCharge;
 use App\Service\Partner\Fee\FeeLine;
 use App\Service\Partner\Fee\FeeStatement;
@@ -113,5 +114,31 @@ class FeeStatementTest extends TestCase
         $statement->addCharge(new FeeCharge(FeeConcept::MembershipUpkeep, $payer, null));
         $this->assertSame([FeeConcept::MembershipUpkeep], $statement->getMissingConcepts());
         $this->assertStringContainsString('cuota de mantenimiento', $statement->getProblems()[0]);
+    }
+
+    /**
+     * Quien paga por transferencia no necesita mandato, pero sí precios: tiene cuota y
+     * hay que saber cuánto transfiere. No va en la remesa. Quien no paga no tiene nada
+     * que arreglar.
+     */
+    public function testSinReciboNoSePideMandatoNiEntraEnLaRemesa(): void
+    {
+        $receipt = new Partner();
+        $transfer = (new Partner())->setPaymentMethod(PartnerPaymentMethod::Transfer);
+        $none = (new Partner())->setPaymentMethod(PartnerPaymentMethod::NotCharged)->setPaymentNote('Cobra el transporte en cestas');
+
+        $this->assertSame(['No tiene mandato de domiciliación completo (cuenta, referencia y fecha).'], self::statement($receipt, [self::line($receipt)])->getProblems());
+
+        $byTransfer = self::statement($transfer, [self::line($transfer)]);
+        $this->assertSame([], $byTransfer->getProblems());
+        $this->assertFalse($byTransfer->isChargeable());
+        $byTransfer->addCharge(new FeeCharge(FeeConcept::MembershipUpkeep, $transfer, null));
+        $this->assertStringContainsString('cuota de mantenimiento', $byTransfer->getProblems()[0], 'Sin precio no se sabe cuánto transfiere.');
+
+        $notCharged = self::statement($none, [self::line($none)]);
+        $notCharged->addCharge(new FeeCharge(FeeConcept::MembershipUpkeep, $none, null));
+        $this->assertSame([], $notCharged->getProblems());
+        $this->assertFalse($notCharged->isChargeable());
+        $this->assertSame('72.00', $notCharged->getTotal(), 'La cuota sigue siendo lo que vale su cesta.');
     }
 }

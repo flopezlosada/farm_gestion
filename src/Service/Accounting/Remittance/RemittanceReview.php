@@ -59,6 +59,7 @@ class RemittanceReview
                 $partner === null ? 'Sin socix: no se puede contrastar con sus cestas.' : null,
                 $partner?->getStatus() === Partner::STATUS_BAJA ? 'Está de baja.' : null,
                 $partner?->getStatus() === Partner::STATUS_PAUSADO ? 'Está en pausa.' : null,
+                $partner !== null && !$partner->paysByReceipt() ? 'Su ficha dice que no paga por recibo. ' . $partner->describePayment() : null,
                 $root !== null && $expected !== null ? self::feeWarning($expected[$root->getId()] ?? null, $charged[$root->getId()]) : null,
             ]));
         }
@@ -82,9 +83,10 @@ class RemittanceReview
         }
 
         $charged = $this->chargedByFamily($remittance);
+        // Quien paga de otra forma no le falta el recibo: va en familiesPayingOtherwise().
         $missing = array_filter(
             $expected,
-            static fn (FeeStatement $fee, int $rootId): bool => $fee->getCents() > 0 && !isset($charged[$rootId]),
+            static fn (FeeStatement $fee, int $rootId): bool => $fee->getCents() > 0 && !isset($charged[$rootId]) && $fee->payer->paysByReceipt(),
             ARRAY_FILTER_USE_BOTH,
         );
         $rows = array_map(
@@ -94,6 +96,29 @@ class RemittanceReview
                 'reasons' => $fee->getProblems() ?: [self::NOTHING_MISSING],
             ],
             array_values($missing),
+        );
+        usort($rows, static fn (array $a, array $b): int => strcmp($a['partner']->getLegalName(), $b['partner']->getLegalName()));
+
+        return $rows;
+    }
+
+    /**
+     * Familias con cuota este mes que no pagan por recibo (transferencia, o no pagan),
+     * con cómo pagan. No es nada que mirar: es para que quien revisa la remesa sepa
+     * por qué no están, sin ir a sus fichas.
+     *
+     * @param array<int, FeeStatement> $expected La cuota calculada del mes, por quien encabeza la familia.
+     *
+     * @return list<array{partner: Partner, amount: string, how: string}>
+     */
+    public function familiesPayingOtherwise(Remittance $remittance, array $expected): array
+    {
+        if (!$remittance->isDraft() || !$remittance->isBasketFees()) {
+            return [];
+        }
+        $rows = array_map(
+            static fn (FeeStatement $fee): array => ['partner' => $fee->payer, 'amount' => $fee->getTotal(), 'how' => (string) $fee->payer->describePayment()],
+            array_values(array_filter($expected, static fn (FeeStatement $fee): bool => $fee->getCents() > 0 && !$fee->payer->paysByReceipt())),
         );
         usort($rows, static fn (array $a, array $b): int => strcmp($a['partner']->getLegalName(), $b['partner']->getLegalName()));
 

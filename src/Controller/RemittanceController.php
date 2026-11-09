@@ -335,6 +335,7 @@ class RemittanceController extends AbstractController
             'problems' => $remittance->isDraft() ? $this->sendProblems($remittance, $validator) : [],
             'warnings' => $review->lineWarnings($remittance, $expected),
             'withoutLine' => $review->familiesWithoutLine($remittance, $expected),
+            'payingOtherwise' => $review->familiesPayingOtherwise($remittance, $expected),
             'changes' => $changes,
             'changesTotals' => $previous !== null && $changes !== [] ? $review->changesTotals($changes, $previous, $remittance) : null,
             // Una enviada dice con qué cuenta y mandato se cobró: cada recibo que no

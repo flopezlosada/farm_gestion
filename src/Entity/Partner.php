@@ -87,6 +87,24 @@ class Partner
     private ?string $iban = null;
 
     /**
+     * Cómo paga su cuota. Por recibo (casi todas) necesita el mandato de abajo; por
+     * transferencia o sin pagar, no entra en la remesa y allí no sale como que le
+     * falta el recibo.
+     *
+     * @ORM\Column(name="payment_method", type="string", length=10, enumType=PartnerPaymentMethod::class, options={"default": "receipt"})
+     */
+    private PartnerPaymentMethod $paymentMethod = PartnerPaymentMethod::Receipt;
+
+    /**
+     * Por qué paga así: «cobra el transporte en cestas», «transfiere el día 5». Sólo
+     * con transferencia o sin pagar; con recibo no hay nada que explicar.
+     *
+     * @ORM\Column(name="payment_note", type="string", length=255, nullable=true)
+     */
+    #[Assert\Length(max: 255)]
+    private ?string $paymentNote = null;
+
+    /**
      * La referencia del mandato de domiciliación que firmó quien paga («CUOTA
      * MENSUAL 200»). Tenerla es pagar por domiciliación: quien no la tiene no entra
      * en la remesa. No se reutiliza nunca, ni tras una baja: lo prohíbe el banco.
@@ -650,6 +668,55 @@ class Partner
         return $this;
     }
 
+    public function getPaymentMethod(): PartnerPaymentMethod
+    {
+        return $this->paymentMethod;
+    }
+
+    /** Al volver a recibo se borra el motivo: con recibo no hay nada que explicar. */
+    public function setPaymentMethod(PartnerPaymentMethod $paymentMethod): self
+    {
+        $this->paymentMethod = $paymentMethod;
+        if ($paymentMethod === PartnerPaymentMethod::Receipt) {
+            $this->paymentNote = null;
+        }
+
+        return $this;
+    }
+
+    public function getPaymentNote(): ?string
+    {
+        return $this->paymentNote;
+    }
+
+    /** Se ignora con recibo: ver {@see self::setPaymentMethod()}. */
+    public function setPaymentNote(?string $paymentNote): self
+    {
+        $note = $paymentNote !== null ? trim($paymentNote) : '';
+        $this->paymentNote = $this->paymentMethod !== PartnerPaymentMethod::Receipt && $note !== '' ? $note : null;
+
+        return $this;
+    }
+
+    /** Si su cuota se cobra con recibo domiciliado, en la remesa. */
+    public function paysByReceipt(): bool
+    {
+        return $this->paymentMethod === PartnerPaymentMethod::Receipt;
+    }
+
+    /**
+     * Cómo paga, en una frase, si no es por recibo: «Paga por transferencia: el día 5»,
+     * «No paga: cobra el transporte en cestas». Null si paga por recibo.
+     */
+    public function describePayment(): ?string
+    {
+        return match ($this->paymentMethod) {
+            PartnerPaymentMethod::Receipt => null,
+            PartnerPaymentMethod::Transfer => 'Paga por transferencia' . ($this->paymentNote !== null ? ': ' . $this->paymentNote : '') . '.',
+            PartnerPaymentMethod::NotCharged => 'No paga' . ($this->paymentNote !== null ? ': ' . $this->paymentNote : '') . '.',
+        };
+    }
+
     /** Si paga por domiciliación: tiene mandato completo (referencia y fecha) y cuenta. */
     public function hasDirectDebit(): bool
     {
@@ -675,6 +742,11 @@ class Partner
         }
         if ($this->mandateReference !== null && $this->iban === null) {
             $context->buildViolation('Con mandato hace falta la cuenta en que se carga.')->atPath('iban')->addViolation();
+        }
+        // Quien no paga tiene que decir por qué: si no, en la remesa nadie sabe si es
+        // un olvido o una decisión.
+        if ($this->paymentMethod === PartnerPaymentMethod::NotCharged && $this->paymentNote === null) {
+            $context->buildViolation('Di por qué no paga.')->atPath('paymentNote')->addViolation();
         }
     }
 
