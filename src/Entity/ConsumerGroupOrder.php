@@ -95,7 +95,7 @@ class ConsumerGroupOrder
     public function __construct(?ConsumerGroupRound $round = null, ?Partner $partner = null)
     {
         $this->round = $round;
-        $this->partner = $partner;
+        $this->partner = $partner?->getFamilyHead();
         $this->lines = new ArrayCollection();
     }
 
@@ -120,9 +120,14 @@ class ConsumerGroupOrder
         return $this->partner;
     }
 
+    /**
+     * El pedido es de la FAMILIA, no de quien lo escribe: se guarda siempre a nombre
+     * de quien la encabeza. Así dos miembros no pueden pedir por duplicado (el único
+     * por ronda y socia lo impide) y cualquiera de ellos ve y cambia el mismo pedido.
+     */
     public function setPartner(?Partner $partner): self
     {
-        $this->partner = $partner;
+        $this->partner = $partner?->getFamilyHead();
         return $this;
     }
 

@@ -7,6 +7,7 @@ use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupProduct;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\Image;
+use App\Entity\Partner;
 use App\Repository\ConsumerGroupOrderRepository;
 use App\Repository\ConsumerGroupRoundRepository;
 use App\Security\MemberVoter;
@@ -139,6 +140,7 @@ class PanelConsumerGroupController extends AbstractController
             ->findOneForObjects(ConsumerGroupProduct::OBJECT_CLASS, $productIds);
 
         return $this->render('Panel/consumer_group/show.html.twig', [
+            'family'     => self::relativesOf($partner),
             'photos'     => $photos,
             'round'      => $round,
             'order'      => $order,
@@ -255,4 +257,17 @@ class PanelConsumerGroupController extends AbstractController
         return $this->redirectToRoute('panel_consumer_group_show', ['id' => $round->getId()]);
     }
 
+    /**
+     * Los nombres del resto de la familia de la socia, para decirle en la ficha que
+     * el pedido es común: lo ve y lo cambia cualquiera de ellas. Vacío si vive sola.
+     *
+     * @return list<string>
+     */
+    private static function relativesOf(Partner $partner): array
+    {
+        return array_values(array_map(
+            static fn (Partner $member): string => (string) $member->getName(),
+            array_filter($partner->getFamilyMembers(), static fn (Partner $member): bool => $member !== $partner),
+        ));
+    }
 }

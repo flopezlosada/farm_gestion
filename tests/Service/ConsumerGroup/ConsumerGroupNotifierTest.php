@@ -167,4 +167,51 @@ class ConsumerGroupNotifierTest extends TestCase
         self::assertSame(2, $stats['total']);
         self::assertSame(1, $stats['withEmail']);
     }
+
+    public function testAvisaATodaLaFamiliaConUnCorreoPorPersona(): void
+    {
+        $head = $this->partner('ana@example.com')->setName('Ana');
+        $pablo = $this->partner('pablo@example.com')->setName('Pablo');
+        $sinCorreo = $this->partner(null)->setName('Lucía');
+        $head->addRelative($pablo);
+        $head->addRelative($sinCorreo);
+        // Lo pidió Pablo, pero el pedido es de la familia.
+        $this->orderFor($pablo);
+
+        $sent = [];
+        $mailer = $this->createMock(MailerInterface::class);
+        $mailer->expects(self::exactly(2))->method('send')->willReturnCallback(function ($message) use (&$sent): void {
+            $sent[] = [$message->getTo()[0]->getAddress(), $message->getContext()['partner']->getName()];
+        });
+
+        $result = $this->notifier($mailer, true)->notifyConfirmed($this->round);
+
+        self::assertSame([['ana@example.com', 'Ana'], ['pablo@example.com', 'Pablo']], $sent);
+        self::assertSame(2, $result['sent']);
+        self::assertSame(0, $result['skippedNoEmail']);
+    }
+
+    public function testUnaFamiliaQueComparteCorreoRecibeUnoSolo(): void
+    {
+        $head = $this->partner('casa@example.com');
+        $head->addRelative($this->partner(' Casa@example.com '));
+        $this->orderFor($head);
+
+        $mailer = $this->createMock(MailerInterface::class);
+        $mailer->expects(self::once())->method('send');
+
+        self::assertSame(1, $this->notifier($mailer, true)->notifyConfirmed($this->round)['sent']);
+    }
+
+    public function testCuentaComoConCorreoLaFamiliaSiAlgunMiembroLoTiene(): void
+    {
+        $head = $this->partner(null);
+        $relative = $this->partner('pablo@example.com');
+        $head->addRelative($relative);
+        $this->orderFor($head);
+
+        $stats = $this->notifier($this->createMock(MailerInterface::class), true)->recipientStats($this->round);
+
+        self::assertSame(['total' => 1, 'withEmail' => 1], $stats);
+    }
 }

@@ -5,7 +5,8 @@
  #
  # El controller pasa:
  #   - round         ConsumerGroupRound
- #   - order         ConsumerGroupOrder|null (el de la socia)
+ #   - order         ConsumerGroupOrder|null (el de su familia)
+ #   - family        list<string> nombres del resto de su familia ([] = sola)
  #   - quantities    array item_id => cantidad ya pedida
  #   - can_order     bool (¿el pedido admite pedidos?)
  #   - repeatable    array item_id => cantidad del último pedido a este productor
@@ -42,6 +43,10 @@
                     Cierre de apuntes: <b>{{ round.ordersCloseAt ? round.ordersCloseAt|date('d/m/Y') : '—' }}</b>.
                     Entrega el <b>{{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}</b> con tu cesta.
                     Puedes cambiar tu pedido hasta el cierre.
+                    {% if family is not empty %}
+                        {% set varias = family|length > 1 %}
+                        Es el pedido de tu familia: {{ family|join(', ', ' y ') }} también lo {{ varias ? 'ven' : 've' }} y lo {{ varias ? 'pueden' : 'puede' }} cambiar.
+                    {% endif %}
                     {# Un pedido confirmado sigue admitiendo cambios, pero ya NO es cierto
                      # que no haya que pagar: decirlo aquí contradecía al bloque de pago
                      # que aparece justo debajo pidiendo la transferencia. #}
@@ -167,7 +172,7 @@
                 </p>
 
                 {% if order and not order.empty %}
-                    <h3 style="margin-bottom: var(--csa-sp-2);">Tu pedido</h3>
+                    <h3 style="margin-bottom: var(--csa-sp-2);">{{ family is empty ? 'Tu pedido' : 'El pedido de tu familia' }}</h3>
                     <ul class="cg-order-summary">
                         {% for line in order.lines %}
                             {% if line.quantity > 0 %}

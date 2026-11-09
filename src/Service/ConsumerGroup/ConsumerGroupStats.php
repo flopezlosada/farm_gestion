@@ -189,7 +189,7 @@ class ConsumerGroupStats
              JOIN o.round r
              JOIN l.roundItem ri
              WHERE o.partner = :partner AND r.confirmed = true AND r.status != :cancelled AND l.quantity > 0'
-        )->setParameter('partner', $partner)
+        )->setParameter('partner', $partner->getFamilyHead())
             ->setParameter('cancelled', ConsumerGroupRound::STATUS_CANCELLED)
             ->getSingleResult();
 
