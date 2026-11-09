@@ -38,10 +38,13 @@
 {% if warned %}
     {% set to_check = to_check|merge([{ n: warned, what: warned == 1 ? 'recibo con avisos' : 'recibos con avisos', where: 'En amarillo, en la pestaña Recibos', href: '#recibos' }]) %}
 {% endif %}
+{% if withoutLine is not empty %}
+    {% set to_check = to_check|merge([{ n: withoutLine|length, what: withoutLine|length == 1 ? 'persona con cesta y sin recibo' : 'personas con cesta y sin recibo', where: 'Más abajo, con el motivo de cada una', href: '#sin-recibo' }]) %}
+{% endif %}
 {% if changesTotals and not changesTotals.addsUp %}
     {% set to_check = to_check|merge([{ n: '!', what: 'Los cambios no cuadran con el total', where: 'La comparación se ha dejado algo', href: '#cambios' }]) %}
 {% endif %}
-{% set pending = problems|length + warned + unexplained + (changesTotals and not changesTotals.addsUp ? 1 : 0) %}
+{% set pending = problems|length + warned + unexplained + withoutLine|length + (changesTotals and not changesTotals.addsUp ? 1 : 0) %}
 
 {# El cuadre de un mes al siguiente, que se lee de arriba abajo como una suma: lo
  # cobrado el mes anterior, las altas y bajas de cesta, quién sube o baja su cuota, y
@@ -361,7 +364,7 @@
         {% endif %}
 
         {% if withoutLine is not empty %}
-            <h2 class="acc-subhead">Con cesta este mes y sin recibo</h2>
+            <h2 class="acc-subhead" id="sin-recibo">Con cesta este mes y sin recibo</h2>
             <p class="acc-muted">Tienen cuota este mes y no van en la remesa. Al lado, por qué.</p>
             <div class="prl-table-wrap rem-box">
                 <table class="prl-table">
