@@ -236,7 +236,8 @@ class RemittanceReviewTest extends TestCase
     /**
      * El porqué de cada cambio sale de la cuota calculada de los dos meses: la cesta que
      * cambia de precio, la que se deja, la que empieza. Si la app no da porqué, o lo
-     * calculado no cambia como lo cobrado, no está explicado: en rojo.
+     * calculado no cambia como lo cobrado, no está explicado: en rojo, y diciendo en qué
+     * mes lo cobrado no es lo que calcula la app.
      */
     public function testElPorQueDeCadaCambioSaleDeLasCestas(): void
     {
@@ -255,20 +256,32 @@ class RemittanceReviewTest extends TestCase
             ['name' => 'SIN FICHA', 'partner' => null, 'before' => null, 'after' => '35.00', 'change' => RemittanceReview::CHANGE_NEW],
             // De baja: hoy no se le calcula nada en ningún mes, y basta con eso.
             ['name' => 'Fran Ruiz', 'partner' => self::partner(7, 'FRAN', 'RUIZ', status: Partner::STATUS_BAJA), 'before' => '67.00', 'after' => null, 'change' => RemittanceReview::CHANGE_GONE],
+            // En agosto tenía pausa y se le cobró la cuota entera: este mes cuadra, la
+            // diferencia viene de agosto.
+            ['name' => 'Gema Paz', 'partner' => $gema = self::partner(8, 'GEMA', 'PAZ'), 'before' => '67.00', 'after' => '61.00', 'change' => RemittanceReview::CHANGE_AMOUNT],
+            // Tenía cesta en agosto y no se le cobró; entra este mes con lo que toca.
+            ['name' => 'Hugo Rey', 'partner' => $hugo = self::partner(9, 'HUGO', 'REY'), 'before' => null, 'after' => '30.00', 'change' => RemittanceReview::CHANGE_NEW],
+            // Se le cobra sin que la app le calcule nada.
+            ['name' => 'Iris Mora', 'partner' => self::partner(10, 'IRIS', 'MORA'), 'before' => null, 'after' => '35.00', 'change' => RemittanceReview::CHANGE_NEW],
         ];
         $evaShare = self::share($eva);
-        $before = [3 => self::feeOf($bea, $beaShare, 4350), 4 => self::feeOf($carmen, $carmenShare, 3000), 6 => self::feeOf($eva, $evaShare, 3000)];
-        $now = [3 => self::feeOf($bea, $beaShare, 5500), 5 => self::feeOf($dani, $daniShare, 6000), 6 => self::feeOf($eva, $evaShare, 3000)];
+        $gemaShare = self::share($gema);
+        $hugoShare = self::share($hugo);
+        $before = [3 => self::feeOf($bea, $beaShare, 4350), 4 => self::feeOf($carmen, $carmenShare, 3000), 6 => self::feeOf($eva, $evaShare, 3000), 8 => self::feeOf($gema, $gemaShare, 1220), 9 => self::feeOf($hugo, $hugoShare, 3000)];
+        $now = [3 => self::feeOf($bea, $beaShare, 5500), 5 => self::feeOf($dani, $daniShare, 6000), 6 => self::feeOf($eva, $evaShare, 3000), 8 => self::feeOf($gema, $gemaShare, 6100), 9 => self::feeOf($hugo, $hugoShare, 3000)];
 
-        $rows = (new RemittanceReview())->explainChanges($changes, $before, $now);
+        $rows = (new RemittanceReview())->explainChanges($changes, $before, $now, new \DateTimeImmutable('2026-08-01'), new \DateTimeImmutable('2026-09-01'));
 
         $this->assertSame([
             [['La cesta pasa de 43,50 € a 55,00 €.'], true],
             [['Deja la cesta el 31/08/2026.'], true],
             [['Empieza la cesta el 03/09/2026.'], true],
-            [['La app no lo explica: sus cestas y su cuota no cambian.'], false],
+            [['En septiembre se le cobran 40,00 €, pero la app calcula 30,00 €.'], false],
             [['Recibo sin socix: la app no sabe de quién es.'], false],
             [['Está de baja.'], true],
+            [['En agosto se le cobraron 67,00 €, pero la app calcula 12,20 €.', 'La cesta pasa de 12,20 € a 61,00 €.'], false],
+            [['En agosto no se le cobró nada, pero la app calcula 30,00 €.'], false],
+            [['En septiembre se le cobran 35,00 €, pero la app no le calcula nada.'], false],
         ], array_map(static fn (array $r): array => [$r['reasons'], $r['explained']], $rows));
     }
 
