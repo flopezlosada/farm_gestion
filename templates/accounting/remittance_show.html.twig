@@ -366,14 +366,24 @@
         {% if withoutLine is not empty %}
             <h2 class="acc-subhead" id="sin-recibo">Con cesta este mes y sin recibo</h2>
             <p class="acc-muted">Tienen cuota este mes y no van en la remesa. Al lado, por qué.</p>
-            <div class="prl-table-wrap rem-box">
+            <div class="rem-box" data-csa-table-filter>
+                {{ csa.table_toolbar('sin', 'Buscar por nombre o motivo…') }}
+                <div class="prl-table-wrap">
                 <table class="prl-table">
+                    <thead>
+                        <tr>
+                            <th class="prl-sortable" data-csa-sort="text"><a href="#">Quién</a></th>
+                            <th>Por qué</th>
+                            <th class="tight acc-num prl-sortable" data-csa-sort="num"><a href="#">Cuota</a></th>
+                            {% if editable %}<th class="tight"></th>{% endif %}
+                        </tr>
+                    </thead>
                     <tbody>
                         {% for row in withoutLine %}
                             <tr>
                                 <td>{% if can_see_partners %}<a href="{{ path('partner_show', { id: row.partner.id }) }}">{{ row.partner.legalName }}</a>{% else %}{{ row.partner.legalName }}{% endif %}</td>
                                 <td>{% for reason in row.reasons %}<div>{{ reason }}</div>{% endfor %}</td>
-                                <td class="tight acc-num">{{ fmt.money(row.amount) }} al mes</td>
+                                <td class="tight acc-num" data-sort-value="{{ row.amount }}">{{ fmt.money(row.amount) }} al mes</td>
                                 {% if editable %}
                                     <td class="tight"><a href="{{ path('accounting_remittance_line_new', { id: remittance.id, partner: row.partner.id }) }}" class="prl-btn"><i class="fa fa-plus"></i> Añadir su recibo</a></td>
                                 {% endif %}
@@ -381,6 +391,7 @@
                         {% endfor %}
                     </tbody>
                 </table>
+                </div>
             </div>
         {% endif %}
 
@@ -393,24 +404,35 @@
                     <p class="acc-muted rem-box">Ninguno: se cobra lo mismo a las mismas personas.</p>
                 {% else %}
                     {% if changesTotals %}<div class="rem-box">{{ rem.changes_bridge(previous, remittance, changes, changesTotals) }}</div>{% endif %}
-                    <div class="prl-table-wrap rem-box">
+                    {% set explains = changes[0].reasons is defined %}
+                    <div class="rem-box" data-csa-table-filter>
+                        {{ csa.table_toolbar('cam', 'Buscar por nombre o motivo…', [
+                            { key: 'kind', label: 'Qué', options: [
+                                { value: 'new', label: 'Alta de cesta' },
+                                { value: 'gone', label: 'Baja de cesta' },
+                                { value: 'up', label: 'Sube la cuota' },
+                                { value: 'down', label: 'Baja la cuota' },
+                            ] },
+                        ]|merge(explains ? [{ key: 'explained', value: 'no', label: 'Sin explicar' }] : [])) }}
+                        <div class="prl-table-wrap">
                         <table class="prl-table">
                             <thead>
                                 <tr>
-                                    <th>Quién</th>
-                                    <th class="tight">Qué</th>
-                                    <th class="tight acc-num">Antes</th>
-                                    <th class="tight acc-num">Ahora</th>
-                                    {% if changes[0].reasons is defined %}<th>Por qué</th>{% endif %}
+                                    <th class="prl-sortable" data-csa-sort="text"><a href="#">Quién</a></th>
+                                    <th class="tight prl-sortable" data-csa-sort="text"><a href="#">Qué</a></th>
+                                    <th class="tight acc-num prl-sortable" data-csa-sort="num"><a href="#">Antes</a></th>
+                                    <th class="tight acc-num prl-sortable" data-csa-sort="num"><a href="#">Ahora</a></th>
+                                    {% if explains %}<th>Por qué</th>{% endif %}
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for c in changes %}
-                                    <tr>
+                                    {% set kind = c.change == 'amount' ? (c.after * 1 > c.before * 1 ? 'up' : 'down') : c.change %}
+                                    <tr data-facet-kind="{{ kind }}"{% if c.explained is defined and not c.explained %} data-facet-explained="no"{% endif %}>
                                         <td>{% if c.partner and can_see_partners %}<a href="{{ path('partner_show', { id: c.partner.id }) }}">{{ c.name }}</a>{% else %}{{ c.name }}{% endif %}</td>
-                                        <td class="tight">{{ c.change == 'amount' ? (c.after * 1 > c.before * 1 ? 'Sube la cuota' : 'Baja la cuota') : { new: 'Alta de cesta', gone: 'Baja de cesta' }[c.change] }}</td>
-                                        <td class="acc-num">{{ c.before is not null ? fmt.money(c.before) : '—' }}</td>
-                                        <td class="acc-num">{{ c.after is not null ? fmt.money(c.after) : '—' }}</td>
+                                        <td class="tight">{{ { new: 'Alta de cesta', gone: 'Baja de cesta', up: 'Sube la cuota', down: 'Baja la cuota' }[kind] }}</td>
+                                        <td class="acc-num" data-sort-value="{{ c.before }}">{{ c.before is not null ? fmt.money(c.before) : '—' }}</td>
+                                        <td class="acc-num" data-sort-value="{{ c.after }}">{{ c.after is not null ? fmt.money(c.after) : '—' }}</td>
                                         {% if c.reasons is defined %}
                                             {# En rojo lo que la app no explica: eso es lo que hay que mirar. #}
                                             <td class="{{ c.explained ? '' : 'acc-neg' }}">{% for reason in c.reasons %}<div>{{ reason }}</div>{% endfor %}</td>
@@ -419,33 +441,40 @@
                                 {% endfor %}
                             </tbody>
                         </table>
+                        </div>
                     </div>
                 {% endif %}
             </section>
         {% endif %}
 
         <section class="csa-tabpanel" id="recibos" role="tabpanel">
-        <div class="prl-table-wrap">
+        <div data-csa-table-filter>
             {% if remittance.lines is empty %}
-                <div class="prl-empty">Ningún recibo todavía.</div>
+                <div class="prl-table-wrap"><div class="prl-empty">Ningún recibo todavía.</div></div>
             {% else %}
+                {{ csa.table_toolbar('rec', 'Buscar por nombre, mandato o referencia…', (warned ? [{ key: 'warn', value: '1', label: 'Con aviso' }] : [])|merge([
+                    { key: 'partner', value: 'none', label: 'Sin ficha' },
+                    { key: 'shared', value: '1', label: 'Mandato con más de un recibo' },
+                ])) }}
+                <div class="prl-table-wrap">
                 <table class="prl-table">
                     <thead>
                         <tr>
-                            <th>Quien paga</th>
+                            <th class="prl-sortable" data-csa-sort="text"><a href="#">Quien paga</a></th>
                             <th class="tight">Cuenta</th>
-                            <th class="tight">Mandato</th>
-                            <th class="tight">Firma</th>
+                            <th class="tight prl-sortable" data-csa-sort="text"><a href="#">Mandato</a></th>
+                            <th class="tight prl-sortable" data-csa-sort="text"><a href="#">Firma</a></th>
                             <th class="tight">Ref. adeudo</th>
-                            <th class="tight">Tipo</th>
-                            <th class="tight acc-num">Importe</th>
+                            <th class="tight prl-sortable" data-csa-sort="text"><a href="#">Tipo</a></th>
+                            <th class="tight acc-num prl-sortable" data-csa-sort="num"><a href="#">Importe</a></th>
                             {% if editable %}<th class="tight"></th>{% endif %}
                         </tr>
                     </thead>
                     <tbody>
                         {% for line in remittance.lines %}
                             {% set w = warnings[line.id] ?? [] %}
-                            <tr{{ w is not empty ? ' class="rem-has-warn"' }}>
+                            {% set same = mandates|filter(m => m == line.mandateReference)|length %}
+                            <tr{{ w is not empty ? ' class="rem-has-warn" data-facet-warn="1"' }}{{ line.partner is null ? ' data-facet-partner="none"' }}{{ same > 1 ? ' data-facet-shared="1"' }}>
                                 <td>
                                     {{ line.debtorName }}
                                     {% if line.partner %}<br>{% if can_see_partners %}<a class="acc-muted acc-small" href="{{ path('partner_show', { id: line.partner.id }) }}">{{ line.partner.legalName }}</a>{% else %}<span class="acc-muted acc-small">{{ line.partner.legalName }}</span>{% endif %}{% endif %}
@@ -457,13 +486,12 @@
                                     {# Dos recibos del mismo mandato: uno es la cuota y el otro algo
                                      # aparte (el alta de quien entra, una derrama). Se señala para
                                      # que no parezca un recibo repetido. #}
-                                    {% set same = mandates|filter(m => m == line.mandateReference)|length %}
                                     {% if same > 1 %}<span class="prl-chip prl-chip--neutral rem-extra" title="Hay {{ same }} recibos con este mandato en la remesa: la cuota y otro aparte, como el alta.">{{ same }} con este mandato</span>{% endif %}
                                 </td>
-                                <td class="tight">{{ line.mandateSignedOn ? line.mandateSignedOn|date('d/m/Y') : '—' }}</td>
+                                <td class="tight" data-sort-value="{{ line.mandateSignedOn ? line.mandateSignedOn|date('Y-m-d') }}">{{ line.mandateSignedOn ? line.mandateSignedOn|date('d/m/Y') : '—' }}</td>
                                 <td class="tight">{{ line.debitReference }}</td>
                                 <td class="tight">{{ line.sequenceType }}</td>
-                                <td class="acc-num">{{ fmt.money(line.amount) }}</td>
+                                <td class="acc-num" data-sort-value="{{ line.amount }}">{{ fmt.money(line.amount) }}</td>
                                 {% if editable %}
                                     <td class="tight">
                                         <a href="{{ path('accounting_remittance_line_edit', { id: line.id }) }}" title="Cambiar"><i class="fa fa-pencil"></i></a>
@@ -477,6 +505,7 @@
                         {% endfor %}
                     </tbody>
                 </table>
+                </div>
             {% endif %}
         </div>
 
