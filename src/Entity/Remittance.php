@@ -44,10 +44,17 @@ class Remittance
     /** Lo que no es ninguna de las dos: derramas, cuotas pendientes… */
     public const KIND_OTHER = 'other';
 
+    /**
+     * Los pedidos del grupo de consumo de un mes: un recibo por socia con la suma de
+     * lo que se le entrega ese mes. Sólo existe con el grupo de consumo encendido.
+     */
+    public const KIND_CONSUMER_GROUP = 'consumer_group';
+
     public const KIND_LABELS = [
         self::KIND_BASKET => 'Cuotas de cesta',
         self::KIND_MEMBERSHIP => 'Cuota de socix',
         self::KIND_OTHER => 'Otra',
+        self::KIND_CONSUMER_GROUP => 'Grupo de consumo',
     ];
 
     public const SOURCE_IMPORT = 'import';
@@ -326,6 +333,12 @@ class Remittance
     public function isBasketFees(): bool
     {
         return $this->kind === self::KIND_BASKET;
+    }
+
+    /** Si es la de los pedidos del grupo de consumo. */
+    public function isConsumerGroup(): bool
+    {
+        return $this->kind === self::KIND_CONSUMER_GROUP;
     }
 
     public function getPeriod(): \DateTimeImmutable

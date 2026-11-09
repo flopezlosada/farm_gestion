@@ -33,7 +33,14 @@
         </p>
     {% elseif order.paid %}
         <p class="cg-money__ok" style="margin: 0;">
-            Pago recibido{% if order.paidAt %} el {{ order.paidAt|date('d/m/Y') }}{% endif %}. Gracias.
+            Pago recibido por {{ order.paidVia.label }}{% if order.paidAt %} el {{ order.paidAt|date('d/m/Y') }}{% endif %}. Gracias.
+        </p>
+    {% elseif order.willBeChargedByReceipt %}
+        {# Paga por recibo: no tiene que hacer nada, y la entrega ya sale en su
+         # calendario. Pedirle una transferencia aquí sería cobrarle dos veces. #}
+        <p style="margin: 0;">
+            <b>No tienes que hacer nada.</b> Se te cobrará en el recibo del grupo de consumo
+            {%- if round.deliveryDate %} de {{ round.deliveryDate|format_date(pattern='MMMM', locale='es') }}{% endif %}, a mes vencido.
         </p>
     {% else %}
         <p style="margin: 0;">

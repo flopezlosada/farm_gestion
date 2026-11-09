@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\AccountEntry;
+use App\Entity\ConsumerGroupPaymentMethod;
 use App\Entity\IssuedInvoice;
 use App\Entity\Partner;
 use App\Entity\Remittance;
@@ -10,6 +11,7 @@ use App\Entity\RemittanceLine;
 use App\Entity\User;
 use App\Form\RemittanceImportType;
 use App\Form\RemittanceLineType;
+use App\Repository\ConsumerGroupOrderRepository;
 use App\Repository\PartnerRepository;
 use App\Repository\RemittanceRepository;
 use App\Repository\RemittanceReturnRepository;
@@ -23,6 +25,7 @@ use App\Service\Accounting\Remittance\RemittanceBase;
 use App\Service\Accounting\Remittance\RemittanceCases;
 use App\Service\Accounting\Remittance\RemittanceChargeWatch;
 use App\Service\Accounting\Remittance\RemittanceCredits;
+use App\Service\Accounting\Remittance\RemittanceFromConsumerGroup;
 use App\Service\Accounting\Remittance\RemittanceFromFees;
 use App\Service\Accounting\Remittance\RemittancePartnerMatcher;
 use App\Service\Accounting\Remittance\RemittancePeriodText;
@@ -63,6 +66,7 @@ class RemittanceController extends AbstractController
         Remittance::KIND_BASKET => 1,
         Remittance::KIND_MEMBERSHIP => 6,
         Remittance::KIND_OTHER => 1,
+        Remittance::KIND_CONSUMER_GROUP => 1,
     ];
 
     /**
@@ -76,20 +80,21 @@ class RemittanceController extends AbstractController
     public function index(RemittanceRepository $remittances): Response
     {
         $next = [];
-        foreach (array_keys(Remittance::KIND_LABELS) as $kind) {
+        foreach (array_keys($this->kindLabels()) as $kind) {
             $latest = $remittances->findLatestOfKind($kind);
             $next[$kind] = [
                 'from' => $latest,
                 'period' => $latest !== null
                     ? $latest->getPeriod()->modify(sprintf('+%d months', self::MONTHS_TO_NEXT[$kind]))
-                    : Remittance::firstOfMonth(new \DateTimeImmutable('first day of next month')),
+                    // El grupo de consumo se cobra a mes vencido: lo que se entrega este mes.
+                    : Remittance::firstOfMonth(new \DateTimeImmutable($kind === Remittance::KIND_CONSUMER_GROUP ? 'today' : 'first day of next month')),
             ];
         }
 
         return $this->render('accounting/remittances.html.twig', [
             'remittances' => $remittances->findAllNewestFirst(),
             'next' => $next,
-            'kindLabels' => Remittance::KIND_LABELS,
+            'kindLabels' => $this->kindLabels(),
             'bases' => RemittanceBase::cases(),
         ]);
     }
@@ -163,8 +168,14 @@ class RemittanceController extends AbstractController
 
         $kind = (string) $request->request->get('kind');
         $period = \DateTimeImmutable::createFromFormat('!Y-m', (string) $request->request->get('period'));
-        if (!isset(Remittance::KIND_LABELS[$kind]) || $period === false) {
+        if (!isset($this->kindLabels()[$kind]) || $period === false) {
             $this->addFlash('warning', 'Elige el tipo y el mes.');
+
+            return $back;
+        }
+        if ($kind === Remittance::KIND_CONSUMER_GROUP) {
+            // Copiar la anterior cobraría a quien pidió el mes pasado: sale de los pedidos.
+            $this->addFlash('warning', 'La remesa del grupo de consumo se prepara desde los pedidos del mes.');
 
             return $back;
         }
@@ -306,6 +317,48 @@ class RemittanceController extends AbstractController
         return $this->redirectToRoute('accounting_remittance_show', ['id' => $remittance->getId()]);
     }
 
+    /**
+     * Preparar la remesa del grupo de consumo de un mes desde los pedidos: un recibo por
+     * socia con lo que se le entrega ese mes. Quien no tiene recibo no entra: paga por
+     * transferencia o en metálico y lo marca la comisión.
+     */
+    #[Route('/from-consumer-group', name: 'accounting_remittance_from_consumer_group', methods: ['POST'])]
+    #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
+    #[IsGranted('FEATURE_GRUPO_CONSUMO')]
+    public function fromConsumerGroup(Request $request, RemittanceRepository $remittances, ConsumerGroupOrderRepository $orders, RemittanceFromConsumerGroup $builder, EntityManagerInterface $em): Response
+    {
+        $back = $this->redirectToRoute('accounting_remittances');
+        if (!$this->isCsrfTokenValid('remittance-from-consumer-group', (string) $request->request->get('_token'))) {
+            $this->addFlash('danger', 'La página había caducado. Vuelve a intentarlo.');
+
+            return $back;
+        }
+        $period = \DateTimeImmutable::createFromFormat('!Y-m', (string) $request->request->get('period'));
+        if ($period === false) {
+            $this->addFlash('warning', 'Elige el mes.');
+
+            return $back;
+        }
+        $existing = $remittances->findOneBy(['kind' => Remittance::KIND_CONSUMER_GROUP, 'period' => Remittance::firstOfMonth($period)]);
+        if ($existing !== null) {
+            $this->addFlash('warning', sprintf('Ya hay una remesa del grupo de consumo de %s: «%s». Si hay que rehacerla, tira el borrador antes.', $period->format('m/Y'), $existing->getLabel()));
+
+            return $this->redirectToRoute('accounting_remittance_show', ['id' => $existing->getId()]);
+        }
+
+        $remittance = $builder->build($period, $orders->findToChargeByReceiptIn($period), $this->actor());
+        if ($remittance->getLines()->isEmpty()) {
+            $this->addFlash('warning', sprintf('No hay pedidos que cobrar por recibo en %s: o no hay rondas confirmadas que se entreguen ese mes, o ya están pagados, o nadie tiene recibo.', $period->format('m/Y')));
+
+            return $back;
+        }
+        $em->persist($remittance);
+        $em->flush();
+        $this->addFlash('success', sprintf('Borrador con %d recibos (%s €).', $remittance->getLines()->count(), number_format((float) $remittance->getTotal(), 2, ',', '.')));
+
+        return $this->redirectToRoute('accounting_remittance_show', ['id' => $remittance->getId()]);
+    }
+
     /** Una remesa: sus recibos, y en un borrador lo que hay que revisar antes de enviarla. */
     #[Route('/{id}', name: 'accounting_remittance_show', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function show(Remittance $remittance, RemittanceRepository $remittances, RemittanceReview $review, MonthlyFeeCalculator $fees, ValidatorInterface $validator, RemittanceCases $cases, PartnerRepository $partners, RemittanceReturnRepository $returnRepository, BankReturns $bankReturns, RemittanceChargeWatch $chargeWatch, RemittanceCredits $credits): Response
@@ -379,7 +432,7 @@ class RemittanceController extends AbstractController
     /** Darla por enviada al banco: desde aquí es histórico. */
     #[Route('/{id}/send', name: 'accounting_remittance_send', methods: ['POST'], requirements: ['id' => '\d+'])]
     #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
-    public function send(Request $request, Remittance $remittance, ValidatorInterface $validator, EntityManagerInterface $em): Response
+    public function send(Request $request, Remittance $remittance, ValidatorInterface $validator, ConsumerGroupOrderRepository $orders, EntityManagerInterface $em): Response
     {
         $back = $this->redirectToRoute('accounting_remittance_show', ['id' => $remittance->getId()]);
         if (!$this->isCsrfTokenValid('send-remittance-' . $remittance->getId(), (string) $request->request->get('_token'))) {
@@ -400,6 +453,13 @@ class RemittanceController extends AbstractController
         }
 
         $remittance->markSent($this->actor(), $chargeDate);
+        if ($remittance->isConsumerGroup()) {
+            // Sólo los pedidos que van en sus recibos: uno confirmado después del
+            // borrador no se ha cobrado y sigue pendiente para la siguiente.
+            foreach ($orders->findInRemittance($remittance) as $order) {
+                $order->markPaid(ConsumerGroupPaymentMethod::Receipt, \DateTime::createFromImmutable($chargeDate));
+            }
+        }
         $em->flush();
         $this->addFlash('success', sprintf('Remesa dada por enviada, con cargo el %s. Ya no se puede cambiar.', $chargeDate->format('d/m/Y')));
 
@@ -704,6 +764,19 @@ class RemittanceController extends AbstractController
         $this->addFlash('warning', 'Una remesa enviada no se cambia.');
 
         return $this->redirectToRoute('accounting_remittance_show', ['id' => $remittance->getId()]);
+    }
+
+    /**
+     * Los tipos de remesa que se pueden usar: el del grupo de consumo sólo con el grupo
+     * de consumo encendido.
+     *
+     * @return array<string, string>
+     */
+    private function kindLabels(): array
+    {
+        return $this->isGranted('FEATURE_GRUPO_CONSUMO')
+            ? Remittance::KIND_LABELS
+            : array_diff_key(Remittance::KIND_LABELS, [Remittance::KIND_CONSUMER_GROUP => true]);
     }
 
     private function actor(): ?User

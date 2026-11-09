@@ -287,17 +287,31 @@
                                         <td class="tight" data-label="Total"><b>{{ order.total|number_format(2, ',', '.') }} €</b></td>
                                         <td class="tight" data-label="Pago">
                                             <div class="cg-cell-pago">
-                                                {% if can_edit %}
-                                                    <form method="post" action="{{ path('consumer_group_order_toggle_paid', { id: order.id }) }}" class="cg-order__pay-form">
-                                                        <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_toggle_paid_' ~ order.id) }}">
-                                                        <button type="submit" class="prl-chip prl-chip--{{ order.paid ? 'activo' : 'pausado' }} cg-chip-btn" title="Click para marcar {{ order.paid ? 'pendiente' : 'pagado' }}">
-                                                            <span class="dot"></span>{{ order.paid ? 'Pagado' : 'Pendiente' }}
+                                                {# Pagado = de una forma concreta. «Va en el recibo» no es
+                                                 # pagado todavía: se le cobra en la remesa del mes, y por
+                                                 # eso ya se le entrega. #}
+                                                {% set pay_label = order.paid ? 'Pagado · ' ~ order.paidVia.label : (order.willBeChargedByReceipt ? 'Va en el recibo' : 'Pendiente') %}
+                                                {% set pay_chip = order.paid ? 'activo' : (order.willBeChargedByReceipt ? 'mod-4' : 'pausado') %}
+                                                {% if can_edit and order.paid %}
+                                                    <form method="post" action="{{ path('consumer_group_order_payment', { id: order.id }) }}" class="cg-order__pay-form">
+                                                        <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_order_payment_' ~ order.id) }}">
+                                                        <input type="hidden" name="via" value="">
+                                                        <button type="submit" class="prl-chip prl-chip--{{ pay_chip }} cg-chip-btn" title="Click para volver a dejarlo pendiente">
+                                                            <span class="dot"></span>{{ pay_label }}
                                                         </button>
                                                     </form>
                                                 {% else %}
-                                                    <span class="prl-chip prl-chip--{{ order.paid ? 'activo' : 'pausado' }}"><span class="dot"></span>{{ order.paid ? 'Pagado' : 'Pendiente' }}</span>
+                                                    <span class="prl-chip prl-chip--{{ pay_chip }}"><span class="dot"></span>{{ pay_label }}</span>
                                                 {% endif %}
-                                                {% if not order.paid %}
+                                                {% if can_edit and not order.paid %}
+                                                    <form method="post" action="{{ path('consumer_group_order_payment', { id: order.id }) }}" class="cg-order__pay-form cg-order__pay-via">
+                                                        <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_order_payment_' ~ order.id) }}">
+                                                        <span class="cg-order__ref-label">Pagado por:</span>
+                                                        <button type="submit" name="via" value="transfer" class="prl-btn prl-btn--sm">Transferencia</button>
+                                                        <button type="submit" name="via" value="cash" class="prl-btn prl-btn--sm">Metálico</button>
+                                                    </form>
+                                                {% endif %}
+                                                {% if not order.paid and not order.willBeChargedByReceipt %}
                                                     {# El mismo concepto que se le pide a la socia, para poder
                                                      # buscarlo en el extracto: en el banco aparece el titular de
                                                      # la cuenta, que no siempre es quien figura aquí. Rotulado a
@@ -464,6 +478,7 @@
            la unidad. #}
         .cg-order__ref { font-size: .8rem; color: var(--csa-muted); white-space: normal; overflow-wrap: anywhere; }
         .cg-order__ref-label { font-weight: 600; }
+        .cg-order__pay-via { display: flex; flex-wrap: wrap; align-items: center; gap: var(--csa-sp-1); font-size: .8rem; color: var(--csa-muted); }
         .cg-order__pay-form { margin: 0; max-width: 100%; }
         {# El chip ES el botón: un click cambia el estado, sin un botón de
            texto aparte al lado —eso era lo que hacía desbordar la columna—. #}

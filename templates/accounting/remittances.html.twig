@@ -117,6 +117,18 @@
                             <a href="{{ path('monthly_fee_index', { month: n.period|date('Y-m') }) }}">ver las cuotas del mes</a>
                         </div>
                     </form>
+                {% elseif kind == 'consumer_group' %}
+                    {# Los pedidos del grupo de consumo salen de los pedidos confirmados que
+                     # se entregan ese mes, no de copiar el anterior: cada mes es otra gente. #}
+                    <form method="post" action="{{ path('accounting_remittance_from_consumer_group') }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('remittance-from-consumer-group') }}">
+                        <h3>Grupo de consumo</h3>
+                        <p>Un recibo por socia con lo que ha pedido de las rondas que se entregan ese mes (y lo atrasado sin cobrar). Quien no tiene recibo paga por transferencia o en metálico y no entra.</p>
+                        <label>Mes <input type="month" name="period" value="{{ n.period|date('Y-m') }}"></label>
+                        <div class="actions">
+                            <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-shopping-basket"></i> Preparar desde los pedidos</button>
+                        </div>
+                    </form>
                 {% else %}
                     {# Derrama o cuota de socix: el mismo importe para toda una base, que se
                      # elige porque hay socixs que pagan sin llevar cesta. #}
