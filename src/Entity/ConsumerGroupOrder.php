@@ -244,13 +244,31 @@ class ConsumerGroupOrder
         return $this;
     }
 
-    /** Volver a dejarlo pendiente de pago. */
+    /**
+     * Volver a dejarlo pendiente de pago. Suelta también su recibo: si se desmarca uno
+     * cobrado por recibo (el banco lo devolvió) tiene que poder entrar en la siguiente
+     * remesa, y uno que iba en un borrador deja de cuadrar con él y se ve al enviarlo
+     * ({@see \App\Service\Accounting\Remittance\ConsumerGroupReceiptCheck}).
+     */
     public function markUnpaid(): self
     {
         $this->paidVia = null;
         $this->paidAt = null;
+        $this->remittanceLine = null;
 
         return $this;
+    }
+
+    /**
+     * Si hoy se le puede cobrar por recibo lo que pide: sin pagar, de una ronda
+     * confirmada y no cancelada. Lo que tiene que seguir cumpliendo al enviar la remesa.
+     */
+    public function isChargeableByReceiptNow(): bool
+    {
+        return !$this->isPaid()
+            && $this->round !== null
+            && $this->round->isConfirmed()
+            && $this->round->getStatus() !== ConsumerGroupRound::STATUS_CANCELLED;
     }
 
     /**

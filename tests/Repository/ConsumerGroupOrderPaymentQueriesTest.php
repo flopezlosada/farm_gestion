@@ -112,7 +112,7 @@ class ConsumerGroupOrderPaymentQueriesTest extends KernelTestCase
         $this->assertSame([$anaFebruary->getId(), $anaMarch->getId()], array_map(static fn (ConsumerGroupOrder $o): ?int => $o->getId(), $found));
     }
 
-    public function testUnPedidoQueYaVaEnUnReciboNoVuelveAEntrarYAlEnviarQuedaCobrado(): void
+    public function testUnPedidoQueYaVaEnUnReciboNoVuelveAEntrar(): void
     {
         $ana = $this->partner('Ana', true);
         $march = $this->round('2097-03-10');

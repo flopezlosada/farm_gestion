@@ -18,6 +18,7 @@ use App\Repository\RemittanceReturnRepository;
 use App\Service\Accounting\Invoice\LedgerSheet;
 use App\Service\Accounting\Remittance\BankReturns;
 use App\Service\Accounting\Remittance\CaseAction;
+use App\Service\Accounting\Remittance\ConsumerGroupReceiptCheck;
 use App\Service\Accounting\Remittance\FlatRemittance;
 use App\Service\Accounting\Remittance\MandatesToPartners;
 use App\Service\Accounting\Remittance\PartnerNameMatcher;
@@ -74,6 +75,12 @@ class RemittanceController extends AbstractController
      * errata (el año mal puesto) y la remesa se vigilaría en una fecha que no es.
      */
     private const CHARGE_DATE_RANGE_DAYS = 90;
+
+    public function __construct(
+        private readonly ConsumerGroupOrderRepository $orders,
+        private readonly ConsumerGroupReceiptCheck $receiptCheck,
+    ) {
+    }
 
     /** Todas, y la siguiente que toca preparar de cada tipo. */
     #[Route('', name: 'accounting_remittances', methods: ['GET'])]
@@ -325,7 +332,7 @@ class RemittanceController extends AbstractController
     #[Route('/from-consumer-group', name: 'accounting_remittance_from_consumer_group', methods: ['POST'])]
     #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
     #[IsGranted('FEATURE_GRUPO_CONSUMO')]
-    public function fromConsumerGroup(Request $request, RemittanceRepository $remittances, ConsumerGroupOrderRepository $orders, RemittanceFromConsumerGroup $builder, EntityManagerInterface $em): Response
+    public function fromConsumerGroup(Request $request, RemittanceRepository $remittances, RemittanceFromConsumerGroup $builder, EntityManagerInterface $em): Response
     {
         $back = $this->redirectToRoute('accounting_remittances');
         if (!$this->isCsrfTokenValid('remittance-from-consumer-group', (string) $request->request->get('_token'))) {
@@ -346,7 +353,7 @@ class RemittanceController extends AbstractController
             return $this->redirectToRoute('accounting_remittance_show', ['id' => $existing->getId()]);
         }
 
-        $remittance = $builder->build($period, $orders->findToChargeByReceiptIn($period), $this->actor());
+        $remittance = $builder->build($period, $this->orders->findToChargeByReceiptIn($period), $this->actor());
         if ($remittance->getLines()->isEmpty()) {
             $this->addFlash('warning', sprintf('No hay pedidos que cobrar por recibo en %s: o no hay rondas confirmadas que se entreguen ese mes, o ya están pagados, o nadie tiene recibo.', $period->format('m/Y')));
 
@@ -432,8 +439,11 @@ class RemittanceController extends AbstractController
     /** Darla por enviada al banco: desde aquí es histórico. */
     #[Route('/{id}/send', name: 'accounting_remittance_send', methods: ['POST'], requirements: ['id' => '\d+'])]
     #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
-    public function send(Request $request, Remittance $remittance, ValidatorInterface $validator, ConsumerGroupOrderRepository $orders, EntityManagerInterface $em): Response
+    public function send(Request $request, Remittance $remittance, ValidatorInterface $validator, EntityManagerInterface $em): Response
     {
+        if ($remittance->isConsumerGroup()) {
+            $this->denyAccessUnlessGranted('FEATURE_GRUPO_CONSUMO');
+        }
         $back = $this->redirectToRoute('accounting_remittance_show', ['id' => $remittance->getId()]);
         if (!$this->isCsrfTokenValid('send-remittance-' . $remittance->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('danger', 'La página había caducado. Vuelve a intentarlo.');
@@ -456,7 +466,8 @@ class RemittanceController extends AbstractController
         if ($remittance->isConsumerGroup()) {
             // Sólo los pedidos que van en sus recibos: uno confirmado después del
             // borrador no se ha cobrado y sigue pendiente para la siguiente.
-            foreach ($orders->findInRemittance($remittance) as $order) {
+            // Ya comprobado que cuadran (sendProblems): todos siguen sin pagar y vigentes.
+            foreach ($this->orders->findInRemittance($remittance) as $order) {
                 $order->markPaid(ConsumerGroupPaymentMethod::Receipt, \DateTime::createFromImmutable($chargeDate));
             }
         }
@@ -681,6 +692,9 @@ class RemittanceController extends AbstractController
      */
     private function sendProblems(Remittance $remittance, ValidatorInterface $validator): array
     {
+        $receipts = $remittance->isConsumerGroup()
+            ? $this->receiptCheck->problems($remittance, $this->orders->findInRemittance($remittance))
+            : [];
         $ibans = [];
         foreach ($remittance->getLines() as $line) {
             foreach ($validator->validateProperty($line, 'iban') as $violation) {
@@ -689,7 +703,7 @@ class RemittanceController extends AbstractController
             }
         }
 
-        return array_values(array_unique([...$remittance->sendProblems(), ...$ibans]));
+        return array_values(array_unique([...$remittance->sendProblems(), ...$ibans, ...$receipts]));
     }
 
     /** Alta y edición de un recibo son el mismo formulario. */

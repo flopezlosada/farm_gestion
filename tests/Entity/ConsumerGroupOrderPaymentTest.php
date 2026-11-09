@@ -4,6 +4,8 @@ namespace App\Tests\Entity;
 
 use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupPaymentMethod;
+use App\Entity\ConsumerGroupRound;
+use App\Entity\RemittanceLine;
 use App\Entity\Partner;
 use App\Entity\PartnerPaymentMethod;
 use PHPUnit\Framework\TestCase;
@@ -91,5 +93,28 @@ class ConsumerGroupOrderPaymentTest extends TestCase
     public function testLaComisionSoloMarcaTransferenciaOMetalico(): void
     {
         $this->assertSame([ConsumerGroupPaymentMethod::Transfer, ConsumerGroupPaymentMethod::Cash], ConsumerGroupPaymentMethod::manual());
+    }
+
+    public function testVolverAPendienteSueltaSuRecibo(): void
+    {
+        // El banco devolvió el recibo: tiene que poder entrar en la remesa siguiente.
+        $order = (new ConsumerGroupOrder(null, self::withMandate()))->setRemittanceLine(new RemittanceLine())
+            ->markPaid(ConsumerGroupPaymentMethod::Receipt)
+            ->markUnpaid();
+
+        $this->assertNull($order->getRemittanceLine());
+    }
+
+    public function testSeLePuedeCobrarHoySoloSinPagarYDeRondaConfirmadaYNoCancelada(): void
+    {
+        $confirmed = (new ConsumerGroupRound())->setStatus(ConsumerGroupRound::STATUS_CONFIRMED)->setConfirmed(true);
+        $open = (new ConsumerGroupRound())->setStatus(ConsumerGroupRound::STATUS_OPEN);
+        $cancelled = (new ConsumerGroupRound())->setStatus(ConsumerGroupRound::STATUS_CANCELLED)->setConfirmed(true);
+
+        $this->assertTrue((new ConsumerGroupOrder($confirmed, new Partner()))->isChargeableByReceiptNow());
+        $this->assertFalse((new ConsumerGroupOrder($open, new Partner()))->isChargeableByReceiptNow());
+        $this->assertFalse((new ConsumerGroupOrder($cancelled, new Partner()))->isChargeableByReceiptNow());
+        $this->assertFalse((new ConsumerGroupOrder($confirmed, new Partner()))->markPaid(ConsumerGroupPaymentMethod::Cash)->isChargeableByReceiptNow());
+        $this->assertFalse((new ConsumerGroupOrder(null, new Partner()))->isChargeableByReceiptNow());
     }
 }
