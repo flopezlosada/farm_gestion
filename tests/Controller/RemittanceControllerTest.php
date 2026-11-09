@@ -237,6 +237,9 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
         // 7. El día de cargo sí se cambia (se volvió a subir) y se quita (no vigilarla).
         $crawler = $client->request('GET', '/gestion/accounting/remittances/' . $september->getId());
         $this->assertSelectorTextContains('body', 'Cargo pedido el ' . $chargeDate->format('d/m/Y'));
+        // Ya enviada, sigue diciendo si lo cobrado es lo que calcula la app (pestaña Cuadre).
+        $this->assertSelectorExists('[data-csa-tabs] a[href="#cuadre"] .csa-tabs__count');
+        $this->assertSelectorTextContains('#cuadre', 'La app calcula con las fichas de hoy');
         $change = $crawler->filter('form[action$="/charge-date"]')->form();
         $later = $chargeDate->modify('+7 days');
         $client->submit($change, ['charge_date' => $later->format('Y-m-d')]);

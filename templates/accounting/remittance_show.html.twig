@@ -41,10 +41,16 @@
 {% if withoutLine is not empty %}
     {% set to_check = to_check|merge([{ n: withoutLine|length, what: withoutLine|length == 1 ? 'persona con cesta y sin recibo' : 'personas con cesta y sin recibo', where: 'Más abajo, con el motivo de cada una', href: '#sin-recibo' }]) %}
 {% endif %}
+{# En un borrador lo que no cuadra ya sale como aviso en su recibo y en «sin recibo»;
+ # en una enviada sólo lo dice el cuadre. #}
+{% set not_matching = feeCheck and remittance.sent ? feeCheck.rows|length : 0 %}
+{% if not_matching %}
+    {% set to_check = to_check|merge([{ n: not_matching, what: not_matching == 1 ? 'familia en la que lo cobrado no es lo que calcula la app' : 'familias en las que lo cobrado no es lo que calcula la app', where: 'En la pestaña Cuadre', href: '#cuadre' }]) %}
+{% endif %}
 {% if changesTotals and not changesTotals.addsUp %}
     {% set to_check = to_check|merge([{ n: '!', what: 'Los cambios no cuadran con el total', where: 'La comparación se ha dejado algo', href: '#cambios' }]) %}
 {% endif %}
-{% set pending = problems|length + warned + unexplained + withoutLine|length + (changesTotals and not changesTotals.addsUp ? 1 : 0) %}
+{% set pending = problems|length + warned + unexplained + withoutLine|length + not_matching + (changesTotals and not changesTotals.addsUp ? 1 : 0) %}
 
 {# El cuadre de un mes al siguiente, que se lee de arriba abajo como una suma: lo
  # cobrado el mes anterior, las altas y bajas de cesta, quién sube o baja su cuota, y
@@ -257,6 +263,13 @@
                     </a>
                 </li>
             {% endif %}
+            {% if feeCheck %}
+                <li class="csa-tabs__item">
+                    <a class="csa-tabs__link" href="#cuadre" role="tab" aria-selected="false">
+                        Cuadre<span class="csa-tabs__count">{{ feeCheck.matched }}/{{ feeCheck.total }}</span>
+                    </a>
+                </li>
+            {% endif %}
             <li class="csa-tabs__item">
                 <a class="csa-tabs__link" href="#recibos" role="tab" aria-selected="false">
                     Recibos<span class="csa-tabs__count">{{ remittance.lines|length }}</span>
@@ -311,6 +324,15 @@
                             {{ rem.changes_bridge(previous, remittance, changes, changesTotals) }}
                             <a class="rem-panel__more" href="#cambios">Ver quién y por qué <i class="fa fa-angle-right" aria-hidden="true"></i></a>
                         {% endif %}
+                    </section>
+                {% endif %}
+
+                {% if feeCheck and feeCheck.total %}
+                    <section class="rem-panel" aria-labelledby="rem-fee-title">
+                        <h2 class="rem-panel__title" id="rem-fee-title">¿Es lo que calcula la app?</h2>
+                        <p>Cuadran <b>{{ feeCheck.matched }} de {{ feeCheck.total }}</b> familias: se les cobra justo su cuota calculada.</p>
+                        {% if feeCheck.unlinked %}<p class="acc-muted">{{ feeCheck.unlinked == 1 ? '1 recibo no tiene socix' : feeCheck.unlinked ~ ' recibos no tienen socix' }}: no se puede saber de quién es.</p>{% endif %}
+                        {% if feeCheck.rows is not empty %}<a class="rem-panel__more" href="#cuadre">Ver las que no cuadran <i class="fa fa-angle-right" aria-hidden="true"></i></a>{% endif %}
                     </section>
                 {% endif %}
             </div>
@@ -464,6 +486,48 @@
                                             {# En rojo lo que la app no explica: eso es lo que hay que mirar. #}
                                             <td class="{{ c.explained ? '' : 'acc-neg' }}">{% for reason in c.reasons %}<div>{{ reason }}</div>{% endfor %}</td>
                                         {% endif %}
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        </div>
+                    </div>
+                {% endif %}
+            </section>
+        {% endif %}
+
+        {% if feeCheck %}
+            <section class="csa-tabpanel" id="cuadre" role="tabpanel">
+                <h2 class="acc-subhead">Lo cobrado frente a lo que calcula la app</h2>
+                <p class="acc-muted rem-box">
+                    Cuadran {{ feeCheck.matched }} de {{ feeCheck.total }} familias.
+                    {% if remittance.sent %}La app calcula con las fichas de hoy (cestas con sus fechas, pausas, tarifas de cada semana; el grupo de recogida, el de hoy): una diferencia es algo que mirar, no un error seguro.{% endif %}
+                </p>
+                {% if feeCheck.rows is empty %}
+                    <p class="rem-box"><i class="fa fa-check" aria-hidden="true"></i> Todas cuadran.</p>
+                {% else %}
+                    <div class="rem-box" data-csa-table-filter>
+                        {{ csa.table_toolbar('cua', 'Buscar por nombre…') }}
+                        <div class="prl-table-wrap">
+                        <table class="prl-table">
+                            <thead>
+                                <tr>
+                                    <th class="prl-sortable" data-csa-sort="text"><a href="#">Quién</a></th>
+                                    <th class="tight acc-num prl-sortable" data-csa-sort="num"><a href="#">Cobrado</a></th>
+                                    <th class="tight acc-num prl-sortable" data-csa-sort="num"><a href="#">Calcula la app</a></th>
+                                    <th class="tight acc-num prl-sortable" data-csa-sort="num"><a href="#">Diferencia</a></th>
+                                    <th>Detalle</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for r in feeCheck.rows %}
+                                    {% set diff = r.charged * 1 - (r.calculated ?? 0) * 1 %}
+                                    <tr>
+                                        <td>{% if can_see_partners %}<a href="{{ path('partner_show', { id: r.partner.id }) }}">{{ r.partner.legalName }}</a>{% else %}{{ r.partner.legalName }}{% endif %}</td>
+                                        <td class="acc-num" data-sort-value="{{ r.charged }}">{{ fmt.money(r.charged) }}</td>
+                                        <td class="acc-num" data-sort-value="{{ r.calculated }}">{{ r.calculated is not null ? fmt.money(r.calculated) : '—' }}</td>
+                                        <td class="acc-num" data-sort-value="{{ diff }}">{{ r.calculated is not null ? fmt.money(diff, true) : '—' }}</td>
+                                        <td>{{ r.note }}</td>
                                     </tr>
                                 {% endfor %}
                             </tbody>

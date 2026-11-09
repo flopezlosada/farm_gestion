@@ -126,6 +126,76 @@ class RemittanceReview
     }
 
     /**
+     * Si lo que se cobra en una remesa de cuotas es lo que calcula la app, familia a
+     * familia: cuántas cuadran y las que no, con las dos cifras. Vale también para las
+     * enviadas e importadas, que es donde se ve si la app ya calcula lo que cobra la
+     * tesorera; en ellas la app calcula con las fichas de hoy (el grupo de recogida, por
+     * ejemplo), así que un descuadre es algo que mirar, no un error seguro.
+     *
+     * Cuenta toda familia con recibo y toda la que paga por recibo y tiene cuota
+     * calculada. Quien paga de otra forma y no tiene recibo no cuenta; a quien le falta
+     * algún precio no se le puede contrastar y sale aparte. Los recibos sin socix no se
+     * pueden atribuir a nadie: sólo se cuentan.
+     *
+     * @param array<int, FeeStatement> $expected La cuota calculada del mes, por quien encabeza la familia.
+     *
+     * @return array{matched: int, total: int, unlinked: int, rows: list<array{partner: Partner, charged: string, calculated: ?string, note: ?string}>}|null
+     *         calculated es null si no hay cuota o le falta algún precio;
+     *         null si la remesa no es de cuotas de cesta.
+     */
+    public function feeCheck(Remittance $remittance, array $expected): ?array
+    {
+        if (!$remittance->isBasketFees()) {
+            return null;
+        }
+        $charged = $this->chargedByFamily($remittance);
+        $heads = [];
+        foreach ($remittance->getLines() as $line) {
+            if ($line->getPartner() !== null) {
+                $head = $line->getPartner()->getFamilyHead();
+                $heads[(int) $head->getId()] = $head;
+            }
+        }
+        foreach ($expected as $id => $fee) {
+            if ($fee->getCents() > 0 && $fee->payer->paysByReceipt()) {
+                $heads[$id] ??= $fee->payer;
+            }
+        }
+
+        $rows = [];
+        foreach ($heads as $id => $head) {
+            $fee = $expected[$id] ?? null;
+            $chargedCents = $charged[$id] ?? 0;
+            $missing = $fee?->describeMissing();
+            if ($missing === null && ($fee?->getCents() ?? 0) === $chargedCents) {
+                continue;
+            }
+            $rows[] = [
+                'partner' => $head,
+                'charged' => IssuedInvoice::fromCents($chargedCents),
+                // Con un precio que falta la cifra sale corta: mejor no darla.
+                'calculated' => $fee !== null && $missing === null ? IssuedInvoice::fromCents($fee->getCents()) : null,
+                'note' => match (true) {
+                    $missing !== null => sprintf('Falta el precio de %s: no se puede contrastar.', $missing),
+                    $fee === null => 'La app no le calcula ninguna cesta ese mes.',
+                    $chargedCents === 0 => implode(' ', ['No tiene recibo en esta remesa.', ...$fee->getProblems()]),
+                    default => null,
+                },
+            ];
+        }
+        // Lo que más se aleja, arriba: es lo primero que hay que mirar.
+        $gap = static fn (array $r): int => abs(IssuedInvoice::toCents($r['charged']) - IssuedInvoice::toCents($r['calculated'] ?? '0'));
+        usort($rows, static fn (array $a, array $b): int => [$gap($b), $a['partner']->getLegalName()] <=> [$gap($a), $b['partner']->getLegalName()]);
+
+        return [
+            'matched' => \count($heads) - \count($rows),
+            'total' => \count($heads),
+            'unlinked' => \count(array_filter($remittance->getLines()->toArray(), static fn (RemittanceLine $l): bool => $l->getPartner() === null)),
+            'rows' => $rows,
+        ];
+    }
+
+    /**
      * Qué cambia de la remesa anterior a ésta, por familia (o por mandato, si el
      * recibo no tiene socix). Lo que no cambia no sale.
      *
