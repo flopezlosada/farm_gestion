@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\Basket;
 use App\Entity\BasketComponent;
 use App\Entity\City;
+use App\Entity\ConsumerGroupRound;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
@@ -16,6 +17,7 @@ use App\Entity\WeeklyBasketStatus;
 use App\Form\ChangePasswordType;
 use App\Form\PartnerProfileType;
 use App\Repository\BasketRepository;
+use App\Repository\ConsumerGroupRoundRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Repository\SharedBasketChangeRequestRepository;
@@ -28,6 +30,7 @@ use App\Repository\WeeklyBasketRepository;
 use App\Security\ManagementVoter;
 use App\Security\MemberVoter;
 use App\Service\ConsumerGroup\PartnerConsumerGroupDeliveries;
+use App\Service\ConsumerGroup\PartnerConsumerGroupOrders;
 use App\Service\Delivery\AccumulatingMove;
 use App\Service\Delivery\DeliveryCalendarProjector;
 use App\Service\Delivery\DeliveryCalendarViewBuilder;
@@ -89,12 +92,22 @@ class PanelController extends AbstractController
         VolunteerContributions $contributions,
         DeliveryCalendarProjector $projector,
         SurveyRepository $surveys,
+        ConsumerGroupRoundRepository $consumerGroupRounds,
+        PartnerConsumerGroupOrders $consumerGroupOrders,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
             return $redirect;
         }
 
         $partner = $this->getUser()->getPartner();
+
+        // El grupo de consumo en la portada: los pedidos en los que aún se puede
+        // apuntar y lo que su familia tiene por recoger. Sólo vivía en su propia
+        // pantalla, escondida en «Más» en el móvil, así que un pedido abierto podía
+        // cerrarse sin que lo viera.
+        $consumerGroup = $this->memberFeature('FEATURE_GRUPO_CONSUMO')
+            ? $consumerGroupOrders->forPartner($partner)
+            : null;
 
         // Las encuestas que le quedan por responder. De la socia y no del dueño
         // de la cesta: en una familia responde cada cual. Sin esto, la única
@@ -164,6 +177,14 @@ class PanelController extends AbstractController
             // en un banner que repetía el nodo tres veces en la misma pantalla.
             'next_delivery' => $nextDelivery,
             'pending_surveys' => $pendingSurveys,
+            // Abiertos con plazo vivo (vencido ya no admite apuntes: en la portada
+            // sería invitar a algo que no se puede hacer), y lo suyo por recoger.
+            'cg_open' => $consumerGroup === null ? [] : array_values(array_filter(
+                $consumerGroupRounds->findOpen(),
+                static fn (ConsumerGroupRound $round): bool => $round->canReceiveOrders(),
+            )),
+            'cg_order_by_round' => $consumerGroup['byRound'] ?? [],
+            'cg_upcoming' => $consumerGroup['upcoming'] ?? [],
             // Quién le está montando la cesta de esa semana en su punto de recogida.
             // Es la cara amable del voluntariado —gente con nombre, no un contador— y
             // a la vez el sitio donde más barato sale pedir ayuda: a quien va a ir de

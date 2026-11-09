@@ -15,6 +15,7 @@ use App\Service\AppSettings;
 use App\Service\ConsumerGroup\ConsumerGroupEventRecorder;
 use App\Service\ConsumerGroup\MinimumAutoConfirmer;
 use App\Service\ConsumerGroup\OrderEditor;
+use App\Service\ConsumerGroup\PartnerConsumerGroupOrders;
 use App\Service\ConsumerGroup\RepeatLastOrder;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -44,48 +45,20 @@ class PanelConsumerGroupController extends AbstractController
      * confirmados (que se le entregarán con la cesta).
      */
     #[Route('', name: 'panel_consumer_group_index', methods: ['GET'])]
-    public function index(ConsumerGroupRoundRepository $rounds, ConsumerGroupOrderRepository $orders, AppSettings $settings): Response
+    public function index(ConsumerGroupRoundRepository $rounds, PartnerConsumerGroupOrders $myOrders, AppSettings $settings): Response
     {
         $partner = $this->getUser()?->getPartner();
         if ($partner === null) {
             return $this->redirectToRoute('dashboard');
         }
 
-        // Un solo query: todos los pedidos de la socia; los indexamos por ronda
-        // (para marcar las abiertas ya apuntadas) y filtramos los confirmados.
-        $myOrders = $orders->findByPartner($partner);
-        $orderByRound = [];
-        foreach ($myOrders as $order) {
-            $orderByRound[$order->getRound()->getId()] = $order;
-        }
-
-        // Lo confirmado se parte en DOS: lo que está por llegar y lo que ya pasó.
-        // Juntos bajo «se te entregará con la cesta» iban los pedidos de hace
-        // meses, ya entregados y cobrados, anunciando una entrega que no va a
-        // pasar; y la lista sólo podía crecer.
-        $today = new \DateTime('today');
-        $upcoming = [];
-        $past = [];
-        foreach ($myOrders as $order) {
-            $round = $order->getRound();
-            if (!$round->isConfirmed() || $order->isEmpty()) {
-                continue;
-            }
-
-            $delivery = $round->getDeliveryDate();
-            $isPast = $round->getStatus() === ConsumerGroupRound::STATUS_DELIVERED
-                || ($delivery !== null && $delivery < $today);
-
-            // Sin fecha de entrega cuenta como pendiente: la comisión aún no la ha
-            // puesto, así que el pedido está por llegar, no vivido.
-            $isPast ? $past[] = $order : $upcoming[] = $order;
-        }
+        $mine = $myOrders->forPartner($partner);
 
         return $this->render('Panel/consumer_group/index.html.twig', [
             'open_rounds'    => $rounds->findOpen(),
-            'order_by_round' => $orderByRound,
-            'confirmed'      => $upcoming,
-            'past'           => $past,
+            'order_by_round' => $mine['byRound'],
+            'confirmed'      => $mine['upcoming'],
+            'past'           => $mine['past'],
             'payment_info'   => $settings->getString(AppSettings::CONSUMER_GROUP_PAYMENT_INFO),
         ]);
     }
