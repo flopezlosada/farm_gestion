@@ -200,7 +200,19 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
 
         // 6. Enviarla pide el día de cargo: sin él, o con una fecha que no existe, no se envía.
         $crawler = $client->request('GET', '/gestion/accounting/remittances/' . $september->getId());
-        $this->assertSelectorTextContains('body', 'Cambia');
+        $this->assertSelectorTextContains('#cambios', 'la cuota');
+        // Sin problemas, pero con recibos sin socix: se avisa, no se da por bueno.
+        $this->assertSelectorTextContains('#resumen .rem-panel--check', 'Antes de enviarla, mira');
+        $this->assertSelectorTextContains('#resumen .rem-panel--check', 'con avisos');
+        $this->assertSelectorExists('#resumen .rem-panel--check a[href="#recibos"]');
+        $this->assertSelectorNotExists('#resumen .rem-panel--ok');
+        $this->assertSelectorTextContains('[data-csa-tabs] a[href="#recibos"] .csa-tabs__count', '3');
+        $this->assertSelectorExists('[data-csa-tabs] a[href="#resumen"] .rem-tab-warn');
+        // El cuadre de agosto a septiembre se lee como una suma: de un mes al otro.
+        $this->assertSelectorTextContains('#resumen .rem-bridge__from', 'Agosto');
+        $this->assertSelectorTextContains('#resumen .rem-bridge__to', 'Septiembre');
+        $this->assertSelectorTextContains('.prl-stats', 'por mirar');
+        $this->assertSelectorTextNotContains('.prl-stats', 'recibos con avisos');
         $send = $crawler->filter('form[action$="/send"]')->form();
         $client->submit($send, ['charge_date' => '']);
         $this->assertTrue($this->remittance('2096-09')->isDraft(), 'Sin día de cargo no se da por enviada.');

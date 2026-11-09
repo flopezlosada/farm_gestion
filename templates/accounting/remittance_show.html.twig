@@ -8,6 +8,9 @@
  #
  # En las dos, lo que cambia respecto a la remesa anterior del mismo tipo.
  #
+ # En tres pestañas: Resumen (lo que hay que mirar, como aviso, y los totales;
+ # debajo las acciones de la ficha), Cambios y Recibos.
+ #
  # El controller pasa: remittance, previous, problems, warnings (por id de
  # recibo), withoutLine, changes, cases (en una enviada: los recibos que no
  # casan con su ficha, {@see RemittanceCases}), everyone (las fichas, para
@@ -18,12 +21,72 @@
 {% extends '_layouts/csa_shell.html.twig' %}
 {% import '_macros/csa.html.twig' as csa %}
 {% import 'accounting/_money.html.twig' as fmt %}
+{% import _self as rem %}
 
 {% set can_edit = is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
 {% set editable = can_edit and remittance.draft %}
 {% set can_see_partners = is_granted('ROLE_GESTION_SOCIXS') %}
 {% set warned = warnings|filter(w => w is not empty)|length %}
 {% set mandates = remittance.lines|map(l => l.mandateReference) %}
+{% set unexplained = changes|filter(c => c.explained is defined and not c.explained)|length %}
+{#  Lo que no impide enviarla pero hay que mirar: sin esto, «no hay problemas»
+ #  tapaba los recibos con avisos y los cambios que la app no explica. #}
+{% set to_check = [] %}
+{% if unexplained %}
+    {% set to_check = to_check|merge([{ n: unexplained, what: unexplained == 1 ? 'cambio que la app no explica' : 'cambios que la app no explica', where: 'En rojo, en la pestaña Cambios', href: '#cambios' }]) %}
+{% endif %}
+{% if warned %}
+    {% set to_check = to_check|merge([{ n: warned, what: warned == 1 ? 'recibo con avisos' : 'recibos con avisos', where: 'En amarillo, en la pestaña Recibos', href: '#recibos' }]) %}
+{% endif %}
+{% if withoutLine is not empty %}
+    {% set to_check = to_check|merge([{ n: withoutLine|length, what: withoutLine|length == 1 ? 'persona con cesta y sin recibo' : 'personas con cesta y sin recibo', where: 'Más abajo, con el motivo de cada una', href: '#sin-recibo' }]) %}
+{% endif %}
+{% if changesTotals and not changesTotals.addsUp %}
+    {% set to_check = to_check|merge([{ n: '!', what: 'Los cambios no cuadran con el total', where: 'La comparación se ha dejado algo', href: '#cambios' }]) %}
+{% endif %}
+{% set pending = problems|length + warned + unexplained + withoutLine|length + (changesTotals and not changesTotals.addsUp ? 1 : 0) %}
+
+{# El cuadre de un mes al siguiente, que se lee de arriba abajo como una suma: lo
+ # cobrado el mes anterior, las altas y bajas de cesta, quién sube o baja su cuota, y
+ # lo de este mes. Va en el Resumen y encima de la tabla de Cambios. #}
+{% macro changes_bridge(previous, remittance, changes, t) %}
+    {% import 'accounting/_money.html.twig' as fmt %}
+    {% set same_year = previous.period|date('Y') == remittance.period|date('Y') %}
+    {% set month = same_year ? 'MMMM' : 'MMMM y' %}
+    {% set n = {
+        new: changes|filter(c => c.change == 'new')|length,
+        gone: changes|filter(c => c.change == 'gone')|length,
+        up: changes|filter(c => c.change == 'amount' and c.after * 1 > c.before * 1)|length,
+        down: changes|filter(c => c.change == 'amount' and c.after * 1 < c.before * 1)|length,
+    } %}
+    {% set rows = [
+        { key: 'new', sign: '+', label: n.new == 1 ? 'alta de cesta' : 'altas de cesta', amount: t.new },
+        { key: 'gone', sign: '−', label: n.gone == 1 ? 'baja de cesta' : 'bajas de cesta', amount: t.gone },
+        { key: 'up', sign: '+', label: n.up == 1 ? 'sube su cuota' : 'suben su cuota', amount: t.up },
+        { key: 'down', sign: '−', label: n.down == 1 ? 'baja su cuota' : 'bajan su cuota', amount: t.down|abs },
+    ] %}
+    <table class="rem-bridge">
+        <tbody>
+            <tr class="rem-bridge__from">
+                <th scope="row">{{ previous.period|format_date(pattern=month, locale='es')|capitalize }}</th>
+                <td class="acc-num">{{ fmt.money(previous.total) }}</td>
+            </tr>
+            {% for row in rows|filter(r => n[r.key] > 0) %}
+                <tr class="rem-bridge__step rem-bridge__step--{{ row.sign == '+' ? 'up' : 'down' }}">
+                    <th scope="row"><span class="rem-bridge__sign" aria-hidden="true">{{ row.sign }}</span><b>{{ n[row.key] }}</b> {{ row.label }}</th>
+                    <td class="acc-num">{{ row.sign == '−' ? '−' }}{{ fmt.money(row.amount) }}</td>
+                </tr>
+            {% endfor %}
+            <tr class="rem-bridge__to">
+                <th scope="row">{{ remittance.period|format_date(pattern=month, locale='es')|capitalize }}</th>
+                <td class="acc-num">{{ fmt.money(remittance.total) }}</td>
+            </tr>
+        </tbody>
+    </table>
+    {% if not t.addsUp %}
+        <p class="acc-neg rem-bridge__note">No cuadra: entre los dos meses van {{ fmt.money(t.expectedNet) }} y los cambios suman {{ fmt.money(t.net) }}.</p>
+    {% endif %}
+{% endmacro %}
 
 {% block title %}{{ remittance.label }} · Remesas{% endblock %}
 
@@ -89,6 +152,47 @@
         .rem-reviewed summary { cursor: pointer; font-size: 13px; color: var(--prl-ink-soft); margin-bottom: 10px; }
         /* El segundo recibo de un mismo mandato en la remesa (el alta, una derrama). */
         .rem-extra { margin-left: 4px; }
+        /* La pestaña Resumen avisa desde fuera de que hay cosas por mirar. */
+        .rem-tab-warn, .csa-tabs__item.active .rem-tab-warn { color: var(--csa-warning-ink, #8a5a00); opacity: 1; font-weight: 600; }
+        [data-csa-tabs] { margin-top: var(--csa-sp-5, 20px); }
+        .prl-stat.rem-stat-warn .v { color: var(--csa-warning-ink, #8a5a00); }
+
+        /* Resumen: dos paneles lado a lado (se apilan en estrecho). Lo que hay que
+           mirar va en el tono de aviso; el cuadre, en blanco y sereno. */
+        .rem-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); gap: 16px; align-items: start; }
+        .rem-panel { background: var(--prl-surface); border: 1px solid var(--prl-line); border-radius: 10px; padding: 18px 20px 16px; }
+        .rem-panel__title { margin: 0 0 12px; font-size: 15px; font-weight: 600; line-height: 1.3; color: var(--prl-ink); }
+        .rem-panel p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--prl-ink-soft); }
+        .rem-panel__more { display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; font-size: 13.5px; font-weight: 500; color: var(--prl-sage-d); text-decoration: none; }
+        .rem-panel__more:hover, .rem-panel__more:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
+        .rem-panel--check { background: var(--prl-ochre-l); border-color: #efdcae; }
+        .rem-panel--check .rem-panel__title { color: var(--prl-ochre-d); }
+        .rem-panel--ok { background: var(--prl-sage-l); border-color: #d3dfc4; }
+        .rem-panel--ok .rem-panel__title { color: var(--prl-sage-d); }
+
+        .rem-checks { list-style: none; margin: 0; padding: 0; }
+        .rem-checks li + li { border-top: 1px solid rgba(140, 105, 25, 0.16); }
+        .rem-checks a { display: flex; align-items: center; gap: 14px; padding: 10px 6px; margin: 0 -6px; border-radius: 6px; color: var(--prl-ink); text-decoration: none; }
+        .rem-checks a:hover { background: rgba(255, 255, 255, 0.55); }
+        .rem-checks a:focus-visible { outline: 2px solid var(--prl-ochre-d); outline-offset: 1px; }
+        .rem-checks__n { min-width: 1.6em; text-align: right; font-size: 22px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; color: var(--prl-ochre-d); }
+        .rem-checks__text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+        .rem-checks__what { font-size: 14.5px; font-weight: 500; }
+        .rem-checks__where { font-size: 12.5px; color: var(--prl-ink-soft); }
+        .rem-checks .fa { color: var(--prl-ochre-d); font-size: 18px; }
+
+        /* El cuadre: se lee como una suma escrita a mano. */
+        .rem-bridge { width: 100%; border-collapse: collapse; font-size: 14px; }
+        .rem-bridge th { font-weight: 400; text-align: left; padding: 6px 0; color: var(--prl-ink); }
+        .rem-bridge td { padding: 6px 0 6px 16px; color: var(--prl-ink); }
+        .rem-bridge b { font-weight: 600; font-variant-numeric: tabular-nums; }
+        .rem-bridge__sign { display: inline-block; width: 1.3em; font-weight: 600; }
+        .rem-bridge__step--up .rem-bridge__sign { color: var(--prl-sage); }
+        .rem-bridge__step--down .rem-bridge__sign { color: var(--prl-terra); }
+        .rem-bridge__step th { padding-left: 2px; }
+        .rem-bridge__from th, .rem-bridge__from td { color: var(--prl-ink-soft); padding-bottom: 8px; }
+        .rem-bridge__to th, .rem-bridge__to td { font-weight: 600; font-size: 15px; border-top: 1px solid var(--prl-line-2); padding-top: 10px; }
+        .rem-bridge__note { margin-top: 8px !important; font-size: 13px; }
     </style>
 {% endblock %}
 
@@ -107,9 +211,8 @@
     <div class="prl-stats">
         <div class="prl-stat"><div class="v">{{ remittance.lines|length }}</div><div class="l">recibos</div></div>
         <div class="prl-stat"><div class="v">{{ fmt.money(remittance.total) }}</div><div class="l">en total</div></div>
-        {% if remittance.draft %}
-            <div class="prl-stat"><div class="v">{{ warned }}</div><div class="l">{{ warned == 1 ? 'recibo' : 'recibos' }} con avisos</div></div>
-        {% endif %}
+        {# Lo mismo que cuenta el aviso del Resumen y su pestaña: un único número. #}
+        <div class="prl-stat{{ pending ? ' rem-stat-warn' }}"><div class="v">{{ pending }}</div><div class="l">{{ pending == 1 ? 'cosa' : 'cosas' }} por mirar</div></div>
     </div>
 
     <div class="prl-toolbar">
@@ -136,195 +239,248 @@
         {% endif %}
     </div>
 
-    {% if remittance.draft %}
-        {% if problems is not empty %}
-            <div class="csa-alert csa-alert--warning rem-box" role="status">
-                <i class="csa-alert__icon fa fa-exclamation-triangle" aria-hidden="true"></i>
+    {# ============ PESTAÑAS ============
+     # Resumen: lo que hay que mirar, dicho como aviso, y los totales; debajo lo que
+     # se hace desde la ficha (día de cargo, devueltos, casos, devoluciones, sin
+     # recibo). Cambios y Recibos: el detalle, cada uno en su pestaña. #}
+    <div data-csa-tabs>
+        <ul class="csa-tabs" role="tablist">
+            <li class="csa-tabs__item active">
+                <a class="csa-tabs__link" href="#resumen" role="tab" aria-selected="true">
+                    Resumen{% if pending %}<span class="csa-tabs__count rem-tab-warn" title="Cosas por mirar"><i class="fa fa-exclamation-triangle" aria-hidden="true"></i> {{ pending }}</span>{% endif %}
+                </a>
+            </li>
+            {% if previous %}
+                <li class="csa-tabs__item">
+                    <a class="csa-tabs__link" href="#cambios" role="tab" aria-selected="false">
+                        Cambios<span class="csa-tabs__count">{{ changes|length }}</span>
+                    </a>
+                </li>
+            {% endif %}
+            <li class="csa-tabs__item">
+                <a class="csa-tabs__link" href="#recibos" role="tab" aria-selected="false">
+                    Recibos<span class="csa-tabs__count">{{ remittance.lines|length }}</span>
+                </a>
+            </li>
+        </ul>
+
+        <section class="csa-tabpanel is-active" id="resumen" role="tabpanel">
+            {# Lo que impide enviarla va aparte y arriba: el banco la rechazaría. #}
+            {% if problems is not empty %}
+                <div class="csa-alert csa-alert--warning rem-box" role="alert">
+                    <i class="csa-alert__icon fa fa-exclamation-triangle" aria-hidden="true"></i>
+                    <div class="csa-alert__body">
+                        El banco rechazaría esta remesa. Falta arreglar:
+                        <ul>{% for problem in problems %}<li>{{ problem }}</li>{% endfor %}</ul>
+                    </div>
+                </div>
+            {% endif %}
+
+            <div class="rem-summary rem-box">
+                {% if to_check is not empty %}
+                    <section class="rem-panel rem-panel--check" aria-labelledby="rem-check-title">
+                        <h2 class="rem-panel__title" id="rem-check-title">{{ remittance.draft ? 'Antes de enviarla, mira' : 'Por mirar' }}</h2>
+                        <ul class="rem-checks">
+                            {% for item in to_check %}
+                                <li>
+                                    <a href="{{ item.href }}">
+                                        <span class="rem-checks__n">{{ item.n }}</span>
+                                        <span class="rem-checks__text">
+                                            <span class="rem-checks__what">{{ item.what }}</span>
+                                            <span class="rem-checks__where">{{ item.where }}</span>
+                                        </span>
+                                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                                    </a>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </section>
+                {% elseif remittance.draft and problems is empty %}
+                    <section class="rem-panel rem-panel--ok">
+                        <h2 class="rem-panel__title"><i class="fa fa-check" aria-hidden="true"></i> Lista para enviar</h2>
+                        <p>Los recibos están completos y no hay nada que mirar. Descarga el Excel, súbelo a Fiare y márcala como enviada.</p>
+                    </section>
+                {% endif %}
+
+                {% if previous %}
+                    <section class="rem-panel" aria-labelledby="rem-bridge-title">
+                        <h2 class="rem-panel__title" id="rem-bridge-title">Respecto al mes anterior</h2>
+                        {% if changes is empty %}
+                            <p class="acc-muted">Ningún cambio: se cobra lo mismo a las mismas personas que en <a href="{{ path('accounting_remittance_show', { id: previous.id }) }}">{{ previous.label }}</a>.</p>
+                        {% elseif changesTotals %}
+                            {{ rem.changes_bridge(previous, remittance, changes, changesTotals) }}
+                            <a class="rem-panel__more" href="#cambios">Ver quién y por qué <i class="fa fa-angle-right" aria-hidden="true"></i></a>
+                        {% endif %}
+                    </section>
+                {% endif %}
+            </div>
+
+        {# El día de cargo: con él se avisa en la portada si el abono no entra en el banco.
+           Sin él, si el abono ya entró (las importadas), no hay nada que vigilar ni avisar. #}
+        {% if remittance.sent and (remittance.chargeDate or bankCheck is null) %}
+            <div class="csa-alert csa-alert--{{ remittance.chargeDate ? 'info' : 'warning' }} rem-box" role="status">
+                <i class="csa-alert__icon fa fa-calendar" aria-hidden="true"></i>
                 <div class="csa-alert__body">
-                    El banco rechazaría esta remesa. Falta arreglar:
-                    <ul>{% for problem in problems %}<li>{{ problem }}</li>{% endfor %}</ul>
+                    {% if remittance.chargeDate %}
+                        Cargo pedido el {{ remittance.chargeDate|date('d/m/Y') }}. Si el extracto pasa de esa fecha y el abono no ha entrado, se avisa en la portada de contabilidad.
+                    {% else %}
+                        Sin fecha de cargo: no se vigila si entra en el banco. Pon el día que se pidió al subirla para que se avise si no se cobra.
+                    {% endif %}
+                    {% if can_edit %}
+                        <form method="post" action="{{ path('accounting_remittance_charge_date', { id: remittance.id }) }}" class="rem-charge" style="margin-top: 10px;">
+                            <input type="hidden" name="_token" value="{{ csrf_token('charge-date-' ~ remittance.id) }}">
+                            <label for="rem-charge-change">{{ remittance.chargeDate ? 'Si se volvió a subir, nuevo día de cargo' : 'Día de cargo' }}</label>
+                            <input type="date" id="rem-charge-change" name="charge_date" class="csa-input" value="{{ remittance.chargeDate ? remittance.chargeDate|date('Y-m-d') : '' }}">
+                            <button type="submit" class="prl-btn"><i class="fa fa-check"></i> Guardar</button>
+                            {% if remittance.chargeDate %}<span class="acc-muted">Vacío, deja de vigilarse.</span>{% endif %}
+                        </form>
+                    {% endif %}
                 </div>
             </div>
-        {% else %}
+        {% endif %}
+
+        {% if toRecharge is not empty %}
             <div class="csa-alert csa-alert--info rem-box" role="status">
-                <i class="csa-alert__icon fa fa-info-circle" aria-hidden="true"></i>
-                <div class="csa-alert__body">Los recibos están completos. Revisa los avisos, descarga el Excel, súbelo a Fiare y vuelve a marcarla como enviada.</div>
+                <i class="csa-alert__icon fa fa-repeat" aria-hidden="true"></i>
+                <div class="csa-alert__body">
+                    {{ toRecharge|length == 1 ? 'Hay 1 recibo devuelto' : 'Hay ' ~ toRecharge|length ~ ' recibos devueltos' }} por volver a cobrar:
+                    {% for r in toRecharge %}{{ r.line.debtorName }} ({{ fmt.money(r.line.amount) }}, de {{ r.line.remittance.label }}){{ loop.last ? '.' : ', ' }}{% endfor %}
+                    {% if editable %}
+                        <form method="post" action="{{ path('accounting_return_recharge_into', { id: remittance.id }) }}" style="margin-top: 10px;">
+                            <input type="hidden" name="_token" value="{{ csrf_token('recharge-into-' ~ remittance.id) }}">
+                            <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Añadirlos a esta remesa</button>
+                        </form>
+                    {% endif %}
+                </div>
             </div>
         {% endif %}
-    {% endif %}
 
-    {# El día de cargo: con él se avisa en la portada si el abono no entra en el banco.
-       Sin él, si el abono ya entró (las importadas), no hay nada que vigilar ni avisar. #}
-    {% if remittance.sent and (remittance.chargeDate or bankCheck is null) %}
-        <div class="csa-alert csa-alert--{{ remittance.chargeDate ? 'info' : 'warning' }} rem-box" role="status">
-            <i class="csa-alert__icon fa fa-calendar" aria-hidden="true"></i>
-            <div class="csa-alert__body">
-                {% if remittance.chargeDate %}
-                    Cargo pedido el {{ remittance.chargeDate|date('d/m/Y') }}. Si el extracto pasa de esa fecha y el abono no ha entrado, se avisa en la portada de contabilidad.
-                {% else %}
-                    Sin fecha de cargo: no se vigila si entra en el banco. Pon el día que se pidió al subirla para que se avise si no se cobra.
-                {% endif %}
-                {% if can_edit %}
-                    <form method="post" action="{{ path('accounting_remittance_charge_date', { id: remittance.id }) }}" class="rem-charge" style="margin-top: 10px;">
-                        <input type="hidden" name="_token" value="{{ csrf_token('charge-date-' ~ remittance.id) }}">
-                        <label for="rem-charge-change">{{ remittance.chargeDate ? 'Si se volvió a subir, nuevo día de cargo' : 'Día de cargo' }}</label>
-                        <input type="date" id="rem-charge-change" name="charge_date" class="csa-input" value="{{ remittance.chargeDate ? remittance.chargeDate|date('Y-m-d') : '' }}">
-                        <button type="submit" class="prl-btn"><i class="fa fa-check"></i> Guardar</button>
-                        {% if remittance.chargeDate %}<span class="acc-muted">Vacío, deja de vigilarse.</span>{% endif %}
-                    </form>
-                {% endif %}
-            </div>
-        </div>
-    {% endif %}
+        {% if cases %}
+            {% include 'accounting/_remittance_cases.html.twig' %}
+        {% endif %}
 
-    {% if toRecharge is not empty %}
-        <div class="csa-alert csa-alert--info rem-box" role="status">
-            <i class="csa-alert__icon fa fa-repeat" aria-hidden="true"></i>
-            <div class="csa-alert__body">
-                {{ toRecharge|length == 1 ? 'Hay 1 recibo devuelto' : 'Hay ' ~ toRecharge|length ~ ' recibos devueltos' }} por volver a cobrar:
-                {% for r in toRecharge %}{{ r.line.debtorName }} ({{ fmt.money(r.line.amount) }}, de {{ r.line.remittance.label }}){{ loop.last ? '.' : ', ' }}{% endfor %}
-                {% if editable %}
-                    <form method="post" action="{{ path('accounting_return_recharge_into', { id: remittance.id }) }}" style="margin-top: 10px;">
-                        <input type="hidden" name="_token" value="{{ csrf_token('recharge-into-' ~ remittance.id) }}">
-                        <button type="submit" class="prl-btn prl-btn--primary"><i class="fa fa-plus"></i> Añadirlos a esta remesa</button>
-                    </form>
-                {% endif %}
-            </div>
-        </div>
-    {% endif %}
+        {% if remittance.sent %}
+            {% include 'accounting/_remittance_returns.html.twig' %}
+        {% endif %}
 
-    {% if cases %}
-        {% include 'accounting/_remittance_cases.html.twig' %}
-    {% endif %}
-
-    {% if remittance.sent %}
-        {% include 'accounting/_remittance_returns.html.twig' %}
-    {% endif %}
-
-    {% if withoutLine is not empty %}
-        <h2 class="acc-subhead">Con cesta este mes y sin recibo</h2>
-        <p class="acc-muted">Tienen cuota este mes y no van en la remesa. Al lado, por qué.</p>
-        <div class="prl-table-wrap rem-box">
-            <table class="prl-table">
-                <tbody>
-                    {% for row in withoutLine %}
-                        <tr>
-                            <td>{% if can_see_partners %}<a href="{{ path('partner_show', { id: row.partner.id }) }}">{{ row.partner.legalName }}</a>{% else %}{{ row.partner.legalName }}{% endif %}</td>
-                            <td>{% for reason in row.reasons %}<div>{{ reason }}</div>{% endfor %}</td>
-                            <td class="tight acc-num">{{ fmt.money(row.amount) }} al mes</td>
-                            {% if editable %}
-                                <td class="tight"><a href="{{ path('accounting_remittance_line_new', { id: remittance.id, partner: row.partner.id }) }}" class="prl-btn"><i class="fa fa-plus"></i> Añadir su recibo</a></td>
-                            {% endif %}
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    {% endif %}
-
-    {% if previous %}
-        <h2 class="acc-subhead">Cambios respecto a <a href="{{ path('accounting_remittance_show', { id: previous.id }) }}">{{ previous.label }}</a></h2>
-        {% if changes is empty %}
-            <p class="acc-muted rem-box">Ninguno: se cobra lo mismo a las mismas personas.</p>
-        {% else %}
+        {% if withoutLine is not empty %}
+            <h2 class="acc-subhead" id="sin-recibo">Con cesta este mes y sin recibo</h2>
+            <p class="acc-muted">Tienen cuota este mes y no van en la remesa. Al lado, por qué.</p>
             <div class="prl-table-wrap rem-box">
                 <table class="prl-table">
-                    <thead>
-                        <tr>
-                            <th>Quién</th>
-                            <th class="tight">Qué</th>
-                            <th class="tight acc-num">Antes</th>
-                            <th class="tight acc-num">Ahora</th>
-                            {% if changes[0].reasons is defined %}<th>Por qué</th>{% endif %}
-                        </tr>
-                    </thead>
                     <tbody>
-                        {% for c in changes %}
+                        {% for row in withoutLine %}
                             <tr>
-                                <td>{% if c.partner and can_see_partners %}<a href="{{ path('partner_show', { id: c.partner.id }) }}">{{ c.name }}</a>{% else %}{{ c.name }}{% endif %}</td>
-                                <td class="tight">{{ { new: 'Entra', gone: 'Sale', amount: 'Cambia' }[c.change] }}</td>
-                                <td class="acc-num">{{ c.before is not null ? fmt.money(c.before) : '—' }}</td>
-                                <td class="acc-num">{{ c.after is not null ? fmt.money(c.after) : '—' }}</td>
-                                {% if c.reasons is defined %}
-                                    {# En rojo lo que la app no explica: eso es lo que hay que mirar. #}
-                                    <td class="{{ c.explained ? '' : 'acc-neg' }}">{% for reason in c.reasons %}<div>{{ reason }}</div>{% endfor %}</td>
+                                <td>{% if can_see_partners %}<a href="{{ path('partner_show', { id: row.partner.id }) }}">{{ row.partner.legalName }}</a>{% else %}{{ row.partner.legalName }}{% endif %}</td>
+                                <td>{% for reason in row.reasons %}<div>{{ reason }}</div>{% endfor %}</td>
+                                <td class="tight acc-num">{{ fmt.money(row.amount) }} al mes</td>
+                                {% if editable %}
+                                    <td class="tight"><a href="{{ path('accounting_remittance_line_new', { id: remittance.id, partner: row.partner.id }) }}" class="prl-btn"><i class="fa fa-plus"></i> Añadir su recibo</a></td>
                                 {% endif %}
                             </tr>
                         {% endfor %}
                     </tbody>
-                    {% if changesTotals %}
-                        {% set t = changesTotals %}
-                        <tfoot>
-                            <tr>
-                                <th colspan="{{ changes[0].reasons is defined ? 5 : 4 }}">
-                                    Entran {{ fmt.money(t.new) }} · salen {{ fmt.money(t.gone) }} · suben {{ fmt.money(t.up) }} · bajan {{ fmt.money(t.down|abs) }}
-                                    → la remesa {{ t.net >= 0 ? 'sube' : 'baja' }} <b>{{ fmt.money(t.net|abs) }}</b>
-                                    {% if not t.addsUp %}
-                                        <div class="acc-neg">No cuadra: de una remesa a otra van {{ fmt.money(t.expectedNet) }}. La comparación se ha dejado algo.</div>
-                                    {% endif %}
-                                </th>
-                            </tr>
-                        </tfoot>
-                    {% endif %}
                 </table>
             </div>
         {% endif %}
-    {% endif %}
 
-    <h2 class="acc-subhead">Recibos</h2>
-    <div class="prl-table-wrap">
-        {% if remittance.lines is empty %}
-            <div class="prl-empty">Ningún recibo todavía.</div>
-        {% else %}
-            <table class="prl-table">
-                <thead>
-                    <tr>
-                        <th>Quien paga</th>
-                        <th class="tight">Cuenta</th>
-                        <th class="tight">Mandato</th>
-                        <th class="tight">Firma</th>
-                        <th class="tight">Ref. adeudo</th>
-                        <th class="tight">Tipo</th>
-                        <th class="tight acc-num">Importe</th>
-                        {% if editable %}<th class="tight"></th>{% endif %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for line in remittance.lines %}
-                        {% set w = warnings[line.id] ?? [] %}
-                        <tr{{ w is not empty ? ' class="rem-has-warn"' }}>
-                            <td>
-                                {{ line.debtorName }}
-                                {% if line.partner %}<br>{% if can_see_partners %}<a class="acc-muted acc-small" href="{{ path('partner_show', { id: line.partner.id }) }}">{{ line.partner.legalName }}</a>{% else %}<span class="acc-muted acc-small">{{ line.partner.legalName }}</span>{% endif %}{% endif %}
-                                {% if w is not empty %}<div class="rem-warn"><ul>{% for msg in w %}<li>{{ msg }}</li>{% endfor %}</ul></div>{% endif %}
-                            </td>
-                            <td class="tight acc-muted" title="{{ editable ? line.iban }}">{{ line.maskedIban }}</td>
-                            <td class="tight">
-                                {{ line.mandateReference }}
-                                {# Dos recibos del mismo mandato: uno es la cuota y el otro algo
-                                 # aparte (el alta de quien entra, una derrama). Se señala para
-                                 # que no parezca un recibo repetido. #}
-                                {% set same = mandates|filter(m => m == line.mandateReference)|length %}
-                                {% if same > 1 %}<span class="prl-chip prl-chip--neutral rem-extra" title="Hay {{ same }} recibos con este mandato en la remesa: la cuota y otro aparte, como el alta.">{{ same }} con este mandato</span>{% endif %}
-                            </td>
-                            <td class="tight">{{ line.mandateSignedOn ? line.mandateSignedOn|date('d/m/Y') : '—' }}</td>
-                            <td class="tight">{{ line.debitReference }}</td>
-                            <td class="tight">{{ line.sequenceType }}</td>
-                            <td class="acc-num">{{ fmt.money(line.amount) }}</td>
-                            {% if editable %}
-                                <td class="tight">
-                                    <a href="{{ path('accounting_remittance_line_edit', { id: line.id }) }}" title="Cambiar"><i class="fa fa-pencil"></i></a>
-                                    <form method="post" class="rem-inline-form" action="{{ path('accounting_remittance_line_delete', { id: line.id }) }}" onsubmit="return confirm('¿Quitar el recibo de {{ line.debtorName|e('js') }}?');">
-                                        <input type="hidden" name="_token" value="{{ csrf_token('delete-remittance-line-' ~ line.id) }}">
-                                        <button type="submit" class="prl-btn" title="Quitar"><i class="fa fa-trash-o"></i></button>
-                                    </form>
-                                </td>
-                            {% endif %}
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        </section>
+
+        {% if previous %}
+            <section class="csa-tabpanel" id="cambios" role="tabpanel">
+                <h2 class="acc-subhead">Cambios respecto a <a href="{{ path('accounting_remittance_show', { id: previous.id }) }}">{{ previous.label }}</a></h2>
+                {% if changes is empty %}
+                    <p class="acc-muted rem-box">Ninguno: se cobra lo mismo a las mismas personas.</p>
+                {% else %}
+                    {% if changesTotals %}<div class="rem-box">{{ rem.changes_bridge(previous, remittance, changes, changesTotals) }}</div>{% endif %}
+                    <div class="prl-table-wrap rem-box">
+                        <table class="prl-table">
+                            <thead>
+                                <tr>
+                                    <th>Quién</th>
+                                    <th class="tight">Qué</th>
+                                    <th class="tight acc-num">Antes</th>
+                                    <th class="tight acc-num">Ahora</th>
+                                    {% if changes[0].reasons is defined %}<th>Por qué</th>{% endif %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for c in changes %}
+                                    <tr>
+                                        <td>{% if c.partner and can_see_partners %}<a href="{{ path('partner_show', { id: c.partner.id }) }}">{{ c.name }}</a>{% else %}{{ c.name }}{% endif %}</td>
+                                        <td class="tight">{{ c.change == 'amount' ? (c.after * 1 > c.before * 1 ? 'Sube la cuota' : 'Baja la cuota') : { new: 'Alta de cesta', gone: 'Baja de cesta' }[c.change] }}</td>
+                                        <td class="acc-num">{{ c.before is not null ? fmt.money(c.before) : '—' }}</td>
+                                        <td class="acc-num">{{ c.after is not null ? fmt.money(c.after) : '—' }}</td>
+                                        {% if c.reasons is defined %}
+                                            {# En rojo lo que la app no explica: eso es lo que hay que mirar. #}
+                                            <td class="{{ c.explained ? '' : 'acc-neg' }}">{% for reason in c.reasons %}<div>{{ reason }}</div>{% endfor %}</td>
+                                        {% endif %}
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endif %}
+            </section>
         {% endif %}
+
+        <section class="csa-tabpanel" id="recibos" role="tabpanel">
+        <div class="prl-table-wrap">
+            {% if remittance.lines is empty %}
+                <div class="prl-empty">Ningún recibo todavía.</div>
+            {% else %}
+                <table class="prl-table">
+                    <thead>
+                        <tr>
+                            <th>Quien paga</th>
+                            <th class="tight">Cuenta</th>
+                            <th class="tight">Mandato</th>
+                            <th class="tight">Firma</th>
+                            <th class="tight">Ref. adeudo</th>
+                            <th class="tight">Tipo</th>
+                            <th class="tight acc-num">Importe</th>
+                            {% if editable %}<th class="tight"></th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for line in remittance.lines %}
+                            {% set w = warnings[line.id] ?? [] %}
+                            <tr{{ w is not empty ? ' class="rem-has-warn"' }}>
+                                <td>
+                                    {{ line.debtorName }}
+                                    {% if line.partner %}<br>{% if can_see_partners %}<a class="acc-muted acc-small" href="{{ path('partner_show', { id: line.partner.id }) }}">{{ line.partner.legalName }}</a>{% else %}<span class="acc-muted acc-small">{{ line.partner.legalName }}</span>{% endif %}{% endif %}
+                                    {% if w is not empty %}<div class="rem-warn"><ul>{% for msg in w %}<li>{{ msg }}</li>{% endfor %}</ul></div>{% endif %}
+                                </td>
+                                <td class="tight acc-muted" title="{{ editable ? line.iban }}">{{ line.maskedIban }}</td>
+                                <td class="tight">
+                                    {{ line.mandateReference }}
+                                    {# Dos recibos del mismo mandato: uno es la cuota y el otro algo
+                                     # aparte (el alta de quien entra, una derrama). Se señala para
+                                     # que no parezca un recibo repetido. #}
+                                    {% set same = mandates|filter(m => m == line.mandateReference)|length %}
+                                    {% if same > 1 %}<span class="prl-chip prl-chip--neutral rem-extra" title="Hay {{ same }} recibos con este mandato en la remesa: la cuota y otro aparte, como el alta.">{{ same }} con este mandato</span>{% endif %}
+                                </td>
+                                <td class="tight">{{ line.mandateSignedOn ? line.mandateSignedOn|date('d/m/Y') : '—' }}</td>
+                                <td class="tight">{{ line.debitReference }}</td>
+                                <td class="tight">{{ line.sequenceType }}</td>
+                                <td class="acc-num">{{ fmt.money(line.amount) }}</td>
+                                {% if editable %}
+                                    <td class="tight">
+                                        <a href="{{ path('accounting_remittance_line_edit', { id: line.id }) }}" title="Cambiar"><i class="fa fa-pencil"></i></a>
+                                        <form method="post" class="rem-inline-form" action="{{ path('accounting_remittance_line_delete', { id: line.id }) }}" onsubmit="return confirm('¿Quitar el recibo de {{ line.debtorName|e('js') }}?');">
+                                            <input type="hidden" name="_token" value="{{ csrf_token('delete-remittance-line-' ~ line.id) }}">
+                                            <button type="submit" class="prl-btn" title="Quitar"><i class="fa fa-trash-o"></i></button>
+                                        </form>
+                                    </td>
+                                {% endif %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+        </div>
+
+        </section>
     </div>
 
 </div>
