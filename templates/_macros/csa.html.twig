@@ -451,7 +451,7 @@
             {% if f.options is defined %}
                 <div class="prl-filt-wrap">
                     <button type="button" class="prl-filt" data-csa-table-pop="{{ id }}-pop-{{ f.key }}">
-                        {{ f.label }} <span class="badge" hidden>0</span>
+                        {{ f.label }} <span class="badge" style="display: none;">0</span>
                         <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
                     </button>
                     <div class="prl-pop" id="{{ id }}-pop-{{ f.key }}" hidden>

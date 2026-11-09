@@ -85,8 +85,9 @@
                 btn.classList.toggle('has', n > 0);
                 var badge = btn.querySelector('.badge');
                 if (badge) {
+                    // style y no `hidden`: el display de .prl-filt .badge le gana.
                     badge.textContent = String(n);
-                    badge.hidden = n === 0;
+                    badge.style.display = n === 0 ? 'none' : '';
                 }
             });
             facets.forEach(function (box) {
