@@ -6,6 +6,7 @@ use App\Entity\FeeAdjustment;
 use App\Entity\FeeConcept;
 use App\Entity\IssuedInvoice;
 use App\Entity\Partner;
+use App\Entity\PartnerPaymentMethod;
 
 /**
  * Lo que se le cobra a quien paga en un mes: las cestas de su familia (y las que paga
@@ -150,7 +151,8 @@ final class FeeStatement
      */
     public function getProblems(): array
     {
-        if ($this->isFree()) {
+        // Quien no paga no tiene nada que arreglar: ni precio ni mandato le cambian nada.
+        if ($this->isFree() || $this->payer->getPaymentMethod() === PartnerPaymentMethod::NotCharged) {
             return [];
         }
         $missing = $this->getMissingConcepts();
@@ -159,7 +161,7 @@ final class FeeStatement
         return array_values(array_filter([
             $undecided ? 'Dejó de trabajar en la asociación y nadie ha decidido si paga su cesta o se le regala: hay que decidirlo en su ficha de trabajador.' : null,
             $missing !== [] ? 'Falta el precio de ' . $this->describeMissing() . '.' : null,
-            !$this->payer->hasDirectDebit() ? 'No tiene mandato de domiciliación completo (cuenta, referencia y fecha).' : null,
+            $this->payer->paysByReceipt() && !$this->payer->hasDirectDebit() ? 'No tiene mandato de domiciliación completo (cuenta, referencia y fecha).' : null,
             $missing === [] && $this->getCents() <= 0 ? 'Le sale ' . number_format($this->getCents() / 100, 2, ',', '.') . ' €: no hay nada que cobrarle.' : null,
         ]));
     }
@@ -175,10 +177,10 @@ final class FeeStatement
         return $missing === [] ? null : implode(', ', array_map(static fn (FeeConcept $c): string => mb_strtolower($c->label()), $missing));
     }
 
-    /** Si se le puede pasar el recibo: tiene todo y algo que cobrar. */
+    /** Si se le puede pasar el recibo: paga por recibo, tiene todo y algo que cobrar. */
     public function isChargeable(): bool
     {
-        return !$this->isFree() && $this->getProblems() === [];
+        return !$this->isFree() && $this->payer->paysByReceipt() && $this->getProblems() === [];
     }
 
     /**

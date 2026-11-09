@@ -3,12 +3,14 @@
 namespace App\Form;
 
 use App\Entity\Partner;
+use App\Entity\PartnerPaymentMethod;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\CallbackTransformer;
 use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\EmailType;
+use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\Form\Extension\Core\Type\TelType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
@@ -48,6 +50,19 @@ class PartnerType extends AbstractType
             ->add('state',EntityType::class, array('class' => 'App\Entity\State', 'required' => true, 'placeholder' => "Selecciona provincia"))
             ->add('city', EntityType::class, array("label" => "Municipio", 'class' => 'App\Entity\City', 'required' => true))
             ->add('share_payment', null, array('label'=>'Forma de pago', 'required'=>true))
+
+            // Cómo paga, ANTES que el motivo: el setter del motivo lo ignora con
+            // recibo, y el formulario escribe los campos en este orden.
+            ->add('paymentMethod', EnumType::class, [
+                'class' => PartnerPaymentMethod::class,
+                'choice_label' => static fn (PartnerPaymentMethod $m): string => $m->label(),
+                // Desplegable y no radios: un desplegable siempre viaja con valor; unos
+                // radios que no llegan dejarían el campo vacío.
+            ])
+            ->add('paymentNote', TextType::class, [
+                'required' => false,
+                'attr' => ['maxlength' => 255, 'placeholder' => 'Cobra el transporte en cestas, transfiere el día 5…'],
+            ])
 
             // Cobro por domiciliación: sin mandato no entra en la remesa.
             ->add('iban', TextType::class, [

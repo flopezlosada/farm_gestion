@@ -395,6 +395,33 @@
             </div>
         {% endif %}
 
+        {# Quien paga de otra forma no es nada que mirar: se dice aquí para que nadie
+         # vaya a su ficha a ver por qué no tiene recibo. #}
+        {% if payingOtherwise is not empty %}
+            <h2 class="acc-subhead" id="sin-recibo-por-ficha">No pagan por recibo</h2>
+            <p class="acc-muted">Tienen cuota este mes y su ficha dice que pagan de otra forma, o que no pagan.</p>
+            <div class="prl-table-wrap rem-box">
+                <table class="prl-table">
+                    <thead>
+                        <tr>
+                            <th>Quién</th>
+                            <th>Cómo paga</th>
+                            <th class="tight acc-num">Cuota</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in payingOtherwise %}
+                            <tr>
+                                <td>{% if can_see_partners %}<a href="{{ path('partner_show', { id: row.partner.id }) }}">{{ row.partner.legalName }}</a>{% else %}{{ row.partner.legalName }}{% endif %}</td>
+                                <td>{{ row.how }}</td>
+                                <td class="tight acc-num">{{ fmt.money(row.amount) }} al mes</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+
         </section>
 
         {% if previous %}

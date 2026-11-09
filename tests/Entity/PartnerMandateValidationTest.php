@@ -3,6 +3,7 @@
 namespace App\Tests\Entity;
 
 use App\Entity\Partner;
+use App\Entity\PartnerPaymentMethod;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Validator\ConstraintViolationInterface;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
@@ -48,5 +49,27 @@ class PartnerMandateValidationTest extends KernelTestCase
 
         $this->assertContains('iban', $this->errors($partner, ['billing']));
         $this->assertNotContains('iban', $this->errors($partner, ['Default']), 'El perfil del socix valida sólo Default.');
+    }
+
+    /**
+     * Quien no paga dice por qué; con recibo no hay motivo que guardar, y volver a
+     * recibo borra el que hubiera.
+     */
+    public function testQuienNoPagaDicePorQue(): void
+    {
+        $sinMotivo = (new Partner())->setPaymentMethod(PartnerPaymentMethod::NotCharged)->setPaymentNote('   ');
+        $conMotivo = (new Partner())->setPaymentMethod(PartnerPaymentMethod::NotCharged)->setPaymentNote(' Cobra el transporte en cestas ');
+        $transferencia = (new Partner())->setPaymentMethod(PartnerPaymentMethod::Transfer);
+
+        $this->assertContains('paymentNote', $this->errors($sinMotivo, ['billing']));
+        $this->assertSame([], $this->errors($conMotivo, ['billing']));
+        $this->assertSame([], $this->errors($transferencia, ['billing']), 'Por transferencia el motivo es opcional.');
+        $this->assertSame('No paga: Cobra el transporte en cestas.', $conMotivo->describePayment());
+        $this->assertSame('Paga por transferencia.', $transferencia->describePayment());
+
+        $conMotivo->setPaymentMethod(PartnerPaymentMethod::Receipt);
+        $this->assertNull($conMotivo->getPaymentNote());
+        $this->assertNull($conMotivo->describePayment());
+        $this->assertNull((new Partner())->setPaymentNote('Nada')->getPaymentNote(), 'Con recibo no se guarda motivo.');
     }
 }

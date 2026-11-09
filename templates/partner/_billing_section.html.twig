@@ -8,11 +8,13 @@
 {% embed '_components/csa_form_section.html.twig' with {
     num: num,
     title: 'Cobro',
-    subtitle: 'La cuenta y el mandato de domiciliación que firmó. Sin mandato no se le pasa recibo: paga de otra forma. Si paga la cesta de otra persona, el mandato va en la ficha de quien paga.'
+    subtitle: 'Cómo paga y, si es por recibo, la cuenta y el mandato de domiciliación que firmó. Si paga la cesta de otra persona, el mandato va en la ficha de quien paga.'
 } %}
     {% block body %}
         {% import '_macros/csa.html.twig' as csa %}
         <div class="csa-form-grid">
+            {{ csa.field(form.paymentMethod, 'Cómo paga') }}
+            {{ csa.field(form.paymentNote, 'Motivo', { show_when: 'paymentMethod=transfer|none', hint: 'obligatorio si no paga' }) }}
             {{ csa.field(form.iban, 'Cuenta (IBAN)', { full: true }) }}
             {{ csa.field(form.mandateReference, 'Referencia del mandato', {
                 hint: form.mandateReference.vars.value ? 'no se cambia nunca: el banco la conoce así' : 'la siguiente libre es ' ~ next_mandate

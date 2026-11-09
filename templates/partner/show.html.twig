@@ -484,6 +484,10 @@
                                 <dd class="prt-defs__value">{{ partner.sharePayment.name }}</dd>
                             </div>
                         {% endif %}
+                        <div class="prt-defs__row">
+                            <dt class="prt-defs__label">Cómo paga</dt>
+                            <dd class="prt-defs__value">{{ partner.paymentMethod.label }}{% if partner.paymentNote %} · {{ partner.paymentNote }}{% endif %}</dd>
+                        </div>
                         {# Cobro: sin mandato no entra en la remesa. La cuenta, enmascarada:
                          # entera sólo hace falta en el formulario de edición. #}
                         <div class="prt-defs__row">
