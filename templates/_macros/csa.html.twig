@@ -428,6 +428,47 @@
     </details>
 {% endmacro %}
 
+{# ---------- BARRA DE UNA TABLA QUE SE FILTRA EN LA PÁGINA ----------
+ # Buscador, filtros y recuento para una tabla que ya está entera en la página,
+ # con el aspecto de la barra de Socixs (prl-toolbar). Va dentro del mismo
+ # contenedor [data-csa-table-filter] que la tabla; el script
+ # assets/js/csa-table-filter.js hace el resto. Sin JS la barra no se ve.
+ #
+ #   {{ csa.table_toolbar('rec', 'Buscar por nombre o mandato…', [
+ #       { key: 'warn', value: '1', label: 'Con aviso' },
+ #       { key: 'kind', label: 'Qué', options: [{ value: 'new', label: 'Alta de cesta' }] },
+ #   ]) }}
+ #
+ # Un filtro con `value` es una casilla suelta; con `options`, un desplegable de
+ # casillas. Una fila pasa si su atributo data-facet-<key> contiene el valor. #}
+{% macro table_toolbar(id, placeholder, filters = []) %}
+    <div class="prl-toolbar" hidden>
+        <div class="prl-search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+            <input type="search" data-csa-table-search placeholder="{{ placeholder }}" aria-label="{{ placeholder }}" autocomplete="off">
+        </div>
+        {% for f in filters %}
+            {% if f.options is defined %}
+                <div class="prl-filt-wrap">
+                    <button type="button" class="prl-filt" data-csa-table-pop="{{ id }}-pop-{{ f.key }}">
+                        {{ f.label }} <span class="badge" style="display: none;">0</span>
+                        <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div class="prl-pop" id="{{ id }}-pop-{{ f.key }}" hidden>
+                        {% for o in f.options %}
+                            <label><input type="checkbox" data-csa-table-facet="{{ f.key }}" value="{{ o.value }}"> {{ o.label }}</label>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% else %}
+                <label class="prl-filt" style="margin: 0;"><input type="checkbox" data-csa-table-facet="{{ f.key }}" value="{{ f.value }}"> {{ f.label }}</label>
+            {% endif %}
+        {% endfor %}
+        <span class="spacer"></span>
+        <span class="counters"><b data-csa-table-count></b> filas</span>
+    </div>
+{% endmacro %}
+
 {# ---------- AYUDA CONTEXTUAL ----------
  # «?» discreto que enlaza a la guía de ayuda, directo a la tarjeta de una
  # tarea concreta. Abre en pestaña nueva para no perder un formulario a medias.

@@ -20,6 +20,10 @@ require('./csa-check-filter.js');
 // Pestañas para partir una ficha larga (opt-in por [data-csa-tabs]). Sin JS
 // los paneles se ven todos. Ver assets/js/csa-tabs.js.
 require('./csa-tabs.js');
+
+// Buscar, filtrar y ordenar una tabla entera ya pintada (opt-in por
+// [data-csa-table-filter]). Sin JS se ve la tabla entera. Ver assets/js/csa-table-filter.js.
+require('./csa-table-filter.js');
 // Menús de acciones con <details> (ficha de área): uno abierto a la vez y
 // cierre al pinchar fuera. Ver assets/js/csa-kebab.js.
 require('./csa-kebab.js');

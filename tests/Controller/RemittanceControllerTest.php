@@ -213,6 +213,13 @@ class RemittanceControllerTest extends AbstractAuthenticatedTest
         $this->assertSelectorTextContains('#resumen .rem-bridge__to', 'Septiembre');
         $this->assertSelectorTextContains('.prl-stats', 'por mirar');
         $this->assertSelectorTextNotContains('.prl-stats', 'recibos con avisos');
+        // Las listas se buscan, filtran y ordenan en la página: cada fila dice por
+        // qué filtros pasa, y el filtro «Con aviso» sólo sale si hay avisos.
+        $this->assertSelectorExists('#cambios [data-csa-table-filter] [data-csa-table-facet="kind"][value="up"]');
+        $this->assertSelectorExists('#cambios tr[data-facet-kind]');
+        $this->assertSelectorExists('#recibos [data-csa-table-facet="warn"]');
+        $this->assertSelectorExists('#recibos tr[data-facet-warn="1"][data-facet-partner="none"]');
+        $this->assertSelectorExists('#recibos th[data-csa-sort="num"] a');
         $send = $crawler->filter('form[action$="/send"]')->form();
         $client->submit($send, ['charge_date' => '']);
         $this->assertTrue($this->remittance('2096-09')->isDraft(), 'Sin día de cargo no se da por enviada.');
