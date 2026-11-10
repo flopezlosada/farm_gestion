@@ -107,7 +107,7 @@ jobs:
             "**/.ddev/**", "**/.claude/**", "**/node_modules/**", "**/tests/**",
             "backup/**", "handoff/**", ".env.local", ".env.test", ".env.*.local",
             "var/cache/**", "var/log/**", "var/sessions/**", "CLAUDE.md", "README.md",
-            "RUNBOOK.md", "phpstan.dist.neon", "rector.php", "phpunit.xml*",
+            "RUNBOOK.md", "phpstan.dist.neon", "phpstan-baseline.neon", "rector.php", "phpunit.xml*",
             "package.json", "yarn.lock", "webpack.config.js", "assets/**",
           ]
 
@@ -223,6 +223,7 @@ jobs:
             README.md
             RUNBOOK.md
             phpstan.dist.neon
+            phpstan-baseline.neon
             rector.php
             phpunit.xml*
             package.json
