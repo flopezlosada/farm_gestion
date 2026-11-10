@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "c1712c0af8b7b8d207d7e9184b9601c4",
+    "content-hash": "157d11c54464a23577fab0a5856cd1ee",
     "packages": [
         {
             "name": "a2lix/auto-form-bundle",
@@ -923,6 +923,7 @@
                     "type": "tidelift"
                 }
             ],
+            "abandoned": true,
             "time": "2025-01-01T22:12:03+00:00"
         },
         {
