@@ -127,6 +127,7 @@ jobs:
             README.md
             RUNBOOK.md
             phpstan.dist.neon
+            phpstan-baseline.neon
             rector.php
             phpunit.xml*
             package.json

@@ -1,0 +1,79 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Function ladybug_dump not found\.$#'
+			identifier: function.notFound
+			count: 1
+			path: src/Controller/BlogController.php
+
+		-
+			message: '#^Access to an undefined property App\\Entity\\Image\:\:\$content\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Entity/Image.php
+
+		-
+			message: '#^Access to an undefined property App\\Entity\\Partner\:\:\$email2\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Entity/Partner.php
+
+		-
+			message: '#^Access to an undefined property App\\Entity\\Partner\:\:\$name2\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Entity/Partner.php
+
+		-
+			message: '#^Access to an undefined property App\\Entity\\Partner\:\:\$surname2\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Entity/Partner.php
+
+		-
+			message: '#^Access to an undefined property App\\Entity\\Production\:\:\$date\.$#'
+			identifier: property.notFound
+			count: 1
+			path: src/Entity/Production.php
+
+		-
+			message: '#^Access to an undefined property App\\Entity\\Purchase\:\:\$fowl\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Entity/Purchase.php
+
+		-
+			message: '#^Access to an undefined property App\\Entity\\Sale\:\:\$price\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Entity/Sale.php
+
+		-
+			message: '#^Method App\\Repository\\BatchRepository\:\:findByProductYear\(\) should return array but return statement is missing\.$#'
+			identifier: return.missing
+			count: 1
+			path: src/Repository/BatchRepository.php
+
+		-
+			message: '#^Method App\\Repository\\BatchRepository\:\:findYearsInProduction\(\) should return array but return statement is missing\.$#'
+			identifier: return.missing
+			count: 1
+			path: src/Repository/BatchRepository.php
+
+		-
+			message: '#^Class App\\Entity\\EggShare not found\.$#'
+			identifier: class.notFound
+			count: 1
+			path: src/Repository/EggShareRepository.php
+
+		-
+			message: '#^Array has 2 duplicate keys with value ''feature\.contabilidad'' \(self\:\:FEATURE_CONTABILIDAD, self\:\:FEATURE_CONTABILIDAD\)\.$#'
+			identifier: array.duplicateKey
+			count: 1
+			path: src/Service/AppSettings.php
+
+		-
+			message: '#^Class App\\Entity\\Glossary not found\.$#'
+			identifier: class.notFound
+			count: 3
+			path: src/Twig/Extension/AppExtension.php
