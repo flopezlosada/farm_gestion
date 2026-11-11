@@ -153,8 +153,28 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
     }
 
     /**
-     * Los pedidos que van en los recibos de una remesa, para darlos por cobrados al
-     * enviarla.
+     * Los pedidos que van en un recibo de una remesa del grupo de consumo ya
+     * enviada: aquéllos cuyo pago lleva el banco
+     * ({@see \App\Service\ConsumerGroup\ConsumerGroupReceiptSync}).
+     *
+     * @return list<ConsumerGroupOrder>
+     */
+    public function findInSentReceipts(): array
+    {
+        return $this->createQueryBuilder('o')
+            ->innerJoin('o.remittanceLine', 'rl')->addSelect('rl')
+            ->innerJoin('rl.remittance', 'rm')->addSelect('rm')
+            ->where('rm.kind = :kind')
+            ->andWhere('rm.status = :sent')
+            ->setParameter('kind', Remittance::KIND_CONSUMER_GROUP)
+            ->setParameter('sent', Remittance::STATUS_SENT)
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Los pedidos que van en los recibos de una remesa, para comprobar antes de
+     * enviarla que cada recibo sigue cuadrando con ellos.
      *
      * @param Remittance $remittance la remesa del grupo de consumo
      *

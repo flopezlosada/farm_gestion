@@ -3,7 +3,6 @@
 namespace App\Controller;
 
 use App\Entity\AccountEntry;
-use App\Entity\ConsumerGroupPaymentMethod;
 use App\Entity\IssuedInvoice;
 use App\Entity\Partner;
 use App\Entity\Remittance;
@@ -418,7 +417,7 @@ class RemittanceController extends AbstractController
             // de cobrarlos, que no traen apunte).
             'bankCheck' => $credits->checkFor($remittance),
             // Borrador: lo devuelto que espera a volver a cobrarse.
-            'toRecharge' => $remittance->isDraft() ? $returnRepository->findToRecharge() : [],
+            'toRecharge' => $remittance->isDraft() ? $returnRepository->findToRecharge($remittance->getKind()) : [],
             // Borrador: el día de cargo que se propone al darla por enviada.
             'usualChargeDate' => $remittance->isDraft() ? $chargeWatch->usualChargeDate(new \DateTimeImmutable('today')) : null,
         ]);
@@ -465,15 +464,9 @@ class RemittanceController extends AbstractController
             return $back;
         }
 
+        // Enviarla no cobra los pedidos del grupo de consumo que van en ella: quedan
+        // «en el recibo» hasta que el abono entre en el banco (ConsumerGroupReceiptSync).
         $remittance->markSent($this->actor(), $chargeDate);
-        if ($remittance->isConsumerGroup()) {
-            // Sólo los pedidos que van en sus recibos: uno confirmado después del
-            // borrador no se ha cobrado y sigue pendiente para la siguiente.
-            // Ya comprobado que cuadran (sendProblems): todos siguen sin pagar y vigentes.
-            foreach ($this->orders->findInRemittance($remittance) as $order) {
-                $order->markPaid(ConsumerGroupPaymentMethod::Receipt, \DateTime::createFromImmutable($chargeDate));
-            }
-        }
         $em->flush();
         $this->addFlash('success', sprintf('Remesa dada por enviada, con cargo el %s. Ya no se puede cambiar.', $chargeDate->format('d/m/Y')));
 

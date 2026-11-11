@@ -35,7 +35,16 @@
         <p class="cg-money__ok" style="margin: 0;">
             Pago recibido por {{ order.paidVia.label }}{% if order.paidAt %} el {{ order.paidAt|date('d/m/Y') }}{% endif %}. Gracias.
         </p>
-    {% elseif order.willBeChargedByReceipt %}
+    {% elseif order.paymentState.value == 'returned' %}
+        {# El banco devolvió el recibo. Qué se hace (volver a pasarlo, que
+         # pague de otra forma) lo decide la comisión con ella: no se le
+         # pide aquí una transferencia que puede cruzarse con un segundo
+         # recibo. #}
+        <p style="margin: 0;">
+            <b>El banco ha devuelto el recibo de este pedido.</b> Nos pondremos en contacto
+            contigo para ver cómo lo pagas.
+        </p>
+    {% elseif order.paymentState.value in ['in_receipt', 'awaiting_bank'] %}
         {# Paga por recibo: no tiene que hacer nada, y la entrega ya sale en su
          # calendario. Pedirle una transferencia aquí sería cobrarle dos veces. #}
         <p style="margin: 0;">

@@ -289,10 +289,19 @@
                                             <div class="cg-cell-pago">
                                                 {# Pagado = de una forma concreta. «Va en el recibo» no es
                                                  # pagado todavía: se le cobra en la remesa del mes, y por
-                                                 # eso ya se le entrega. #}
-                                                {% set pay_label = order.paid ? 'Pagado · ' ~ order.paidVia.label : (order.willBeChargedByReceipt ? 'Va en el recibo' : 'Pendiente') %}
-                                                {% set pay_chip = order.paid ? 'activo' : (order.willBeChargedByReceipt ? 'mod-4' : 'pausado') %}
-                                                {% if can_edit and order.paid %}
+                                                 # eso ya se le entrega. Con el recibo ya enviado, el pago
+                                                 # lo lleva el banco: no se toca a mano. #}
+                                                {% set state = order.paymentState.value %}
+                                                {% set pay_label = {
+                                                    paid: order.paid ? 'Pagado · ' ~ order.paidVia.label : '',
+                                                    awaiting_bank: 'En el recibo, falta el abono',
+                                                    in_receipt: 'Va en el recibo',
+                                                    returned: 'Recibo devuelto',
+                                                    pending: 'Pendiente',
+                                                }[state] %}
+                                                {% set pay_chip = { paid: 'activo', awaiting_bank: 'mod-4', in_receipt: 'mod-4', returned: 'baja', pending: 'pausado' }[state] %}
+                                                {% set manual = can_edit and not order.inSentReceipt %}
+                                                {% if manual and order.paid %}
                                                     <form method="post" action="{{ path('consumer_group_order_payment', { id: order.id }) }}" class="cg-order__pay-form">
                                                         <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_order_payment_' ~ order.id) }}">
                                                         <input type="hidden" name="via" value="">
@@ -301,9 +310,9 @@
                                                         </button>
                                                     </form>
                                                 {% else %}
-                                                    <span class="prl-chip prl-chip--{{ pay_chip }}"><span class="dot"></span>{{ pay_label }}</span>
+                                                    <span class="prl-chip prl-chip--{{ pay_chip }}"{% if state == 'returned' %} title="Se cierra desde la devolución del recibo, en Contabilidad"{% endif %}><span class="dot"></span>{{ pay_label }}</span>
                                                 {% endif %}
-                                                {% if can_edit and not order.paid %}
+                                                {% if manual and not order.paid %}
                                                     <form method="post" action="{{ path('consumer_group_order_payment', { id: order.id }) }}" class="cg-order__pay-form cg-order__pay-via">
                                                         <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_order_payment_' ~ order.id) }}">
                                                         <span class="cg-order__ref-label">Pagado por:</span>
@@ -311,7 +320,7 @@
                                                         <button type="submit" name="via" value="cash" class="prl-btn prl-btn--sm">Metálico</button>
                                                     </form>
                                                 {% endif %}
-                                                {% if not order.paid and not order.willBeChargedByReceipt %}
+                                                {% if state == 'pending' %}
                                                     {# El mismo concepto que se le pide a la socia, para poder
                                                      # buscarlo en el extracto: en el banco aparece el titular de
                                                      # la cuenta, que no siempre es quien figura aquí. Rotulado a

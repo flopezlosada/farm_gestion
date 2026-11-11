@@ -12,6 +12,7 @@ use App\Entity\User;
 use App\Repository\AccountEntryRepository;
 use App\Repository\RemittanceReturnRepository;
 use App\Service\Accounting\Remittance\BankReturns;
+use App\Service\ConsumerGroup\ConsumerGroupReceiptSync;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -35,6 +36,10 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_GESTION_CONTABILIDAD')]
 class RemittanceReturnController extends AbstractController
 {
+    public function __construct(private readonly ConsumerGroupReceiptSync $consumerGroupReceipts)
+    {
+    }
+
     /** Las que tienen algo por hacer. */
     #[Route('', name: 'accounting_returns', methods: ['GET'])]
     public function index(RemittanceReturnRepository $returns): Response
@@ -102,6 +107,7 @@ class RemittanceReturnController extends AbstractController
 
             return $back;
         }
+        $this->syncConsumerGroup($em);
         $this->addFlash('success', sprintf('Recibo de %s dado por devuelto. Queda como deuda abierta hasta que elijas qué se hace.', $line->getDebtorName()));
 
         return $back;
@@ -144,6 +150,7 @@ class RemittanceReturnController extends AbstractController
         }
 
         $em->flush();
+        $this->syncConsumerGroup($em);
         $this->addFlash('success', $done);
 
         return $back;
@@ -176,6 +183,7 @@ class RemittanceReturnController extends AbstractController
                 return $this->redirectToRoute('accounting_return_paid', ['id' => $return->getId()]);
             }
             $em->flush();
+            $this->syncConsumerGroup($em);
             $this->addFlash('success', sprintf('Devolución de %s cerrada: lo pagó aparte el %s.', $line->getDebtorName(), $entry->getDate()?->format('d/m/Y')));
 
             return $this->redirectToRoute('accounting_returns');
@@ -207,7 +215,7 @@ class RemittanceReturnController extends AbstractController
             return $back;
         }
 
-        $pending = $returns->findToRecharge();
+        $pending = $returns->findToRecharge($remittance->getKind());
         if ($pending === []) {
             $this->addFlash('warning', 'No hay ningún recibo devuelto por volver a cobrar.');
 
@@ -219,11 +227,24 @@ class RemittanceReturnController extends AbstractController
             $return->rechargeIn($line);
         }
         $em->flush();
+        $this->syncConsumerGroup($em);
         $this->addFlash('success', \count($pending) === 1
             ? 'Añadido 1 recibo devuelto a la remesa. Revisa la cuenta antes de enviarla.'
             : sprintf('Añadidos %d recibos devueltos a la remesa. Revisa las cuentas antes de enviarla.', \count($pending)));
 
         return $back;
+    }
+
+    /**
+     * Los pedidos del grupo de consumo cuyo recibo es o era éste cambian con la
+     * devolución: devuelto, pagado aparte, otra vez en un recibo. Tras el primer
+     * guardado, porque se recalcula leyendo la base.
+     */
+    private function syncConsumerGroup(EntityManagerInterface $em): void
+    {
+        if ($this->consumerGroupReceipts->syncAll() > 0) {
+            $em->flush();
+        }
     }
 
     /**

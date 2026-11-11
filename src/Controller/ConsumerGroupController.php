@@ -798,8 +798,11 @@ class ConsumerGroupController extends AbstractController
 
     /**
      * Marca cómo ha pagado una socia su pedido (transferencia o metálico) o lo vuelve a
-     * dejar pendiente (`via` vacío). El recibo no se marca aquí: lo pone la remesa del
-     * grupo de consumo al enviarse ({@see ConsumerGroupPaymentMethod::manual()}).
+     * dejar pendiente (`via` vacío). El recibo no se marca aquí: lo pone el abono de la
+     * remesa del grupo de consumo ({@see ConsumerGroupPaymentMethod::manual()}). Y un
+     * pedido que va en un recibo ya enviado no se toca a mano: su pago lo lleva el banco
+     * ({@see \App\Service\ConsumerGroup\ConsumerGroupReceiptSync}), y si se devuelve
+     * se cierra desde la devolución.
      */
     #[Route('/orders/{id}/payment', name: 'consumer_group_order_payment', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function payment(Request $request, ConsumerGroupOrder $order, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
@@ -809,6 +812,12 @@ class ConsumerGroupController extends AbstractController
 
         if (!$this->isCsrfTokenValid('consumer_group_order_payment_'.$order->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $back;
+        }
+
+        if ($order->isInSentReceipt()) {
+            $this->addFlash('warning', 'Este pedido va en un recibo ya enviado al banco. Si lo devuelve, ciérralo desde la devolución del recibo.');
 
             return $back;
         }

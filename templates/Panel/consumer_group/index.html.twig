@@ -88,7 +88,8 @@
                                 <div class="cg-round-card__meta">
                                     {{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}
                                     · {{ order.total|number_format(2, ',', '.') }} €
-                                    {%- if order.willBeChargedByReceipt %} · va en tu recibo{% elseif not order.paid %} · pendiente de pago{% endif %}
+                                    {%- set state = order.paymentState.value %}
+                                    {%- if state in ['in_receipt', 'awaiting_bank'] %} · va en tu recibo{% elseif state == 'returned' %} · recibo devuelto{% elseif state == 'pending' %} · pendiente de pago{% endif %}
                                 </div>
                             </div>
                         </div>

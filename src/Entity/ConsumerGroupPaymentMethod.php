@@ -11,7 +11,7 @@ namespace App\Entity;
  */
 enum ConsumerGroupPaymentMethod: string
 {
-    /** En el recibo del grupo de consumo del mes: sólo lo pone la remesa al enviarse. */
+    /** En el recibo del grupo de consumo del mes: se pone al entrar el abono de la remesa en el banco. */
     case Receipt = 'receipt';
 
     /** Transferencia a la cuenta del grupo, con el concepto del pedido. */
@@ -35,8 +35,9 @@ enum ConsumerGroupPaymentMethod: string
     }
 
     /**
-     * Las que la comisión marca a mano. El recibo no: lo marca la remesa al enviarse,
-     * y marcarlo a mano diría «cobrado por recibo» de algo que ningún banco ha cargado.
+     * Las que la comisión marca a mano. El recibo no: lo marca el abono de la remesa
+     * en el banco, y marcarlo a mano diría «cobrado por recibo» de algo que ningún
+     * banco ha cargado.
      *
      * @return list<self>
      */

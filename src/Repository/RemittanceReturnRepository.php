@@ -60,15 +60,23 @@ class RemittanceReturnRepository extends ServiceEntityRepository
     }
 
     /**
-     * Las que se van a volver a cobrar y aún no están en ninguna remesa.
+     * Las que se van a volver a cobrar y aún no están en ninguna remesa, para meterlas
+     * en un borrador de ese tipo. El grupo de consumo va APARTE: sus recibos se vuelven
+     * a pasar sólo en su remesa, y en ella no entran los de cuotas. Mezclados, el abono
+     * se anotaría en la partida que no es y los pedidos no sabrían de su recibo nuevo.
+     * Entre los demás tipos sí se mezclan (una remesa «otros» para devoluciones).
+     *
+     * @param string $kind tipo del borrador ({@see Remittance::KIND_LABELS})
      *
      * @return list<RemittanceReturn>
      */
-    public function findToRecharge(): array
+    public function findToRecharge(string $kind): array
     {
         return $this->withLines()
             ->andWhere('x.outcome = :recharge')->setParameter('recharge', ReturnOutcome::Recharge->value)
             ->andWhere('x.rechargedIn IS NULL')
+            ->andWhere($kind === Remittance::KIND_CONSUMER_GROUP ? 'r.kind = :gc' : 'r.kind != :gc')
+            ->setParameter('gc', Remittance::KIND_CONSUMER_GROUP)
             ->orderBy('r.period', 'ASC')
             ->addOrderBy('l.debtorName', 'ASC')
             ->getQuery()
@@ -93,6 +101,21 @@ class RemittanceReturnRepository extends ServiceEntityRepository
             ->andWhere('x.entry IN (:entries)')->setParameter('entries', $entries)
             ->getQuery()
             ->getSingleColumnResult());
+    }
+
+    /**
+     * Todas las de recibos de remesas de ese tipo, con lo enlazado ya cargado.
+     *
+     * @param string $kind tipo de remesa ({@see Remittance::KIND_LABELS})
+     *
+     * @return list<RemittanceReturn>
+     */
+    public function findByKind(string $kind): array
+    {
+        return $this->withLines()
+            ->andWhere('r.kind = :kind')->setParameter('kind', $kind)
+            ->getQuery()
+            ->getResult();
     }
 
     /**
