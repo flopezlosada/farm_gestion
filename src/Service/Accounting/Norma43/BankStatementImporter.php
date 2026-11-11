@@ -10,6 +10,7 @@ use App\Entity\User;
 use App\Repository\BankStatementLineRepository;
 use App\Repository\BankStatementRepository;
 use App\Repository\FinancialAccountRepository;
+use App\Service\ConsumerGroup\ConsumerGroupReceiptSync;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -35,6 +36,7 @@ class BankStatementImporter
         private readonly BankLineBooker $booker,
         private readonly CardSettlementBooker $cards,
         private readonly RemittanceCreditBooker $remittanceCredits,
+        private readonly ConsumerGroupReceiptSync $consumerGroupReceipts,
         private readonly EntityManagerInterface $em,
     ) {
     }
@@ -298,6 +300,10 @@ class BankStatementImporter
         $booked = \count($this->cards->bookSafe($bookable, $by))
             + \count($this->remittanceCredits->bookSafe($bookable, $by));
         $booked += \count($this->booker->bookSafe(array_values(array_filter($bookable, static fn (BankStatementLine $l): bool => $l->getEntry() === null)), $by));
+        $this->em->flush();
+        // Con el abono de una remesa del grupo de consumo ya en el libro, sus pedidos
+        // quedan cobrados. Después del flush: lee el libro por consulta.
+        $this->consumerGroupReceipts->syncAll();
         $this->em->flush();
 
         return [$linked, $booked];

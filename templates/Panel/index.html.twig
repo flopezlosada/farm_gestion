@@ -242,9 +242,12 @@
                             <div class="cg-round-card__cta">
                                 {# El mismo orden que el bloque de pago de la ficha: lo
                                  # pagado manda, después el recibo, y si no, falta pagar. #}
-                                {% if order.paid %}
+                                {% set state = order.paymentState.value %}
+                                {% if state == 'paid' %}
                                     <span class="prl-chip prl-chip--ok"><span class="dot"></span>Pagado</span>
-                                {% elseif order.willBeChargedByReceipt %}
+                                {% elseif state == 'returned' %}
+                                    <span class="prl-chip prl-chip--danger"><span class="dot"></span>Recibo devuelto</span>
+                                {% elseif state in ['in_receipt', 'awaiting_bank'] %}
                                     <span class="prl-chip prl-chip--neutral"><span class="dot"></span>Va en el recibo</span>
                                 {% else %}
                                     <span class="prl-chip prl-chip--warn"><span class="dot"></span>Pendiente de pago</span>

@@ -16,7 +16,7 @@ use Doctrine\ORM\EntityManagerInterface;
 
 /**
  * Anota solo el abono de una remesa enviada (`ab.rem.<ref>`) con la partida de lo que
- * cobra la remesa: cuotas de cesta o cuota de socix. Por el concepto no se puede: el
+ * cobra la remesa: cuotas de cesta, cuota de socix o pedidos del grupo de consumo. Por el concepto no se puede: el
  * mismo «ab.rem» ha ido a Cuotas, Inscripciones y Mantenimiento, y el historial no
  * decide.
  *
@@ -38,6 +38,7 @@ class RemittanceCreditBooker
     private const CATEGORY_BY_KIND = [
         Remittance::KIND_BASKET => ['INGRESOS', 'Cuotas de socixs'],
         Remittance::KIND_MEMBERSHIP => ['INGRESOS', 'Cuota de mantenimiento'],
+        Remittance::KIND_CONSUMER_GROUP => ['INGRESOS', 'Grupo de consumo'],
     ];
 
     /** Lo menos que tiene que traer el abono, en partes de lo pedido, para ser la remesa. */

@@ -5,6 +5,7 @@ namespace App\Tests\Controller;
 use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupOrderLine;
 use App\Entity\ConsumerGroupPaymentMethod;
+use App\Entity\ConsumerGroupPaymentState;
 use App\Entity\ConsumerGroupProduct;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupRoundItem;
@@ -18,8 +19,9 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
 /**
  * La remesa del grupo de consumo por HTTP: sólo existe con el grupo de consumo
- * encendido; prepararla cobra a quien tiene recibo; enviarla deja cobrados sus
- * pedidos; y si un pedido cambia después del borrador, no se deja enviar.
+ * encendido; prepararla cobra a quien tiene recibo; enviarla NO cobra sus pedidos
+ * (falta el abono del banco) y deja de poder tocarse su pago a mano; y si un pedido
+ * cambia después del borrador, no se deja enviar.
  *
  * Rondas en marzo de 2096 y un productor propio para no cruzarse con nada.
  */
@@ -141,7 +143,7 @@ class ConsumerGroupRemittanceControllerTest extends AbstractAuthenticatedTest
         $this->assertResponseStatusCodeSame(403);
     }
 
-    public function testPrepararYEnviarDejaCobradoPorReciboSoloAQuienLoTiene(): void
+    public function testEnviarDejaElPedidoEnElReciboEsperandoAlBanco(): void
     {
         $client = $this->createAuthenticatedClient();
         $this->enable(true);
@@ -156,8 +158,15 @@ class ConsumerGroupRemittanceControllerTest extends AbstractAuthenticatedTest
         $client->submit($crawler->filter('form[action$="/send"]')->form(), ['charge_date' => (new \DateTimeImmutable('today'))->format('Y-m-d')]);
 
         $this->assertTrue($this->em()->find(Remittance::class, $remittance->getId())->isSent());
-        $this->assertSame(ConsumerGroupPaymentMethod::Receipt, $this->reload($ana)->getPaidVia());
+        $this->assertFalse($this->reload($ana)->isPaid(), 'Enviada no es cobrada: falta que el abono entre en el banco.');
+        $this->assertSame(ConsumerGroupPaymentState::AwaitingBank, $this->reload($ana)->getPaymentState());
         $this->assertFalse($this->reload($bea)->isPaid(), 'Lo de Bea sigue pendiente: lo marca la comisión.');
+
+        // Su pago ya no se toca a mano: ni se ofrece en la ficha de la ronda.
+        $client->request('GET', sprintf('/gestion/consumer-group/%d', $ana->getRound()->getId()));
+        $this->assertSelectorNotExists(sprintf('form[action$="/orders/%d/payment"]', $ana->getId()));
+        $this->assertSelectorExists(sprintf('form[action$="/orders/%d/payment"]', $bea->getId()));
+        $this->assertSelectorTextContains('body', 'En el recibo, falta el abono');
     }
 
     public function testUnPedidoPagadoAManoDespuesDelBorradorNoDejaEnviarla(): void

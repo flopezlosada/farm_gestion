@@ -56,7 +56,10 @@ class ConsumerGroupOrder
     /**
      * Cómo se pagó, o null si está pendiente. Es la ÚNICA marca de pago: «pagado»
      * sin saber cómo no se puede representar. La transferencia y el metálico los
-     * marca la comisión a mano; el recibo, la remesa del grupo de consumo al enviarse.
+     * marca la comisión a mano. Si el pedido va en un recibo de una remesa ya
+     * enviada, lo escribe sólo {@see \App\Service\ConsumerGroup\ConsumerGroupReceiptSync}:
+     * cobrado cuando el abono entra en el banco, y lo que decida la devolución si
+     * el banco lo devuelve.
      *
      * @ORM\Column(name="paid_via", type="string", length=10, nullable=true, enumType=ConsumerGroupPaymentMethod::class)
      */
@@ -79,6 +82,17 @@ class ConsumerGroupOrder
      * @ORM\JoinColumn(name="remittance_line_id", nullable=true, onDelete="SET NULL")
      */
     private ?RemittanceLine $remittanceLine = null;
+
+    /**
+     * El banco devolvió el recibo en que iba y la devolución no ha acabado en un
+     * pago. Mientras, el pedido no «va en el recibo»: ya fue y volvió. NO vuelve
+     * solo a la remesa siguiente: lo decide la comisión desde la devolución
+     * ({@see ReturnOutcome}). Lo escribe sólo
+     * {@see \App\Service\ConsumerGroup\ConsumerGroupReceiptSync}.
+     *
+     * @ORM\Column(name="receipt_returned", type="boolean", options={"default": false})
+     */
+    private bool $receiptReturned = false;
 
     /**
      * ¿Ha recogido la socia este pedido? Lo puede marcar ella misma desde su
@@ -260,6 +274,7 @@ class ConsumerGroupOrder
         $this->paidVia = null;
         $this->paidAt = null;
         $this->remittanceLine = null;
+        $this->receiptReturned = false;
 
         return $this;
     }
@@ -284,7 +299,60 @@ class ConsumerGroupOrder
      */
     public function willBeChargedByReceipt(): bool
     {
-        return !$this->isPaid() && $this->partner !== null && $this->partner->canBeChargedByReceipt();
+        return !$this->isPaid() && !$this->receiptReturned && $this->partner !== null && $this->partner->canBeChargedByReceipt();
+    }
+
+    /**
+     * En qué punto está su pago, para pintarlo. Un pedido que va en un recibo
+     * enviado y aún sin abono no «va en el recibo»: ya va, y se espera al banco.
+     */
+    public function getPaymentState(): ConsumerGroupPaymentState
+    {
+        return match (true) {
+            $this->isPaid() => ConsumerGroupPaymentState::Paid,
+            $this->receiptReturned => ConsumerGroupPaymentState::Returned,
+            $this->isInSentReceipt() => ConsumerGroupPaymentState::AwaitingBank,
+            $this->willBeChargedByReceipt() => ConsumerGroupPaymentState::InReceipt,
+            default => ConsumerGroupPaymentState::Pending,
+        };
+    }
+
+    /** Si el banco devolvió el recibo en que iba y sigue sin pagar. */
+    public function isReceiptReturned(): bool
+    {
+        return $this->receiptReturned;
+    }
+
+    /**
+     * Si va en un recibo de una remesa ya enviada: su pago lo lleva el banco, no
+     * la comisión a mano.
+     */
+    public function isInSentReceipt(): bool
+    {
+        return (bool) $this->remittanceLine?->getRemittance()?->isSent();
+    }
+
+    /**
+     * Lo que el banco dice del recibo en que va: cobrado (con cómo y cuándo),
+     * devuelto, o aún nada (ni lo uno ni lo otro). Conserva el recibo: es lo que
+     * lo liga a su remesa y a su devolución.
+     *
+     * @param ConsumerGroupPaymentMethod|null $via      cómo quedó pagado; null = sin pagar
+     * @param \DateTimeInterface|null         $at       cuándo entró el dinero
+     * @param bool                            $returned el banco lo devolvió y no se ha pagado
+     *
+     * @throws \InvalidArgumentException si se da por pagado y devuelto a la vez, o pagado sin fecha
+     */
+    public function settleReceipt(?ConsumerGroupPaymentMethod $via, ?\DateTimeInterface $at, bool $returned): self
+    {
+        if ($via !== null && ($returned || $at === null)) {
+            throw new \InvalidArgumentException('Un pedido pagado lleva fecha de pago y no está devuelto.');
+        }
+        $this->paidVia = $via;
+        $this->paidAt = $at !== null ? \DateTime::createFromInterface($at) : null;
+        $this->receiptReturned = $returned;
+
+        return $this;
     }
 
     /** El recibo de la remesa del grupo de consumo en el que va, si va en alguno. */
