@@ -694,8 +694,8 @@ class ConsumerGroupController extends AbstractController
                 return $this->redirectToRoute('consumer_group_order_new', ['id' => $round->getId()]);
             }
 
-            // Evitar duplicar: si ya tiene pedido, lo editamos en su lugar.
-            $existing = $em->getRepository(ConsumerGroupOrder::class)->findOneBy(['round' => $round, 'partner' => $partner]);
+            // Evitar duplicar: si su familia ya tiene pedido, lo editamos en su lugar.
+            $existing = $em->getRepository(ConsumerGroupOrder::class)->findOneByRoundAndPartner($round, $partner);
             $order = $existing ?? new ConsumerGroupOrder($round, $partner);
 
             $editor->apply($order, $this->desiredFrom($request, $round));

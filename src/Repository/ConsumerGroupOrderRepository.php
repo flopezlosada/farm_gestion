@@ -34,12 +34,14 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
     }
 
     /**
-     * El pedido de una socia en una ronda, o null si aún no se ha apuntado. Lo usa
-     * el panel para crear o editar (upsert) sin duplicar (respeta el unique).
+     * El pedido de la familia de una socia en una ronda, o null si nadie de ella se ha
+     * apuntado. Lo usa el panel para crear o editar (upsert) sin duplicar (respeta el
+     * unique). Busca por quien encabeza la familia porque es a su nombre como se
+     * guarda el pedido ({@see ConsumerGroupOrder::setPartner()}).
      */
     public function findOneByRoundAndPartner(ConsumerGroupRound $round, Partner $partner): ?ConsumerGroupOrder
     {
-        return $this->findOneBy(['round' => $round, 'partner' => $partner]);
+        return $this->findOneBy(['round' => $round, 'partner' => $partner->getFamilyHead()]);
     }
 
     /**
@@ -63,7 +65,7 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
             ->andWhere('r.status != :cancelled')
             ->andWhere(self::DELIVERABLE_PAYMENT)
             ->andWhere('r.deliveryDate >= :from')
-            ->setParameter('partner', $partner)
+            ->setParameter('partner', $partner->getFamilyHead())
             ->setParameter('cancelled', \App\Entity\ConsumerGroupRound::STATUS_CANCELLED)
             ->setParameter('from', $from->format('Y-m-d'))
             ->orderBy('r.deliveryDate', 'ASC')
@@ -169,9 +171,9 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
     }
 
     /**
-     * Todos los pedidos de una socia, con su ronda y líneas cargadas, para pintar
-     * su panel (qué rondas ya tiene apuntadas y cuáles se le van a entregar). Volumen
-     * pequeño (los pedidos de una persona), sin paginación.
+     * Todos los pedidos de la familia de una socia, con su ronda y líneas cargadas,
+     * para pintar su panel (qué rondas ya tiene apuntadas y cuáles se le van a
+     * entregar). Volumen pequeño (los pedidos de una familia), sin paginación.
      *
      * @return ConsumerGroupOrder[]
      */
@@ -182,7 +184,7 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
             ->innerJoin('o.round', 'r')
             ->leftJoin('o.lines', 'l')
             ->where('o.partner = :partner')
-            ->setParameter('partner', $partner)
+            ->setParameter('partner', $partner->getFamilyHead())
             ->orderBy('r.deliveryDate', 'DESC')
             ->getQuery()
             ->getResult();
@@ -214,7 +216,7 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
             ->innerJoin('o.round', 'r')
             ->where('o.partner = :partner')
             ->andWhere('r.producer = :producer')
-            ->setParameter('partner', $partner)
+            ->setParameter('partner', $partner->getFamilyHead())
             ->setParameter('producer', $producer)
             ->orderBy('r.deliveryDate', 'DESC')
             ->setMaxResults(1);

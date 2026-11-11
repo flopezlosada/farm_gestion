@@ -1235,6 +1235,23 @@ class Partner
         return $this->parent ?? $this;
     }
 
+    /**
+     * Todas las personas de la familia: quien la encabeza primero y después el resto.
+     * Es a quien hay que contarle lo que es de la familia, como su pedido del grupo de
+     * consumo, lo haya hecho quien lo haya hecho.
+     *
+     * @return list<Partner>
+     */
+    public function getFamilyMembers(): array
+    {
+        $head = $this->getFamilyHead();
+
+        return [$head, ...array_values(array_filter(
+            $head->getRelatives()->toArray(),
+            static fn (Partner $relative): bool => $relative !== $head,
+        ))];
+    }
+
     public function setParent(?self $parent): self
     {
         $this->parent = $parent;
