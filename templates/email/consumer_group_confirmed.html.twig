@@ -17,13 +17,10 @@
     {% endif %}
 
     <h3 style="color: #5a8f3d;">Tu pedido</h3>
-    <ul>
-        {% for line in order.lines %}
-            {% if line.quantity > 0 %}
-                <li>{{ line.quantity|number_format(2, ',', '.') }} {{ line.product.unit }} · {{ line.product.name }}</li>
-            {% endif %}
-        {% endfor %}
-    </ul>
+    {% include 'email/_consumer_group_items.html.twig' with {
+        rows: order.lines|filter(line => line.quantity > 0)|map(line => {product: line.product, label: line.quantity|number_format(2, ',', '.') ~ ' ' ~ line.product.unit ~ ' · ' ~ line.product.name}),
+        photos: photos,
+    } only %}
 
     <p style="text-align: center; margin: 24px 0;">
         <a href="{{ panel_url }}"

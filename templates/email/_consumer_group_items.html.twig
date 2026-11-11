@@ -1,0 +1,29 @@
+{# ============================================================
+ # Lista de productos de los correos del grupo de consumo, cada uno
+ # con su miniatura incrustada a la izquierda.
+ #
+ # Recibe:
+ #   - rows    lista de {product: ConsumerGroupProduct|null, label: string}
+ #   - photos  `src` por id de producto (ConsumerGroupEmailPhotos::embed)
+ #
+ # Si ningún producto tiene foto, no se pinta la columna: un hueco
+ # vacío a la izquierda de cada fila parecería un fallo. La imagen va
+ # con alt vacío porque el nombre está justo al lado.
+ # ============================================================ #}
+{% set with_photos = photos is not empty %}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%; margin:0 0 16px;">
+    {% for row in rows %}
+        {% set src = row.product ? (photos[row.product.id] ?? null) : null %}
+        <tr>
+            {% if with_photos %}
+                <td width="68" style="width:68px; padding:6px 12px 6px 0; vertical-align:middle;">
+                    {% if src %}
+                        <img src="{{ src }}" alt="" width="56" height="56"
+                             style="display:block; width:56px; height:56px; border:0; border-radius:6px;">
+                    {% endif %}
+                </td>
+            {% endif %}
+            <td style="padding:6px 0; vertical-align:middle;">{{ row.label }}</td>
+        </tr>
+    {% endfor %}
+</table>

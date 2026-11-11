@@ -17,6 +17,7 @@ use App\Entity\User;
 use App\Repository\UserRepository;
 use App\Security\PartnerAccessPolicy;
 use App\Service\AppSettings;
+use App\Service\ConsumerGroup\ConsumerGroupEmailPhotos;
 use App\Service\ConsumerGroup\ConsumerGroupPickupNotifier;
 use App\Service\ConsumerGroup\NodeConsumerGroupDeliveries;
 use App\Service\Cron\EffectLedger;
@@ -299,6 +300,7 @@ class ConsumerGroupPickupNotifierTest extends TestCase
             $accessPolicy,
             $urls,
             $this->createMock(LoggerInterface::class),
+            $this->createMock(ConsumerGroupEmailPhotos::class),
         );
     }
 }

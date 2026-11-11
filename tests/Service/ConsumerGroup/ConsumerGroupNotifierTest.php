@@ -11,6 +11,7 @@ use App\Entity\ConsumerGroupRoundItem;
 use App\Entity\Partner;
 use App\Entity\Producer;
 use App\Service\AppSettings;
+use App\Service\ConsumerGroup\ConsumerGroupEmailPhotos;
 use App\Service\ConsumerGroup\ConsumerGroupNotifier;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -67,7 +68,7 @@ class ConsumerGroupNotifierTest extends TestCase
         $urls = $this->createMock(UrlGeneratorInterface::class);
         $urls->method('generate')->willReturn('https://csa-vega.example/panel/consumer-group');
 
-        return new ConsumerGroupNotifier($mailer, $settings, $urls, $this->createMock(LoggerInterface::class));
+        return new ConsumerGroupNotifier($mailer, $settings, $urls, $this->createMock(LoggerInterface::class), $this->createMock(ConsumerGroupEmailPhotos::class));
     }
 
     public function testNoEnviaSiElInterruptorEstaApagado(): void

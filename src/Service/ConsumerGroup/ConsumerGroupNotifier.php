@@ -3,6 +3,7 @@
 namespace App\Service\ConsumerGroup;
 
 use App\Entity\ConsumerGroupOrder;
+use App\Entity\ConsumerGroupProduct;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\Partner;
 use App\Service\AppSettings;
@@ -30,6 +31,7 @@ class ConsumerGroupNotifier
         private readonly AppSettings $settings,
         private readonly UrlGeneratorInterface $urls,
         private readonly LoggerInterface $logger,
+        private readonly ConsumerGroupEmailPhotos $photos,
     ) {
     }
 
@@ -93,15 +95,18 @@ class ConsumerGroupNotifier
                     ->to(trim((string) $member->getEmail()))
                     ->subject('Tu pedido del grupo de consumo está confirmado')
                     ->htmlTemplate('email/consumer_group_confirmed.html.twig')
-                    ->textTemplate('email/consumer_group_confirmed.txt.twig')
-                    ->context([
+                    ->textTemplate('email/consumer_group_confirmed.txt.twig');
+
+                try {
+                    // Dentro del try: un fallo al leer las fotos cuenta como un
+                    // envío fallido más, no corta el aviso al resto.
+                    $message->context([
                         'partner'   => $member,
                         'round'     => $round,
                         'order'     => $order,
                         'panel_url' => $panelUrl,
+                        'photos'    => $this->photos->embed($message, self::orderedProducts($order)),
                     ]);
-
-                try {
                     $this->mailer->send($message);
                     ++$sent;
                 } catch (\Throwable $e) {
@@ -116,6 +121,24 @@ class ConsumerGroupNotifier
         }
 
         return ['enabled' => true, 'sent' => $sent, 'skippedNoEmail' => $skippedNoEmail, 'failed' => $failed];
+    }
+
+    /**
+     * Productos que el pedido lleva de verdad (cantidad mayor que cero): los
+     * que listan los correos de confirmación y de recogida.
+     *
+     * @return list<ConsumerGroupProduct|null>
+     */
+    public static function orderedProducts(ConsumerGroupOrder $order): array
+    {
+        $products = [];
+        foreach ($order->getLines() as $line) {
+            if ((float) $line->getQuantity() > 0) {
+                $products[] = $line->getProduct();
+            }
+        }
+
+        return $products;
     }
 
     /**

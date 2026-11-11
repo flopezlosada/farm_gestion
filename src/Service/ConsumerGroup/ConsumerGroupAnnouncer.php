@@ -3,6 +3,7 @@
 namespace App\Service\ConsumerGroup;
 
 use App\Entity\ConsumerGroupRound;
+use App\Entity\ConsumerGroupRoundItem;
 use App\Entity\Notification;
 use App\Entity\Partner;
 use App\Repository\PartnerRepository;
@@ -64,6 +65,9 @@ class ConsumerGroupAnnouncer
     /** Clase de efecto del aviso al móvil, uno por pedido. */
     private const EFFECT_PUSH = 'consumer_group_open_push';
 
+    /** Productos que lista el correo de apertura; del resto sólo se dice cuántos son. */
+    public const EMAIL_ITEMS = 10;
+
     public function __construct(
         private readonly PartnerRepository $partners,
         private readonly UserRepository $users,
@@ -78,6 +82,7 @@ class ConsumerGroupAnnouncer
         private readonly AppSettings $settings,
         private readonly PartnerAccessPolicy $accessPolicy,
         private readonly UrlGeneratorInterface $urls,
+        private readonly ConsumerGroupEmailPhotos $photos,
         private readonly LoggerInterface $logger,
     ) {
     }
@@ -246,24 +251,7 @@ class ConsumerGroupAnnouncer
                 self::EFFECT_EMAIL,
                 $round->getId() . ':' . $partner->getId(),
                 $round,
-                fn () => $this->mailer->send(
-                    (new TemplatedEmail())
-                        ->to($address)
-                        ->subject($this->subject($round))
-                        ->htmlTemplate('email/consumer_group_open.html.twig')
-                        ->textTemplate('email/consumer_group_open.txt.twig')
-                        ->context([
-                            'partner' => $partner,
-                            'round' => $round,
-                            'url' => $url,
-                            'preferences_url' => $preferencesUrl,
-                            // Los enlaces exigen sesión: a quien no puede entrar
-                            // no se le pinta un botón que sólo le llevaría al
-                            // login. Mismo criterio que el recordatorio de la
-                            // cesta y el aviso de voluntariado.
-                            'can_act' => $this->accessPolicy->canUseActionLinks($partner),
-                        ])
-                ),
+                fn () => $this->mailer->send($this->openEmail($round, $partner, $address, $url, $preferencesUrl)),
                 $address,
                 $resend,
             );
@@ -274,6 +262,58 @@ class ConsumerGroupAnnouncer
         }
 
         return $sent;
+    }
+
+    /**
+     * El correo de apertura para una socia, con las miniaturas de los productos
+     * que lista.
+     *
+     * @param ConsumerGroupRound $round          el pedido que se abre
+     * @param Partner            $partner        destinataria
+     * @param string             $address        su dirección
+     * @param string             $url            ficha del pedido en el panel
+     * @param string             $preferencesUrl pantalla de avisos
+     */
+    private function openEmail(ConsumerGroupRound $round, Partner $partner, string $address, string $url, string $preferencesUrl): TemplatedEmail
+    {
+        $email = (new TemplatedEmail())
+            ->to($address)
+            ->subject($this->subject($round))
+            ->htmlTemplate('email/consumer_group_open.html.twig')
+            ->textTemplate('email/consumer_group_open.txt.twig');
+        $list = self::emailItems($round);
+
+        return $email->context($list + [
+            'partner' => $partner,
+            'round' => $round,
+            'url' => $url,
+            'preferences_url' => $preferencesUrl,
+            'photos' => $this->photos->embed($email, array_map(
+                static fn (ConsumerGroupRoundItem $item) => $item->getProduct(),
+                $list['items'],
+            )),
+            // Los enlaces exigen sesión: a quien no puede entrar no se le pinta
+            // un botón que sólo le llevaría al login. Mismo criterio que el
+            // recordatorio de la cesta y el aviso de voluntariado.
+            'can_act' => $this->accessPolicy->canUseActionLinks($partner),
+        ]);
+    }
+
+    /**
+     * Qué productos lista el correo de apertura y cuántos quedan fuera. Lo usa
+     * también la vista previa del diagnóstico de envíos, para que no se aparte
+     * del correo real.
+     *
+     * @return array{items: list<ConsumerGroupRoundItem>, more_items: int}
+     */
+    public static function emailItems(ConsumerGroupRound $round): array
+    {
+        $all = array_values($round->getItems()->toArray());
+
+        return [
+            'items' => array_slice($all, 0, self::EMAIL_ITEMS),
+            'more_items' => max(0, count($all) - self::EMAIL_ITEMS),
+        ];
     }
 
     /**

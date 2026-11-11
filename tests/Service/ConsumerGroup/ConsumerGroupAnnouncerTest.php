@@ -15,6 +15,7 @@ use App\Repository\PushSubscriptionRepository;
 use App\Repository\UserRepository;
 use App\Security\PartnerAccessPolicy;
 use App\Service\AppSettings;
+use App\Service\ConsumerGroup\ConsumerGroupEmailPhotos;
 use App\Service\ConsumerGroup\ConsumerGroupAnnouncer;
 use App\Service\Cron\EffectLedger;
 use App\Service\Notification\NotificationInbox;
@@ -277,6 +278,7 @@ class ConsumerGroupAnnouncerTest extends TestCase
             $settings,
             $accessPolicy,
             $urls,
+            $this->createMock(ConsumerGroupEmailPhotos::class),
             $this->createMock(LoggerInterface::class),
         );
     }

@@ -9,6 +9,7 @@
  #   - round            ConsumerGroupRound del pedido
  #   - node             Node donde se recoge
  #   - pickup_date      día físico de la recogida
+ #   - photos           `src` de la miniatura por id de producto
  #   - payment_info     dónde transferir ('' = no hay)
  #   - url              ficha del pedido en el panel
  #   - preferences_url  pantalla de avisos
@@ -33,13 +34,10 @@
     </p>
 
     <h3 style="color: #5a8f3d;">Qué recoges</h3>
-    <ul>
-        {% for line in order.lines %}
-            {% if line.quantity > 0 %}
-                <li>{{ line.quantity|number_format(2, ',', '.') }} {{ line.roundItem.unit }} · {{ line.roundItem.name }}</li>
-            {% endif %}
-        {% endfor %}
-    </ul>
+    {% include 'email/_consumer_group_items.html.twig' with {
+        rows: order.lines|filter(line => line.quantity > 0)|map(line => {product: line.product, label: line.quantity|number_format(2, ',', '.') ~ ' ' ~ line.roundItem.unit ~ ' · ' ~ line.roundItem.name}),
+        photos: photos,
+    } only %}
 
     <p><strong>Importe: {{ order.total|number_format(2, ',', '.') }} €.</strong>
         {% if order.paid %}
