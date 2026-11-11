@@ -1,0 +1,41 @@
+{# ============================================================
+ # Panel del socix · tarjeta de UN pedido abierto del grupo de
+ # consumo, con lo que lleva pedido su familia. La usan la
+ # pantalla del grupo de consumo y la portada del panel.
+ #
+ # Recibe:
+ #   - round  ConsumerGroupRound (abierto)
+ #   - mine   ConsumerGroupOrder|null (el de su familia en esa ronda)
+ # Estilos: Panel/consumer_group/_card_styles.html.twig
+ # ============================================================ #}
+<a class="cg-round-card" href="{{ path('panel_consumer_group_show', { id: round.id }) }}">
+    <div class="cg-round-card__body">
+        <div class="cg-round-card__title">{{ round.title }}</div>
+        <div class="cg-round-card__meta">{{ round.producer ? round.producer.name : '' }}</div>
+        <div class="cg-round-card__meta">
+            Cierre: {{ round.ordersCloseAt ? round.ordersCloseAt|date('d/m/Y') : '—' }}
+            · Entrega: {{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}
+        </div>
+    </div>
+    <div class="cg-round-card__cta">
+        {# El plazo vencido NO saca el pedido de la lista: quien se
+         # apuntó tiene que poder seguir viendo lo que pidió. Lo que
+         # desaparece es la invitación a apuntarse, que ya no lleva a
+         # ninguna parte. #}
+        {% if not round.canReceiveOrders %}
+            <span class="prl-chip prl-chip--pausado"><span class="dot"></span>Plazo cerrado</span>
+        {% elseif mine and not mine.empty %}
+            <span class="prl-chip prl-chip--activo"><span class="dot"></span>Ya apuntada</span>
+        {% else %}
+            <span class="csa-btn csa-btn--primary csa-btn--sm">Apuntarme</span>
+        {% endif %}
+
+        {# Lo que lleva pedido, en la propia tarjeta: es el dato por el
+         # que se entra a mirar, y así no hay que abrir la ficha para
+         # recordarlo. Va fuera del if para que no se pierda cuando el
+         # plazo se cierra, que es justo cuando se comprueba. #}
+        {% if mine and not mine.empty %}
+            <div class="cg-round-card__amount">{{ mine.total|number_format(2, ',', '.') }} €</div>
+        {% endif %}
+    </div>
+</a>
