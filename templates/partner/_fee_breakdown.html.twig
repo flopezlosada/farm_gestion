@@ -47,7 +47,7 @@
                 <div class="fee-rc__head">
                     {{ l.label }}
                     {% if l.share.partner != statement.payer %}<span class="fee-bd__soft">(de {{ l.share.partner.legalName }})</span>{% endif %}
-                    {% if l.partial %}<span class="fee-bd__part">{{ l.weeks }} de {{ l.monthWeeks }} {{ l.unit }}</span>{% endif %}
+                    {% if l.partial %}<span class="fee-bd__part">{{ l.partLabel }}</span>{% endif %}
                     {% if l.free %}<span class="fee-bd__part">gratis: cesta de trabajador</span>
                     {% elseif l.freeWeeks > 0 %}<span class="fee-bd__part">{{ l.freeWeeks }} {{ l.freeWeeks == 1 ? 'semana gratis' : 'semanas gratis' }} (cesta de trabajador)</span>{% endif %}
                 </div>
@@ -85,7 +85,7 @@
             <li>
                 {{ l.label }} · <b>{{ fmt.money(l.total) }}</b>
                 {% if l.share.partner != statement.payer %}<span class="fee-bd__soft">(de {{ l.share.partner.legalName }})</span>{% endif %}
-                {% if l.partial %}<span class="fee-bd__part">{{ l.weeks }} de {{ l.monthWeeks }} {{ l.unit }}</span>{% endif %}
+                {% if l.partial %}<span class="fee-bd__part">{{ l.partLabel }}</span>{% endif %}
                 {% if l.free %}<span class="fee-bd__part">gratis: cesta de trabajador</span>
                 {% elseif l.freeWeeks > 0 %}<span class="fee-bd__part">{{ l.freeWeeks }} {{ l.freeWeeks == 1 ? 'semana gratis' : 'semanas gratis' }} (cesta de trabajador)</span>{% endif %}
                 {% if parts|length > 1 %}<span class="fee-bd__soft">— {{ parts|join(' + ') }}</span>{% endif %}

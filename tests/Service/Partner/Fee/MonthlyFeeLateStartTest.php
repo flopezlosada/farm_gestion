@@ -15,10 +15,10 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
- * El primer mes de una quincenal o una mensual que empieza a medias, contra db_test y
- * con el patrón de reparto de verdad (turno A/B y orden mensual): se paga por las
- * cestas que recibe, no por las semanas que quedan. Las pruebas unitarias del cálculo
- * dan las cestas hechas; ésta comprueba que salen del reparto.
+ * El alta a mitad de una quincenal o una mensual, contra db_test y con el patrón de
+ * reparto de verdad (turno A/B y orden mensual): la quincenal paga medio mes si su turno
+ * ya tuvo una cesta antes, la mensual entera si su cesta cae después del alta. Las
+ * pruebas unitarias del cálculo dan las cestas hechas; ésta comprueba que salen del reparto.
  *
  * Marzo de 2094, que nadie más usa (db_test no deshace entre tests): viernes 5, 12, 19
  * y 26. Todo empieza después del día 5. Socixs sin grupo, que reparten el viernes.
@@ -41,7 +41,7 @@ class MonthlyFeeLateStartTest extends KernelTestCase
         parent::tearDown();
     }
 
-    public function testElPrimerMesSePagaPorLasCestasQueRecibe(): void
+    public function testUnAltaAMitadSeCobraSegunElPatronDelReparto(): void
     {
         $baskets = array_map(fn (string $friday): Basket => $this->basket($friday), self::FRIDAYS);
         // El turno que recoge el 19: del 10 en adelante, el 12 y el 26 son del otro.
@@ -53,19 +53,19 @@ class MonthlyFeeLateStartTest extends KernelTestCase
 
         $march = static::getContainer()->get(MonthlyFeeCalculator::class)->forMonth(new \DateTimeImmutable('2094-03-01'));
 
-        $this->assertSame([1, 2, true], $this->counts($march->forPartner($biweekly)->getLines()[0]), 'Su turno sólo le da el 19: una cesta de dos, no 3 de 4 semanas.');
-        $this->assertSame([1, 1, true], $this->counts($march->forPartner($monthly)->getLines()[0]), 'Su mensual cae el 19: entera.');
+        $this->assertSame([1, 2, true], $this->counts($march->forPartner($biweekly)->getLines()[0]), 'Su turno tuvo el 5, antes de empezar: medio mes.');
+        $this->assertSame([4, 4, false], $this->counts($march->forPartner($monthly)->getLines()[0]), 'Su mensual cae el 19: entera.');
 
         $missed = $march->forPartner($missed);
-        $this->assertSame([0, 1, true], $this->counts($missed->getLines()[0]), 'Su mensual es la del día 5, antes de empezar: este mes no recibe nada.');
+        $this->assertSame([0, 1, false], $this->counts($missed->getLines()[0]), 'Su mensual es la del día 5, antes de empezar: este mes no recibe nada.');
         $this->assertSame(0, $missed->getBasketsCents());
         $this->assertSame([FeeConcept::MembershipSignup], array_map(static fn (FeeCharge $c): FeeConcept => $c->concept, $missed->getCharges()), 'Pero es su primer mes: paga la inscripción.');
     }
 
-    /** @return array{int, int, bool} Cestas (o semanas) que tuvo, las de un mes normal y si cuenta cestas. */
+    /** @return array{int, int, bool} Partes del mes que paga, entre cuántas y si es medio mes. */
     private function counts(FeeLine $line): array
     {
-        return [$line->weeks, $line->monthWeeks, $line->byDeliveries];
+        return [$line->weeks, $line->monthWeeks, $line->halfMonth];
     }
 
     private function partner(string $name, int $basketShare, string $start, ?string $deliveryGroup = null, ?int $dayMonthOrder = null): Partner

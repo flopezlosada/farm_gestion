@@ -8,8 +8,8 @@ use App\Entity\PartnerBasketShare;
 
 /**
  * Lo que cuesta una cesta en un mes: su verdura, sus huevos y su transporte, por las
- * semanas del mes en que la tuvo. Si la tuvo todo el mes es la cuota entera; si
- * cambió de modalidad a mitad, cada cesta paga su parte.
+ * semanas del mes que se cobran. Si la tuvo todo el mes es la cuota entera; las reglas
+ * de cambios y altas a mitad están en {@see MonthlyFeeCalculator}.
  *
  * Los importes ya van prorrateados y en céntimos. Si algún concepto no tenía precio,
  * el importe de esa parte es cero y el concepto sale en {@see $missing}: la cuota no
@@ -20,15 +20,14 @@ use App\Entity\PartnerBasketShare;
  * nadie decidiera qué hacer se cobran, pero dejan la cuota sin poder pasar
  * ({@see $undecidedWeeks}).
  *
- * El primer mes de una quincenal o una mensual que empieza a medias no se cuenta por
- * semanas sino por CESTAS ({@see $byDeliveries}): {@see $weeks} son las que recibe y
- * {@see $monthWeeks} las de un mes normal (2 o 1).
+ * El alta a mitad de una semanal o una quincenal paga medio mes ({@see $halfMonth}):
+ * {@see $weeks} es 1 y {@see $monthWeeks} 2, sean cuales sean las cestas que recibe.
  */
 final class FeeLine
 {
     /**
      * @param list<FeeConcept> $missing
-     * @param bool $byDeliveries Si $weeks y $monthWeeks cuentan cestas en vez de semanas.
+     * @param bool $halfMonth Si es el medio mes de un alta a mitad: $weeks y $monthWeeks son mitades, no semanas.
      */
     public function __construct(
         public readonly PartnerBasketShare $share,
@@ -40,16 +39,18 @@ final class FeeLine
         public readonly array $missing,
         public readonly int $freeWeeks = 0,
         public readonly int $undecidedWeeks = 0,
-        public readonly bool $byDeliveries = false,
+        public readonly bool $halfMonth = false,
     ) {
     }
 
-    /** «semanas» o «cestas»: lo que cuentan {@see $weeks} y {@see $monthWeeks}, para listados. */
-    public function getUnit(): string
+    /** Qué parte del mes se cobra, para listados: «medio mes», «2 de 4 semanas» o que no recibe cesta. */
+    public function getPartLabel(): string
     {
-        return $this->byDeliveries
-            ? ($this->monthWeeks === 1 ? 'cesta' : 'cestas')
-            : 'semanas';
+        return match (true) {
+            $this->halfMonth => 'medio mes',
+            $this->weeks === 0 => 'este mes no recibe cesta',
+            default => sprintf('%d de %d semanas', $this->weeks, $this->monthWeeks),
+        };
     }
 
     public function getCents(): int

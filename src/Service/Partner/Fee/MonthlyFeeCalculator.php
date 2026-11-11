@@ -21,22 +21,26 @@ use Doctrine\ORM\EntityManagerInterface;
 /**
  * La cuota de cada socix en un mes: la tarifa de sus cestas, más sus ajustes.
  *
- * Cada cesta paga por las SEMANAS DE REPARTO del mes en que la tuvo, contadas sobre
- * el ciclo semanal global (un {@see Basket} por viernes): quien pasa de semanal a
- * quincenal el día 15 paga la parte de semanal por las semanas que lo fue y el resto
- * como quincenal. En pausa o de baja no se cobra: las pausas salen de sus periodos
- * ({@see PartnerPause}, los mismos que lee el reparto, también los programados) y las
- * bajas de los eventos de baja y vuelta de su ficha. Si una tarifa cambia a mitad de
- * mes, cada semana usa la que valía ese día.
+ * Se paga la cuota que corresponde a la cesta, la recoja o no. Cada cesta paga por las
+ * SEMANAS DE REPARTO del mes en que la tuvo, contadas sobre el ciclo semanal global (un
+ * {@see Basket} por viernes). En pausa o de baja no se cobra: las pausas salen de sus
+ * periodos ({@see PartnerPause}, los mismos que lee el reparto, también los
+ * programados) y las bajas de los eventos de baja y vuelta de su ficha. Si una tarifa
+ * cambia a mitad de mes, cada semana usa la que valía ese día.
  *
- * El primer mes de una quincenal o una mensual que empieza después del primer reparto
- * se paga por las CESTAS que recibe, no por las semanas: una quincenal que sólo recoge
- * una paga la mitad, y una mensual se paga entera si su cesta cae ese mes y nada si no.
- * Contar semanas fallaba porque no mira el turno: la quincenal que empieza la semana 2
- * pagaba 3/4 aunque su turno sólo le diera una cesta. Qué cestas recibe lo dice el
- * patrón del reparto ({@see WeeklyBasketGenerator::projectForBasket}: modalidad, turno,
- * orden mensual y nodo), sin los cambios puntuales, que no cambian la cuota. Las cestas
- * ya cerradas no salen en ese patrón: se siguen contando por semanas.
+ * Una cesta que empieza después del primer reparto del mes es un CAMBIO si la ficha ya
+ * tenía cesta en ese primer reparto, y un ALTA A MITAD si no:
+ * - Cambio (de modalidad, de turno o de fecha): ese mes se paga entera la cesta que tenía
+ *   al empezarlo, aunque termine antes, y la nueva no paga nada hasta el mes siguiente.
+ *   Un aumento a mitad de mes se cobra aparte, con un ajuste.
+ * - Alta a mitad: una semanal o una quincenal paga medio mes ({@see FeeLine::$halfMonth}),
+ *   aunque en un mes de cinco viernes reciba una cesta de más. Una quincenal cuya primera
+ *   cesta es la del segundo viernes no ha perdido ninguna de su turno: paga el mes
+ *   entero. Una mensual paga entera si su cesta cae ese mes, y nada si no.
+ * Qué cestas recibe una quincenal o una mensual lo dice el patrón del reparto
+ * ({@see WeeklyBasketGenerator::projectForBasket}: modalidad, turno, orden mensual y
+ * nodo), sin los cambios puntuales, que no cambian la cuota. Las cestas ya cerradas no
+ * salen en ese patrón: para ellas cuenta la primera semana en que la tuvo.
  *
  * El transporte lo pone el grupo de recogida de quien recoge la cesta (no el de quien
  * la paga), con el precio que tenga cada semana: {@see FeeSchedule::transportMonthPrice}.
@@ -132,10 +136,21 @@ class MonthlyFeeCalculator
      * @param list<int>                 $newHouseholds Ids de los hogares (quien encabeza la familia) que pagan la inscripción este mes.
      * @param list<Worker>              $workers     Trabajadorxs con ficha de socix.
      * @param array<int, list<string>>  $deliveries  Por id de cesta, las semanas (Y-m-d) en que la recibe: sólo
-     *                                               las que se cobran por cestas ({@see self::isLateStart()}).
+     *                                               las que salen en el patrón del reparto ({@see self::isProjected()}).
      */
     public static function compute(\DateTimeImmutable $month, array $weeks, array $shares, FeeSchedule $schedule, array $adjustments, array $events, array $pauses = [], array $newHouseholds = [], array $workers = [], array $deliveries = []): MonthlyFees
     {
+        // Qué fichas tenían cesta en el primer reparto del mes y cuáles empiezan otra después.
+        $hadBasket = $startsAnother = [];
+        foreach ($weeks !== [] ? $shares : [] as $share) {
+            $key = MonthlyFees::keyOf($share->getPartner());
+            if (self::holds($share, $weeks[0])) {
+                $hadBasket[$key] = true;
+            }
+            if (self::startsLate($share, $weeks)) {
+                $startsAnother[$key] = true;
+            }
+        }
         $workerOf = [];
         foreach ($workers as $worker) {
             if ($worker->getPartner() !== null) {
@@ -156,15 +171,16 @@ class MonthlyFeeCalculator
         foreach ($shares as $share) {
             $partner = $share->getPartner();
             $own = MonthlyFees::keyOf($partner);
-            // Sólo las que empiezan a medias se cobran por cestas (y sólo ellas tienen que estar guardadas).
-            $received = $deliveries !== [] && self::isLateStart($share, $weeks) ? ($deliveries[$share->getId()] ?? null) : null;
-            $line = self::line($share, $weeks, $schedule, $stops[$own] ?? [], $workerOf[$own] ?? null, $received);
+            // Sólo las que salen en el patrón tienen sus cestas (y sólo ellas tienen que estar guardadas).
+            $received = $deliveries !== [] && self::isProjected($share, $weeks) ? ($deliveries[$share->getId()] ?? null) : null;
+            $charge = self::charge($share, $weeks, $stops[$own] ?? [], isset($hadBasket[$own]), isset($startsAnother[$own]), $received);
             $household = $partner->getFamilyHead();
-            // Una cesta que este mes no recibe nada sólo deja su línea (a cero) si el hogar
+            // Un alta que este mes no recibe nada sólo deja su línea (a cero) si el hogar
             // empieza ahora: es la que lleva su inscripción. Si no, no hay nada que cobrar.
-            if ($line === null || ($line->byDeliveries && $line->weeks === 0 && !\in_array($household->getId(), $newHouseholds, true))) {
+            if ($charge === null || ($charge[0] === [] && !\in_array($household->getId(), $newHouseholds, true))) {
                 continue;
             }
+            $line = self::line($share, $charge[0], $charge[1], $charge[2], $schedule, $workerOf[$own] ?? null);
             $statement = $statementFor($share->getEffectivePayer()->getFamilyHead());
             $statement->addLine($line);
 
@@ -208,28 +224,67 @@ class MonthlyFeeCalculator
     }
 
     /**
-     * Lo que cuesta una cesta en el mes, o null si no la tuvo ninguna semana.
+     * Qué semanas se cobran de una cesta este mes y entre cuántas partes se reparte la
+     * cuota mensual: [semanas, partes, si es medio mes]. Null si no se cobra nada; sin
+     * semanas, un alta que este mes no recibe nada (quien llama decide si deja su línea:
+     * sólo para la inscripción).
      *
-     * Por semanas, cada una es una parte igual del mes. Por cestas ($received), cada
-     * cesta recibida es una parte de las que trae un mes normal; si no recibe ninguna,
-     * la línea va a cero (quien llama decide si la quiere: sólo para la inscripción).
+     * @param list<\DateTimeImmutable>                                   $weeks
+     * @param list<array{0: \DateTimeImmutable, 1: ?\DateTimeImmutable}> $stops         Periodos sin cobrar [desde, hasta).
+     * @param bool                                                       $hadBasket     Si su ficha tenía cesta en el primer reparto del mes.
+     * @param bool                                                       $startsAnother Si su ficha empieza otra cesta después del primer reparto.
+     * @param list<string>|null                                          $received      Semanas (Y-m-d) en que la recibe, si sale en el patrón del reparto.
      *
-     * @param list<\DateTimeImmutable>                          $weeks
-     * @param list<array{0: \DateTimeImmutable, 1: ?\DateTimeImmutable}> $stops Periodos sin cobrar [desde, hasta).
-     * @param Worker|null       $worker   Si la cesta es de alguien que trabaja o trabajó en la asociación.
-     * @param list<string>|null $received Semanas (Y-m-d) en que recibe la cesta, si se cobra por cestas.
+     * @return array{0: list<\DateTimeImmutable>, 1: int, 2: bool}|null
      */
-    private static function line(PartnerBasketShare $share, array $weeks, FeeSchedule $schedule, array $stops, ?Worker $worker = null, ?array $received = null): ?FeeLine
+    private static function charge(PartnerBasketShare $share, array $weeks, array $stops, bool $hadBasket, bool $startsAnother, ?array $received): ?array
     {
-        $active = array_values(array_filter($weeks, static fn (\DateTimeImmutable $w): bool => self::holds($share, $w) && !self::stopped($stops, $w)));
-        if ($active === [] || $weeks === []) {
+        if ($weeks === []) {
             return null;
         }
-        $perMonth = $received !== null ? $share->getBasketShare()?->getDeliveriesPerMonth() : null;
-        if ($perMonth !== null) {
-            $active = \array_slice(array_values(array_filter($active, static fn (\DateTimeImmutable $w): bool => \in_array($w->format('Y-m-d'), $received, true))), 0, $perMonth);
+        $running = static fn (\DateTimeImmutable $w): bool => !self::stopped($stops, $w);
+        $wholeMonth = array_values(array_filter($weeks, $running));
+        // Las semanas en que la tiene y no está parada; las claves son su posición en el mes.
+        $held = array_filter($weeks, static fn (\DateTimeImmutable $w): bool => self::holds($share, $w) && $running($w));
+
+        if (!self::startsLate($share, $weeks)) {
+            // La que tenía al empezar el mes se paga entera si la cambia por otra.
+            $charged = $startsAnother && self::holds($share, $weeks[0]) ? $wholeMonth : array_values($held);
+
+            return $charged === [] ? null : [$charged, \count($weeks), false];
+        }
+        if ($hadBasket) {
+            return null; // Cambio: la nueva cuenta desde el mes siguiente.
         }
 
+        // Alta a mitad: lo decide su primera cesta del mes. Sin ninguna semana que la
+        // tenga (empieza tras el último reparto, o en pausa) no hay nada: la inscripción
+        // va con su primer reparto ({@see self::newHouseholds()}).
+        if ($held === []) {
+            return null;
+        }
+        $perMonth = $share->getBasketShare()?->getDeliveriesPerMonth();
+        $first = array_key_first(array_filter($held, static fn (\DateTimeImmutable $w): bool => $received === null || \in_array($w->format('Y-m-d'), $received, true)));
+        if ($first === null) {
+            return [[], $perMonth ?? \count($weeks), false];
+        }
+        // Una semanal siempre ha perdido alguna; una quincenal, si su turno ya tuvo una antes.
+        $missedOne = $perMonth === null || ($perMonth === 2 && $first >= 2);
+
+        return $missedOne ? [[$weeks[$first]], 2, true] : [$wholeMonth, \count($weeks), false];
+    }
+
+    /**
+     * Lo que cuesta una cesta en el mes: la suma de las cuotas mensuales de las semanas
+     * que se cobran, entre las partes del mes.
+     *
+     * @param list<\DateTimeImmutable> $active    Semanas que se cobran (las de {@see self::charge()}).
+     * @param int                      $parts     Entre cuántas partes iguales se reparte la cuota mensual.
+     * @param bool                     $halfMonth Si es el medio mes de un alta a mitad.
+     * @param Worker|null              $worker    Si la cesta es de alguien que trabaja o trabajó en la asociación.
+     */
+    private static function line(PartnerBasketShare $share, array $active, int $parts, bool $halfMonth, FeeSchedule $schedule, ?Worker $worker = null): FeeLine
+    {
         // Las semanas gratis cuentan como suyas, pero no se cobran.
         $kinds = array_map(static fn (\DateTimeImmutable $w): ?WorkerBasketWeek => $worker?->basketWeek($w), $active);
         $charged = array_values(array_filter($active, static fn (\DateTimeImmutable $w, int $i): bool => $kinds[$i] !== WorkerBasketWeek::Free, \ARRAY_FILTER_USE_BOTH));
@@ -258,21 +313,18 @@ class MonthlyFeeCalculator
             }
         }
 
-        // Cada semana (o cesta) es una parte igual del mes: la suma de las cuotas
-        // mensuales de las que tuvo, entre las del mes. Se redondea una vez.
-        $n = $perMonth ?? \count($weeks);
-
+        // Se redondea una vez.
         return new FeeLine(
             $share,
-            (int) round($veg / $n),
-            (int) round($egg / $n),
-            (int) round($transport / $n),
+            (int) round($veg / $parts),
+            (int) round($egg / $parts),
+            (int) round($transport / $parts),
             \count($active),
-            $n,
+            $parts,
             array_values(array_unique(array_filter($missing), \SORT_REGULAR)),
             \count($active) - \count($charged),
             \count(array_keys($kinds, WorkerBasketWeek::Undecided, true)),
-            $perMonth !== null,
+            $halfMonth,
         );
     }
 
@@ -305,26 +357,35 @@ class MonthlyFeeCalculator
     }
 
     /**
-     * Si una cesta se cobra este mes por las cestas que recibe y no por semanas: una
-     * quincenal o una mensual, aún abierta, que empieza después del primer reparto del
-     * mes. Las cerradas no salen en el patrón del reparto, que sólo mira las abiertas.
+     * Si una cesta empieza después del primer reparto del mes: es un cambio o un alta a
+     * mitad.
      *
      * @param list<\DateTimeImmutable> $weeks
      */
-    private static function isLateStart(PartnerBasketShare $share, array $weeks): bool
+    private static function startsLate(PartnerBasketShare $share, array $weeks): bool
     {
         $start = $share->getStartDate();
 
-        return $weeks !== []
-            && $start !== null
-            && $start->format('Y-m-d') > $weeks[0]->format('Y-m-d')
+        return $weeks !== [] && $start !== null && $start->format('Y-m-d') > $weeks[0]->format('Y-m-d');
+    }
+
+    /**
+     * Si hace falta saber qué cestas le da el patrón del reparto: una quincenal o una
+     * mensual, aún abierta, que empieza a mitad de mes. Las cerradas no salen en el
+     * patrón, que sólo mira las abiertas.
+     *
+     * @param list<\DateTimeImmutable> $weeks
+     */
+    private static function isProjected(PartnerBasketShare $share, array $weeks): bool
+    {
+        return self::startsLate($share, $weeks)
             && $share->getIsActive()
             && $share->getBasketShare()?->getDeliveriesPerMonth() !== null;
     }
 
     /**
      * Las semanas en que recibe su cesta cada una de las que empiezan a medias
-     * ({@see self::isLateStart()}), según el patrón del reparto. Si no hay ninguna,
+     * ({@see self::isProjected()}), según el patrón del reparto. Si no hay ninguna,
      * no se pregunta nada.
      *
      * @param list<Basket>              $baskets
@@ -337,7 +398,7 @@ class MonthlyFeeCalculator
     {
         $deliveries = [];
         foreach ($shares as $share) {
-            if (self::isLateStart($share, $weeks)) {
+            if (self::isProjected($share, $weeks)) {
                 $deliveries[$share->getId()] = [];
             }
         }
