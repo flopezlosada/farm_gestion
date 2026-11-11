@@ -42,7 +42,8 @@ class NodeConsumerGroupDeliveries
     }
 
     /**
-     * Pedidos a entregar en ese nodo la semana de la fecha dada.
+     * Pedidos a entregar en ese nodo la semana de la fecha dada, en formato plano
+     * para la hoja.
      *
      * @param Node                    $node         el punto de recogida
      * @param \DateTimeInterface|null $physicalDate día en que ese nodo reparte
@@ -52,6 +53,30 @@ class NodeConsumerGroupDeliveries
      */
     public function forNodeAndDate(Node $node, ?\DateTimeInterface $physicalDate): array
     {
+        return array_map(
+            fn (ConsumerGroupOrder $order): array => [
+                'partner' => (string) $order->getPartner(),
+                'lines' => $this->linesOf($order),
+            ],
+            $this->ordersForNodeAndDate($node, $physicalDate),
+        );
+    }
+
+    /**
+     * Los pedidos con algo pedido que ese nodo entrega la semana de la fecha dada.
+     *
+     * Es la ÚNICA regla de «qué pedido se recoge dónde y cuándo»: la usan la hoja de
+     * quien reparte y el aviso de recogida a la socia
+     * ({@see ConsumerGroupPickupNotifier}). Si cada uno decidiera por su lado, la
+     * socia podría recibir aviso de un pedido que no va en la hoja, o al revés.
+     *
+     * @param Node                    $node         el punto de recogida
+     * @param \DateTimeInterface|null $physicalDate día en que ese nodo reparte
+     *
+     * @return list<ConsumerGroupOrder> ordenados por socia
+     */
+    public function ordersForNodeAndDate(Node $node, ?\DateTimeInterface $physicalDate): array
+    {
         if ($physicalDate === null || !$this->settings->getBool(AppSettings::FEATURE_GRUPO_CONSUMO)) {
             return [];
         }
@@ -59,20 +84,10 @@ class NodeConsumerGroupDeliveries
         $monday = (clone \DateTime::createFromInterface($physicalDate))->modify('monday this week')->setTime(0, 0);
         $sunday = (clone $monday)->modify('+6 days')->setTime(23, 59, 59);
 
-        $out = [];
-        foreach ($this->orders->findDeliverableForNodeBetween($node, $monday, $sunday) as $order) {
-            $lines = $this->linesOf($order);
-            if ([] === $lines) {
-                continue;
-            }
-
-            $out[] = [
-                'partner' => (string) $order->getPartner(),
-                'lines' => $lines,
-            ];
-        }
-
-        return $out;
+        return array_values(array_filter(
+            $this->orders->findDeliverableForNodeBetween($node, $monday, $sunday),
+            fn (ConsumerGroupOrder $order): bool => [] !== $this->linesOf($order),
+        ));
     }
 
     /**

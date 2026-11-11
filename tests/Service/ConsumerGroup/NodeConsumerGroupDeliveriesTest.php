@@ -95,6 +95,22 @@ class NodeConsumerGroupDeliveriesTest extends TestCase
         self::assertSame([], $result);
     }
 
+    /**
+     * El aviso de recogida pide los PEDIDOS, no la vista plana de la hoja, pero con
+     * la misma regla: un pedido sin cantidades tampoco se avisa.
+     */
+    public function testLosPedidosDeLaHojaSonLosMismosQueSeAvisan(): void
+    {
+        $full = $this->orderWith(['2', '0']);
+        $orders = $this->createMock(ConsumerGroupOrderRepository::class);
+        $orders->method('findDeliverableForNodeBetween')->willReturn([$this->orderWith(['0', '0']), $full]);
+
+        $result = (new NodeConsumerGroupDeliveries($orders, $this->settings(true)))
+            ->ordersForNodeAndDate(new Node(), new \DateTime('2026-09-25'));
+
+        self::assertSame([$full], $result);
+    }
+
     private function settings(bool $enabled): AppSettings
     {
         $settings = $this->createMock(AppSettings::class);

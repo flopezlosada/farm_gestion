@@ -1,0 +1,24 @@
+Hola {{ partner.name }},
+
+Te toca recoger tu pedido del grupo de consumo «{{ round.title }}» ({{ round.producer }}):
+
+  {{ pickup_date|format_date(pattern="EEEE d 'de' MMMM", locale='es')|capitalize }}, en {{ node.name }}
+
+Qué recoges:
+{% for line in order.lines %}{% if line.quantity > 0 %}- {{ line.quantity|number_format(2, ',', '.') }} {{ line.roundItem.unit }} · {{ line.roundItem.name }}
+{% endif %}{% endfor %}
+
+Importe: {{ order.total|number_format(2, ',', '.') }} €.
+{% if order.paid %}Ya está pagado. Gracias.
+{% elseif order.willBeChargedByReceipt %}No tienes que hacer nada: va en tu recibo del grupo de consumo, a mes vencido.
+{% else %}Está pendiente de pago: haz la transferencia con el concepto {{ order.paymentReference }}.
+{% if payment_info %}{{ payment_info }}
+{% endif %}{% endif %}
+
+{% if can_act %}Tu pedido: {{ url }}
+
+{% endif %}Un abrazo,
+CSA Vega de Jarama
+https://csavegadejarama.org
+
+¿No quieres estos avisos? Puedes apagarlos en {{ preferences_url }} sin perder el de tu cesta.

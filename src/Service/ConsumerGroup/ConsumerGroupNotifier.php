@@ -48,7 +48,7 @@ class ConsumerGroupNotifier
                 continue;
             }
             ++$total;
-            if (self::recipients($order) !== []) {
+            if (self::familyRecipients($order) !== []) {
                 ++$withEmail;
             }
         }
@@ -81,7 +81,7 @@ class ConsumerGroupNotifier
                 continue;
             }
 
-            $recipients = self::recipients($order);
+            $recipients = self::familyRecipients($order);
             if ($recipients === []) {
                 ++$skippedNoEmail;
                 continue;
@@ -169,7 +169,7 @@ class ConsumerGroupNotifier
      *
      * @return list<Partner>
      */
-    private static function recipients(ConsumerGroupOrder $order): array
+    public static function familyRecipients(ConsumerGroupOrder $order): array
     {
         $byEmail = [];
         foreach ($order->getPartner()?->getFamilyMembers() ?? [] as $member) {
