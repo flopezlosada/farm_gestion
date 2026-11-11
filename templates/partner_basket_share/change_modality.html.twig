@@ -1,8 +1,9 @@
 {# ============================================================
  # Cambio de modalidad de cesta CON histórico — shell csa.
  # A diferencia de edit (corrección en sitio), parte el histórico:
- # cierra la cesta vigente y abre una nueva con efecto desde la
- # fecha efectiva, emitiendo un evento BASKET_CHANGE.
+ # cierra la cesta vigente y abre una nueva con efecto desde el
+ # día 1 del mes siguiente (lo fija el servidor, no se elige),
+ # emitiendo un evento BASKET_CHANGE.
  # Misma lógica condicional JS que new/edit.
  # ============================================================ #}
 
@@ -27,12 +28,12 @@
     {{ csa.page_header(
         'Socixs · Cesta',
         'Cambiar la cesta',
-        'Para ' ~ partner_basket_share.partner ~ '. Se conserva el histórico: la cesta actual se cierra la víspera de la fecha efectiva y se abre una nueva.'
+        'Para ' ~ partner_basket_share.partner ~ '. El cambio vale desde el ' ~ effective|date('d/m/Y') ~ ': la cesta actual se cierra la víspera y se abre la nueva. Se conserva el histórico.'
     ) }}
 
     {# ---- Contexto: qué cesta tiene HOY la persona (read-only) ---- #}
     <div class="csa-form-narrow csa-stack-lg" style="margin-bottom: var(--csa-sp-5);">
-        {% embed '_components/csa_card.html.twig' with { title: 'Cesta actual', subtitle: 'Lo que recibe ahora. Se cerrará la víspera de la fecha efectiva.', accent: 'ochre', icon: 'fa-shopping-basket' } %}
+        {% embed '_components/csa_card.html.twig' with { title: 'Cesta actual', subtitle: 'Lo que recibe y paga hasta el ' ~ effective|date('d/m/Y') ~ '.', accent: 'ochre', icon: 'fa-shopping-basket' } %}
             {% import '_macros/csa.html.twig' as csa %}
             {% block body %}
                 <div class="csa-row" style="flex-wrap: wrap; gap: var(--csa-sp-2);">
@@ -82,11 +83,18 @@
                 {% endblock %}
             {% endembed %}
 
-            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Cuándo entra en vigor', subtitle: 'Fecha efectiva del cambio, día concreto del mes y turno de viernes si procede.' } %}
+            {% embed '_components/csa_form_section.html.twig' with { num: '3', title: 'Cuándo entra en vigor', subtitle: 'Desde cuándo vale, día concreto del mes y turno de viernes si procede.' } %}
                 {% block body %}
                     {% import '_macros/csa.html.twig' as csa %}
                     <div class="csa-form-grid">
-                        {{ csa.field(form.start_date, 'Fecha efectiva del cambio', { full: true, hint: 'La cesta actual se cierra el día anterior a esta fecha. ' ~ form.start_date.vars.help, attr: { class: 'csa-input datepicker' } }) }}
+                        {# Sin calendario: un cambio vale siempre desde el mes siguiente,
+                           porque la cuota es mensual. La fecha la fija el servidor. #}
+                        <div class="csa-field--full">
+                            {{ csa.callout(
+                                'El cambio vale desde el ' ~ effective|date('d/m/Y') ~ '. Los cambios de cesta empiezan siempre el día 1 del mes siguiente, porque la cuota es mensual: hasta entonces recibe y paga su cesta de ahora.',
+                                'info', 'calendar'
+                            ) }}
+                        </div>
                         <div id="day_month_order" class="csa-field--full hidden">
                             {{ csa.field(form.dayMonthOrder, 'Qué entrega del mes recoge la cesta', { full: true }) }}
                         </div>
@@ -116,7 +124,7 @@
             </div>
 
             {{ csa.callout(
-                'Al aplicar: la cesta actual se cierra la víspera de la fecha efectiva y se abre la nueva. Las entregas futuras ya generadas a partir de esa fecha se borran y se regeneran con la nueva cesta.',
+                'Al aplicar: la cesta actual se cierra el ' ~ effective|date_modify('-1 day')|date('d/m/Y') ~ ' y la nueva empieza el ' ~ effective|date('d/m/Y') ~ '. Las entregas ya generadas a partir de esa fecha se borran y se regeneran con la nueva cesta. Se avisa a quien tiene la cesta.',
                 'warning',
                 'exchange'
             ) }}

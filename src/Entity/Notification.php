@@ -58,6 +58,9 @@ class Notification
     /** Te quedas sin los huevos de este reparto, o cambian de semana. */
     public const KIND_EGGS_RESCHEDULED = 'pickup.eggs';
 
+    /** Tu cesta cambia (de modalidad, de huevos o de turno) desde el mes siguiente. */
+    public const KIND_BASKET_CHANGE = 'pickup.basket_change';
+
     /** Tu cambio puntual de reparto se ha anulado al cerrarse la semana. */
     public const KIND_SHIFT_CANCELLED = 'pickup.shift_cancelled';
 

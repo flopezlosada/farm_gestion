@@ -139,7 +139,7 @@ class PartnerBasketShareControllerTest extends AbstractAuthenticatedTest
                 $form['partner_basket_share[deliveryGroup]']->getValue(),
                 'El turno de la cesta vigente debe llegar precargado.'
             );
-            $form['partner_basket_share[start_date]'] = '2030-01-04';
+            $this->assertFalse($form->has('partner_basket_share[start_date]'), 'El cambio no deja elegir fecha: vale desde el mes siguiente.');
             $client->submit($form);
             $this->assertTrue($client->getResponse()->isRedirect(), 'El cambio válido debe volver a la ficha.');
 
@@ -154,6 +154,8 @@ class PartnerBasketShareControllerTest extends AbstractAuthenticatedTest
                 $latest->getDeliveryGroup(),
                 'Con huevos quincenales en un punto semanal, el turno decide qué viernes van los huevos: no puede perderse.'
             );
+            $this->assertSame('01', $latest->getStartDate()->format('d'), 'Empieza un día 1.');
+            $this->assertGreaterThan((new \DateTimeImmutable('today'))->format('Y-m-d'), $latest->getStartDate()->format('Y-m-d'), 'Nunca desde el mes en curso.');
         } finally {
             $conn = $em->getConnection();
             foreach (['partner_event', 'weekly_basket', 'partner_basket_share'] as $table) {
@@ -166,11 +168,11 @@ class PartnerBasketShareControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
-     * Un cambio de cesta no puede empezar en un mes cuyas cuotas ya se mandaron al
-     * banco: lo cobrado no se regulariza, así que vale desde el mes siguiente. El
-     * formulario lo rechaza, lo explica y no toca la cesta.
+     * Si el mes siguiente ya está cobrado (remesa mandada por adelantado), el cambio vale
+     * desde el primero sin cobrar: lo cobrado no se regulariza. La pantalla lo dice antes
+     * de aplicarlo y no deja elegir otra fecha.
      */
-    public function testUnCambioNoPuedeEmpezarEnUnMesYaCobrado(): void
+    public function testUnCambioValeDesdeElPrimerMesSinCobrar(): void
     {
         $client = $this->createAuthenticatedClient();
         $em = static::getContainer()->get('doctrine')->getManager();
@@ -180,19 +182,13 @@ class PartnerBasketShareControllerTest extends AbstractAuthenticatedTest
         $charged = Remittance::fromImport(Remittance::KIND_BASKET, new \DateTimeImmutable('2098-03-01'), 'Recibos MARZO 2098', 'x.xlsx', [$line], null);
         $em->persist($charged);
         $em->flush();
-        $shareId = $this->findActiveShareId();
 
         try {
-            $crawler = $client->request('GET', sprintf('/gestion/partner/basket/share/%d/change-modality', $shareId));
-            $form = $crawler->selectButton('Aplicar cambio de cesta')->form();
-            $form['partner_basket_share[start_date]'] = '2098-03-20';
-            $client->submit($form);
+            $crawler = $client->request('GET', sprintf('/gestion/partner/basket/share/%d/change-modality', $this->findActiveShareId()));
 
-            $this->assertFalse($client->getResponse()->isRedirect(), 'Un mes ya cobrado no se acepta.');
-            $this->assertStringContainsString('Las cuotas de marzo de 2098 ya se mandaron al banco', (string) $client->getResponse()->getContent());
-            $this->assertStringContainsString('01/04/2098', (string) $client->getResponse()->getContent());
-            $em->clear();
-            $this->assertTrue($em->find(PartnerBasketShare::class, $shareId)->getIsActive(), 'La cesta sigue como estaba.');
+            $this->assertSame(200, $client->getResponse()->getStatusCode());
+            $this->assertStringContainsString('El cambio vale desde el 01/04/2098', (string) $client->getResponse()->getContent());
+            $this->assertFalse($crawler->selectButton('Aplicar cambio de cesta')->form()->has('partner_basket_share[start_date]'));
         } finally {
             $em = static::getContainer()->get('doctrine')->getManager();
             $em->remove($em->find(Remittance::class, $charged->getId()));

@@ -102,14 +102,17 @@ class PartnerBasketShareType extends AbstractType
             );
         }
 
-        $builder
-
-            ->add('start_date', TextType::class, [
+        // El cambio de cesta no pide fecha: la fija el servidor (BasketChangeDate).
+        if ($options['ask_start_date']) {
+            $builder->add('start_date', TextType::class, [
                 'label' => 'Fecha de inicio',
                 'help' => self::startHelp($options['earliest_start']),
                 'attr' => ['class' => 'datepicker form-control'],
                 'constraints' => $options['earliest_start'] !== null ? [self::notBefore($options['earliest_start'])] : [],
-            ])
+            ]);
+        }
+
+        $builder
             ->add('partner')
             ->add('basket_share', EntityType::class, [
                 'class' => BasketShare::class,
@@ -332,6 +335,9 @@ class PartnerBasketShareType extends AbstractType
             // aún no se han cobrado. Lo pasan el alta y el cambio de cesta; la edición
             // (corregir datos) no, porque no cambia de cesta.
             'earliest_start' => null,
+            // Si se elige la fecha de inicio. El cambio de cesta no: vale desde el mes
+            // siguiente y la fija el servidor, para que nadie cambie a mitad de mes.
+            'ask_start_date' => true,
         ]);
         $resolver->setAllowedTypes('cohort_choices', 'array');
         $resolver->setAllowedTypes('allowed_share_ids', ['null', 'int[]']);
@@ -340,5 +346,6 @@ class PartnerBasketShareType extends AbstractType
         $resolver->setAllowedTypes('ask_pickup_group', 'bool');
         $resolver->setAllowedTypes('pickup_group', ['null', WeeklyBasketGroup::class]);
         $resolver->setAllowedTypes('earliest_start', ['null', \DateTimeInterface::class]);
+        $resolver->setAllowedTypes('ask_start_date', 'bool');
     }
 }
