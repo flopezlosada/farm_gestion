@@ -1,0 +1,60 @@
+<?php
+
+namespace App\Tests\Service\Accounting\Norma43;
+
+use App\Entity\BankStatementLine;
+use App\Entity\FinancialAccount;
+use App\Service\Accounting\Norma43\Norma43Movement;
+use App\Service\Accounting\Norma43\TransferPayer;
+use PHPUnit\Framework\TestCase;
+
+/**
+ * Quién ordena una transferencia recibida, en los formatos que traen los extractos
+ * reales de Fiare y La Caixa. Nombres inventados.
+ */
+class TransferPayerTest extends TestCase
+{
+    public function testFiareLoPoneEnLaPrimeraLinea(): void
+    {
+        $this->assertSame('LUCIA ORTEGA PEREZ', TransferPayer::fromDetails('TRF. LUCIA ORTEGA PEREZ'));
+    }
+
+    public function testLaCaixaLoPoneEnLaSegundaConLaEntidadDelante(): void
+    {
+        $this->assertSame('LUCIA ORTEGA PEREZ', TransferPayer::fromDetails("TRANSF. A SU FAVOR\n14650100-LUCIA ORTEGA PEREZ"));
+    }
+
+    /** Los dobles espacios del banco se quedan en uno: es como se compara. */
+    public function testLaTransferenciaInmediataDeLaCaixaNoLlevaEntidad(): void
+    {
+        $this->assertSame('DE LA ESPINOSA SALCEDO', TransferPayer::fromDetails("TRANSFER INMEDIATA\nDE LA  ESPINOSA SALCEDO"));
+    }
+
+    public function testLoQueNoEsUnaTransferenciaRecibidaNoTieneOrdenante(): void
+    {
+        $this->assertNull(TransferPayer::fromDetails('TRASPASO'));
+        $this->assertNull(TransferPayer::fromDetails('AB.REM.20260013579'));
+        $this->assertNull(TransferPayer::fromDetails("TRANSF. A SU FAVOR\n"), 'Sin nombre no hay ordenante.');
+        $this->assertNull(TransferPayer::fromDetails(''));
+    }
+
+    /** Un cargo con el mismo texto no es una transferencia recibida. */
+    public function testUnCargoNoTieneOrdenante(): void
+    {
+        $this->assertSame('LUCIA ORTEGA', TransferPayer::of($this->line(3000, ['TRF. LUCIA ORTEGA'])));
+        $this->assertNull(TransferPayer::of($this->line(-3000, ['TRF. LUCIA ORTEGA'])));
+        $this->assertNull(TransferPayer::of($this->line(3000, [])), 'Sin texto del banco.');
+    }
+
+    /**
+     * @param list<string> $texts
+     */
+    private function line(int $cents, array $texts): BankStatementLine
+    {
+        $account = new FinancialAccount();
+        (new \ReflectionProperty($account, 'id'))->setValue($account, 1);
+        $day = new \DateTimeImmutable('2026-11-05');
+
+        return new BankStatementLine($account, new Norma43Movement($day, $day, '02', '000', $cents, '', '', '', $texts), 1);
+    }
+}

@@ -13,6 +13,7 @@ use App\Repository\RemittanceRepository;
 use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Remittance\RemittanceCredits;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Contracts\Service\ResetInterface;
 
 /**
  * Anota solo el abono de una remesa enviada (`ab.rem.<ref>`) con la partida de lo que
@@ -32,7 +33,7 @@ use Doctrine\ORM\EntityManagerInterface;
  * recibos que el banco rechaza son unos pocos: el abono real ronda el 95-99 % de lo
  * pedido.
  */
-class RemittanceCreditBooker
+class RemittanceCreditBooker implements ResetInterface
 {
     /** La partida de lo que cobra cada tipo de remesa, por grupo y nombre. */
     private const CATEGORY_BY_KIND = [
@@ -120,7 +121,16 @@ class RemittanceCreditBooker
      */
     private function categoryFor(Remittance $remittance): ?BudgetCategory
     {
-        $kind = $remittance->getKind();
+        return $this->categoryForKind($remittance->getKind());
+    }
+
+    /**
+     * La partida de lo que cobra un tipo de remesa ({@see Remittance::KIND_CONSUMER_GROUP}
+     * y los demás), si existe, está viva y no es de traspasos. La usa también quien
+     * anota las transferencias de los pedidos del grupo de consumo: es el mismo ingreso.
+     */
+    public function categoryForKind(string $kind): ?BudgetCategory
+    {
         if (!\array_key_exists($kind, $this->categoryByKind)) {
             [$group, $name] = self::CATEGORY_BY_KIND[$kind] ?? [null, null];
             $category = $group !== null ? $this->categories->findOneByGroupAndName($group, $name) : null;
@@ -128,5 +138,15 @@ class RemittanceCreditBooker
         }
 
         return $this->categoryByKind[$kind];
+    }
+
+    /**
+     * Olvida las partidas buscadas: entre una petición y otra (o un mensaje y otro en
+     * un proceso largo) el EntityManager se vacía y una partida memorizada ya no es
+     * suya; ligarla a un apunte nuevo haría fallar el guardado.
+     */
+    public function reset(): void
+    {
+        $this->categoryByKind = [];
     }
 }

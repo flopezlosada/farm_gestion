@@ -20,7 +20,8 @@ use Gedmo\Mapping\Annotation as Gedmo;
  * @ORM\Table(name="consumer_group_order", uniqueConstraints={
  *     @ORM\UniqueConstraint(name="uniq_cg_order_round_partner", columns={"round_id", "partner_id"})
  * }, indexes={
- *     @ORM\Index(name="IDX_CG_ORDER_REMITTANCE_LINE", columns={"remittance_line_id"})
+ *     @ORM\Index(name="IDX_CG_ORDER_REMITTANCE_LINE", columns={"remittance_line_id"}),
+ *     @ORM\Index(name="IDX_CG_ORDER_TRANSFER", columns={"transfer_id"})
  * })
  * @ORM\Entity(repositoryClass="App\Repository\ConsumerGroupOrderRepository")
  */
@@ -93,6 +94,16 @@ class ConsumerGroupOrder
      * @ORM\Column(name="receipt_returned", type="boolean", options={"default": false})
      */
     private bool $receiptReturned = false;
+
+    /**
+     * El movimiento del banco con que se pagó, si se pagó por una transferencia que
+     * está en un extracto. Null en lo marcado a mano sin movimiento (la comisión sabe
+     * que pagó, pero el extracto aún no está subido) y en todo lo que no es transferencia.
+     *
+     * @ORM\ManyToOne(targetEntity="ConsumerGroupTransfer", inversedBy="orders")
+     * @ORM\JoinColumn(name="transfer_id", nullable=true, onDelete="SET NULL")
+     */
+    private ?ConsumerGroupTransfer $transfer = null;
 
     /**
      * ¿Ha recogido la socia este pedido? Lo puede marcar ella misma desde su
@@ -257,6 +268,7 @@ class ConsumerGroupOrder
      */
     public function markPaid(ConsumerGroupPaymentMethod $via, ?\DateTime $at = null): self
     {
+        $this->detachTransfer();
         $this->paidVia = $via;
         $this->paidAt = $at ?? new \DateTime();
 
@@ -275,8 +287,57 @@ class ConsumerGroupOrder
         $this->paidAt = null;
         $this->remittanceLine = null;
         $this->receiptReturned = false;
+        $this->detachTransfer();
 
         return $this;
+    }
+
+    /**
+     * Soltar el movimiento del banco con que se pagó, si lo hay. Un pedido ligado a un
+     * movimiento está pagado por transferencia con él: cualquier otro cambio de su pago
+     * tiene que romper ese vínculo, o el movimiento seguiría diciendo que lo pagó.
+     */
+    private function detachTransfer(): void
+    {
+        $this->transfer?->removeOrder($this);
+        $this->transfer = null;
+    }
+
+    /**
+     * Pagado con ese movimiento del banco: por transferencia y el día en que entró.
+     * Lo llama {@see ConsumerGroupTransfer::assign()}, que es quien decide.
+     *
+     * @throws \InvalidArgumentException si no se puede pagar ({@see assertPayableByTransfer()})
+     */
+    public function payByTransfer(ConsumerGroupTransfer $transfer): self
+    {
+        $this->assertPayableByTransfer();
+        $this->paidVia = ConsumerGroupPaymentMethod::Transfer;
+        $this->paidAt = \DateTime::createFromImmutable($transfer->getLine()->getOperationDate());
+        $this->transfer = $transfer;
+        $transfer->addOrder($this);
+
+        return $this;
+    }
+
+    /**
+     * Comprueba que se puede pagar con un movimiento del banco: sin pagar, de una ronda
+     * confirmada y no cancelada, y fuera de un recibo ya enviado al banco (pagarlo otra
+     * vez lo cobraría dos veces).
+     *
+     * @throws \InvalidArgumentException si no se cumple alguna
+     */
+    public function assertPayableByTransfer(): void
+    {
+        if (!$this->isChargeableByReceiptNow() || $this->isInSentReceipt()) {
+            throw new \InvalidArgumentException(sprintf('El pedido de %s ya está pagado, va en un recibo enviado al banco o es de una ronda sin confirmar o cancelada.', $this->partner));
+        }
+    }
+
+    /** El movimiento del banco con que se pagó, si se ligó a uno. */
+    public function getTransfer(): ?ConsumerGroupTransfer
+    {
+        return $this->transfer;
     }
 
     /**
@@ -355,6 +416,7 @@ class ConsumerGroupOrder
         if ($via !== null && ($returned || $at === null)) {
             throw new \InvalidArgumentException('Un pedido pagado lleva fecha de pago y no está devuelto.');
         }
+        $this->detachTransfer();
         $this->paidVia = $via;
         $this->paidAt = $at !== null ? \DateTime::createFromInterface($at) : null;
         $this->receiptReturned = $returned;

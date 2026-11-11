@@ -35,6 +35,7 @@ use App\Service\Accounting\Norma43\BankLineMatcher;
 use App\Service\Accounting\OfficialNotice\OfficialNoticeAlert;
 use App\Service\Accounting\Remittance\RemittanceChargeWatch;
 use App\Service\Accounting\Remittance\RemittanceCredits;
+use App\Service\ConsumerGroup\ConsumerGroupTransfers;
 
 /**
  * Lo que queda por hacer en la contabilidad, para la portada: las notificaciones
@@ -87,6 +88,7 @@ class AccountingAgenda
         private readonly BankLineMatcher $matcher,
         private readonly RemittanceCredits $credits,
         private readonly BankStatementRepository $statements,
+        private readonly ConsumerGroupTransfers $consumerGroupTransfers,
     ) {
     }
 
@@ -110,6 +112,7 @@ class AccountingAgenda
             ...$this->accountantDeliveries($today),
             $this->openReceivedInvoices(),
             ...$this->uncollectedIssuedInvoices($today),
+            $this->consumerGroupTransfers(),
             $this->monthlyRemittance($today),
             ...$this->uncreditedRemittances(),
             ...$this->creditMismatches(),
@@ -663,6 +666,31 @@ class AccountingAgenda
             ['id' => $pair[1]->getId()],
             identity: sprintf('duplicate:%d-%d', $pair[0]->getId(), $pair[1]->getId()),
         ), $pairs);
+    }
+
+    /**
+     * Transferencias que pueden ser el pago de un pedido del grupo de consumo y el cruce
+     * no supo asignar solas: falta elegir qué pedido paga cada una. Una tarea para todas,
+     * con identidad propia: que entre otra no es una tarea nueva.
+     */
+    private function consumerGroupTransfers(): ?AgendaItem
+    {
+        $count = $this->consumerGroupTransfers->countPending();
+        if ($count === 0) {
+            return null;
+        }
+
+        return new AgendaItem(
+            AgendaUrgency::Normal,
+            $count === 1
+                ? 'Elegir qué pedido del grupo de consumo paga 1 transferencia'
+                : sprintf('Elegir qué pedido del grupo de consumo paga cada una de %d transferencias', $count),
+            ['No traen el concepto y el importe o el nombre de quien paga no deja claro el pedido. Lo que elijas se aprende para la próxima vez.'],
+            'accounting_cg_transfers',
+            [],
+            'por-elegir',
+            identity: 'consumer-group-transfers',
+        );
     }
 
     /** Traspasos a los que les falta la otra mitad: el saldo de una cuenta no cuadra. */

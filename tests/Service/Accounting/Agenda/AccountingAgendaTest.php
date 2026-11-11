@@ -42,6 +42,7 @@ use App\Service\Accounting\Norma43\BankLineMatcher;
 use App\Service\Accounting\Norma43\Norma43Movement;
 use App\Service\Accounting\Remittance\RemittanceChargeWatch;
 use App\Service\Accounting\Remittance\RemittanceCredits;
+use App\Service\ConsumerGroup\ConsumerGroupTransfers;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\String\Slugger\AsciiSlugger;
@@ -696,6 +697,29 @@ class AccountingAgendaTest extends TestCase
     }
 
     /**
+     * Las transferencias del grupo de consumo sin pedido son UNA tarea: que entre otra
+     * cambia el número, no la tarea, y no vuelve a avisar.
+     */
+    public function testTransferenciasDelGrupoDeConsumoPorElegir(): void
+    {
+        $this->assertSame([], array_values(array_filter(
+            $this->agenda()->items(new \DateTimeImmutable('2026-11-11')),
+            static fn (AgendaItem $i): bool => $i->route === 'accounting_cg_transfers',
+        )));
+
+        $items = fn (int $n): array => array_values(array_filter(
+            $this->agenda(consumerGroupTransfers: $n)->items(new \DateTimeImmutable('2026-11-11')),
+            static fn (AgendaItem $i): bool => $i->route === 'accounting_cg_transfers',
+        ));
+        $one = $items(1);
+        $three = $items(3);
+
+        $this->assertSame('Elegir qué pedido del grupo de consumo paga 1 transferencia', $one[0]->title);
+        $this->assertSame('Elegir qué pedido del grupo de consumo paga cada una de 3 transferencias', $three[0]->title);
+        $this->assertSame($one[0]->key(), $three[0]->key());
+    }
+
+    /**
      * @param list<ReceivedInvoice>               $received  del trimestre, para la gestoría
      * @param list<ReceivedInvoice>               $open      en la bandeja
      * @param list<IssuedInvoice>                 $unpaid    emitidas sin apunte
@@ -739,6 +763,7 @@ class AccountingAgendaTest extends TestCase
         array $bankProposals = [],
         array $creditMismatches = [],
         array $duplicates = [],
+        int $consumerGroupTransfers = 0,
     ): AccountingAgenda {
         $receivedRepo = $this->createStub(ReceivedInvoiceRepository::class);
         $receivedRepo->method('findOpen')->willReturn($open);
@@ -789,6 +814,9 @@ class AccountingAgendaTest extends TestCase
         $credits->method('unidentifiedReturns')->willReturn($unlinkedReturns);
         $credits->method('mismatches')->willReturn($creditMismatches);
 
+        $cgTransfers = $this->createStub(ConsumerGroupTransfers::class);
+        $cgTransfers->method('countPending')->willReturn($consumerGroupTransfers);
+
         return new AccountingAgenda(
             $receivedRepo,
             $issuedRepo,
@@ -808,6 +836,7 @@ class AccountingAgendaTest extends TestCase
             $matcher,
             $credits,
             $statements,
+            $cgTransfers,
         );
     }
 
