@@ -96,4 +96,14 @@ class FeeLineTest extends TestCase
 
         $this->assertFalse($line->hasSeveralParts());
     }
+
+    /** Qué parte del mes paga, en palabras: semanas, medio mes de un alta o nada este mes. */
+    public function testLaParteDelMesSeDiceEnPalabras(): void
+    {
+        $weekly = self::share(BasketShare::ID_WEEKLY, 1);
+
+        $this->assertSame('2 de 4 semanas', (new FeeLine($weekly, 5000, 0, 0, 2, 4, []))->getPartLabel());
+        $this->assertSame('medio mes', (new FeeLine($weekly, 5000, 0, 0, 1, 2, [], halfMonth: true))->getPartLabel());
+        $this->assertSame('este mes no recibe cesta', (new FeeLine(self::share(BasketShare::ID_MONTHLY, 1), 0, 0, 0, 0, 1, []))->getPartLabel());
+    }
 }

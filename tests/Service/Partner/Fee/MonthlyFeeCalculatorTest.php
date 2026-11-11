@@ -161,11 +161,12 @@ class MonthlyFeeCalculatorTest extends TestCase
         $this->assertSame('140.00', self::of($statements, $ana)->getTotal());
         $this->assertSame('120.00', self::of($statements, $ana)->getLines()[0]->getTotal());
 
-        // Bea: dos semanas de semanal (100 × 2/4) y dos de quincenal ya a 60 (60 × 2/4).
+        // Bea cambia el 15: paga entera la semanal que tenía al empezar el mes; la
+        // quincenal, desde septiembre.
         $bea = self::of($statements, $bea);
-        $this->assertSame(['50.00', '30.00'], array_map(static fn ($l): string => $l->getTotal(), $bea->getLines()));
-        $this->assertTrue($bea->getLines()[0]->isPartial());
-        $this->assertSame('80.00', $bea->getTotal());
+        $this->assertSame(['100.00'], array_map(static fn ($l): string => $l->getTotal(), $bea->getLines()));
+        $this->assertFalse($bea->getLines()[0]->isPartial());
+        $this->assertSame('100.00', $bea->getTotal());
 
         // Carla, compartida: el precio de la quincenal compartida (30), que no sigue a la
         // quincenal cuando ésta sube el 15, más el transporte de su grupo (2 € por reparto,
@@ -192,7 +193,7 @@ class MonthlyFeeCalculatorTest extends TestCase
         $this->assertFalse($hugo->isChargeable());
         $this->assertSame([FeeConcept::EggMonthly], $fees->getMissingConcepts());
 
-        $this->assertSame(\count($shares) - 1, array_sum(array_map(static fn (FeeStatement $s): int => \count($s->getLines()), $statements)), 'Una línea por cesta, menos la cerrada de Gil.');
+        $this->assertSame(\count($shares) - 2, array_sum(array_map(static fn (FeeStatement $s): int => \count($s->getLines()), $statements)), 'Una línea por cesta, menos la cerrada de Gil y la nueva de Bea.');
     }
 
     /** Nadie tiene mandato en este test: ninguna cuota se puede cobrar todavía, y lo dice. */
@@ -370,11 +371,11 @@ class MonthlyFeeCalculatorTest extends TestCase
     }
 
     /**
-     * El primer mes de una quincenal que empieza a medias se paga por las cestas que le
-     * da su turno, no por las semanas: las dos empiezan el 10 de agosto y tienen tres
-     * viernes por delante, pero a Bea su turno sólo le da el 21 y a Ciro el 14 y el 28.
+     * Un alta quincenal a mitad de mes paga medio mes si su turno ya tuvo una cesta antes
+     * de empezar, y el mes entero si no: las dos empiezan el 10 de agosto, pero el turno
+     * de Bea recogió el 7 (le queda el 21) y el de Ciro empieza el 14 (el 14 y el 28).
      */
-    public function testElPrimerMesDeUnaQuincenalSePagaPorLasCestasDeSuTurno(): void
+    public function testUnAltaQuincenalAMitadPagaSegunSuTurno(): void
     {
         $bea = self::partner('Bea');
         $ciro = self::partner('Ciro');
@@ -386,23 +387,23 @@ class MonthlyFeeCalculatorTest extends TestCase
 
         $statements = MonthlyFeeCalculator::compute(new \DateTimeImmutable('2026-08-01'), self::weeks(), $shares, self::schedule(), [], [], deliveries: $deliveries)->getStatements();
 
-        // Bea: una cesta de dos, a la tarifa del 21 (60): la mitad. Por semanas eran 3/4.
+        // Bea: medio mes, a la tarifa de su primera cesta, la del 21 (60).
         $line = self::of($statements, $bea)->getLines()[0];
         $this->assertSame('30.00', $line->getTotal());
-        $this->assertSame([1, 2, 'cestas'], [$line->weeks, $line->monthWeeks, $line->getUnit()]);
+        $this->assertSame([1, 2, true, 'medio mes'], [$line->weeks, $line->monthWeeks, $line->halfMonth, $line->getPartLabel()]);
         $this->assertTrue($line->isPartial());
 
-        // Ciro: sus dos cestas, cada una a su tarifa (55 el 14, 60 el 28): el mes entero.
+        // Ciro: el mes entero, cada semana a su tarifa (55 hasta el 14, 60 desde el 15).
         $line = self::of($statements, $ciro)->getLines()[0];
         $this->assertSame('57.50', $line->getTotal());
         $this->assertFalse($line->isPartial());
     }
 
     /**
-     * Una mensual que empieza a medias se paga entera si su cesta cae ese mes y nada si
+     * Un alta mensual a mitad de mes se paga entera si su cesta cae ese mes y nada si
      * no. La que no recibe nada deja su línea a cero sólo si el hogar es nuevo, porque
      * con ella va la inscripción, que si no se perdería (al mes siguiente ya no es
-     * nuevo). En un hogar de antes no hay nada que cobrar: ni línea ni recibo a 0 €.
+     * nuevo). Quien cambia a mensual paga entera la cesta que tenía y la mensual, nada.
      */
     public function testUnaMensualQueEmpiezaAMitadSePagaEnteraONada(): void
     {
@@ -431,13 +432,88 @@ class MonthlyFeeCalculatorTest extends TestCase
         $nuria = self::of($statements, $nuria);
         $line = $nuria->getLines()[0];
         $this->assertSame('0.00', $line->getTotal(), 'Empieza el 20 y su cesta es la de primeros de mes: este mes no recibe nada.');
-        $this->assertSame([0, 1, 'cesta'], [$line->weeks, $line->monthWeeks, $line->getUnit()]);
+        $this->assertSame([0, 1, 'este mes no recibe cesta'], [$line->weeks, $line->monthWeeks, $line->getPartLabel()]);
         $this->assertSame([FeeConcept::MembershipSignup], array_map(static fn (FeeCharge $c): FeeConcept => $c->concept, $nuria->getCharges()));
         $this->assertSame('25.00', $nuria->getTotal());
 
         $olga = self::of($statements, $olga);
-        $this->assertCount(1, $olga->getLines(), 'Sólo su semanal: la mensual no le trae nada en agosto.');
-        $this->assertSame('50.00', $olga->getTotal(), 'Dos de cuatro semanas de semanal.');
+        $this->assertCount(1, $olga->getLines(), 'Sólo su semanal: la mensual cuenta desde septiembre.');
+        $this->assertSame('100.00', $olga->getTotal(), 'La semanal entera, aunque la dejara el 19.');
+    }
+
+    /** Octubre de 2026: cinco viernes. */
+    private static function october(): array
+    {
+        return array_map(static fn (string $d): \DateTimeImmutable => new \DateTimeImmutable($d), ['2026-10-02', '2026-10-09', '2026-10-16', '2026-10-23', '2026-10-30']);
+    }
+
+    /**
+     * Un cambio de turno a mitad de mes no cambia la cuota, aunque al cambiar se pierda
+     * la cesta del mes: la quincenal del turno de antes acaba el 10 y la del nuevo empieza
+     * el 11. Se paga la cuota, no las cestas recogidas.
+     */
+    public function testUnCambioDeTurnoAMitadPagaLaCuotaEntera(): void
+    {
+        $rosa = self::partner('Rosa');
+        $shares = [
+            self::share($rosa, BasketShare::ID_BIWEEKLY, start: '2025-03-01', end: '2026-10-10', active: false),
+            self::share($rosa, BasketShare::ID_BIWEEKLY, start: '2026-10-11'),
+        ];
+
+        $rosa = self::of(MonthlyFeeCalculator::compute(new \DateTimeImmutable('2026-10-01'), self::october(), $shares, self::schedule(), [], [])->getStatements(), $rosa);
+
+        $this->assertCount(1, $rosa->getLines(), 'La del turno nuevo cuenta desde noviembre.');
+        $this->assertSame('60.00', $rosa->getTotal());
+        $this->assertFalse($rosa->getLines()[0]->isPartial());
+    }
+
+    /**
+     * Un alta a mitad de un mes de cinco viernes: la semanal y la quincenal pagan medio
+     * mes aunque reciban una cesta de más (tres semanas, dos quincenas); la mensual,
+     * entera si su cesta cae después del alta.
+     */
+    public function testUnAltaAMitadPagaMedioMesAunqueTengaCincoViernes(): void
+    {
+        $sara = self::partner('Sara');     // semanal desde el 12: el 16, el 23 y el 30
+        $tomas = self::partner('Tomás');   // quincenal desde el 5; su turno es el del 2: el 16 y el 30
+        $ulises = self::partner('Ulises'); // mensual desde el 5; su cesta es la del 9
+        $shares = [
+            self::withShareId(self::share($sara, BasketShare::ID_WEEKLY, start: '2026-10-12'), 1),
+            self::withShareId(self::share($tomas, BasketShare::ID_BIWEEKLY, start: '2026-10-05'), 2),
+            self::withShareId(self::share($ulises, BasketShare::ID_MONTHLY, start: '2026-10-05'), 3),
+        ];
+        $deliveries = [2 => ['2026-10-16', '2026-10-30'], 3 => ['2026-10-09']];
+
+        $statements = MonthlyFeeCalculator::compute(new \DateTimeImmutable('2026-10-01'), self::october(), $shares, self::schedule(), [], [], deliveries: $deliveries)->getStatements();
+
+        $line = self::of($statements, $sara)->getLines()[0];
+        $this->assertSame('50.00', $line->getTotal());
+        $this->assertSame('medio mes', $line->getPartLabel());
+        $this->assertSame('30.00', self::of($statements, $tomas)->getTotal(), 'Medio mes de quincenal a 60, con dos cestas.');
+        $this->assertSame('30.00', self::of($statements, $ulises)->getTotal(), 'La mensual entera.');
+    }
+
+    /**
+     * Una cesta más a mitad de mes no se cobra hasta el mes siguiente (el aumento a
+     * mitad va con un ajuste). Una cesta que se deja sin otra a cambio sigue pagando
+     * las semanas que la tuvo.
+     */
+    public function testUnaCestaDeMasEsperaYUnaQueSeDejaPagaSusSemanas(): void
+    {
+        $vera = self::partner('Vera');
+        $wally = self::partner('Wally');
+        $shares = [
+            self::share($vera, BasketShare::ID_WEEKLY, start: '2024-01-01'),
+            self::share($vera, BasketShare::ID_WEEKLY, start: '2026-08-12'),
+            self::share($wally, BasketShare::ID_WEEKLY, start: '2024-01-01', end: '2026-08-14', active: false),
+        ];
+
+        $statements = MonthlyFeeCalculator::compute(new \DateTimeImmutable('2026-08-01'), self::weeks(), $shares, self::schedule(), [], [])->getStatements();
+
+        $this->assertCount(1, self::of($statements, $vera)->getLines());
+        $this->assertSame('100.00', self::of($statements, $vera)->getTotal());
+        $this->assertSame('50.00', self::of($statements, $wally)->getTotal(), 'El 7 y el 14.');
+        $this->assertSame('2 de 4 semanas', self::of($statements, $wally)->getLines()[0]->getPartLabel());
     }
 
     /** Sin semanas de reparto dadas de alta no hay nada que prorratear: nadie paga. */
