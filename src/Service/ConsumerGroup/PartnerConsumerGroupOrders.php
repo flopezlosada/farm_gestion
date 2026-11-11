@@ -6,6 +6,7 @@ use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\Partner;
 use App\Repository\ConsumerGroupOrderRepository;
+use App\Repository\ConsumerGroupRoundRepository;
 
 /**
  * Los pedidos del grupo de consumo de una socia, ordenados como los lee ella: por
@@ -17,8 +18,40 @@ use App\Repository\ConsumerGroupOrderRepository;
  */
 class PartnerConsumerGroupOrders
 {
-    public function __construct(private readonly ConsumerGroupOrderRepository $orders)
+    public function __construct(
+        private readonly ConsumerGroupOrderRepository $orders,
+        private readonly ConsumerGroupRoundRepository $rounds,
+    ) {
+    }
+
+    /**
+     * Lo que la portada del panel enseña del grupo de consumo: los pedidos abiertos en
+     * los que aún se puede apuntar y lo que su familia tiene por recoger.
+     *
+     * Un abierto con plazo vencido no sale: en la portada sería invitar a algo que ya
+     * no se puede hacer. Un abierto que ya está confirmado y en el que la familia ya ha
+     * pedido tampoco: ese pedido sale en «por recoger», con su estado de pago, y
+     * pintarlo en los dos sitios era la misma ronda dos veces seguidas.
+     *
+     * @param Partner                 $partner la socia
+     * @param \DateTimeInterface|null $today   hoy (por defecto, el de verdad)
+     *
+     * @return array{open: list<ConsumerGroupRound>, byRound: array<int, ConsumerGroupOrder>, upcoming: list<ConsumerGroupOrder>}
+     */
+    public function forHome(Partner $partner, ?\DateTimeInterface $today = null): array
     {
+        $mine = $this->forPartner($partner, $today);
+        $toCollect = array_flip(array_map(
+            static fn (ConsumerGroupOrder $order): int => $order->getRound()->getId(),
+            $mine['upcoming'],
+        ));
+        $open = array_values(array_filter(
+            $this->rounds->findOpen(),
+            static fn (ConsumerGroupRound $round): bool => $round->canReceiveOrders()
+                && !isset($toCollect[$round->getId()]),
+        ));
+
+        return ['open' => $open, 'byRound' => $mine['byRound'], 'upcoming' => $mine['upcoming']];
     }
 
     /**

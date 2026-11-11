@@ -40,6 +40,10 @@
     {% if is_granted('FEATURE_VOLUNTEERING') %}
         {% include '_components/volunteering_styles.html.twig' %}
     {% endif %}
+    {% if cg_open|default([]) is not empty or cg_upcoming|default([]) is not empty %}
+        {% include 'partner/_listing_styles.html.twig' %}
+        {% include 'Panel/consumer_group/_card_styles.html.twig' %}
+    {% endif %}
     {% if pending_surveys|default([]) is not empty %}
         {{ include('panel_survey/_teaser_styles.html.twig') }}
     {% endif %}
@@ -207,6 +211,50 @@
                 place: next_place,
                 delivery_date: next_delivery.date
             } only %}
+        {% endif %}
+
+        {# ============ GRUPO DE CONSUMO ============
+         # Lo que se puede pedir ahora y lo que su familia tiene por recoger. Sólo
+         # vivía en su propia pantalla (en el móvil, escondida en «Más»), y un pedido
+         # abierto podía cerrarse sin que la socia lo viera. Va pegado a la cesta
+         # porque se recoge con ella. Sin nada abierto ni por recoger, no se pinta:
+         # un bloque vacío en la portada sólo es ruido. #}
+        {% if cg_open|default([]) is not empty or cg_upcoming|default([]) is not empty %}
+            <section class="pnl-block">
+                <h2 class="pnl-block__title">Grupo de consumo</h2>
+                <div class="csa-stack">
+                    {% for round in cg_open %}
+                        {% include 'Panel/consumer_group/_round_card.html.twig' with {
+                            round: round,
+                            mine: cg_order_by_round[round.id] ?? null
+                        } only %}
+                    {% endfor %}
+
+                    {% for order in cg_upcoming %}
+                        {% set round = order.round %}
+                        <a class="cg-round-card" href="{{ path('panel_consumer_group_show', { id: round.id }) }}">
+                            <div class="cg-round-card__body">
+                                <div class="cg-round-card__title">{{ round.title }}</div>
+                                <div class="cg-round-card__meta">
+                                    Recoges el {{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }} con tu cesta
+                                </div>
+                            </div>
+                            <div class="cg-round-card__cta">
+                                {# El mismo orden que el bloque de pago de la ficha: lo
+                                 # pagado manda, después el recibo, y si no, falta pagar. #}
+                                {% if order.paid %}
+                                    <span class="prl-chip prl-chip--ok"><span class="dot"></span>Pagado</span>
+                                {% elseif order.willBeChargedByReceipt %}
+                                    <span class="prl-chip prl-chip--neutral"><span class="dot"></span>Va en el recibo</span>
+                                {% else %}
+                                    <span class="prl-chip prl-chip--warn"><span class="dot"></span>Pendiente de pago</span>
+                                {% endif %}
+                                <div class="cg-round-card__amount">{{ order.total|number_format(2, ',', '.') }} €</div>
+                            </div>
+                        </a>
+                    {% endfor %}
+                </div>
+            </section>
         {% endif %}
 
         {# ============ LA ASOCIACIÓN TE PREGUNTA ============

@@ -106,15 +106,7 @@
     {% include 'partner/_listing_styles.html.twig' %}
     <style>
         .csa-section-title { font-size: 1.05rem; margin: 0 0 var(--csa-sp-3); }
-        .cg-round-card { display: flex; align-items: center; justify-content: space-between; gap: var(--csa-sp-4);
-            padding: var(--csa-sp-4); border: 1px solid var(--csa-rule); border-radius: 10px; background: #fff;
-            text-decoration: none; color: inherit; }
-        a.cg-round-card:hover { border-color: var(--csa-accent, #6b8f4e); }
-        .cg-round-card__title { font-weight: 600; }
-        .cg-round-card__meta { font-size: .85rem; color: var(--csa-muted); }
-        .cg-round-card__lines { margin: var(--csa-sp-2) 0 0; padding-left: var(--csa-sp-4); font-size: .9rem; }
-        .cg-round-card__amount { margin-top: var(--csa-sp-2); font-weight: 600; text-align: right; }
-        .cg-round-card--past { background: transparent; }
     </style>
+    {% include 'Panel/consumer_group/_card_styles.html.twig' %}
     {% include 'Panel/consumer_group/_money_styles.html.twig' %}
 {% endblock %}

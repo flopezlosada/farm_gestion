@@ -5,7 +5,6 @@ namespace App\Controller;
 use App\Entity\Basket;
 use App\Entity\BasketComponent;
 use App\Entity\City;
-use App\Entity\ConsumerGroupRound;
 use App\Entity\Partner;
 use App\Entity\PartnerBasketShare;
 use App\Entity\PartnerDeliveryShift;
@@ -17,7 +16,6 @@ use App\Entity\WeeklyBasketStatus;
 use App\Form\ChangePasswordType;
 use App\Form\PartnerProfileType;
 use App\Repository\BasketRepository;
-use App\Repository\ConsumerGroupRoundRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Repository\PartnerDeliveryShiftRepository;
 use App\Repository\SharedBasketChangeRequestRepository;
@@ -92,7 +90,6 @@ class PanelController extends AbstractController
         VolunteerContributions $contributions,
         DeliveryCalendarProjector $projector,
         SurveyRepository $surveys,
-        ConsumerGroupRoundRepository $consumerGroupRounds,
         PartnerConsumerGroupOrders $consumerGroupOrders,
     ): Response {
         if (($redirect = $this->ensureReady()) !== null) {
@@ -106,7 +103,7 @@ class PanelController extends AbstractController
         // pantalla, escondida en «Más» en el móvil, así que un pedido abierto podía
         // cerrarse sin que lo viera.
         $consumerGroup = $this->memberFeature('FEATURE_GRUPO_CONSUMO')
-            ? $consumerGroupOrders->forPartner($partner)
+            ? $consumerGroupOrders->forHome($partner)
             : null;
 
         // Las encuestas que le quedan por responder. De la socia y no del dueño
@@ -177,12 +174,7 @@ class PanelController extends AbstractController
             // en un banner que repetía el nodo tres veces en la misma pantalla.
             'next_delivery' => $nextDelivery,
             'pending_surveys' => $pendingSurveys,
-            // Abiertos con plazo vivo (vencido ya no admite apuntes: en la portada
-            // sería invitar a algo que no se puede hacer), y lo suyo por recoger.
-            'cg_open' => $consumerGroup === null ? [] : array_values(array_filter(
-                $consumerGroupRounds->findOpen(),
-                static fn (ConsumerGroupRound $round): bool => $round->canReceiveOrders(),
-            )),
+            'cg_open' => $consumerGroup['open'] ?? [],
             'cg_order_by_round' => $consumerGroup['byRound'] ?? [],
             'cg_upcoming' => $consumerGroup['upcoming'] ?? [],
             // Quién le está montando la cesta de esa semana en su punto de recogida.
