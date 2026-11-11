@@ -1,0 +1,32 @@
+{# Administración ha aplicado un cambio de cesta que no se comparte con otro hogar.
+ # Contexto: name, modality_name, effective_date. #}
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Tu cesta cambia · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 580px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Hola {{ name }},</h2>
+
+    <p>Ya está hecho: administración ha aplicado el cambio de tu cesta.</p>
+
+    <p style="background: #eef5e8; border-left: 3px solid #5a8f3d; padding: 10px 14px;">
+        Pasas a <strong>{{ modality_name }}</strong>
+        a partir del <strong>{{ effective_date|format_date('full', locale='es') }}</strong>.
+    </p>
+
+    <p>Hasta esa fecha recoges y pagas tu cesta de siempre. Los cambios de cesta valen
+       siempre desde el mes siguiente, porque la cuota es mensual.</p>
+
+    <p>No tienes que hacer nada más. Si esto no es lo que esperabas, avisa a administración.</p>
+
+    <p style="margin-top: 32px; color: #777; font-size: 13px;">
+        Un abrazo,<br>
+        CSA Vega de Jarama<br>
+        <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+</body>
+</html>

@@ -9,11 +9,11 @@ use App\Entity\PartnerBasketShare;
 use App\Entity\WeeklyBasket;
 use App\Entity\WeeklyBasketStatus;
 use App\Form\PartnerBasketShareType;
-use App\Repository\RemittanceRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Service\Delivery\CohortChoiceBuilder;
 use App\Service\Delivery\SharedBasketChangeNotifier;
 use App\Service\Delivery\WeeklyBasketGenerator;
+use App\Service\Partner\BasketChangeDate;
 use App\Service\Partner\BasketModalityChanger;
 use App\Service\Partner\PartnerShareEventRecorder;
 use App\Service\Partner\SharedBasketCohortSync;
@@ -133,22 +133,25 @@ class PartnerBasketShareController extends AbstractController
      * escribía la cesta sin pasar por la validación que aquí impone el formulario.
      *
      * El formulario reusa PartnerBasketShareType sobre una PBS NUEVA precargada
-     * con los valores vigentes; su campo start_date se reinterpreta como la
-     * "fecha efectiva del cambio". Tras partir el histórico, los listados YA
+     * con los valores vigentes, sin fecha: el cambio vale desde el mes siguiente
+     * ({@see BasketChangeDate}) y la pantalla lo dice antes de aplicarlo, para que
+     * nadie reciba una cesta y pague otra a mitad de mes. Tras partir el histórico, los listados YA
      * generados (fecha >= efectiva) se reconcilian al patrón nuevo vía
      * WeeklyBasketGenerator::reconcilePartnerFrom (añade donde ahora reparte,
      * quita donde ya no); las semanas sin generar las siembra la generación normal.
      *
      * Si la cesta es COMPARTIDA el cambio arrastra al otro hogar (lo hace el changer) y
      * aquí se cierra el círculo: se reconcilian también sus semanas, se dice en pantalla
-     * y se avisa a los dos hogares de que ya está aplicado y desde cuándo.
+     * y se avisa a los dos hogares de que ya está aplicado y desde cuándo. Si no lo es,
+     * se avisa igual a quien tiene la cesta.
      *
      * @param PartnerBasketShare        $partnerBasketShare PBS vigente que se cambia (la del enlace).
      * @param Request                   $request            Petición HTTP con el formulario.
      * @param BasketModalityChanger     $modalityChanger    Parte el histórico y arrastra a la pareja.
      * @param WeeklyBasketGenerator     $generator          Reconcilia las semanas ya generadas.
      * @param CohortChoiceBuilder       $cohortChoiceBuilder Turnos que caben en su punto.
-     * @param SharedBasketChangeNotifier $notifier          Avisa a los dos hogares.
+     * @param SharedBasketChangeNotifier $notifier          Avisa del cambio a quien tiene la cesta (y a su pareja).
+     * @param BasketChangeDate          $changeDate         Desde cuándo vale el cambio.
      *
      * @return Response El formulario, o la vuelta a la ficha del socix.
      */
@@ -160,10 +163,10 @@ class PartnerBasketShareController extends AbstractController
         WeeklyBasketGenerator $generator,
         CohortChoiceBuilder $cohortChoiceBuilder,
         SharedBasketChangeNotifier $notifier,
-        RemittanceRepository $remittances,
+        BasketChangeDate $changeDate,
     ): Response {
-        // start_date queda vacío: admin introduce la fecha EFECTIVA del cambio.
         $new = $partnerBasketShare->successor();
+        $effective = $changeDate->next();
 
         // Turno de viernes traducido a fechas físicas reales del nodo del socio
         // (ver CohortChoiceBuilder). El turno A/B sólo aplica a quincenales en
@@ -182,9 +185,7 @@ class PartnerBasketShareController extends AbstractController
             'allowed_share_ids' => $cohort['allowedShareIds'],
             'offered_month_orders' => $cohort['offeredMonthOrders'],
             'forced_month_order' => $cohort['forcedMonthOrder'],
-            // Un cambio tras la remesa del mes, a más o a menos, vale desde el mes
-            // siguiente: ese ya está cobrado y no se regulariza.
-            'earliest_start' => $remittances->firstUnchargedBasketMonth(),
+            'ask_start_date' => false,
         ]);
         $form->handleRequest($request);
 
@@ -212,8 +213,6 @@ class PartnerBasketShareController extends AbstractController
                 $new->setDeliveryGroup(null);
             }
 
-            $effective = new \DateTime($new->getStartDate());
-
             try {
                 $outcome = $modalityChanger->applyChange($new, $effective);
             } catch (\DomainException $e) {
@@ -240,7 +239,9 @@ class PartnerBasketShareController extends AbstractController
             // es lo que se perdió por el camino—. Sigue haciendo falta en edit(), donde
             // no hay cascada.
             $mate = $outcome->matePartner();
-            if ($mate !== null) {
+            if ($mate === null) {
+                $notifier->changeApplied($new->getPartner(), $new->getBasketShare(), $effective);
+            } else {
                 $mateReconciled = $generator->reconcilePartnerFrom($mate, $effective);
                 $this->addFlash('info', sprintf(
                     'Comparte cesta con %s: su cesta cambia igual, porque es una sola. %d listado(s) suyo(s) reconciliado(s).',
@@ -267,6 +268,7 @@ class PartnerBasketShareController extends AbstractController
             'node_is_biweekly' => $nodeIsBiweekly,
             'node_name' => $cohort['nodeName'],
             'node_dates_label' => $cohort['nodeDatesLabel'],
+            'effective' => $effective,
         ]);
     }
 

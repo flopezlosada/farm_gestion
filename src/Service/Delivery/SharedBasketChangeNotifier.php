@@ -269,6 +269,36 @@ final class SharedBasketChangeNotifier
     }
 
     /**
+     * Avisa a quien tiene la cesta de que administración ha aplicado su cambio, y desde
+     * cuándo. Es el de {@see modalityApplied} para una cesta que no se comparte: también
+     * quien no comparte tiene que saber qué recibe y paga a partir de qué día.
+     *
+     * Vive aquí, y no en un notificador propio, para mandar por los mismos tres canales
+     * con las mismas reglas; el nombre de la clase se quedó corto.
+     *
+     * @param Partner            $household Quien tiene la cesta.
+     * @param BasketShare        $modality  Modalidad de la cesta nueva.
+     * @param \DateTimeInterface $effective Desde cuándo.
+     *
+     * @return int Cuántos correos salieron.
+     */
+    public function changeApplied(Partner $household, BasketShare $modality, \DateTimeInterface $effective): int
+    {
+        return $this->notify(
+            [$household],
+            'Tu cesta cambia · CSA Vega de Jarama',
+            'Tu cesta cambia',
+            sprintf('Pasas a %s a partir del %s.', $modality->getName(), $effective->format('j/n/Y')),
+            'email/basket_change_applied.html.twig',
+            [
+                'modality_name' => $modality->getName(),
+                'effective_date' => $effective,
+            ],
+            Notification::KIND_BASKET_CHANGE,
+        );
+    }
+
+    /**
      * El envío en sí, por los tres canales.
      *
      * @param list<Partner>        $households A quiénes avisar.
@@ -322,7 +352,7 @@ final class SharedBasketChangeNotifier
                 $this->mailer->send($message);
                 ++$sent;
             } catch (TransportExceptionInterface $e) {
-                $this->logger->warning('No se pudo avisar del cambio de la cesta compartida a {email}: {error}', [
+                $this->logger->warning('No se pudo avisar del cambio de la cesta a {email}: {error}', [
                     'email' => $address,
                     'error' => $e->getMessage(),
                 ]);
