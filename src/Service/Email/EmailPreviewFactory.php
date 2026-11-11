@@ -12,6 +12,7 @@ use App\Entity\User;
 use App\Repository\PartnerEventRepository;
 use App\Repository\PartnerRepository;
 use App\Service\AppSettings;
+use App\Service\ConsumerGroup\ConsumerGroupAnnouncer;
 use App\Service\Delivery\DeliveryDeadline;
 use App\Service\Delivery\PickupContents;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -153,7 +154,10 @@ class EmailPreviewFactory
             ->setDeliveryDate(new \DateTime('+17 days'));
         $round->addItem(new ConsumerGroupRoundItem($round, $product, '42.00'));
 
-        return [
+        // Sin fotos: la vista previa se pinta en la web, no es un correo al que
+        // incrustarlas.
+        return ConsumerGroupAnnouncer::emailItems($round) + [
+            'photos' => [],
             'partner' => $this->partners->findOneBy([]) ?? (new Partner())->setName('Ejemplo'),
             'round' => $round,
             'url' => $this->urls->generate('panel_consumer_group_index', [], UrlGeneratorInterface::ABSOLUTE_URL),

@@ -8,6 +8,9 @@
  # El servicio pasa:
  #   - partner          Partner destinataria
  #   - round            ConsumerGroupRound abierto
+ #   - items            los productos que se listan (los primeros)
+ #   - more_items       cuántos quedan fuera de la lista
+ #   - photos           `src` de la miniatura por id de producto
  #   - url              ficha del pedido en el panel
  #   - preferences_url  pantalla de avisos
  #   - can_act          si puede entrar en la web (si no, sin botón)
@@ -29,15 +32,14 @@
         <p>{{ round.description|nl2br }}</p>
     {% endif %}
 
-    {% if round.items|length %}
+    {% if items|length %}
         <h3 style="color: #5a8f3d;">Qué hay</h3>
-        <ul>
-            {% for item in round.items|slice(0, 10) %}
-                <li>{{ item.name }} · {{ item.price|number_format(2, ',', '.') }} € / {{ item.unit }}</li>
-            {% endfor %}
-        </ul>
-        {% if round.items|length > 10 %}
-            <p style="color: #777;">Y {{ round.items|length - 10 }} producto{{ round.items|length - 10 == 1 ? '' : 's' }} más.</p>
+        {% include 'email/_consumer_group_items.html.twig' with {
+            rows: items|map(item => {product: item.product, label: item.name ~ ' · ' ~ item.price|number_format(2, ',', '.') ~ ' € / ' ~ item.unit}),
+            photos: photos,
+        } only %}
+        {% if more_items > 0 %}
+            <p style="color: #777;">Y {{ more_items }} producto{{ more_items == 1 ? '' : 's' }} más.</p>
         {% endif %}
     {% endif %}
 

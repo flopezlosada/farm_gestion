@@ -62,3 +62,13 @@ liip_imagine:
           mode: line
         strip: ~
         thumbnail: { allow_upscale: true, size: [200, 200], mode: inset }
+    # Miniatura de producto incrustada en los correos del grupo de consumo
+    # (ConsumerGroupEmailPhotos). JPEG pequeño: las fotos subidas pesan MB. El
+    # fondo blanco evita que un PNG con transparencia salga negro al pasar a JPEG.
+    consumer_group_email_thumb:
+      format: jpeg
+      quality: 80
+      filters:
+        strip: ~
+        thumbnail: { allow_upscale: true, size: [120, 120], mode: outbound }
+        background: { color: '#ffffff' }

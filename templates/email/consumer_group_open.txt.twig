@@ -4,10 +4,10 @@ Hemos abierto un pedido del grupo de consumo: «{{ round.title }}», de {{ round
 {% if round.description %}
 {{ round.description }}
 {% endif %}
-{% if round.items|length %}
+{% if items|length %}
 Qué hay:
-{% for item in round.items|slice(0, 10) %}- {{ item.name }} · {{ item.price|number_format(2, ',', '.') }} € / {{ item.unit }}
-{% endfor %}{% if round.items|length > 10 %}Y {{ round.items|length - 10 }} producto{{ round.items|length - 10 == 1 ? '' : 's' }} más.
+{% for item in items %}- {{ item.name }} · {{ item.price|number_format(2, ',', '.') }} € / {{ item.unit }}
+{% endfor %}{% if more_items > 0 %}Y {{ more_items }} producto{{ more_items == 1 ? '' : 's' }} más.
 {% endif %}{% endif %}
 {% if round.ordersCloseAt %}Puedes apuntarte hasta el {{ round.ordersCloseAt|format_date('full', locale='es') }}.{% else %}Ya puedes apuntarte.{% endif %}
 {% if round.deliveryDate %}{{ round.confirmed ? 'Se entrega' : 'Si el pedido sale adelante, se entrega' }} el {{ round.deliveryDate|format_date('full', locale='es') }} en tu punto de recogida, junto con la cesta.{% endif %}

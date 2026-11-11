@@ -68,6 +68,7 @@ class ConsumerGroupPickupNotifier
         private readonly PartnerAccessPolicy $accessPolicy,
         private readonly UrlGeneratorInterface $urls,
         private readonly LoggerInterface $logger,
+        private readonly ConsumerGroupEmailPhotos $photos,
     ) {
     }
 
@@ -167,26 +168,7 @@ class ConsumerGroupPickupNotifier
                 self::EFFECT_EMAIL,
                 $pickup,
                 $order->getId() . ':' . $member->getId(),
-                fn () => $this->mailer->send(
-                    (new TemplatedEmail())
-                        ->to($address)
-                        ->subject(sprintf('Recoge tu pedido: %s', $order->getRound()?->getTitle()))
-                        ->htmlTemplate('email/consumer_group_pickup.html.twig')
-                        ->textTemplate('email/consumer_group_pickup.txt.twig')
-                        ->context([
-                            'partner' => $member,
-                            'order' => $order,
-                            'round' => $order->getRound(),
-                            'node' => $pickup['node'],
-                            'pickup_date' => $pickup['date'],
-                            'payment_info' => $this->settings->getString(AppSettings::CONSUMER_GROUP_PAYMENT_INFO),
-                            'url' => $url,
-                            'preferences_url' => $preferencesUrl,
-                            // Los enlaces exigen sesión: a quien no puede entrar no
-                            // se le pinta un botón que sólo le llevaría al login.
-                            'can_act' => $this->accessPolicy->canUseActionLinks($member),
-                        ])
-                ),
+                fn () => $this->mailer->send($this->pickupEmail($pickup, $member, $address, $url, $preferencesUrl)),
                 $address,
                 $resend,
             );
@@ -196,6 +178,41 @@ class ConsumerGroupPickupNotifier
         }
 
         return $sent;
+    }
+
+    /**
+     * El correo de recogida para una persona de la familia, con las miniaturas
+     * de lo que recoge.
+     *
+     * @param array{order: ConsumerGroupOrder, node: Node, date: \DateTimeImmutable} $pickup         la recogida
+     * @param Partner                                                                 $member         destinataria
+     * @param string                                                                  $address        su dirección
+     * @param string                                                                  $url            ficha del pedido en el panel
+     * @param string                                                                  $preferencesUrl pantalla de avisos
+     */
+    private function pickupEmail(array $pickup, Partner $member, string $address, string $url, string $preferencesUrl): TemplatedEmail
+    {
+        $order = $pickup['order'];
+        $email = (new TemplatedEmail())
+            ->to($address)
+            ->subject(sprintf('Recoge tu pedido: %s', $order->getRound()?->getTitle()))
+            ->htmlTemplate('email/consumer_group_pickup.html.twig')
+            ->textTemplate('email/consumer_group_pickup.txt.twig');
+
+        return $email->context([
+            'partner' => $member,
+            'order' => $order,
+            'round' => $order->getRound(),
+            'node' => $pickup['node'],
+            'pickup_date' => $pickup['date'],
+            'payment_info' => $this->settings->getString(AppSettings::CONSUMER_GROUP_PAYMENT_INFO),
+            'url' => $url,
+            'preferences_url' => $preferencesUrl,
+            'photos' => $this->photos->embed($email, ConsumerGroupNotifier::orderedProducts($order)),
+            // Los enlaces exigen sesión: a quien no puede entrar no se le pinta
+            // un botón que sólo le llevaría al login.
+            'can_act' => $this->accessPolicy->canUseActionLinks($member),
+        ]);
     }
 
     /**
