@@ -13,6 +13,52 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Comprobaciones sin BBDD ni navegador: cazan plantillas rotas, servicios mal
+  # cableados y código PHP que llama a cosas inexistentes antes de que lleguen
+  # a producción como un 500. Son baratas y van en paralelo a PHPUnit.
+  static:
+    name: Lints y análisis estático
+    runs-on: ubuntu-latest
+
+    env:
+      APP_ENV: test
+      APP_DEBUG: '0'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, pdo_mysql, gd, exif, iconv
+          ini-values: date.timezone=Europe/Madrid
+          tools: composer:2.2
+          coverage: none
+
+      - name: Cache de vendor/
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: vendor-test-php83-${{ hashFiles('composer.lock') }}
+
+      - name: Composer install
+        run: composer install --optimize-autoloader --no-interaction --no-progress
+
+      - name: Sintaxis de plantillas Twig
+        run: php bin/console lint:twig templates
+
+      - name: Sintaxis de YAML de config
+        run: php bin/console lint:yaml config --parse-tags
+
+      - name: Cableado del contenedor de servicios
+        run: php bin/console lint:container
+
+      # Nivel y baseline en phpstan.dist.neon: sólo falla lo que no estaba ya.
+      - name: PHPStan
+        run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+
   phpunit:
     name: PHPUnit sobre db_test
     runs-on: ubuntu-latest

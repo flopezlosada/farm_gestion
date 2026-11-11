@@ -118,7 +118,7 @@
                                 <div class="cg-round-card__meta">
                                     {{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}
                                     · {{ order.total|number_format(2, ',', '.') }} €
-                                    {%- if not order.paid %} · pendiente de pago{% endif %}
+                                    {%- if order.willBeChargedByReceipt %} · va en tu recibo{% elseif not order.paid %} · pendiente de pago{% endif %}
                                 </div>
                             </div>
                         </div>

@@ -5,6 +5,7 @@ namespace App\Command;
 use App\Entity\ConsumerGroupCategory;
 use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupOrderLine;
+use App\Entity\ConsumerGroupPaymentMethod;
 use App\Entity\ConsumerGroupProduct;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupRoundItem;
@@ -159,8 +160,7 @@ class SeedConsumerGroupFakesCommand extends Command
                 }
             }
             if ($existing !== null) {
-                $existing->setPaid(true);
-                $existing->setPaidAt(new \DateTime('-1 day'));
+                $existing->markPaid(ConsumerGroupPaymentMethod::Transfer, new \DateTime('-1 day'));
             } else {
                 $this->orderFor($confirmado, $cestaPartner, [0 => '1'], true);
             }
@@ -305,8 +305,7 @@ class SeedConsumerGroupFakesCommand extends Command
             }
         }
         if ($paid) {
-            $order->setPaid(true);
-            $order->setPaidAt(new \DateTime('-3 days'));
+            $order->markPaid(ConsumerGroupPaymentMethod::Transfer, new \DateTime('-3 days'));
         }
         $round->addOrder($order);
         $this->em->persist($order);

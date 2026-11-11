@@ -1,8 +1,13 @@
+# Análisis estático que corre el CI en cada PR (job "static" de tests.yml).
+# Nivel 0 sobre src/: detecta clases, métodos y propiedades que no existen, que
+# hoy sólo afloran como un 500 en producción. Niveles más altos dan miles de
+# avisos en el código legacy y no aportan señal.
+# El baseline congela los avisos ya conocidos: sólo falla lo nuevo. Al arreglar
+# uno, regenerarlo con `vendor/bin/phpstan --generate-baseline`.
+includes:
+    - phpstan-baseline.neon
+
 parameters:
-    level: 6
+    level: 0
     paths:
-        - bin/
-        - config/
-        - public/
         - src/
-        - tests/

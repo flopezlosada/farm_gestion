@@ -724,6 +724,15 @@ class Partner
     }
 
     /**
+     * Si se le puede pasar un recibo ya: paga por recibo y tiene el mandato completo.
+     * Lo que exige cualquier remesa, sea de cuotas o del grupo de consumo.
+     */
+    public function canBeChargedByReceipt(): bool
+    {
+        return $this->paysByReceipt() && $this->hasDirectDebit();
+    }
+
+    /**
      * Un mandato va entero: la referencia sin la fecha de firma (o al revés) no se
      * puede mandar al banco, y una cuenta hace falta para cargarle nada.
      *

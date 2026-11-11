@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\ConsumerGroupEventLog;
 use App\Entity\ConsumerGroupOrder;
+use App\Entity\ConsumerGroupPaymentMethod;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupRoundItem;
 use App\Entity\Partner;
@@ -796,31 +797,42 @@ class ConsumerGroupController extends AbstractController
     }
 
     /**
-     * Marca el pedido de una socia como pagado / pendiente (seguimiento manual del
-     * cobro por la comisión). Alterna el estado.
+     * Marca cómo ha pagado una socia su pedido (transferencia o metálico) o lo vuelve a
+     * dejar pendiente (`via` vacío). El recibo no se marca aquí: lo pone la remesa del
+     * grupo de consumo al enviarse ({@see ConsumerGroupPaymentMethod::manual()}).
      */
-    #[Route('/orders/{id}/toggle-paid', name: 'consumer_group_order_toggle_paid', methods: ['POST'], requirements: ['id' => '\d+'])]
-    public function togglePaid(Request $request, ConsumerGroupOrder $order, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
+    #[Route('/orders/{id}/payment', name: 'consumer_group_order_payment', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function payment(Request $request, ConsumerGroupOrder $order, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
         $roundId = $order->getRound()->getId();
+        $back = $this->redirectToRoute('consumer_group_show', ['id' => $roundId]);
 
-        if (!$this->isCsrfTokenValid('consumer_group_toggle_paid_'.$order->getId(), (string) $request->request->get('_token'))) {
+        if (!$this->isCsrfTokenValid('consumer_group_order_payment_'.$order->getId(), (string) $request->request->get('_token'))) {
             $this->addFlash('warning', 'Token de seguridad inválido.');
 
-            return $this->redirectToRoute('consumer_group_show', ['id' => $roundId]);
+            return $back;
         }
 
-        $order->setPaid(!$order->isPaid());
-        $order->setPaidAt($order->isPaid() ? new \DateTime() : null);
+        $raw = (string) $request->request->get('via');
+        $via = $raw === '' ? null : ConsumerGroupPaymentMethod::tryFrom($raw);
+        if ($raw !== '' && !\in_array($via, ConsumerGroupPaymentMethod::manual(), true)) {
+            $this->addFlash('warning', 'Elige transferencia o metálico.');
+
+            return $back;
+        }
+
+        $via === null ? $order->markUnpaid() : $order->markPaid($via);
         $recorder->record(
             ConsumerGroupEventLog::KIND_ORDER_PAYMENT_TOGGLED,
             $order->getRound(),
             $this->getUser(),
-            sprintf('Pedido de %s marcado como %s.', $order->getPartner(), $order->isPaid() ? 'pagado' : 'pendiente de pago'),
+            $via === null
+                ? sprintf('Pedido de %s marcado como pendiente de pago.', $order->getPartner())
+                : sprintf('Pedido de %s marcado como pagado por %s.', $order->getPartner(), $via->label()),
         );
         $em->flush();
 
-        return $this->redirectToRoute('consumer_group_show', ['id' => $roundId]);
+        return $back;
     }
 
     /**
