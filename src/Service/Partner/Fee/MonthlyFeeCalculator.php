@@ -172,7 +172,7 @@ class MonthlyFeeCalculator
             $partner = $share->getPartner();
             $own = MonthlyFees::keyOf($partner);
             // Sólo las que salen en el patrón tienen sus cestas (y sólo ellas tienen que estar guardadas).
-            $received = $share->getId() !== null && self::isProjected($share, $weeks) ? ($deliveries[$share->getId()] ?? null) : null;
+            $received = $deliveries !== [] && self::isProjected($share, $weeks) ? ($deliveries[$share->getId()] ?? null) : null;
             $charge = self::charge($share, $weeks, $stops[$own] ?? [], isset($hadBasket[$own]), isset($startsAnother[$own]), $received);
             $household = $partner->getFamilyHead();
             // Un alta que este mes no recibe nada sólo deja su línea (a cero) si el hogar
