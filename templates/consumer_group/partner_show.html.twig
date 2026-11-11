@@ -51,7 +51,7 @@
                                 <td><a href="{{ path('consumer_group_show', { id: order.round.id }) }}">{{ order.round.title }}</a></td>
                                 <td class="tight">{{ order.round.statusLabel }}{{ order.round.confirmed ? ' · confirmada' : '' }}</td>
                                 <td class="tight">{{ order.total|number_format(2, ',', '.') }} €</td>
-                                <td class="tight">{{ order.paid ? 'Sí' : 'No' }}</td>
+                                <td class="tight">{{ order.paid ? 'Sí, por ' ~ order.paidVia.label : (order.willBeChargedByReceipt ? 'Va en el recibo' : 'No') }}</td>
                                 <td class="tight">{{ order.pickedUp ? 'Sí' : 'No' }}</td>
                             </tr>
                         {% endfor %}

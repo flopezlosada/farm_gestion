@@ -40,7 +40,9 @@ class RemittanceImportType extends AbstractType
             ])
             ->add('kind', ChoiceType::class, [
                 'label' => 'Qué se cobró',
-                'choices' => array_flip(Remittance::KIND_LABELS),
+                // La del grupo de consumo no se importa: sale de los pedidos, y una
+                // importada no sabría qué pedidos deja cobrados.
+                'choices' => array_flip(array_diff_key(Remittance::KIND_LABELS, [Remittance::KIND_CONSUMER_GROUP => true])),
             ])
             ->add('period', MonthType::class, [
                 'label' => 'Mes',

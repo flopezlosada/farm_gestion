@@ -10,7 +10,7 @@ use App\Entity\ConsumerGroupRound;
  * para decidir si se supera el mínimo del productor y para pasarle el pedido:
  *   - participantCount: nº de socias con pedido NO vacío.
  *   - total: importe total de lo que se le encarga al productor, en euros
- *     (informativo; la app no cobra).
+ *     (a quien paga por recibo se le cobra en la remesa del grupo de consumo).
  *   - byItem: por cada producto de la ronda ({@see \App\Entity\ConsumerGroupRoundItem}),
  *     lo que piden las socias, lo que pide la asociación para el local, la suma
  *     de las dos y su subtotal. Incluye items sin pedir.

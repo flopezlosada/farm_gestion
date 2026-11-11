@@ -6,6 +6,8 @@ use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\Node;
 use App\Entity\Partner;
+use App\Entity\PartnerPaymentMethod;
+use App\Entity\Remittance;
 use App\Entity\Producer;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -17,6 +19,15 @@ use Doctrine\Persistence\ManagerRegistry;
  */
 class ConsumerGroupOrderRepository extends ServiceEntityRepository
 {
+    /**
+     * Cuándo un pedido se puede entregar por su pago: consta pagado, o se le va a
+     * cobrar en el recibo del mes (paga por recibo y tiene el mandato completo). Es
+     * {@see ConsumerGroupOrder::willBeChargedByReceipt()} en DQL, y la misma condición
+     * para el calendario y la hoja del nodo. Necesita el alias `p` del socix.
+     */
+    private const DELIVERABLE_PAYMENT = "(o.paidVia IS NOT NULL OR (p.paymentMethod = '" . PartnerPaymentMethod::Receipt->value . "'"
+        . ' AND p.mandateReference IS NOT NULL AND p.mandateSignedOn IS NOT NULL AND p.iban IS NOT NULL))';
+
     public function __construct(ManagerRegistry $registry)
     {
         parent::__construct($registry, ConsumerGroupOrder::class);
@@ -33,9 +44,10 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
 
     /**
      * Apuntes de una socia listos para entregar y cuya entrega es futura (>= $from):
-     * pedido colectivo CONFIRMADO y apunte PAGADO. Con ronda y líneas, ordenados por
+     * pedido colectivo CONFIRMADO y apunte PAGADO o que va en el recibo del mes. Con ronda y líneas, ordenados por
      * fecha de entrega. Para pintar en el calendario (socio y gestor) lo que la socia
-     * va a recibir. Regla de negocio: si no ha pagado, no aparece.
+     * va a recibir. Regla de negocio: si no ha pagado ni se le va a cobrar por
+     * recibo, no aparece ({@see self::DELIVERABLE_PAYMENT}).
      *
      * @return ConsumerGroupOrder[]
      */
@@ -45,10 +57,11 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
             ->addSelect('r', 'l')
             ->innerJoin('o.round', 'r')
             ->leftJoin('o.lines', 'l')
+            ->innerJoin('o.partner', 'p')
             ->where('o.partner = :partner')
             ->andWhere('r.confirmed = true')
             ->andWhere('r.status != :cancelled')
-            ->andWhere('o.paid = true')
+            ->andWhere(self::DELIVERABLE_PAYMENT)
             ->andWhere('r.deliveryDate >= :from')
             ->setParameter('partner', $partner)
             ->setParameter('cancelled', \App\Entity\ConsumerGroupRound::STATUS_CANCELLED)
@@ -63,7 +76,7 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
      * que quien reparte sepa qué bultos saca además de las cestas.
      *
      * Mismo filtro de entregabilidad que {@see findDeliverableUpcomingForPartner()}
-     * —confirmado, no cancelado y PAGADO—, y por el mismo motivo: la hoja tiene
+     * —confirmado, no cancelado y PAGADO o con recibo—, y por el mismo motivo: la hoja tiene
      * que llevar exactamente lo que se le ha prometido a la socia en su
      * calendario. Dos reglas distintas serían un pedido que aparece en un sitio y
      * no en el otro.
@@ -88,7 +101,7 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
             ->where('g.node = :node')
             ->andWhere('r.confirmed = true')
             ->andWhere('r.status != :cancelled')
-            ->andWhere('o.paid = true')
+            ->andWhere(self::DELIVERABLE_PAYMENT)
             ->andWhere('r.deliveryDate BETWEEN :from AND :to')
             ->setParameter('node', $node)
             ->setParameter('cancelled', ConsumerGroupRound::STATUS_CANCELLED)
@@ -96,6 +109,61 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
             ->setParameter('to', $to->format('Y-m-d'))
             ->orderBy('p.name', 'ASC')
             ->addOrderBy('p.surname', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Lo que va en la remesa del grupo de consumo de un mes: los pedidos de rondas
+     * confirmadas (no canceladas) que se entregan ese mes O ANTES, sin pagar, que no
+     * van ya en otro recibo y de socias a las que se puede pasar recibo. Con líneas,
+     * para sacar el importe sin una consulta por pedido.
+     *
+     * «O antes» porque un pedido que no entró en la remesa de su mes (se apuntó
+     * después de preparar el borrador, o se tiró su recibo) ya se ha entregado contando
+     * con el recibo: si sólo se mirase su mes, no se le cobraría nunca.
+     *
+     * @param \DateTimeInterface $month cualquier día del mes
+     *
+     * @return ConsumerGroupOrder[] ordenados por socia y fecha de entrega
+     */
+    public function findToChargeByReceiptIn(\DateTimeInterface $month): array
+    {
+        $first = Remittance::firstOfMonth($month);
+
+        return $this->createQueryBuilder('o')
+            ->addSelect('r', 'l', 'p')
+            ->innerJoin('o.round', 'r')
+            ->innerJoin('o.partner', 'p')
+            ->leftJoin('o.lines', 'l')
+            ->where('r.confirmed = true')
+            ->andWhere('r.status != :cancelled')
+            ->andWhere('o.paidVia IS NULL')
+            ->andWhere('o.remittanceLine IS NULL')
+            ->andWhere(self::DELIVERABLE_PAYMENT)
+            ->andWhere('r.deliveryDate <= :to')
+            ->setParameter('cancelled', ConsumerGroupRound::STATUS_CANCELLED)
+            ->setParameter('to', $first->modify('last day of this month')->format('Y-m-d'))
+            ->orderBy('p.id', 'ASC')
+            ->addOrderBy('r.deliveryDate', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Los pedidos que van en los recibos de una remesa, para darlos por cobrados al
+     * enviarla.
+     *
+     * @param Remittance $remittance la remesa del grupo de consumo
+     *
+     * @return ConsumerGroupOrder[]
+     */
+    public function findInRemittance(Remittance $remittance): array
+    {
+        return $this->createQueryBuilder('o')
+            ->innerJoin('o.remittanceLine', 'rl')
+            ->where('rl.remittance = :remittance')
+            ->setParameter('remittance', $remittance)
             ->getQuery()
             ->getResult();
     }

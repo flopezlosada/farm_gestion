@@ -19,6 +19,8 @@ use Gedmo\Mapping\Annotation as Gedmo;
  *
  * @ORM\Table(name="consumer_group_order", uniqueConstraints={
  *     @ORM\UniqueConstraint(name="uniq_cg_order_round_partner", columns={"round_id", "partner_id"})
+ * }, indexes={
+ *     @ORM\Index(name="IDX_CG_ORDER_REMITTANCE_LINE", columns={"remittance_line_id"})
  * })
  * @ORM\Entity(repositoryClass="App\Repository\ConsumerGroupOrderRepository")
  */
@@ -52,17 +54,31 @@ class ConsumerGroupOrder
     private Collection $lines;
 
     /**
-     * ¿La socia ha pagado su pedido? La app no cobra: es una marca manual que
-     * lleva la comisión para el seguimiento del cobro (por transferencia).
-     * @ORM\Column(type="boolean")
+     * Cómo se pagó, o null si está pendiente. Es la ÚNICA marca de pago: «pagado»
+     * sin saber cómo no se puede representar. La transferencia y el metálico los
+     * marca la comisión a mano; el recibo, la remesa del grupo de consumo al enviarse.
+     *
+     * @ORM\Column(name="paid_via", type="string", length=10, nullable=true, enumType=ConsumerGroupPaymentMethod::class)
      */
-    private bool $paid = false;
+    private ?ConsumerGroupPaymentMethod $paidVia = null;
 
     /**
      * Cuándo se marcó como pagado.
      * @ORM\Column(type="datetime", nullable=true)
      */
     private ?\DateTime $paidAt = null;
+
+    /**
+     * El recibo de la remesa del grupo de consumo en el que va este pedido. Se pone al
+     * preparar el borrador y es lo que dice, al enviarla, qué pedidos quedan cobrados:
+     * recalcular el mes entonces marcaría como pagado un pedido confirmado después del
+     * borrador, que no va en ningún recibo. Si se tira el borrador o se quita el
+     * recibo, vuelve a null y el pedido entra en la siguiente.
+     *
+     * @ORM\ManyToOne(targetEntity="RemittanceLine")
+     * @ORM\JoinColumn(name="remittance_line_id", nullable=true, onDelete="SET NULL")
+     */
+    private ?RemittanceLine $remittanceLine = null;
 
     /**
      * ¿Ha recogido la socia este pedido? Lo puede marcar ella misma desde su
@@ -196,25 +212,91 @@ class ConsumerGroupOrder
         return sprintf('GC%d %s', $this->round?->getId() ?? 0, (string) $this->partner);
     }
 
+    /** Si consta pagado, de la forma que sea. */
     public function isPaid(): bool
     {
-        return $this->paid;
+        return $this->paidVia !== null;
     }
 
-    public function setPaid(bool $paid): self
+    /** Cómo se pagó, o null si está pendiente. */
+    public function getPaidVia(): ?ConsumerGroupPaymentMethod
     {
-        $this->paid = $paid;
-        return $this;
+        return $this->paidVia;
     }
 
+    /** Cuándo se marcó como pagado, o null si está pendiente. */
     public function getPaidAt(): ?\DateTime
     {
         return $this->paidAt;
     }
 
-    public function setPaidAt(?\DateTime $paidAt): self
+    /**
+     * Dejarlo pagado de esa forma, y cuándo (ahora si no se dice).
+     *
+     * @param ConsumerGroupPaymentMethod $via cómo entró el dinero
+     * @param \DateTime|null             $at  cuándo; null = ahora
+     */
+    public function markPaid(ConsumerGroupPaymentMethod $via, ?\DateTime $at = null): self
     {
-        $this->paidAt = $paidAt;
+        $this->paidVia = $via;
+        $this->paidAt = $at ?? new \DateTime();
+
+        return $this;
+    }
+
+    /**
+     * Volver a dejarlo pendiente de pago. Suelta también su recibo: si se desmarca uno
+     * cobrado por recibo (el banco lo devolvió) tiene que poder entrar en la siguiente
+     * remesa, y uno que iba en un borrador deja de cuadrar con él y se ve al enviarlo
+     * ({@see \App\Service\Accounting\Remittance\ConsumerGroupReceiptCheck}).
+     */
+    public function markUnpaid(): self
+    {
+        $this->paidVia = null;
+        $this->paidAt = null;
+        $this->remittanceLine = null;
+
+        return $this;
+    }
+
+    /**
+     * Si hoy se le puede cobrar por recibo lo que pide: sin pagar, de una ronda
+     * confirmada y no cancelada. Lo que tiene que seguir cumpliendo al enviar la remesa.
+     */
+    public function isChargeableByReceiptNow(): bool
+    {
+        return !$this->isPaid()
+            && $this->round !== null
+            && $this->round->isConfirmed()
+            && $this->round->getStatus() !== ConsumerGroupRound::STATUS_CANCELLED;
+    }
+
+    /**
+     * Si, sin estar pagado, se le va a cobrar en el recibo del mes: la socia paga por
+     * recibo y tiene el mandato completo. Para la entrega cuenta como pagado, porque el
+     * cobro está asegurado; la consulta de entregables lo repite en DQL
+     * ({@see \App\Repository\ConsumerGroupOrderRepository}).
+     */
+    public function willBeChargedByReceipt(): bool
+    {
+        return !$this->isPaid() && $this->partner !== null && $this->partner->canBeChargedByReceipt();
+    }
+
+    /** El recibo de la remesa del grupo de consumo en el que va, si va en alguno. */
+    public function getRemittanceLine(): ?RemittanceLine
+    {
+        return $this->remittanceLine;
+    }
+
+    /**
+     * Meterlo en un recibo de la remesa del grupo de consumo, o sacarlo (null).
+     *
+     * @param RemittanceLine|null $line el recibo de la socia en el borrador
+     */
+    public function setRemittanceLine(?RemittanceLine $line): self
+    {
+        $this->remittanceLine = $line;
+
         return $this;
     }
 
