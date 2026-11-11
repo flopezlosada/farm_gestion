@@ -90,7 +90,7 @@ final class NotificationTopic
         ],
         self::CONSUMER_GROUP => [
             'label' => 'Grupo de consumo',
-            'help' => 'Cuando se abre un pedido de aceite, fruta o legumbre al que puedes apuntarte. Son unos pocos al año.',
+            'help' => 'Cuando se abre un pedido de aceite, fruta o legumbre al que puedes apuntarte, y cuando te toca recoger lo que pediste. Son unos pocos al año.',
             'feature' => AppSettings::FEATURE_GRUPO_CONSUMO,
             'members' => true,
             // Encendido por defecto, como todos: el pedido está abierto a toda

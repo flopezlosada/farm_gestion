@@ -361,6 +361,13 @@ class AppSettings
     public const CRON_DELIVERY_CONFIRMATION = 'cron.delivery_confirmation';
 
     /**
+     * Aviso a cada familia de que tiene un pedido del grupo de consumo por recoger
+     * (app:send-consumer-group-pickup-notices). Aparte del recordatorio de la cesta:
+     * ése no llega a quien recoge cada semana ni calla por las mismas razones.
+     */
+    public const CRON_CONSUMER_GROUP_PICKUP = 'cron.consumer_group_pickup';
+
+    /**
      * Avisos de voluntariado: la tarea que abre por pasos las llamadas pidiendo
      * gente. Es la única de cadencia fina (por intervalo) porque un "falta gente
      * para mañana" no admite esperar al día siguiente.
@@ -612,6 +619,24 @@ class AppSettings
             // Sin congelado no hay destinatarios: el recordatorio lee sólo
             // cestas ya materializadas (WeeklyBasketRepository::findPickedByDeliveryDateAndShares).
             'depends_on' => [self::CRON_GENERATE_WEEKLY_DELIVERY],
+        ],
+        self::CRON_CONSUMER_GROUP_PICKUP => [
+            'command' => 'app:send-consumer-group-pickup-notices',
+            'channels' => ['email', 'push', 'inbox'],
+            'needs_recipient' => false,
+            'confirm' => true,
+            'dry' => true,
+            // A la hora del listado, como el recordatorio de la cesta: la socia
+            // recibe los dos avisos a la vez y con la misma antelación.
+            'schedule' => ['freq' => 'daily', 'hour' => 12],
+            'hour_setting' => self::DELIVERY_SHEET_SEND_TIME,
+            'max_delay_hours' => 36,
+            // Con el módulo apagado no hay pedidos que avisar. El correo NO va aquí,
+            // por lo mismo que en el recordatorio: `requires` inhibe la tarea entera
+            // y dejaría sin la bandeja y el móvil. El correo lo mira el servicio.
+            'requires' => [self::FEATURE_GRUPO_CONSUMO],
+            // Los pedidos no dependen del congelado: la fecha la pone la ronda.
+            'depends_on' => [],
         ],
         self::CRON_ADMIN_DELIVERY_SUMMARY => [
             'command' => 'app:send-admin-delivery-changes-summary',
@@ -1145,6 +1170,12 @@ class AppSettings
             'group' => 'Tareas programadas',
             'label' => 'Avisar a socixs de su recogida',
             'help' => 'Avisa a quincenales y mensuales del próximo reparto (app:send-pickup-reminders), a la «Hora de envío del listado». Con el plazo de cambios ya cerrado no manda nada —el aviso es la confirmación de la cesta— y sólo comprueba que nadie se quedó sin aviso; si la confirmación está apagada, avisa igualmente. Independiente del email del recordatorio: apagada aquí, la tarea ni se ejecuta.',
+            'default' => true,
+        ],
+        self::CRON_CONSUMER_GROUP_PICKUP => [
+            'group' => 'Tareas programadas',
+            'label' => 'Avisar de la recogida del grupo de consumo',
+            'help' => 'Avisa a cada familia con un pedido del grupo de consumo por recoger: qué, en qué nodo, qué día y cuánto (app:send-consumer-group-pickup-notices). Sale con la misma antelación que el recordatorio de la cesta, por correo, al móvil y en su bandeja. Sólo corre con el grupo de consumo encendido.',
             'default' => true,
         ],
         self::CRON_DELIVERY_SHEET => [

@@ -1,0 +1,78 @@
+{# ============================================================
+ # Aviso de que la familia tiene un pedido del grupo de consumo
+ # por recoger. Aparte del aviso de la cesta: ése no llega a
+ # quien recoge cada semana ni a quien no tiene cesta ese día.
+ #
+ # El servicio pasa:
+ #   - partner          Partner destinataria
+ #   - order            ConsumerGroupOrder de su familia
+ #   - round            ConsumerGroupRound del pedido
+ #   - node             Node donde se recoge
+ #   - pickup_date      día físico de la recogida
+ #   - payment_info     dónde transferir ('' = no hay)
+ #   - url              ficha del pedido en el panel
+ #   - preferences_url  pantalla de avisos
+ #   - can_act          si puede entrar en la web (si no, sin botón)
+ # ============================================================ #}
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Recoge tu pedido · Grupo de consumo · CSA Vega de Jarama</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 580px; margin: 0 auto; padding: 24px;">
+
+    <h2 style="color: #5a8f3d; margin-top: 0;">Hola {{ partner.name }},</h2>
+
+    <p>Te toca recoger tu pedido del grupo de consumo <strong>«{{ round.title }}»</strong>
+       ({{ round.producer }}):</p>
+
+    <p style="background: #f4f7f0; border-left: 3px solid #5a8f3d; padding: 12px 16px; font-size: 16px;">
+        <strong>{{ pickup_date|format_date(pattern="EEEE d 'de' MMMM", locale='es')|capitalize }}</strong><br>
+        en <strong>{{ node.name }}</strong>
+    </p>
+
+    <h3 style="color: #5a8f3d;">Qué recoges</h3>
+    <ul>
+        {% for line in order.lines %}
+            {% if line.quantity > 0 %}
+                <li>{{ line.quantity|number_format(2, ',', '.') }} {{ line.roundItem.unit }} · {{ line.roundItem.name }}</li>
+            {% endif %}
+        {% endfor %}
+    </ul>
+
+    <p><strong>Importe: {{ order.total|number_format(2, ',', '.') }} €.</strong>
+        {% if order.paid %}
+            Ya está pagado. Gracias.
+        {% elseif order.willBeChargedByReceipt %}
+            No tienes que hacer nada: va en tu recibo del grupo de consumo, a mes vencido.
+        {% else %}
+            Está pendiente de pago: haz la transferencia con el concepto <strong>{{ order.paymentReference }}</strong>.
+        {% endif %}
+    </p>
+    {% if not order.paid and not order.willBeChargedByReceipt and payment_info %}
+        <p style="color: #555;">{{ payment_info|nl2br }}</p>
+    {% endif %}
+
+    {% if can_act %}
+        <p style="text-align: center; margin: 24px 0;">
+            <a href="{{ url }}"
+               style="background: #5a8f3d; color: #fff; text-decoration: none; padding: 12px 22px; border-radius: 6px; display: inline-block;">
+                Ver mi pedido
+            </a>
+        </p>
+    {% endif %}
+
+    <p style="margin-top: 32px; color: #777; font-size: 13px;">
+        Un abrazo,<br>
+        CSA Vega de Jarama<br>
+        <a href="https://csavegadejarama.org">csavegadejarama.org</a>
+    </p>
+
+    <p style="color: #999; font-size: 12px;">
+        ¿No quieres estos avisos? Puedes apagarlos en
+        <a href="{{ preferences_url }}">tus avisos</a> sin perder el de tu cesta.
+    </p>
+
+</body>
+</html>
