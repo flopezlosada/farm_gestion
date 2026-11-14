@@ -195,7 +195,8 @@ class PayrollCostTest extends TestCase
         $this->assertSame(850.0, $cost['gross'][11]);
         // Diciembre: la extra del 2º semestre pierde los 29 días de baja de 184.
         $this->assertSame(round(1500 + 1500 * 155 / 184, 2), $cost['gross'][12]);
-        $this->assertSame(1500.0, $cost['gross'][7]);
+        // Julio: mes sin baja, nómina más la extra de verano entera.
+        $this->assertSame(3000.0, $cost['gross'][7]);
         $this->assertSame(array_fill(1, 12, 525.0), $cost['ss']);
         $this->assertSame(array_fill(1, 12, 0.0), $cost['sickLeaveRefund']);
         $this->assertSame(round(850 + 525, 2), $cost['total'][11]);
