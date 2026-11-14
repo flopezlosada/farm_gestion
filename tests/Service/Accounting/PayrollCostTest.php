@@ -283,6 +283,61 @@ class PayrollCostTest extends TestCase
     }
 
     /**
+     * En 12 pagas no hay extra que recortar: una baja de 10 días sin complemento quita
+     * 10 de 30 días de la nómina de noviembre y paga el 60 % de los días 4 a 10.
+     */
+    public function testSickLeaveWithoutTopUpInTwelvePays(): void
+    {
+        $worker = $this->worker(1);
+        $cost = $this->payroll->forYear(
+            [$this->salary($worker, '2025-01-01', null, '21000.00', PaySchedule::Twelve, '30.00')],
+            [$this->sickLeave($worker, '2026-11-02', '2026-11-11', false)],
+            self::YEAR,
+        )[1];
+
+        $this->assertSame(round(1750 - 1750 * 10 / 30 + 21000 / 365 * 0.6 * 7, 2), $cost['gross'][11]);
+        $this->assertSame(1750.0, $cost['gross'][12]);
+        $this->assertSame(1750.0, $cost['gross'][10]);
+    }
+
+    /**
+     * Subida de sueldo el 1 de noviembre en mitad de la baja: cada día cobra la base
+     * reguladora de su tramo, y la numeración de días sigue desde el inicio de la baja.
+     */
+    public function testSickLeaveAcrossASalaryChangeUsesEachDaysSalary(): void
+    {
+        $worker = $this->worker(1);
+        $cost = $this->payroll->forYear(
+            [
+                $this->salary($worker, '2025-01-01', '2026-10-31', '21000.00', PaySchedule::Fourteen, '30.00'),
+                $this->salary($worker, '2026-11-01', null, '28000.00', PaySchedule::Fourteen, '30.00'),
+            ],
+            [$this->sickLeave($worker, '2026-10-16', '2026-11-13', true)],
+            self::YEAR,
+        )[1];
+
+        $this->assertSame(-round(21000 / 365 * 0.6, 2), $cost['sickLeaveRefund'][10]);
+        $this->assertSame(-round(28000 / 365 * (4 * 0.6 + 9 * 0.75), 2), $cost['sickLeaveRefund'][11]);
+    }
+
+    /**
+     * Una baja que empieza antes de tener sueldo: los días sin sueldo no cuestan ni
+     * devuelven nada, pero cuentan para numerar (el 31 de octubre sigue siendo el 16.º).
+     */
+    public function testSickLeaveDaysBeforeTheSalaryCountForNumberingOnly(): void
+    {
+        $worker = $this->worker(1);
+        $cost = $this->payroll->forYear(
+            [$this->salary($worker, '2026-10-20', null, '21000.00', PaySchedule::Fourteen, '30.00')],
+            [$this->sickLeave($worker, '2026-10-16', '2026-10-31', true)],
+            self::YEAR,
+        )[1];
+
+        $this->assertSame(-round(21000 / 365 * 0.6, 2), $cost['sickLeaveRefund'][10]);
+        $this->assertSame(round(1500 * 12 / 31, 2), $cost['gross'][10]);
+    }
+
+    /**
      * Una baja médica aprobada; `$end` null = sin fecha de alta.
      */
     private function sickLeave(Worker $worker, string $start, ?string $end, bool $toppedUp): Absence

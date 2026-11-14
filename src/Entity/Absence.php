@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Service\Accounting\PayrollCost;
 use Doctrine\ORM\Mapping as ORM;
 use Gedmo\Mapping\Annotation as Gedmo;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -153,7 +154,7 @@ class Absence
      * hasta el 100 % del sueldo? Marcado, la persona cobra su sueldo entero
      * durante la baja; desmarcado, cobra sólo la prestación. Cambia lo que
      * cuesta la baja en la previsión de sueldos
-     * ({@see \App\Service\Accounting\PayrollCost}). En el resto de ausencias
+     * ({@see PayrollCost}). En el resto de ausencias
      * se ignora.
      *
      * @var bool

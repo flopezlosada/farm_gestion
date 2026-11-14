@@ -919,6 +919,41 @@ class StaffControllerTest extends WebTestCase
     }
 
     /**
+     * El complemento no cambia con un token falso, ni desde la ficha de otra persona,
+     * ni en una baja sólo solicitada.
+     */
+    public function testTopUpToggleRejectsBadRequests(): void
+    {
+        $worker = $this->makeWorker();
+        $other = $this->makeWorker('Otra persona');
+        $id = $worker->getId();
+        $sickId = $this->persistOpenSickLeave($worker, '2026-10-16')->getId();
+        $requested = $this->persistOpenSickLeave($worker, '2027-01-04')->setStatus(Absence::STATUS_REQUESTED);
+        $this->em->flush();
+        $requestedId = $requested->getId();
+        $otherSickId = $this->persistOpenSickLeave($other, '2026-09-01')->getId();
+        $this->em->clear();
+
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $id);
+        $token = $crawler->filter('form[action$="/absence/' . $sickId . '/top-up"] input[name="_token"]')->attr('value');
+
+        $this->client->request('POST', '/gestion/staff/' . $id . '/absence/' . $sickId . '/top-up', ['_token' => 'falso']);
+        $this->assertResponseRedirects('/gestion/staff/' . $id);
+
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $other->getId());
+        $otherToken = $crawler->filter('form[action$="/absence/' . $otherSickId . '/top-up"] input[name="_token"]')->attr('value');
+        $this->client->request('POST', '/gestion/staff/' . $other->getId() . '/absence/' . $sickId . '/top-up', ['_token' => $otherToken]);
+        $this->assertResponseStatusCodeSame(404);
+
+        $this->client->request('POST', '/gestion/staff/' . $id . '/absence/' . $requestedId . '/top-up', ['_token' => $token]);
+        $this->assertResponseRedirects('/gestion/staff/' . $id);
+
+        $this->em->clear();
+        $this->assertTrue($this->em->getRepository(Absence::class)->find($sickId)->topsUpToFullPay());
+        $this->assertTrue($this->em->getRepository(Absence::class)->find($requestedId)->topsUpToFullPay());
+    }
+
+    /**
      * Guarda una baja médica aprobada sin fecha de alta.
      *
      * @param Worker $worker Trabajador.

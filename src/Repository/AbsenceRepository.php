@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\Absence;
 use App\Entity\Worker;
+use App\Service\Accounting\PayrollCost;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -54,7 +55,7 @@ class AbsenceRepository extends ServiceEntityRepository
     /**
      * Las bajas médicas APROBADAS de todo el mundo que tocan un año natural, en una
      * sola consulta: lo que necesita la previsión de sueldos
-     * ({@see \App\Service\Accounting\PayrollCost}). Trae también las que empezaron
+     * ({@see PayrollCost}). Trae también las que empezaron
      * antes, porque los días de baja se numeran desde su inicio. Una baja abierta
      * toca todo lo posterior a su inicio.
      *

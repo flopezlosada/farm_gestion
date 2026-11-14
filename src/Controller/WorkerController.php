@@ -564,8 +564,8 @@ class WorkerController extends AbstractController
         if ($absence->getWorker()?->getId() !== $worker->getId()) {
             throw $this->createNotFoundException('La ausencia no pertenece a este trabajador.');
         }
-        if ($absence->getType() !== Absence::TYPE_SICK_LEAVE) {
-            $this->addFlash('error', 'Sólo una baja médica lleva complemento.');
+        if (!$absence->isApprovedSickLeave()) {
+            $this->addFlash('error', 'Sólo una baja médica aprobada lleva complemento.');
 
             return $back;
         }
