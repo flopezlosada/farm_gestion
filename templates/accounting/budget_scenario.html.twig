@@ -80,7 +80,7 @@
         <div class="prl-empty">{{ budget.year }} ya está anotado entero: no quedan meses que simular.</div>
     {% else %}
 
-    <form method="get" action="{{ path('accounting_budget_scenario', { id: budget.id }) }}">
+    <form method="get" action="{{ path('accounting_budget_scenario', { id: budget.id }) }}" id="scenario-form">
         <div class="acc-levers">
 
             {# ============ CUOTAS ============ #}
@@ -166,7 +166,8 @@
          # Siempre plegada al cargar: en una asamblea se proyecta la pantalla y el sueldo
          # de cada persona no tiene por qué salir, ni siquiera al recalcular. El resumen
          # dice si se está recalculando, sin cifras. Plegada, sus casillas viajan igual
-         # con el formulario. #}
+         # con el formulario; las de las fichas que nadie ha tocado no viajan (JS de
+         # abajo): si no, el sueldo de cada persona saldría en la URL proyectada. #}
         {% if canSeeSalaries %}
         <details class="acc-staff-lever" style="margin-top: 14px;">
             <summary>Sueldos <span class="acc-muted acc-small">· {{ (query.recalc ?? '') == '1' ? 'recalculados con las fichas de trabajadores' : 'los del presupuesto' }} (pulsa para ver y cambiar)</span></summary>
@@ -293,4 +294,27 @@
 
     {% endif %}
 </div>
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    <script>
+        // El escenario vive en la URL (GET). Una casilla de sueldo de las fichas que
+        // nadie ha tocado no se envía: el servidor ya cae en lo de la ficha cuando
+        // falta, y así el sueldo de cada persona no sale en la barra del navegador,
+        // ni en el historial, al simular sólo cuotas en una asamblea.
+        (function () {
+            var form = document.getElementById('scenario-form');
+            if (!form) { return; }
+            form.addEventListener('submit', function () {
+                form.querySelectorAll('input[name^="staff["]').forEach(function (input) {
+                    input.disabled = input.value === input.defaultValue;
+                });
+            });
+            // Al volver atrás (bfcache) las casillas vuelven a estar disponibles.
+            window.addEventListener('pageshow', function () {
+                form.querySelectorAll('input[name^="staff["]').forEach(function (input) { input.disabled = false; });
+            });
+        })();
+    </script>
 {% endblock %}
