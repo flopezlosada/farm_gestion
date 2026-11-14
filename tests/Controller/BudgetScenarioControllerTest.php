@@ -16,7 +16,7 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
 /**
  * La calculadora de escenarios de un presupuesto: responde con lo que dice el enlace y
- * los sueldos sólo existen para quien administra.
+ * los sueldos sólo existen para quien escribe en la contabilidad.
  *
  * Trabaja sobre un año lejano, sin nada anotado: todos los meses son previsión y la
  * tesorería arranca de la del presupuesto.
@@ -119,10 +119,39 @@ class BudgetScenarioControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
-     * Quien lleva la contabilidad sin ser admin no ve sueldos: ni la palanca ni las
-     * fichas, y un enlace que la traiga marcada no cambia la cuenta.
+     * La tarjeta de sueldos sale plegada, también al recalcular: proyectada en una
+     * asamblea, no enseña el sueldo de cada persona hasta que alguien la abre.
      */
-    public function testAccountantWithoutAdminNeverSeesSalaries(): void
+    public function testSalariesCardIsFoldedByDefault(): void
+    {
+        $this->browser->request('GET', $this->url());
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorExists('details.acc-staff-lever:not([open]) input[name="recalc"]');
+    }
+
+    /**
+     * Quien escribe en la contabilidad, sin ser admin, puede recalcular con las fichas.
+     */
+    public function testAccountingEditorRecalculatesWithTheWorkerFiles(): void
+    {
+        $user = $this->createUserWithRoles(['ROLE_GESTION_CONTABILIDAD_EDIT']);
+        $this->created[] = $user;
+        $this->browser->loginUser($user);
+
+        $crawler = $this->browser->request('GET', $this->url(['recalc' => '1']));
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorExists('details.acc-staff-lever:not([open])');
+        $this->assertSelectorTextContains('details.acc-staff-lever summary', 'recalculados con las fichas');
+        $this->assertStringContainsString('-26.844,00 €', $crawler->filter('.acc-headline')->text());
+    }
+
+    /**
+     * Quien sólo lee la contabilidad no ve sueldos: ni la palanca ni las fichas, y un
+     * enlace que la traiga marcada no cambia la cuenta.
+     */
+    public function testAccountingReaderNeverSeesSalaries(): void
     {
         $user = $this->createUserWithRoles(['ROLE_GESTION_CONTABILIDAD']);
         $this->created[] = $user;
@@ -132,7 +161,9 @@ class BudgetScenarioControllerTest extends AbstractAuthenticatedTest
 
         $this->assertResponseIsSuccessful();
         $this->assertSelectorNotExists('input[name="recalc"]');
+        $this->assertSelectorNotExists('details.acc-staff-lever');
         $this->assertStringNotContainsString($this->worker->getName(), $crawler->text());
+        $this->assertStringNotContainsString('21000', $crawler->html());
         $this->assertStringContainsString('750,00 €', $crawler->filter('.acc-headline')->text());
     }
 

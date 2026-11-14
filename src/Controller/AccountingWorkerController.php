@@ -23,14 +23,21 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * Lo que cuesta cada trabajador: sus tramos de sueldo y, con ellos, lo que toca pagar
  * cada mes del año. Es la base para prever los sueldos en las simulaciones.
  *
- * Sólo ROLE_ADMIN, aunque el resto de la contabilidad lo vea más gente: son sueldos.
+ * Sólo quien puede escribir en la contabilidad (ROLE_GESTION_CONTABILIDAD_EDIT), aunque
+ * la lectura la tenga más gente: son sueldos.
  * Las personas son las fichas del registro de jornada; aquí sólo se les pone precio.
  */
 #[Route('/gestion/accounting/workers')]
 #[IsGranted('FEATURE_CONTABILIDAD')]
-#[IsGranted('ROLE_ADMIN')]
+#[IsGranted(self::SALARIES_ROLE)]
 class AccountingWorkerController extends AbstractController
 {
+    /**
+     * Quién ve y toca sueldos, aquí y en todo sitio que los enseñe (el enlace de
+     * Ajustes, la palanca de sueldos de «¿Y si…?»): un solo sitio para que no se
+     * separen.
+     */
+    public const SALARIES_ROLE = 'ROLE_GESTION_CONTABILIDAD_EDIT';
 
     /**
      * Cada trabajador con sus tramos y la rejilla del año: bruto, Seguridad Social de

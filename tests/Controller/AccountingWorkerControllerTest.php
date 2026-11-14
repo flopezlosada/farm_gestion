@@ -12,7 +12,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
 /**
- * Los sueldos de los trabajadores: sólo los ve quien administra, un sueldo nuevo
+ * Los sueldos de los trabajadores: sólo los ve quien escribe en la contabilidad, un sueldo nuevo
  * cierra el anterior y dos tramos de la misma persona no pueden pisarse.
  */
 class AccountingWorkerControllerTest extends AbstractAuthenticatedTest
@@ -54,12 +54,12 @@ class AccountingWorkerControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
-     * Quien lleva la contabilidad sin ser admin no ve sueldos, ni en la pantalla ni en
-     * el enlace de Ajustes.
+     * Quien sólo puede LEER la contabilidad no ve sueldos, ni en la pantalla ni en el
+     * enlace de Ajustes.
      */
-    public function testAccountingStaffWithoutAdminCannotSeeSalaries(): void
+    public function testAccountingReadersCannotSeeSalaries(): void
     {
-        $user = $this->createUserWithRoles(['ROLE_GESTION_CONTABILIDAD', 'ROLE_GESTION_CONTABILIDAD_EDIT']);
+        $user = $this->createUserWithRoles(['ROLE_GESTION_CONTABILIDAD']);
         $this->created[] = $user;
         $this->browser->loginUser($user);
 
@@ -77,6 +77,27 @@ class AccountingWorkerControllerTest extends AbstractAuthenticatedTest
         $this->browser->request('GET', '/gestion/accounting/settings');
         $this->assertResponseIsSuccessful();
         $this->assertSelectorNotExists('a[href="/gestion/accounting/workers"]');
+    }
+
+    /**
+     * Quien puede escribir en la contabilidad, sin ser admin, ve y toca los sueldos.
+     */
+    public function testAccountingEditorsSeeSalaries(): void
+    {
+        $user = $this->createUserWithRoles(['ROLE_GESTION_CONTABILIDAD_EDIT']);
+        $this->created[] = $user;
+        $this->browser->loginUser($user);
+        $this->persist($this->salary('2025-01-01', null));
+
+        $crawler = $this->browser->request('GET', '/gestion/accounting/workers?year=2026');
+        $this->assertResponseIsSuccessful();
+        $this->assertStringContainsString($this->worker->getName(), $crawler->filter('.acc-grid')->text());
+
+        $this->browser->request('GET', '/gestion/accounting/workers/'.$this->worker->getId().'/salary/new');
+        $this->assertResponseIsSuccessful();
+
+        $this->browser->request('GET', '/gestion/accounting/settings');
+        $this->assertSelectorExists('a[href="/gestion/accounting/workers"]');
     }
 
     /**

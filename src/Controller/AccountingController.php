@@ -197,7 +197,7 @@ class AccountingController extends AbstractController
             ['route' => 'accounting_providers', 'params' => [], 'icon' => 'fa-truck', 'title' => 'Proveedores', 'text' => 'A quién se le compra.'],
             ['route' => 'accounting_customers', 'params' => [], 'icon' => 'fa-users', 'title' => 'Clientes', 'text' => 'A quién se le factura.'],
         ];
-        if ($this->isGranted('ROLE_ADMIN')) {
+        if ($this->isGranted(AccountingWorkerController::SALARIES_ROLE)) {
             $links[] = ['route' => 'accounting_workers', 'params' => [], 'icon' => 'fa-id-card-o', 'title' => 'Trabajadores', 'text' => 'Lo que cuesta cada persona contratada, mes a mes.'];
         }
 

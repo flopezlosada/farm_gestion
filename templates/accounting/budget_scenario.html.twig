@@ -46,6 +46,8 @@
         .acc-scenario-grid .acc-cash td { font-weight: 600; }
         .acc-headline { display: flex; flex-wrap: wrap; gap: 24px; font-size: 14px; }
         .acc-headline b { font-size: 18px; }
+        .acc-staff-lever > summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+        .acc-staff-lever[open] > summary { margin-bottom: 8px; }
     </style>
 {% endblock %}
 
@@ -160,9 +162,14 @@
             {% endembed %}
         </div>
 
-        {# ============ SUELDOS (sólo admin) ============ #}
+        {# ============ SUELDOS (sólo quien ve los sueldos) ============
+         # Siempre plegada al cargar: en una asamblea se proyecta la pantalla y el sueldo
+         # de cada persona no tiene por qué salir, ni siquiera al recalcular. El resumen
+         # dice si se está recalculando, sin cifras. Plegada, sus casillas viajan igual
+         # con el formulario. #}
         {% if canSeeSalaries %}
-        <div style="margin-top: 14px;">
+        <details class="acc-staff-lever" style="margin-top: 14px;">
+            <summary>Sueldos <span class="acc-muted acc-small">· {{ (query.recalc ?? '') == '1' ? 'recalculados con las fichas de trabajadores' : 'los del presupuesto' }} (pulsa para ver y cambiar)</span></summary>
             {% embed '_components/csa_card.html.twig' with { title: 'Sueldos', subtitle: 'Con las fichas de trabajadores en vez de lo presupuestado', accent: 'green' } %}
                 {% block body %}
                     <label style="font-size: 13px;">
@@ -215,7 +222,7 @@
                     </p>
                 {% endblock %}
             {% endembed %}
-        </div>
+        </details>
         {% endif %}
 
         <div class="prl-toolbar" style="margin-top: 14px;">

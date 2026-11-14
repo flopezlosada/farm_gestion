@@ -280,7 +280,9 @@ class BudgetController extends AbstractController
      * presupuesto si cambian las cestas, los sueldos o llega un gasto puntual.
      *
      * Es un GET a propósito: no guarda nada, el escenario es su enlace. Los sueldos
-     * sólo entran para ROLE_ADMIN, como en la pantalla de trabajadores.
+     * sólo entran para quien puede ver la pantalla de trabajadores
+     * ({@see AccountingWorkerController::SALARIES_ROLE}); el resto ve el resultado sin
+     * la palanca.
      */
     #[Route('/{id}/scenario', name: 'accounting_budget_scenario', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function scenario(
@@ -289,7 +291,7 @@ class BudgetController extends AbstractController
         ScenarioLeverReader $reader,
         ScenarioSimulator $simulator,
     ): Response {
-        $canSeeSalaries = $this->isGranted('ROLE_ADMIN');
+        $canSeeSalaries = $this->isGranted(AccountingWorkerController::SALARIES_ROLE);
         $form = $reader->read($request->query->all(), (int) $budget->getYear(), $canSeeSalaries);
 
         return $this->render('accounting/budget_scenario.html.twig', $form + [
