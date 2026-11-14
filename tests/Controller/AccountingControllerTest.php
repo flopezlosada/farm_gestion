@@ -84,6 +84,11 @@ class AccountingControllerTest extends AbstractAuthenticatedTest
         $this->assertSelectorTextContains('#budget-grid .counters', '(prevista)');
         $this->assertSelectorTextContains('.acc-cash-row', 'Tesorería a fin de mes');
         $this->assertCount(12, $crawler->filter('.acc-cash-row .acc-cash-month'));
+        // Firefox no rellena al recargar lo tecleado sin guardar: parecería guardado.
+        $this->assertSame('off', $crawler->filter('#budget-grid')->attr('autocomplete'));
+        // «=» pregunta con el modal de la casa, que no envía nada por sí solo.
+        $this->assertCount(1, $crawler->filter('dialog#budget-spread-confirm button[type="button"][data-csa-confirm]'));
+        $this->assertCount(0, $crawler->filter('dialog#budget-spread-confirm form'));
     }
 
     public function testComoVamosEstaEnInformes(): void

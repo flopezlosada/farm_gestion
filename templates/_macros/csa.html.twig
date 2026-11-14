@@ -336,6 +336,10 @@
  #   csrf_token    valor del CSRF token (opcional)
  #   csrf_name     nombre del campo CSRF (default: '_csrf_token')
  #   extra_fields  array de {name, value} para hidden inputs adicionales
+ #   client_side   true: no envía nada. El botón confirmar es un type="button"
+ #                 con [data-csa-confirm] y el JS del call site decide qué hacer
+ #                 (y puede reescribir el texto en .csa-modal__body p). Para
+ #                 acciones que sólo cambian la pantalla, como rellenar casillas.
  #
  # Ejemplo:
  #   <button type="button" class="csa-btn csa-btn--danger-soft csa-btn--sm"
@@ -356,7 +360,8 @@
     {%- set csrf_name = opts.csrf_name|default('_csrf_token') -%}
     {%- set form_id = opts.external_form_id|default(null) -%}
     {%- set href = opts.confirm_href|default(null) -%}
-    {%- set as_form = not form_id and not href -%}
+    {%- set client_side = opts.client_side|default(false) -%}
+    {%- set as_form = not form_id and not href and not client_side -%}
     <dialog id="{{ id }}" class="csa-modal csa-modal--{{ variant }}"
             role="alertdialog" aria-labelledby="{{ id }}-title">
         {% if as_form %}<form method="post" action="{{ opts.action }}">
@@ -395,6 +400,8 @@
             </button>
             {% if as_form %}
                 <button type="submit" class="csa-modal__btn csa-modal__btn--primary">{{ opts.confirm_label }}</button>
+            {% elseif client_side %}
+                <button type="button" class="csa-modal__btn csa-modal__btn--primary" data-csa-confirm>{{ opts.confirm_label }}</button>
             {% elseif form_id %}
                 <button type="submit" form="{{ form_id }}" class="csa-modal__btn csa-modal__btn--primary">{{ opts.confirm_label }}</button>
             {% else %}

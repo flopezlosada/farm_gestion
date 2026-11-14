@@ -78,7 +78,9 @@
         {{ csa.callout('Éste es el presupuesto aprobado en asamblea. Si lo que quieres es rehacer las cuentas a mitad de año, cópialo y trabaja sobre la copia: lo aprobado es contra lo que hay que rendir cuentas.', 'warning', 'gavel') }}
     {% endif %}
 
-    <form method="post" action="{{ path('accounting_budget_lines_save', { id: budget.id }) }}" id="budget-grid" data-opening="{{ opening.amount }}">
+    {# autocomplete="off": al recargar, Firefox rellenaba las casillas con lo tecleado
+     # sin guardar y parecía guardado. #}
+    <form method="post" action="{{ path('accounting_budget_lines_save', { id: budget.id }) }}" id="budget-grid" data-opening="{{ opening.amount }}" autocomplete="off">
         <input type="hidden" name="_token" value="{{ csrf_token('accounting_budget_lines_' ~ budget.id) }}">
 
         <div class="prl-toolbar">
@@ -186,6 +188,15 @@
         {% endif %}
     </form>
 
+    {{ csa.confirm_dialog('budget-spread-confirm', {
+        variant: 'warning',
+        eyebrow: 'Repetir enero',
+        title: 'Copiar enero en todos los meses',
+        body: 'Se sustituyen meses con cifras distintas.',
+        confirm_label: 'Sustituir',
+        client_side: true,
+    }) }}
+
 </div>
 {% endblock %}
 
@@ -285,14 +296,52 @@
 
             // «=» copia enero al resto del año: la mitad de las partidas son la misma
             // cifra doce veces (el alquiler, las nóminas, la cuota del préstamo).
-            form.addEventListener('click', function (event) {
-                var button = event.target.closest('.acc-spread');
-                if (!button) { return; }
-                var cells = button.closest('tr').querySelectorAll('input.acc-cell');
+            // Si algún mes de febrero a diciembre tiene otra cifra, pregunta antes:
+            // se pierde. Vacíos o iguales a enero, copia sin molestar.
+            var dialog = document.getElementById('budget-spread-confirm');
+            var pendingRow = null;
+
+            function spread(row) {
+                var cells = row.querySelectorAll('input.acc-cell');
                 var first = cells[0].value;
                 cells.forEach(function (cell) { cell.value = first; });
                 recalc();
+            }
+
+            function overwritten(row) {
+                var cells = Array.prototype.slice.call(row.querySelectorAll('input.acc-cell'));
+                var first = parse(cells[0].value);
+                return cells.slice(1).filter(function (cell) {
+                    return cell.value.trim() !== '' && parse(cell.value) !== first;
+                }).length;
+            }
+
+            form.addEventListener('click', function (event) {
+                var button = event.target.closest('.acc-spread');
+                if (!button) { return; }
+                var row = button.closest('tr');
+                var lost = overwritten(row);
+                if (lost === 0 || !dialog || typeof dialog.showModal !== 'function') {
+                    spread(row);
+                    return;
+                }
+                var name = row.querySelector('.acc-cat-name').textContent.trim().split('\n')[0].trim();
+                dialog.querySelector('.csa-modal__body p').textContent = (lost === 1
+                    ? 'Se sustituye 1 mes con una cifra distinta de la de enero'
+                    : 'Se sustituyen ' + lost + ' meses con cifras distintas de la de enero')
+                    + ' en «' + name + '». Lo tecleado en esos meses se pierde.';
+                pendingRow = row;
+                dialog.showModal();
             });
+
+            if (dialog) {
+                dialog.querySelector('[data-csa-confirm]').addEventListener('click', function () {
+                    if (pendingRow) { spread(pendingRow); }
+                    pendingRow = null;
+                    dialog.close();
+                });
+                dialog.addEventListener('close', function () { pendingRow = null; });
+            }
 
             recalc();
         })();
