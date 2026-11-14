@@ -29,6 +29,15 @@
                         {{ csa.field(form.type, 'Tipo') }}
                         {{ csa.field(form.startDate, 'Desde') }}
                         {{ csa.field(form.endDate, 'Hasta') }}
+                        <div class="csa-field csa-field--full"{{ csa.reveal(form.topsUpToFullPay, 'type=sick_leave') }}>
+                            <label for="{{ form.topsUpToFullPay.vars.id }}" style="display:flex; gap:.5rem; align-items:flex-start;">
+                                {{ form_widget(form.topsUpToFullPay) }}
+                                <span>
+                                    La asociación complementa hasta el 100 % del sueldo
+                                    <span class="csa-field__hint" style="display:block;">Marcada, cobra el sueldo entero durante la baja. Desmarcada, sólo la prestación (nada los 3 primeros días, el 60 % del 4.º al 20.º y el 75 % desde el 21.º). Cambia la previsión de sueldos.</span>
+                                </span>
+                            </label>
+                        </div>
                         {{ csa.field(form.note, 'Comentario', { full: true }) }}
                     </div>
                 {% endblock %}

@@ -4,6 +4,7 @@ namespace App\Form;
 
 use App\Entity\Absence;
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\CheckboxType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
@@ -17,7 +18,8 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
  * según quién actúa.
  *
  * Cuando lo usa el trabajador, se puede ocultar el selector de tipo dejando solo
- * vacaciones, con la opción `only_vacation`.
+ * vacaciones, con la opción `only_vacation`; entonces tampoco lleva la casilla
+ * del complemento de la baja médica.
  */
 class AbsenceType extends AbstractType
 {
@@ -27,6 +29,11 @@ class AbsenceType extends AbstractType
             $builder->add('type', ChoiceType::class, [
                 'label' => 'Tipo',
                 'choices' => array_flip(Absence::TYPE_LABELS),
+            ]);
+            // Sólo cuenta en una baja médica: la plantilla lo enseña sólo con ese tipo.
+            $builder->add('topsUpToFullPay', CheckboxType::class, [
+                'label' => 'La asociación complementa hasta el 100 % del sueldo',
+                'required' => false,
             ]);
         }
 

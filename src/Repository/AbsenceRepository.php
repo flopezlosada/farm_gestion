@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\Absence;
 use App\Entity\Worker;
+use App\Service\Accounting\PayrollCost;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -46,6 +47,32 @@ class AbsenceRepository extends ServiceEntityRepository
             ->setParameter('status', Absence::STATUS_APPROVED)
             ->setParameter('yearStart', $yearStart)
             ->setParameter('yearEnd', $yearEnd)
+            ->orderBy('a.startDate', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Las bajas médicas APROBADAS de todo el mundo que tocan un año natural, en una
+     * sola consulta: lo que necesita la previsión de sueldos
+     * ({@see PayrollCost}). Trae también las que empezaron
+     * antes, porque los días de baja se numeran desde su inicio. Una baja abierta
+     * toca todo lo posterior a su inicio.
+     *
+     * @param int $year Año natural.
+     * @return list<Absence>
+     */
+    public function findApprovedSickLeavesTouchingYear(int $year): array
+    {
+        return $this->createQueryBuilder('a')
+            ->andWhere('a.type = :type')
+            ->andWhere('a.status = :status')
+            ->andWhere('a.startDate <= :to')
+            ->andWhere('a.endDate IS NULL OR a.endDate >= :from')
+            ->setParameter('type', Absence::TYPE_SICK_LEAVE)
+            ->setParameter('status', Absence::STATUS_APPROVED)
+            ->setParameter('from', new \DateTimeImmutable($year . '-01-01'))
+            ->setParameter('to', new \DateTimeImmutable($year . '-12-31'))
             ->orderBy('a.startDate', 'ASC')
             ->getQuery()
             ->getResult();

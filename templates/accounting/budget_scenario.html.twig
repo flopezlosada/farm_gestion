@@ -46,6 +46,8 @@
         .acc-scenario-grid .acc-cash td { font-weight: 600; }
         .acc-headline { display: flex; flex-wrap: wrap; gap: 24px; font-size: 14px; }
         .acc-headline b { font-size: 18px; }
+        .acc-staff-lever > summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+        .acc-staff-lever[open] > summary { margin-bottom: 8px; }
     </style>
 {% endblock %}
 
@@ -78,7 +80,7 @@
         <div class="prl-empty">{{ budget.year }} ya está anotado entero: no quedan meses que simular.</div>
     {% else %}
 
-    <form method="get" action="{{ path('accounting_budget_scenario', { id: budget.id }) }}">
+    <form method="get" action="{{ path('accounting_budget_scenario', { id: budget.id }) }}" id="scenario-form">
         <div class="acc-levers">
 
             {# ============ CUOTAS ============ #}
@@ -160,14 +162,20 @@
             {% endembed %}
         </div>
 
-        {# ============ SUELDOS (sólo admin) ============ #}
+        {# ============ SUELDOS (sólo quien ve los sueldos) ============
+         # Siempre plegada al cargar: en una asamblea se proyecta la pantalla y el sueldo
+         # de cada persona no tiene por qué salir, ni siquiera al recalcular. El resumen
+         # dice si se está recalculando, sin cifras. Plegada, sus casillas viajan igual
+         # con el formulario; las de las fichas que nadie ha tocado no viajan (JS de
+         # abajo): si no, el sueldo de cada persona saldría en la URL proyectada. #}
         {% if canSeeSalaries %}
-        <div style="margin-top: 14px;">
+        <details class="acc-staff-lever" style="margin-top: 14px;">
+            <summary>Sueldos <span class="acc-muted acc-small">· {{ (query.recalc ?? '') == '1' ? 'recalculados con las fichas de trabajadores' : 'los del presupuesto' }} (pulsa para ver y cambiar)</span></summary>
             {% embed '_components/csa_card.html.twig' with { title: 'Sueldos', subtitle: 'Con las fichas de trabajadores en vez de lo presupuestado', accent: 'green' } %}
                 {% block body %}
                     <label style="font-size: 13px;">
                         <input type="checkbox" name="recalc" value="1" {{ (query.recalc ?? '') == '1' ? 'checked' }}>
-                        Recalcular los sueldos de los meses que faltan con las fichas y los trabajadores de abajo
+                        Recalcular los sueldos de los meses que faltan con las fichas, sus bajas médicas y los trabajadores de abajo
                     </label>
                     <p class="acc-muted acc-small" style="margin: 4px 0 10px;">
                         Sin marcar, los sueldos son los del presupuesto. Marcada, sustituyen al grupo entero de sueldos
@@ -215,7 +223,7 @@
                     </p>
                 {% endblock %}
             {% endembed %}
-        </div>
+        </details>
         {% endif %}
 
         <div class="prl-toolbar" style="margin-top: 14px;">
@@ -286,4 +294,27 @@
 
     {% endif %}
 </div>
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    <script>
+        // El escenario vive en la URL (GET). Una casilla de sueldo de las fichas que
+        // nadie ha tocado no se envía: el servidor ya cae en lo de la ficha cuando
+        // falta, y así el sueldo de cada persona no sale en la barra del navegador,
+        // ni en el historial, al simular sólo cuotas en una asamblea.
+        (function () {
+            var form = document.getElementById('scenario-form');
+            if (!form) { return; }
+            form.addEventListener('submit', function () {
+                form.querySelectorAll('input[name^="staff["]').forEach(function (input) {
+                    input.disabled = input.value === input.defaultValue;
+                });
+            });
+            // Al volver atrás (bfcache) las casillas vuelven a estar disponibles.
+            window.addEventListener('pageshow', function () {
+                form.querySelectorAll('input[name^="staff["]').forEach(function (input) { input.disabled = false; });
+            });
+        })();
+    </script>
 {% endblock %}

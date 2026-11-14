@@ -2,10 +2,12 @@
 
 namespace App\Tests\Service\Accounting\Scenario;
 
+use App\Entity\Absence;
 use App\Entity\Budget;
 use App\Entity\BudgetCategory;
 use App\Entity\BudgetCategoryGroup;
 use App\Entity\PaySchedule;
+use App\Entity\Worker;
 use App\Entity\WorkerSalary;
 use App\Repository\AccountEntryRepository;
 use App\Repository\BudgetCategoryGroupRepository;
@@ -18,6 +20,7 @@ use App\Service\Accounting\Scenario\OneOff;
 use App\Service\Accounting\Scenario\ScenarioLevers;
 use App\Service\Accounting\Scenario\ScenarioSimulator;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MockClock;
 
 /**
  * Un escenario sólo cambia los meses que faltan y sólo lo que tocan sus palancas: la
@@ -124,6 +127,39 @@ class ScenarioSimulatorTest extends TestCase
     }
 
     /**
+     * Con la palanca de sueldos van las bajas médicas: la misma persona, de baja
+     * complementada del 16-oct al 31-dic, cuesta en noviembre y diciembre lo de antes
+     * menos lo que paga la Seguridad Social (días 17 a 20 al 60 %, desde el 21 al 75 %).
+     * La baja de otra persona no la toca.
+     */
+    public function testStaffCostDropsWithTheWorkersSickLeave(): void
+    {
+        $worker = (new Worker())->setName('De baja');
+        (new \ReflectionProperty(Worker::class, 'id'))->setValue($worker, 7);
+        $other = (new Worker())->setName('Otra');
+        (new \ReflectionProperty(Worker::class, 'id'))->setValue($other, 8);
+        $person = (new WorkerSalary())
+            ->setWorker($worker)
+            ->setAnnualGross('21000.00')
+            ->setPayments(PaySchedule::Fourteen)
+            ->setEmployerSsRate('31.40')
+            ->setValidFrom(new \DateTimeImmutable('2025-01-01'));
+        $leave = static fn (Worker $who): Absence => (new Absence())
+            ->setWorker($who)
+            ->setType(Absence::TYPE_SICK_LEAVE)
+            ->setStatus(Absence::STATUS_APPROVED)
+            ->setStartDate(new \DateTimeImmutable('2026-10-16'))
+            ->setEndDate(new \DateTimeImmutable('2026-12-31'));
+
+        $result = $this->simulate(new ScenarioLevers(staff: [[$person]], sickLeaves: [$leave($worker), $leave($other)]));
+
+        $november = round(2049.50 - 21000 / 365 * (4 * 0.6 + 26 * 0.75), 2);
+        $december = round(3549.50 - 21000 / 365 * 31 * 0.75, 2);
+        $this->assertSame(round(5118.75 - $november, 2), $result['months'][11]['parts']['staff']);
+        $this->assertSame(round(10237.50 - $december, 2), $result['months'][12]['parts']['staff']);
+    }
+
+    /**
      * Sin nadie en plantilla, los sueldos del escenario son cero: se ahorra todo lo
      * presupuestado de los meses que faltan.
      */
@@ -188,7 +224,7 @@ class ScenarioSimulatorTest extends TestCase
     {
         $budget = (new Budget())->setYear(self::YEAR)->setName('Aprobado')->setOpeningCash('12225.00');
 
-        return (new ScenarioSimulator($this->tracker(), new PayrollCost()))->simulate($budget, $levers);
+        return (new ScenarioSimulator($this->tracker(), new PayrollCost(new MockClock('2026-11-14 10:00:00'))))->simulate($budget, $levers);
     }
 
     /**
