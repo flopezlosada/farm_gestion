@@ -6,6 +6,7 @@ use App\Entity\BudgetCategory;
 use App\Entity\PaySchedule;
 use App\Entity\Worker;
 use App\Entity\WorkerSalary;
+use App\Repository\AbsenceRepository;
 use App\Repository\BudgetCategoryRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Repository\WorkerSalaryRepository;
@@ -34,6 +35,7 @@ class ScenarioLeverReader
         private readonly MonthlyFeeCalculator $fees,
         private readonly WorkerSalaryRepository $salaries,
         private readonly BudgetCategoryRepository $categories,
+        private readonly AbsenceRepository $absences,
     ) {
     }
 
@@ -42,7 +44,8 @@ class ScenarioLeverReader
      *
      * Los sueldos sólo se leen para quien puede verlos: la suma de los sueldos de dos
      * personas es casi el sueldo de cada una. Para el resto la palanca no existe, ni en
-     * la pantalla ni en el cálculo, aunque el enlace la traiga.
+     * la pantalla ni en el cálculo, aunque el enlace la traiga. Con la palanca van las
+     * bajas médicas del año, que abaratan los sueldos igual que en «Trabajadores».
      *
      * @param array<array-key, mixed> $query los parámetros de la petición
      *
@@ -63,8 +66,10 @@ class ScenarioLeverReader
         $salaries = $canSeeSalaries ? $this->salaries->findTouchingYear($year) : [];
         $staffRows = $this->staffRows($salaries, self::child($query, 'staff'));
         $staff = null;
+        $sickLeaves = [];
         if ($canSeeSalaries && ($query['recalc'] ?? '') === '1') {
             $staff = $this->staff($salaries, $staffRows, self::child($query, 'extra'), $year, $warnings);
+            $sickLeaves = $this->absences->findApprovedSickLeavesTouchingYear($year);
         }
 
         return [
@@ -73,6 +78,7 @@ class ScenarioLeverReader
                 $this->maintenance(self::child($query, 'maintenance'), $warnings),
                 $staff,
                 $this->oneOffs(self::child($query, 'oneoff'), $categories, $warnings),
+                $sickLeaves,
             ),
             'hints' => $hints,
             'staffRows' => $staffRows,

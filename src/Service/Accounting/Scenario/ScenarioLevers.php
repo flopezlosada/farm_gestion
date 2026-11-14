@@ -2,6 +2,7 @@
 
 namespace App\Service\Accounting\Scenario;
 
+use App\Entity\Absence;
 use App\Entity\WorkerSalary;
 
 /**
@@ -16,12 +17,17 @@ final class ScenarioLevers
      *                                                       persona, de verdad o imaginaria;
      *                                                       null = los sueldos del presupuesto
      * @param list<OneOff>                            $oneOffs
+     * @param list<Absence>                           $sickLeaves las bajas médicas del año, que
+     *                                                            abaratan los sueldos de
+     *                                                            `$staff`; sin `$staff` no
+     *                                                            cuentan
      */
     public function __construct(
         public readonly ?BasketFees $fees = null,
         public readonly ?MaintenanceFee $maintenance = null,
         public readonly ?array $staff = null,
         public readonly array $oneOffs = [],
+        public readonly array $sickLeaves = [],
     ) {
     }
 

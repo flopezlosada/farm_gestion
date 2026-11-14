@@ -125,9 +125,9 @@ class ScenarioSimulator
         if ($levers->staff !== null) {
             $cost = array_fill(1, 12, 0.0);
             foreach ($levers->staff as $salaries) {
-                $person = $this->payroll->forWorker($salaries, $year);
+                $person = $this->payroll->forWorker($salaries, $levers->sickLeaves, $year);
                 for ($m = 1; $m <= 12; ++$m) {
-                    $cost[$m] += $person['gross'][$m] + $person['ss'][$m];
+                    $cost[$m] += $person['total'][$m];
                 }
             }
             $planned = $this->plannedGroup($groups, self::STAFF_GROUP);

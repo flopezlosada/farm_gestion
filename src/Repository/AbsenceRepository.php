@@ -52,6 +52,32 @@ class AbsenceRepository extends ServiceEntityRepository
     }
 
     /**
+     * Las bajas médicas APROBADAS de todo el mundo que tocan un año natural, en una
+     * sola consulta: lo que necesita la previsión de sueldos
+     * ({@see \App\Service\Accounting\PayrollCost}). Trae también las que empezaron
+     * antes, porque los días de baja se numeran desde su inicio. Una baja abierta
+     * toca todo lo posterior a su inicio.
+     *
+     * @param int $year Año natural.
+     * @return list<Absence>
+     */
+    public function findApprovedSickLeavesTouchingYear(int $year): array
+    {
+        return $this->createQueryBuilder('a')
+            ->andWhere('a.type = :type')
+            ->andWhere('a.status = :status')
+            ->andWhere('a.startDate <= :to')
+            ->andWhere('a.endDate IS NULL OR a.endDate >= :from')
+            ->setParameter('type', Absence::TYPE_SICK_LEAVE)
+            ->setParameter('status', Absence::STATUS_APPROVED)
+            ->setParameter('from', new \DateTimeImmutable($year . '-01-01'))
+            ->setParameter('to', new \DateTimeImmutable($year . '-12-31'))
+            ->orderBy('a.startDate', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
      * Ausencias APROBADAS de un trabajador (de cualquier tipo: vacaciones, baja,
      * permiso…) que solapan el rango [from, to]. Sirve para excluir del panel de
      * huecos los días cubiertos por una ausencia justificada (un día de baja no

@@ -2,6 +2,7 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\Absence;
 use App\Entity\PaySchedule;
 use App\Entity\Setting;
 use App\Entity\Worker;
@@ -76,6 +77,33 @@ class AccountingWorkerControllerTest extends AbstractAuthenticatedTest
         $this->browser->request('GET', '/gestion/accounting/settings');
         $this->assertResponseIsSuccessful();
         $this->assertSelectorNotExists('a[href="/gestion/accounting/workers"]');
+    }
+
+    /**
+     * Una baja médica aprobada y complementada (16-oct al 13-nov) baja el coste del
+     * año en lo que paga la Seguridad Social desde el día 16 de baja: 34,52 € en
+     * octubre y 526,44 € en noviembre. Una baja sólo solicitada no cuenta.
+     */
+    public function testAnApprovedSickLeaveLowersTheYearCost(): void
+    {
+        $this->persist(
+            $this->salary('2025-01-01', null),
+            (new Absence())->setWorker($this->worker)->setType(Absence::TYPE_SICK_LEAVE)
+                ->setStatus(Absence::STATUS_APPROVED)
+                ->setStartDate(new \DateTimeImmutable('2026-10-16'))
+                ->setEndDate(new \DateTimeImmutable('2026-11-13')),
+            (new Absence())->setWorker($this->worker)->setType(Absence::TYPE_SICK_LEAVE)
+                ->setStatus(Absence::STATUS_REQUESTED)
+                ->setStartDate(new \DateTimeImmutable('2026-03-02'))
+                ->setEndDate(new \DateTimeImmutable('2026-03-31')),
+        );
+
+        $crawler = $this->browser->request('GET', '/gestion/accounting/workers?year=2026');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertStringContainsString('Baja: lo que paga la Seguridad Social', $crawler->filter('.acc-grid')->text());
+        // 27.300 − 34,52 − 526,44 = 26.739,04.
+        $this->assertSame('26.739', trim($crawler->filter('.acc-grid tfoot .acc-total-col')->text()));
     }
 
     /**

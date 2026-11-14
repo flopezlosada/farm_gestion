@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\Worker;
 use App\Entity\WorkerSalary;
 use App\Form\WorkerSalaryType;
+use App\Repository\AbsenceRepository;
 use App\Repository\WorkerRepository;
 use App\Repository\WorkerSalaryRepository;
 use App\Service\Accounting\MonthNames;
@@ -30,27 +31,29 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_ADMIN')]
 class AccountingWorkerController extends AbstractController
 {
+
     /**
-     * Cada trabajador con sus tramos y la rejilla del año: bruto y Seguridad Social de
-     * la empresa mes a mes.
+     * Cada trabajador con sus tramos y la rejilla del año: bruto, Seguridad Social de
+     * la empresa y lo que devuelve la Seguridad Social de una baja, mes a mes.
      */
     #[Route('', name: 'accounting_workers', methods: ['GET'])]
     public function index(
         Request $request,
         WorkerRepository $workers,
         WorkerSalaryRepository $salaries,
+        AbsenceRepository $absences,
         PayrollCost $payroll,
     ): Response {
         $year = $request->query->getInt('year');
         if ($year < 2000 || $year > 2100) {
             $year = (int) date('Y');
         }
-        $costs = $payroll->forYear($salaries->findTouchingYear($year), $year);
+        $costs = $payroll->forYear($salaries->findTouchingYear($year), $absences->findApprovedSickLeavesTouchingYear($year), $year);
 
         $totals = array_fill(1, 12, 0.0);
         foreach ($costs as $cost) {
             foreach ($totals as $m => $total) {
-                $totals[$m] = $total + $cost['gross'][$m] + $cost['ss'][$m];
+                $totals[$m] = $total + $cost['total'][$m];
             }
         }
 

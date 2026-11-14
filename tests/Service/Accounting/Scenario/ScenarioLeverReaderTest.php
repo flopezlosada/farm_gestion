@@ -2,11 +2,13 @@
 
 namespace App\Tests\Service\Accounting\Scenario;
 
+use App\Entity\Absence;
 use App\Entity\BudgetCategory;
 use App\Entity\BudgetCategoryGroup;
 use App\Entity\PaySchedule;
 use App\Entity\Worker;
 use App\Entity\WorkerSalary;
+use App\Repository\AbsenceRepository;
 use App\Repository\BudgetCategoryRepository;
 use App\Repository\PartnerBasketShareRepository;
 use App\Repository\WorkerSalaryRepository;
@@ -94,11 +96,33 @@ class ScenarioLeverReaderTest extends TestCase
     {
         $salaries = $this->createMock(WorkerSalaryRepository::class);
         $salaries->expects($this->never())->method('findTouchingYear');
+        $absences = $this->createMock(AbsenceRepository::class);
+        $absences->expects($this->never())->method('findApprovedSickLeavesTouchingYear');
 
-        $form = $this->reader($salaries)->read(['recalc' => '1', 'extra' => [['gross' => '20000', 'ss' => '31']]], self::YEAR, false);
+        $form = $this->reader($salaries, $absences)->read(['recalc' => '1', 'extra' => [['gross' => '20000', 'ss' => '31']]], self::YEAR, false);
 
         $this->assertNull($form['levers']->staff);
+        $this->assertSame([], $form['levers']->sickLeaves);
         $this->assertSame([], $form['staffRows']);
+    }
+
+    /**
+     * Al recalcular con las fichas van también las bajas médicas del año, de una sola
+     * consulta; sin recalcular ni se piden.
+     */
+    public function testRecalculatingBringsTheYearsSickLeaves(): void
+    {
+        $this->addSalary(1, 10, '2025-01-01', null, '21000.00');
+        $leave = (new Absence())->setType(Absence::TYPE_SICK_LEAVE)->setStatus(Absence::STATUS_APPROVED)
+            ->setStartDate(new \DateTimeImmutable('2026-10-16'));
+        $absences = $this->createMock(AbsenceRepository::class);
+        $absences->expects($this->once())->method('findApprovedSickLeavesTouchingYear')->with(self::YEAR)->willReturn([$leave]);
+
+        $this->assertSame([$leave], $this->reader(null, $absences)->read(['recalc' => '1'], self::YEAR, true)['levers']->sickLeaves);
+
+        $idle = $this->createMock(AbsenceRepository::class);
+        $idle->expects($this->never())->method('findApprovedSickLeavesTouchingYear');
+        $this->assertSame([], $this->reader(null, $idle)->read([], self::YEAR, true)['levers']->sickLeaves);
     }
 
     /**
@@ -214,7 +238,7 @@ class ScenarioLeverReaderTest extends TestCase
         $this->assertTrue($form['levers']->isEmpty());
     }
 
-    private function reader(?WorkerSalaryRepository $salaries = null): ScenarioLeverReader
+    private function reader(?WorkerSalaryRepository $salaries = null, ?AbsenceRepository $absences = null): ScenarioLeverReader
     {
         $shares = $this->createMock(PartnerBasketShareRepository::class);
         $shares->method('countActiveBasketEquivalents')->willReturn(61.0);
@@ -229,7 +253,12 @@ class ScenarioLeverReaderTest extends TestCase
         $categories = $this->createMock(BudgetCategoryRepository::class);
         $categories->method('findActive')->willReturn($this->categories);
 
-        return new ScenarioLeverReader($shares, $fees, $salaries, $categories);
+        if ($absences === null) {
+            $absences = $this->createMock(AbsenceRepository::class);
+            $absences->method('findApprovedSickLeavesTouchingYear')->willReturn([]);
+        }
+
+        return new ScenarioLeverReader($shares, $fees, $salaries, $categories, $absences);
     }
 
     /** Un tramo guardado de un trabajador, con sus ids como si vinieran de la base. */

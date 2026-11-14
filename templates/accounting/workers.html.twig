@@ -1,6 +1,7 @@
 {# ============================================================
  # Lo que cuesta cada trabajador: sus tramos de sueldo y la rejilla del año con el
- # bruto de las nóminas y la Seguridad Social de la empresa, mes a mes.
+ # bruto de las nóminas y la Seguridad Social de la empresa, mes a mes, y lo que
+ # devuelve la Seguridad Social de una baja médica complementada.
  #
  # Sólo ROLE_ADMIN: son sueldos.
  #
@@ -136,9 +137,18 @@
                         <tr class="acc-group-row">
                             <td colspan="14">{{ cost.worker.name }}</td>
                         </tr>
-                        {% for key, label in { gross: 'Bruto de las nóminas', ss: 'Seguridad Social empresa' } %}
+                        {% set rows = { gross: 'Bruto de las nóminas', ss: 'Seguridad Social empresa' } %}
+                        {% if cost.sickLeaveRefund|filter(v => v != 0) is not empty %}
+                            {% set rows = rows|merge({ sickLeaveRefund: 'Baja: lo que paga la Seguridad Social' }) %}
+                        {% endif %}
+                        {% set hints = {
+                            gross: 'Lo que cobra más lo que se le retiene (IRPF y su parte de Seguridad Social). Con 14 pagas, julio y diciembre llevan la extra. En una baja sin complemento, sólo la prestación que paga la asociación (60 % del día 4 al 15).',
+                            ss: 'Lo que paga la asociación encima del bruto. Sigue igual durante una baja.',
+                            sickLeaveRefund: 'Baja complementada al 100 %: la asociación paga el sueldo entero, pero desde el día 16 la prestación (60 % hasta el día 20, 75 % después) la pone la Seguridad Social y se descuenta de las cotizaciones.',
+                        } %}
+                        {% for key, label in rows %}
                             <tr class="acc-cat-row">
-                                <td title="{{ key == 'gross' ? 'Lo que cobra más lo que se le retiene (IRPF y su parte de Seguridad Social). Con 14 pagas, julio y diciembre llevan la extra.' : 'Lo que paga la asociación encima del bruto.' }}">{{ label }}</td>
+                                <td title="{{ hints[key] }}">{{ label }}</td>
                                 {% for n in 1..12 %}
                                     {% set v = cost[key][n] %}
                                     <td class="acc-num {{ v == 0 ? 'zero' : '' }}">{{ v == 0 ? '·' : v|number_format(0, ',', '.') }}</td>
@@ -164,6 +174,7 @@
     <p class="acc-muted acc-small">
         Cada cosa va en el mes en que se gana. En el banco, la Seguridad Social sale el mes siguiente
         y el IRPF retenido cada trimestre: el total del año es el mismo.
+        Las bajas médicas aprobadas (Personal) bajan el coste; una baja sin fecha de alta se cuenta sólo hasta hoy.
     </p>
 
 </div>
