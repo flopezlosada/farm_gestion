@@ -538,6 +538,48 @@ class WorkerController extends AbstractController
     }
 
     /**
+     * Marca o desmarca en una baja médica que la asociación complementa hasta el
+     * 100 % del sueldo. No toca el registro de jornada (los días siguen siendo de
+     * baja): sólo cambia lo que cuesta la baja en la previsión de sueldos.
+     *
+     * @param Request                $request
+     * @param Worker                 $worker
+     * @param Absence                $absence
+     * @param EntityManagerInterface $em
+     * @return Response
+     */
+    #[Route('/{id}/absence/{absenceId}/top-up', name: 'staff_absence_top_up', methods: ['POST'], requirements: ['id' => '\d+', 'absenceId' => '\d+'])]
+    public function toggleAbsenceTopUp(
+        Request $request,
+        Worker $worker,
+        #[MapEntity(id: 'absenceId')] Absence $absence,
+        EntityManagerInterface $em,
+    ): Response {
+        $back = $this->redirectToRoute('staff_show', ['id' => $worker->getId()]);
+        if (!$this->isCsrfTokenValid('staff_absence' . $worker->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $back;
+        }
+        if ($absence->getWorker()?->getId() !== $worker->getId()) {
+            throw $this->createNotFoundException('La ausencia no pertenece a este trabajador.');
+        }
+        if ($absence->getType() !== Absence::TYPE_SICK_LEAVE) {
+            $this->addFlash('error', 'Sólo una baja médica lleva complemento.');
+
+            return $back;
+        }
+
+        $absence->setTopsUpToFullPay(!$absence->topsUpToFullPay());
+        $em->flush();
+        $this->addFlash('success', $absence->topsUpToFullPay()
+            ? 'La asociación complementa esta baja hasta el 100 % del sueldo.'
+            : 'Esta baja cobra sólo la prestación, sin complemento.');
+
+        return $back;
+    }
+
+    /**
      * Cambia el estado de una ausencia validando CSRF y pertenencia, y registra
      * quién decidió. Centraliza aprobar/rechazar/cancelar.
      *

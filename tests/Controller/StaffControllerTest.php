@@ -852,6 +852,73 @@ class StaffControllerTest extends WebTestCase
     }
 
     /**
+     * La baja nace complementada al 100 % (la casilla viene marcada) y quien la
+     * registra puede desmarcarla: entonces se guarda sin complemento.
+     */
+    public function testSickLeaveIsToppedUpUnlessUnticked(): void
+    {
+        $worker = $this->makeWorker();
+        $id = $worker->getId();
+
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $id . '/absence/new');
+        $this->assertSelectorExists('input[name="absence[topsUpToFullPay]"][checked]');
+        $this->assertSelectorExists('[data-csa-show-when="absence[type]=sick_leave"]');
+        $form = $crawler->selectButton('Registrar ausencia')->form([
+            'absence[type]' => Absence::TYPE_SICK_LEAVE,
+            'absence[startDate]' => '2026-10-16',
+            'absence[endDate]' => '',
+        ]);
+        $form['absence[topsUpToFullPay]']->untick();
+        $this->client->submit($form);
+        $this->assertResponseRedirects();
+
+        $this->em->clear();
+        $saved = $this->em->getRepository(Absence::class)->findBy(['worker' => $id]);
+        $this->assertCount(1, $saved);
+        $this->assertFalse($saved[0]->topsUpToFullPay());
+    }
+
+    /**
+     * Desde la ficha se quita y se vuelve a poner el complemento de una baja;
+     * unas vacaciones no lo admiten.
+     */
+    public function testTopUpIsToggledOnlyOnSickLeaves(): void
+    {
+        $worker = $this->makeWorker();
+        $id = $worker->getId();
+        $sickId = $this->persistOpenSickLeave($worker, '2026-10-16')->getId();
+        $vacation = (new Absence())
+            ->setWorker($worker)
+            ->setType(Absence::TYPE_VACATION)
+            ->setStatus(Absence::STATUS_APPROVED)
+            ->setStartDate(new \DateTimeImmutable('2026-08-03'))
+            ->setEndDate(new \DateTimeImmutable('2026-08-07'));
+        $this->em->persist($vacation);
+        $this->em->flush();
+        $vacationId = $vacation->getId();
+        $this->em->clear();
+
+        $crawler = $this->client->request('GET', '/gestion/staff/' . $id);
+        $this->assertStringContainsString('la asociación complementa hasta el 100 %', $crawler->text());
+        $this->assertCount(0, $crawler->filter('form[action$="/absence/' . $vacationId . '/top-up"]'));
+        $token = $crawler->filter('form[action$="/absence/' . $sickId . '/top-up"] input[name="_token"]')->attr('value');
+
+        $this->client->request('POST', '/gestion/staff/' . $id . '/absence/' . $sickId . '/top-up', ['_token' => $token]);
+        $this->assertResponseRedirects('/gestion/staff/' . $id);
+        $this->em->clear();
+        $this->assertFalse($this->em->getRepository(Absence::class)->find($sickId)->topsUpToFullPay());
+
+        $this->client->request('POST', '/gestion/staff/' . $id . '/absence/' . $sickId . '/top-up', ['_token' => $token]);
+        $this->em->clear();
+        $this->assertTrue($this->em->getRepository(Absence::class)->find($sickId)->topsUpToFullPay());
+
+        $this->client->request('POST', '/gestion/staff/' . $id . '/absence/' . $vacationId . '/top-up', ['_token' => $token]);
+        $this->assertResponseRedirects('/gestion/staff/' . $id);
+        $this->em->clear();
+        $this->assertTrue($this->em->getRepository(Absence::class)->find($vacationId)->topsUpToFullPay());
+    }
+
+    /**
      * Guarda una baja médica aprobada sin fecha de alta.
      *
      * @param Worker $worker Trabajador.

@@ -149,6 +149,19 @@ class Absence
     private $approvedBy;
 
     /**
+     * Sólo cuenta en una baja médica: ¿la asociación complementa la prestación
+     * hasta el 100 % del sueldo? Marcado, la persona cobra su sueldo entero
+     * durante la baja; desmarcado, cobra sólo la prestación. Cambia lo que
+     * cuesta la baja en la previsión de sueldos
+     * ({@see \App\Service\Accounting\PayrollCost}). En el resto de ausencias
+     * se ignora.
+     *
+     * @var bool
+     * @ORM\Column(name="tops_up_to_full_pay", type="boolean", options={"default": true})
+     */
+    private $topsUpToFullPay = true;
+
+    /**
      * @var string|null
      * @ORM\Column(name="note", type="text", nullable=true)
      */
@@ -347,6 +360,40 @@ class Absence
     public function setApprovedBy(?User $approvedBy): self
     {
         $this->approvedBy = $approvedBy;
+
+        return $this;
+    }
+
+    /**
+     * ¿Es una baja médica aprobada? Las únicas que cambian lo que cuesta un
+     * sueldo: una solicitada, rechazada o cancelada no ha pasado.
+     *
+     * @return bool
+     */
+    public function isApprovedSickLeave(): bool
+    {
+        return $this->type === self::TYPE_SICK_LEAVE && $this->status === self::STATUS_APPROVED;
+    }
+
+    /**
+     * ¿Complementa la asociación la prestación hasta el sueldo entero? Sólo
+     * tiene sentido en una baja médica. Se llama como la propiedad: así lo
+     * encuentran tanto el formulario (PropertyAccessor) como Twig.
+     *
+     * @return bool
+     */
+    public function topsUpToFullPay(): bool
+    {
+        return $this->topsUpToFullPay;
+    }
+
+    /**
+     * @param bool $topsUpToFullPay Si la asociación complementa la baja hasta el 100 %.
+     * @return self
+     */
+    public function setTopsUpToFullPay(bool $topsUpToFullPay): self
+    {
+        $this->topsUpToFullPay = $topsUpToFullPay;
 
         return $this;
     }
