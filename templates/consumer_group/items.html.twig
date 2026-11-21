@@ -11,6 +11,11 @@
  #                          antes de que el controlador aplique el cambio.
  #   - locked_product_ids   map product_id => true — productos con pedidos
  #                          reales (cantidad > 0): su precio no se puede tocar.
+ #   - managed              true si el productor lo gestiona la comisión: el precio
+ #                          final = precio del productor + incremento de gestión.
+ #   - pricing_form         estado del desglose (incremento del pedido y, por
+ #                          producto, precio del productor, incremento propio).
+ #   - item_by_product      map product_id => ConsumerGroupRoundItem ya en el pedido.
  #
  # Mismo lenguaje visual que consumer_group/show.html.twig (hero .prt +
  # .prt-card): esto es una pestaña de esa misma ficha, no un formulario suelto.
@@ -77,6 +82,32 @@
             <form method="post" action="{{ path('consumer_group_items', { id: round.id }) }}">
                 <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_items_' ~ round.id) }}">
 
+                {% if managed %}
+                    <div class="prt-card">
+                        <div class="prt-card__head">
+                            <h2 class="prt-card__title"><span class="accent"></span>Incremento de gestión del pedido</h2>
+                        </div>
+                        <div class="prt-card__body">
+                            <p class="csa-muted" style="margin-top: 0;">
+                                Lo que suma la asociación al precio del productor. Lo heredan todos los productos que no tengan uno propio. Las socias solo ven el precio final.
+                            </p>
+                            <div class="cg-markup">
+                                <select name="round_markup_type" id="round-markup-type" class="csa-input">
+                                    <option value="">Sin incremento</option>
+                                    <option value="percent" {{ pricing_form.round_type.value|default('') == 'percent' ? 'selected' : '' }}>% sobre el precio del productor</option>
+                                    <option value="amount" {{ pricing_form.round_type.value|default('') == 'amount' ? 'selected' : '' }}>€ por unidad</option>
+                                </select>
+                                <input type="number" min="0" step="0.01" inputmode="decimal" name="round_markup_value" id="round-markup-value"
+                                       value="{{ pricing_form.round_value|default('') }}" class="csa-input" placeholder="0,00">
+                            </div>
+                            <p class="csa-muted" style="margin-bottom: 0;">
+                                Al cambiarlo se recalculan los productos que lo heredan. Los que tienen incremento propio quedan <strong>pendientes de revisar</strong>, y el pedido no se puede abrir hasta que los valides.
+                            </p>
+                        </div>
+                    </div>
+                    <div style="height: var(--csa-sp-4);"></div>
+                {% endif %}
+
                 <div class="prt-card">
                     <div class="prt-card__head">
                         <h2 class="prt-card__title"><span class="accent"></span>Productos y precios</h2>
@@ -92,7 +123,13 @@
                                     <tr>
                                         <th style="width: 40px;"><span class="sr-only">Incluir</span></th>
                                         <th>Producto</th>
-                                        <th class="tight" style="width: 190px;">Precio</th>
+                                        {% if managed %}
+                                            <th class="tight">Precio del productor</th>
+                                            <th class="tight">Incremento</th>
+                                            <th class="tight">Precio final</th>
+                                        {% else %}
+                                            <th class="tight" style="width: 190px;">Precio</th>
+                                        {% endif %}
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -106,6 +143,49 @@
                                                 {{ product.name }} <span class="csa-muted">/ {{ product.unit }}</span>
                                                 {% if product.description %}<div class="csa-muted" style="font-size: .85em;">{{ product.description|striptags|u.truncate(80, '…', false) }}</div>{% endif %}
                                             </td>
+                                            {% if managed %}
+                                                {% set item = item_by_product[product.id]|default(null) %}
+                                                {% set unbroken = item and item.producerPrice is null and (not round.draft or is_locked) %}
+                                                {% set pending = item and item.markupPendingReview %}
+                                                {% if unbroken %}
+                                                    <td class="tight cg-cell-price">
+                                                        <input type="number" min="0" step="0.01" inputmode="decimal"
+                                                               name="producer_price[{{ product.id }}]" value="" class="csa-input"
+                                                               placeholder="sin desglosar" title="Opcional: el precio del productor. El precio final no cambia; el incremento se calcula por diferencia.">
+                                                        <span class="csa-muted">€/{{ product.unit }}</span>
+                                                    </td>
+                                                    <td class="tight csa-muted">Sin desglosar</td>
+                                                    <td class="tight"><strong>{{ current_price[product.id]|default('0')|number_format(2, ',', '.') }} €</strong></td>
+                                                {% else %}
+                                                    <td class="tight cg-cell-price">
+                                                        <input type="number" min="0" step="0.01" inputmode="decimal" class="csa-input cg-producer-price"
+                                                               name="producer_price[{{ product.id }}]"
+                                                               value="{{ pricing_form.producer_price[product.id]|default('') }}" placeholder="0,00"
+                                                               {{ is_locked ? 'disabled' : '' }}>
+                                                        <span class="csa-muted">€/{{ product.unit }}</span>
+                                                    </td>
+                                                    <td class="tight cg-cell-price {{ pending ? 'cg-pending' : '' }}">
+                                                        <select name="markup_type[{{ product.id }}]" class="csa-input cg-markup-type" {{ is_locked ? 'disabled' : '' }}>
+                                                            <option value="">Del pedido</option>
+                                                            <option value="percent" {{ pricing_form.markup_type[product.id].value|default('') == 'percent' ? 'selected' : '' }}>Propio %</option>
+                                                            <option value="amount" {{ pricing_form.markup_type[product.id].value|default('') == 'amount' ? 'selected' : '' }}>Propio €</option>
+                                                        </select>
+                                                        <input type="number" min="0" step="0.01" inputmode="decimal" class="csa-input cg-markup-value"
+                                                               name="markup_value[{{ product.id }}]"
+                                                               value="{{ pricing_form.markup_value[product.id]|default('') }}" placeholder="0,00"
+                                                               {{ is_locked ? 'disabled' : '' }}>
+                                                        {% if pending %}
+                                                            <label class="cg-review">
+                                                                <input type="checkbox" name="reviewed[{{ product.id }}]" value="1" {{ pricing_form.reviewed[product.id] is defined ? 'checked' : '' }}>
+                                                                <span>Revisado: el incremento propio sigue siendo correcto</span>
+                                                            </label>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td class="tight"><strong class="cg-final-price">{{ current_price[product.id]|default('0')|number_format(2, ',', '.') }}</strong> €
+                                                        {% if is_locked %}<i class="fa fa-lock csa-muted" title="Ya hay pedidos de socias con este precio: no se puede cambiar."></i>{% endif %}
+                                                    </td>
+                                                {% endif %}
+                                            {% else %}
                                             <td class="tight cg-cell-price">
                                                 <input type="number" min="0" step="0.01" inputmode="decimal"
                                                        name="price[{{ product.id }}]"
@@ -117,6 +197,7 @@
                                                     <i class="fa fa-lock csa-muted" title="Ya hay pedidos de socias con este precio: no se puede cambiar."></i>
                                                 {% endif %}
                                             </td>
+                                            {% endif %}
                                         </tr>
                                     {% endfor %}
                                 </tbody>
@@ -150,6 +231,12 @@
         .cg-removal-warning__list ul { margin: var(--csa-sp-1) 0 var(--csa-sp-2); }
         .cg-removal-confirm { display: flex; align-items: flex-start; gap: var(--csa-sp-2); margin-top: var(--csa-sp-4); font-weight: 400; }
         .cg-removal-confirm input { width: auto; height: auto; margin-top: 3px; }
+        .cg-markup { display: flex; flex-wrap: wrap; gap: var(--csa-sp-2); margin-bottom: var(--csa-sp-2); }
+        .cg-markup .csa-input { height: 34px; width: auto; min-width: 6.5rem; }
+        .cg-pending { background: var(--csa-warning-bg, #fff4d6); }
+        .cg-review { display: flex; align-items: flex-start; gap: var(--csa-sp-2); font-weight: 400; font-size: .85em; flex-basis: 100%; }
+        .cg-review input { width: auto; height: auto; margin-top: 3px; }
+        .cg-cell-price select.csa-input { width: auto; }
         .cg-row-locked { background: var(--prl-sage-l, #eaf0e2); }
         {# Sin nowrap: "€/garrafa de 5 L" es más ancho que la columna (190px,
            table-layout: fixed) y desbordaba la fila hacia la derecha,
@@ -164,4 +251,41 @@
         .cg-cell-price .csa-input[type=number] { -moz-appearance: textfield; }
         .cg-cell-price .fa-lock { font-size: 12px; }
     </style>
+{% endblock %}
+
+{% block more_js %}
+    {{ parent() }}
+    {% if managed %}
+    <script>
+        {# Precio final en vivo. Misma aritmética que App\Service\ConsumerGroup\Markup
+           (céntimos enteros, porcentaje redondeado mitad hacia arriba); el servidor
+           recalcula al guardar, esto es solo para ver el resultado antes. #}
+        (function () {
+            var cents = function (v) { var n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? 0 : Math.round(n * 100); };
+            var roundType = document.getElementById('round-markup-type');
+            var roundValue = document.getElementById('round-markup-value');
+            var markupCents = function (type, value, producer) {
+                if (type === 'amount') { return cents(value); }
+                if (type === 'percent') { return Math.floor((producer * cents(value) * 2 + 10000) / 20000); }
+                return 0;
+            };
+            var refresh = function () {
+                document.querySelectorAll('tr').forEach(function (row) {
+                    var price = row.querySelector('.cg-producer-price');
+                    var out = row.querySelector('.cg-final-price');
+                    if (!price || !out) { return; }
+                    var own = row.querySelector('.cg-markup-type').value;
+                    var type = own || roundType.value;
+                    var value = own ? row.querySelector('.cg-markup-value').value : roundValue.value;
+                    var producer = cents(price.value);
+                    var total = producer + markupCents(type, value, producer);
+                    out.textContent = (total / 100).toFixed(2).replace('.', ',');
+                });
+            };
+            document.addEventListener('input', refresh);
+            document.addEventListener('change', refresh);
+            refresh();
+        })();
+    </script>
+    {% endif %}
 {% endblock %}

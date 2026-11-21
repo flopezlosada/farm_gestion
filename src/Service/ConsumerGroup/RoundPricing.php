@@ -49,6 +49,9 @@ class RoundPricing
     public function changeRoundMarkup(ConsumerGroupRound $round, ?MarkupType $type, ?string $value): void
     {
         $previous = [$round->getMarkupType(), $round->getMarkupValue()];
+        if ($type === $previous[0] && self::sameDecimal($value, $previous[1])) {
+            return;
+        }
         $round->setMarkup($type, $value);
 
         try {
@@ -73,16 +76,20 @@ class RoundPricing
     }
 
     /**
-     * Valida el incremento de un producto: fija el propio (o null para volver a heredar
-     * el del pedido), recalcula el precio y lo quita de pendientes.
+     * Fija el desglose de un producto: precio del productor e incremento propio (type y
+     * value null = hereda el del pedido), y recalcula el precio final. Si `$reviewed`
+     * es true, el producto deja de estar pendiente de revisar.
      *
      * @throws PriceLocked
      */
-    public function validateItemMarkup(ConsumerGroupRoundItem $item, ?MarkupType $type, ?string $value): void
+    public function setBreakdown(ConsumerGroupRoundItem $item, string $producerPrice, ?MarkupType $type, ?string $value, bool $reviewed): void
     {
+        $item->setProducerPrice(Markup::fromCents(Markup::toCents($producerPrice)));
         $item->setOwnMarkup($type, $value);
         $this->reprice($item);
-        $item->setMarkupPendingReview(false);
+        if ($reviewed) {
+            $item->setMarkupPendingReview(false);
+        }
     }
 
     /**
@@ -139,14 +146,25 @@ class RoundPricing
      */
     private function assertPriceChangeAllowed(ConsumerGroupRoundItem $item, string $newPrice): void
     {
-        if ($item->getLines()->isEmpty()) {
+        // Primero lo barato: solo si el precio cambia de verdad se miran las líneas
+        // (cargarlas cuesta una consulta por producto).
+        if (Markup::toCents($newPrice) === Markup::toCents($item->getPrice()) || !$item->hasOrderedQuantity()) {
             return;
         }
-        if (Markup::toCents($newPrice) !== Markup::toCents($item->getPrice())) {
-            throw new PriceLocked(sprintf(
-                'No se puede cambiar el precio de «%s»: ya hay socias apuntadas. Avisa a Paco.',
-                $item->getName(),
-            ));
-        }
+
+        throw new PriceLocked(sprintf(
+            'No se puede cambiar el precio de «%s»: ya hay socias apuntadas. Avisa a Paco.',
+            $item->getName(),
+        ));
+    }
+
+    /**
+     * ¿Son iguales dos decimales en string? Ambos null cuentan como iguales.
+     */
+    private static function sameDecimal(?string $a, ?string $b): bool
+    {
+        return $a === null || $b === null
+            ? $a === $b
+            : Markup::toCents($a) === Markup::toCents($b);
     }
 }

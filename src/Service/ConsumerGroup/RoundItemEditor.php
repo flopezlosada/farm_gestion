@@ -2,8 +2,10 @@
 
 namespace App\Service\ConsumerGroup;
 
+use App\Entity\ConsumerGroupProduct;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupRoundItem;
+use App\Entity\MarkupType;
 use App\Repository\ConsumerGroupRoundItemRepository;
 
 /**
@@ -19,16 +21,23 @@ use App\Repository\ConsumerGroupRoundItemRepository;
  */
 class RoundItemEditor
 {
-    public function __construct(private readonly ConsumerGroupRoundItemRepository $roundItems)
-    {
+    public function __construct(
+        private readonly ConsumerGroupRoundItemRepository $roundItems,
+        private readonly RoundPricing $pricing,
+    ) {
     }
 
     /**
      * Puebla una ronda recién creada con los productos activos del catálogo de su
      * productor. No hay precio de referencia en el catálogo (se quitó: nadie lo
-     * mantenía al día): el arranque es el precio de la ÚLTIMA ronda que llevó
-     * cada producto ({@see ConsumerGroupRoundItemRepository::findLastPriceForProduct()}),
-     * o 0 si es la primera vez.
+     * mantenía al día): el arranque es lo último que se cobró por cada producto
+     * ({@see ConsumerGroupRoundItemRepository::findLastPriceForProduct()}), o 0 si es la
+     * primera vez.
+     *
+     * Con un productor gestionado por la comisión se parte además de su último precio
+     * de productor, si lo hay, y el precio final se recalcula con el incremento del
+     * pedido. Sin él, el precio final de la última vez queda como arranque y la
+     * comisión tiene que poner el precio del productor al revisar.
      */
     public function seedFromCatalog(ConsumerGroupRound $round): void
     {
@@ -43,13 +52,42 @@ class RoundItemEditor
             $item = new ConsumerGroupRoundItem($round, $product, $price);
             $item->setSortOrder($position++);
             $round->addItem($item);
+
+            $producerPrice = $producer->isSelfManaged()
+                ? ($price === '0' ? null : $price)
+                : $this->roundItems->findLastProducerPriceForProduct($product);
+            if ($producerPrice !== null) {
+                $item->setProducerPrice($producerPrice);
+                $this->pricing->reprice($item);
+            }
         }
     }
 
     /**
      * Reconcilia los items de la ronda con la selección enviada.
      *
-     * @param array<array{product: \App\Entity\ConsumerGroupProduct, included: bool, price: string}> $desired
+     * Cada entrada lleva un `mode` que dice cómo se fija el precio:
+     *   - `plain` (por defecto): `price` es el dato. Con productor autogestionado es
+     *     también su precio de productor.
+     *   - `managed`: el dato es `producerPrice` y, opcional, un incremento propio
+     *     (`markupType`/`markupValue`); el precio final sale de {@see RoundPricing}.
+     *     `reviewed` da por validado un incremento pendiente.
+     *   - `breakdown`: producto sin desglosar; el precio final NO cambia y, si llega
+     *     `producerPrice`, se desglosa ({@see RoundPricing::breakDown()}).
+     *
+     * @param array<array{
+     *     product: ConsumerGroupProduct,
+     *     included: bool,
+     *     price: string,
+     *     mode?: 'plain'|'managed'|'breakdown',
+     *     producerPrice?: ?string,
+     *     markupType?: ?MarkupType,
+     *     markupValue?: ?string,
+     *     reviewed?: bool,
+     * }> $desired
+     *
+     * @throws PriceLocked si un precio con socias apuntadas cambiaría
+     * @throws \InvalidArgumentException si un desglose no es válido
      */
     public function apply(ConsumerGroupRound $round, array $desired): void
     {
@@ -69,17 +107,45 @@ class RoundItemEditor
             $item = $existing[$key] ?? null;
 
             if ($entry['included']) {
-                if ($item !== null) {
-                    $item->setPrice($entry['price']);
-                    $item->setSortOrder($position++);
-                } else {
-                    $new = new ConsumerGroupRoundItem($round, $product, $entry['price']);
-                    $new->setSortOrder($position++);
-                    $round->addItem($new);
+                if ($item === null) {
+                    $item = new ConsumerGroupRoundItem($round, $product, '0');
+                    $round->addItem($item);
                 }
+                $item->setSortOrder($position++);
+                $this->fillPrice($item, $entry);
             } elseif ($item !== null) {
                 $round->removeItem($item);
             }
+        }
+    }
+
+    /**
+     * Fija el precio de un producto según el `mode` de su entrada ({@see apply()}).
+     *
+     * @param array<string, mixed> $entry
+     */
+    private function fillPrice(ConsumerGroupRoundItem $item, array $entry): void
+    {
+        switch ($entry['mode'] ?? 'plain') {
+            case 'managed':
+                $this->pricing->setBreakdown(
+                    $item,
+                    (string) $entry['producerPrice'],
+                    $entry['markupType'] ?? null,
+                    $entry['markupValue'] ?? null,
+                    (bool) ($entry['reviewed'] ?? false),
+                );
+                break;
+            case 'breakdown':
+                if (($entry['producerPrice'] ?? null) !== null) {
+                    $this->pricing->breakDown($item, $entry['producerPrice']);
+                }
+                break;
+            default:
+                $item->setPrice($entry['price']);
+                if ($item->getRound()?->getProducer()?->isSelfManaged()) {
+                    $item->setProducerPrice($entry['price']);
+                }
         }
     }
 

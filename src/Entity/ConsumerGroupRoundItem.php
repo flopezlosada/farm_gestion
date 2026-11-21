@@ -180,6 +180,16 @@ class ConsumerGroupRoundItem
         return $this->lines;
     }
 
+    /**
+     * ¿Alguna socia ha apuntado cantidad (> 0) de este producto? Las líneas a 0 no
+     * cuentan: no hay nada que la socia haya visto y aceptado. Con cantidad apuntada
+     * el precio final queda fijado.
+     */
+    public function hasOrderedQuantity(): bool
+    {
+        return $this->lines->exists(static fn (int $i, ConsumerGroupOrderLine $line): bool => (float) $line->getQuantity() > 0);
+    }
+
     public function getProducerPrice(): ?string
     {
         return $this->producerPrice;
