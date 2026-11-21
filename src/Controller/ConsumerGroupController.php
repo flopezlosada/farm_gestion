@@ -7,6 +7,7 @@ use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupPaymentMethod;
 use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupRoundItem;
+use App\Entity\MarkupType;
 use App\Entity\Partner;
 use App\Form\ConsumerGroupRoundType;
 use App\Repository\ConsumerGroupEventLogRepository;
@@ -24,7 +25,9 @@ use App\Service\ConsumerGroup\ItemsChangeNotifier;
 use App\Service\ConsumerGroup\MinimumAutoConfirmer;
 use App\Service\ConsumerGroup\OrderAggregator;
 use App\Service\ConsumerGroup\OrderEditor;
+use App\Service\ConsumerGroup\PriceLocked;
 use App\Service\ConsumerGroup\RoundItemEditor;
+use App\Service\ConsumerGroup\RoundPricing;
 use App\Service\ConsumerGroup\RoundStateMachine;
 use App\Service\Notification\NotificationPreferences;
 use App\Service\Notification\NotificationTopic;
@@ -238,17 +241,23 @@ class ConsumerGroupController extends AbstractController
         ItemsChangeNotifier $itemsChangeNotifier,
         ConsumerGroupRoundItemRepository $roundItemRepo,
         ValidatorInterface $validator,
+        RoundPricing $pricing,
     ): Response {
-        if (!$round->canManageOrders()) {
+        // Confirmado, entregado o cancelado: los productos y precios ya no se tocan, pero
+        // un pedido anterior al desglose se puede desglosar (el precio final no cambia).
+        $breakdownOnly = !$round->canManageOrders();
+        $managed = !($round->getProducer()?->isSelfManaged() ?? false);
+        if ($breakdownOnly && (!$managed || $round->getItems()->isEmpty())) {
             $this->addFlash('warning', 'Este pedido ya no admite cambios en sus productos.');
 
             return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
         }
 
         // Catálogo a mostrar: productos activos del productor + los que ya están en la
-        // pedido (aunque se hayan desactivado, para no perderlos sin querer).
+        // pedido (aunque se hayan desactivado, para no perderlos sin querer). Solo los
+        // del pedido si ya no se pueden añadir ni quitar.
         $catalog = [];
-        foreach ($round->getProducer()?->getActiveProducts() ?? [] as $product) {
+        foreach ($breakdownOnly ? [] : ($round->getProducer()?->getActiveProducts() ?? []) as $product) {
             $catalog[$product->getId()] = $product;
         }
         $existingItemByProductId = [];
@@ -264,7 +273,7 @@ class ConsumerGroupController extends AbstractController
         // apuntarse (y, tras confirmar, lo que ya ha pagado).
         $lockedProductIds = [];
         foreach ($existingItemByProductId as $productId => $item) {
-            if ($orderLines->findWithQuantityForItem($item) !== []) {
+            if ($breakdownOnly || $orderLines->findWithQuantityForItem($item) !== []) {
                 $lockedProductIds[$productId] = true;
             }
         }
@@ -277,22 +286,31 @@ class ConsumerGroupController extends AbstractController
             }
 
             $included = $request->request->all('include');
+            if ($breakdownOnly) {
+                // Ni se añade ni se quita nada: lo enviado no manda, valen los productos del pedido.
+                $included = array_fill_keys(array_keys($existingItemByProductId), '1');
+            }
             $prices = $request->request->all('price');
+            $form = $this->readPricingForm($request);
 
             $desired = [];
             foreach ($catalog as $id => $product) {
-                $price = $this->normalizeDecimal($prices[$id] ?? '0');
+                $item = $existingItemByProductId[$id] ?? null;
+                $entry = [
+                    'product'  => $product,
+                    'included' => isset($included[$id]),
+                    'price'    => $this->normalizeDecimal($prices[$id] ?? '0'),
+                ];
                 if (isset($lockedProductIds[$id])) {
                     // El precio no viaja del formulario para un producto bloqueado:
                     // se ignora lo enviado y se conserva el de la ronda, venga lo
                     // que venga en la petición (no es solo UX, es la garantía).
-                    $price = $existingItemByProductId[$id]->getPrice();
+                    $entry['price'] = $item->getPrice();
                 }
-                $desired[] = [
-                    'product'  => $product,
-                    'included' => isset($included[$id]),
-                    'price'    => $price,
-                ];
+                if ($managed) {
+                    $entry = $this->managedEntry($entry, $item, $form, $id, $round->isDraft(), isset($lockedProductIds[$id]));
+                }
+                $desired[] = $entry;
             }
 
             if (!array_filter($desired, static fn (array $entry): bool => $entry['included'])) {
@@ -310,7 +328,13 @@ class ConsumerGroupController extends AbstractController
                 if (!$entry['included']) {
                     continue;
                 }
-                $violations = $validator->validatePropertyValue(ConsumerGroupRoundItem::class, 'price', $entry['price']);
+                // Con precio del productor, lo que se exige es ese precio: el final sale de él.
+                $managedEntry = ($entry['mode'] ?? 'plain') === 'managed';
+                $violations = $validator->validatePropertyValue(
+                    ConsumerGroupRoundItem::class,
+                    $managedEntry ? 'producerPrice' : 'price',
+                    $managedEntry ? $entry['producerPrice'] : $entry['price'],
+                );
                 if (count($violations) > 0) {
                     $zeroPriceProducts[] = $entry['product']->getName();
                 }
@@ -355,6 +379,10 @@ class ConsumerGroupController extends AbstractController
                     'included'             => $included,
                     'removals_with_orders' => $removalsWithOrders,
                     'locked_product_ids'   => $lockedProductIds,
+                    'managed'              => $managed,
+                    'breakdown_only'       => $breakdownOnly,
+                    'pricing_form'         => $form,
+                    'item_by_product'      => $existingItemByProductId,
                 ]);
             }
 
@@ -380,7 +408,19 @@ class ConsumerGroupController extends AbstractController
                 }
             }
 
-            $itemEditor->apply($round, $desired);
+            try {
+                // Un formulario sin el campo del incremento del pedido (petición recortada,
+                // página vieja) significa «sin cambios», no «quita el incremento».
+                if ($managed && !$breakdownOnly && $request->request->has('round_markup_type')) {
+                    $pricing->changeRoundMarkup($round, $form['round_type'], $form['round_value']);
+                }
+                $itemEditor->apply($round, $desired);
+            } catch (PriceLocked | \InvalidArgumentException $e) {
+                // Nada se ha guardado: el EntityManager no se ha vaciado.
+                $this->addFlash('warning', $e->getMessage().' No se ha guardado.');
+
+                return $this->redirectToRoute('consumer_group_items', ['id' => $round->getId()]);
+            }
             $recorder->record(ConsumerGroupEventLog::KIND_ITEMS_UPDATED, $round, $this->getUser(), 'Productos y precios del pedido actualizados.');
             $em->flush();
 
@@ -442,7 +482,92 @@ class ConsumerGroupController extends AbstractController
             'current_price'      => $currentPrice,
             'included'           => $included,
             'locked_product_ids' => $lockedProductIds,
+            'managed'            => $managed,
+            'breakdown_only'     => $breakdownOnly,
+            'pricing_form'       => $this->pricingFormFromItems($round),
+            'item_by_product'    => $existingItemByProductId,
         ]);
+    }
+
+    /**
+     * Lee del formulario de productos del pedido lo que tiene que ver con el desglose
+     * del precio: el incremento del pedido y, por producto, el precio del productor, el
+     * incremento propio y si se da por revisado. Un tipo desconocido cuenta como «sin
+     * incremento propio».
+     *
+     * @return array{round_type: ?MarkupType, round_value: ?string, producer_price: array<int|string, string>, markup_type: array<int|string, ?MarkupType>, markup_value: array<int|string, ?string>, reviewed: array<int|string, mixed>}
+     */
+    private function readPricingForm(Request $request): array
+    {
+        $roundType = MarkupType::tryFrom((string) $request->request->get('round_markup_type'));
+
+        return [
+            'round_type'     => $roundType,
+            'round_value'    => $roundType === null ? null : $this->normalizeDecimal($request->request->get('round_markup_value')),
+            'producer_price' => array_map($this->normalizeDecimal(...), $request->request->all('producer_price')),
+            'markup_type'    => array_map(static fn (mixed $v): ?MarkupType => MarkupType::tryFrom((string) $v), $request->request->all('markup_type')),
+            'markup_value'   => array_map($this->normalizeDecimal(...), $request->request->all('markup_value')),
+            'reviewed'       => $request->request->all('reviewed'),
+        ];
+    }
+
+    /**
+     * Estado inicial del formulario de desglose, tal como está guardado en el pedido.
+     *
+     * @return array{round_type: ?MarkupType, round_value: ?string, producer_price: array<int, ?string>, markup_type: array<int, ?MarkupType>, markup_value: array<int, ?string>, reviewed: array<int, mixed>}
+     */
+    private function pricingFormFromItems(ConsumerGroupRound $round): array
+    {
+        $form = [
+            'round_type'     => $round->getMarkupType(),
+            'round_value'    => $round->getMarkupValue(),
+            'producer_price' => [],
+            'markup_type'    => [],
+            'markup_value'   => [],
+            'reviewed'       => [],
+        ];
+        foreach ($round->getItems() as $item) {
+            $id = $item->getProduct()?->getId();
+            if ($id === null) {
+                continue;
+            }
+            $form['producer_price'][$id] = $item->getProducerPrice();
+            $form['markup_type'][$id] = $item->getMarkupType();
+            $form['markup_value'][$id] = $item->getMarkupValue();
+        }
+
+        return $form;
+    }
+
+    /**
+     * Completa la entrada de un producto de un productor gestionado con el desglose
+     * enviado, según {@see RoundItemEditor::apply()}:
+     *   - producto con socias apuntadas, o sin desglosar con el pedido ya abierto: el
+     *     precio final NO cambia; solo se puede poner o corregir el precio del productor
+     *     y el incremento sale por diferencia;
+     *   - resto: el dato es el precio del productor y el incremento propio.
+     *
+     * @param array<string, mixed> $entry
+     * @param array<string, mixed> $form  resultado de {@see readPricingForm()}
+     * @return array<string, mixed>
+     */
+    private function managedEntry(array $entry, ?ConsumerGroupRoundItem $item, array $form, int $id, bool $draft, bool $locked): array
+    {
+        if ($item !== null && ($locked || ($item->getProducerPrice() === null && !$draft))) {
+            $producerPrice = $form['producer_price'][$id] ?? '0';
+
+            return $entry + ['mode' => 'breakdown', 'producerPrice' => (float) $producerPrice > 0 ? $producerPrice : null];
+        }
+
+        $type = $form['markup_type'][$id] ?? null;
+
+        return $entry + [
+            'mode'          => 'managed',
+            'producerPrice' => $form['producer_price'][$id] ?? '0',
+            'markupType'    => $type,
+            'markupValue'   => $type === null ? null : ($form['markup_value'][$id] ?? '0'),
+            'reviewed'      => isset($form['reviewed'][$id]),
+        ];
     }
 
     /**
@@ -921,8 +1046,13 @@ class ConsumerGroupController extends AbstractController
      */
     private function normalizeDecimal(mixed $value): string
     {
+        // Un array anidado (`price[5][]=x`) o algo que no cabe en decimal(8,2) cuenta como
+        // inválido: sin tope, un `1e9` llegaría a la BBDD y rompería el guardado.
+        if (!is_scalar($value)) {
+            return '0';
+        }
         $normalized = str_replace(',', '.', (string) $value);
-        if (!is_numeric($normalized) || (float) $normalized < 0) {
+        if (!is_numeric($normalized) || (float) $normalized < 0 || (float) $normalized > 999999.99) {
             return '0';
         }
 

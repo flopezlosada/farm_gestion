@@ -105,11 +105,21 @@
                 {% if round.canManageOrders %}
                     <a href="{{ path('consumer_group_edit', { id: round.id }) }}" class="prt-btn prt-btn--primary"><i class="fa fa-pencil"></i> Editar</a>
                     <a href="{{ path('consumer_group_items', { id: round.id }) }}" class="prt-btn"><i class="fa fa-list"></i> Productos del pedido</a>
+                {% elseif round.producer and not round.producer.selfManaged and round.items is not empty %}
+                    {# Ya no se tocan productos ni precio final, pero el desglose de un pedido anterior se puede rellenar. #}
+                    <a href="{{ path('consumer_group_items', { id: round.id }) }}" class="prt-btn"><i class="fa fa-list"></i> Desglosar precios</a>
                 {% endif %}
                 {% if can_open %}
                     <a href="{{ path('consumer_group_announce', { id: round.id }) }}" class="prt-btn prt-btn--primary"><i class="fa fa-bullhorn"></i> Abrir y avisar a las socias</a>
                 {% elseif round.draft %}
-                    <span class="csa-muted">En borrador: para abrirlo hace falta que tenga productos y que la fecha de cierre no haya pasado.</span>
+                    <span class="csa-muted">En borrador: para abrirlo hace falta que tenga productos, que la fecha de cierre no haya pasado y que no queden incrementos pendientes de revisar.</span>
+                    {% set pending_items = round.items|filter(i => i.markupPendingReview) %}
+                    {% if pending_items|length > 0 %}
+                        <div class="csa-alert csa-alert--warning" style="flex-basis: 100%;">
+                            Incremento pendiente de revisar en: <strong>{{ pending_items|map(i => i.name)|join(', ') }}</strong>.
+                            <a href="{{ path('consumer_group_items', { id: round.id }) }}">Revisarlos en «Productos del pedido»</a>.
+                        </div>
+                    {% endif %}
                 {% endif %}
                 {% if can_confirm %}
                     <a href="{{ path('consumer_group_confirm', { id: round.id }) }}" class="prt-btn prt-btn--primary"><i class="fa fa-check"></i> Confirmar pedido</a>
@@ -164,7 +174,13 @@
                                     {% set medios = line.item.product and line.item.product.halfUnits %}
                                     <tr>
                                         <td>{{ line.item.name }} <span class="csa-muted">/ {{ line.item.unit }}</span></td>
-                                        <td class="tight">{{ line.item.price|number_format(2, ',', '.') }} €</td>
+                                        <td class="tight">
+                                            {{ line.item.price|number_format(2, ',', '.') }} €
+                                            {# Desglose: solo lo ve la comisión (esta pantalla es de gestión). #}
+                                            {% if line.item.producerPrice is not null and (is_granted('ROLE_GESTION_GRUPO_CONSUMO') or is_granted('ROLE_GESTION_CONTABILIDAD')) %}
+                                                <div class="csa-muted" style="font-size: .8em;">productor {{ line.item.producerPrice|number_format(2, ',', '.') }} + gestión {{ (line.item.price - line.item.producerPrice)|number_format(2, ',', '.') }}</div>
+                                            {% endif %}
+                                        </td>
                                         <td class="tight">{{ line.quantity|number_format(2, ',', '.') }}</td>
                                         <td class="tight">
                                             {% if can_order_local %}

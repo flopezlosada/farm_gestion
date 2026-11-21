@@ -32,7 +32,7 @@ class ConsumerGroupItemsRemovalConfirmationTest extends AbstractAuthenticatedTes
         $client->request('POST', '/gestion/consumer-group/' . $round->getId() . '/items', [
             '_token'   => $this->csrfToken($client, $round),
             'include'  => [$aceite->getId() => '1'],
-            'price'    => [$naranjas->getId() => '2.50', $aceite->getId() => '8.00'],
+            'producer_price'    => [$naranjas->getId() => '2.50', $aceite->getId() => '8.00'],
         ]);
 
         self::assertResponseIsSuccessful();
@@ -56,7 +56,7 @@ class ConsumerGroupItemsRemovalConfirmationTest extends AbstractAuthenticatedTes
         $client->request('POST', '/gestion/consumer-group/' . $round->getId() . '/items', [
             '_token'         => $this->csrfToken($client, $round),
             'include'        => [$aceite->getId() => '1'],
-            'price'          => [$naranjas->getId() => '2.50', $aceite->getId() => '8.00'],
+            'producer_price'          => [$naranjas->getId() => '2.50', $aceite->getId() => '8.00'],
             'confirm_removal' => '1',
         ]);
 

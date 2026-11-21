@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Service\ConsumerGroup\Markup;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
@@ -73,6 +74,35 @@ class ConsumerGroupRoundItem
     private string $price = '0';
 
     /**
+     * Precio del productor por unidad. null = sin desglosar (rondas anteriores al
+     * desglose). El precio final es {@see $price}: producerPrice + incremento.
+     * @ORM\Column(name="producer_price", type="decimal", precision=8, scale=2, nullable=true)
+     */
+    #[Assert\Positive]
+    private ?string $producerPrice = null;
+
+    /**
+     * Incremento PROPIO de este producto; si falta, vale el del pedido
+     * ({@see ConsumerGroupRound::getMarkupType()}).
+     * @ORM\Column(name="markup_type", type="string", length=10, nullable=true, enumType="App\Entity\MarkupType")
+     */
+    private ?MarkupType $markupType = null;
+
+    /**
+     * Valor del incremento propio, en la unidad de {@see $markupType}.
+     * @ORM\Column(name="markup_value", type="decimal", precision=8, scale=2, nullable=true)
+     */
+    #[Assert\PositiveOrZero]
+    private ?string $markupValue = null;
+
+    /**
+     * true cuando cambió el incremento del pedido y este producto, que tiene el suyo,
+     * aún no se ha revisado. Mientras haya alguno así el pedido no se puede abrir.
+     * @ORM\Column(name="markup_pending_review", type="boolean", options={"default": false})
+     */
+    private bool $markupPendingReview = false;
+
+    /**
      * Lo que la ASOCIACIÓN pide de este producto para el local, además de lo que
      * piden las socias. Decimal como string, al mismo precio de ronda.
      *
@@ -137,6 +167,85 @@ class ConsumerGroupRoundItem
     public function setPrice(string $price): self
     {
         $this->price = $price;
+        return $this;
+    }
+
+    /**
+     * Líneas de pedido de las socias sobre este producto.
+     *
+     * @return Collection<int, ConsumerGroupOrderLine>
+     */
+    public function getLines(): Collection
+    {
+        return $this->lines;
+    }
+
+    /**
+     * ¿Alguna socia ha apuntado cantidad (> 0) de este producto? Las líneas a 0 no
+     * cuentan: no hay nada que la socia haya visto y aceptado. Con cantidad apuntada
+     * el precio final queda fijado.
+     */
+    public function hasOrderedQuantity(): bool
+    {
+        return $this->lines->exists(static fn (int $i, ConsumerGroupOrderLine $line): bool => (float) $line->getQuantity() > 0);
+    }
+
+    public function getProducerPrice(): ?string
+    {
+        return $this->producerPrice;
+    }
+
+    public function setProducerPrice(?string $producerPrice): self
+    {
+        $this->producerPrice = $producerPrice;
+        return $this;
+    }
+
+    public function getMarkupType(): ?MarkupType
+    {
+        return $this->markupType;
+    }
+
+    public function getMarkupValue(): ?string
+    {
+        return $this->markupValue;
+    }
+
+    /**
+     * Fija el incremento PROPIO del producto; ambos null lo quitan y el producto
+     * vuelve a heredar el del pedido.
+     */
+    public function setOwnMarkup(?MarkupType $type, ?string $value): self
+    {
+        $this->markupType = $type;
+        $this->markupValue = $value;
+        return $this;
+    }
+
+    /**
+     * Incremento propio del producto, o null si hereda el del pedido.
+     */
+    public function getOwnMarkup(): ?Markup
+    {
+        return Markup::fromStored($this->markupType, $this->markupValue);
+    }
+
+    /**
+     * Incremento que de verdad se aplica: el propio si lo tiene, si no el del pedido.
+     */
+    public function getEffectiveMarkup(): ?Markup
+    {
+        return $this->getOwnMarkup() ?? $this->round?->getMarkup();
+    }
+
+    public function isMarkupPendingReview(): bool
+    {
+        return $this->markupPendingReview;
+    }
+
+    public function setMarkupPendingReview(bool $markupPendingReview): self
+    {
+        $this->markupPendingReview = $markupPendingReview;
         return $this;
     }
 

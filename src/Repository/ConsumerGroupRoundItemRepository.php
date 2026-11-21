@@ -65,4 +65,24 @@ class ConsumerGroupRoundItemRepository extends ServiceEntityRepository
 
         return $price === null ? null : $price['price'];
     }
+
+    /**
+     * El precio del productor que tuvo este producto la última vez que se desglosó,
+     * para sembrar una ronda nueva. Null si nunca se ha desglosado.
+     */
+    public function findLastProducerPriceForProduct(ConsumerGroupProduct $product): ?string
+    {
+        $row = $this->createQueryBuilder('ri')
+            ->select('ri.producerPrice')
+            ->join('ri.round', 'r')
+            ->where('ri.product = :product')
+            ->andWhere('ri.producerPrice IS NOT NULL')
+            ->setParameter('product', $product)
+            ->orderBy('r.created', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        return $row === null ? null : $row['producerPrice'];
+    }
 }
