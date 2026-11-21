@@ -176,7 +176,7 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
         $client = $this->createAuthenticatedClient();
         $this->enable(true);
         $this->roundWithOrders();
-        $line = $this->transfer(4242, 'DONANTE GENEROSA SOLIDARIA');
+        $line = $this->transfer(3000, 'DONANTE GENEROSA SOLIDARIA');
 
         $crawler = $client->request('GET', '/gestion/accounting/consumer-group-transfers');
         $client->submit($crawler->filter(sprintf('form[action$="/lines/%d/dismiss"]', $line->getId()))->form());
@@ -212,6 +212,24 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
 
         $this->assertSelectorTextContains('body', 'Su apunte sigue en la partida «Grupo de consumo»');
         $this->assertNotNull($this->em()->find(BankStatementLine::class, $line->getId())->getEntry(), 'Apartar no borra el apunte.');
+    }
+
+    /**
+     * Un cobro que no casa con ningún pedido y es mayor que todo lo que hay por pagar (a
+     * una empresa, una subvención) no es el pago de ninguno: no se pide elegir.
+     */
+    public function testUnImporteQueNoCabeEnLoQueSeDebeNoSePideElegir(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enable(true);
+        $this->roundWithOrders();
+        $empresa = $this->transfer(320000, 'ECOLISE');
+        $pequeno = $this->transfer(3000, 'DONANTE GENEROSA SOLIDARIA');
+
+        $client->request('GET', '/gestion/accounting/consumer-group-transfers');
+
+        $this->assertSelectorNotExists(sprintf('#movimiento-%d', $empresa->getId()));
+        $this->assertSelectorExists(sprintf('#movimiento-%d', $pequeno->getId()));
     }
 
     /** Un pedido ya pagado no se puede volver a pagar con otra transferencia. */
@@ -310,7 +328,7 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
             $this->accountId = $account->getId();
         }
         $day = new \DateTimeImmutable('2096-03-08');
-        $line = new BankStatementLine($account, new Norma43Movement($day, $day, '02', '000', $cents, uniqid(), '', '', ['TRANSF. A SU FAVOR', '14650100-' . $payer]), 1);
+        $line = new BankStatementLine($account, new Norma43Movement($day, $day, '02', '000', $cents, substr(uniqid(), -10), '', '', ['TRANSF. A SU FAVOR', '14650100-' . $payer]), 1);
         $em->persist($line);
         $em->flush();
 

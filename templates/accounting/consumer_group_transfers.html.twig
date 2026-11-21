@@ -49,6 +49,11 @@
         .cgt-chip input:checked + label small { color: var(--prl-sage-d, #2f4426); }
         .cgt-chip input:focus-visible + label { outline: 2px solid var(--prl-sage, #5b7a4c); outline-offset: 2px; }
         .cgt-chip--named label { border-color: var(--prl-sage, #5b7a4c); }
+        .prl h2.acc-section-head { margin: 2rem 0 .75rem; }
+        .cgt-rest { margin-top: .45rem; }
+        .cgt-rest summary { display: inline-block; font-size: 12px; font-weight: 500; color: var(--prl-sage-d, #2f4426); cursor: pointer; padding: .15rem 0; }
+        .cgt-rest summary:focus-visible { outline: 2px solid var(--prl-sage, #5b7a4c); outline-offset: 2px; }
+        .cgt-rest[open] .cgt-chips { max-height: 11rem; overflow-y: auto; margin-top: .4rem; padding: .15rem .1rem; }
         .cgt-act { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-top: .25rem; }
         .cgt-act .prl-search { flex: 1 1 15rem; max-width: 24rem; min-width: 0; }
         .cgt-sum { flex: 1 1 auto; font-size: 12px; color: var(--prl-ink-soft, #5a564a); font-variant-numeric: tabular-nums; }
@@ -62,6 +67,17 @@
         @media (prefers-reduced-motion: reduce) { .cgt-chip label { transition: none; } }
     </style>
 {% endblock %}
+
+{% macro chip(line, s, exact, checked) %}
+    <li class="cgt-chip{{ s.named ? ' cgt-chip--named' : '' }}">
+        <input type="checkbox" name="orders[]" id="o-{{ line.id }}-{{ s.order.id }}" value="{{ s.order.id }}" data-cents="{{ (s.order.total * 100)|round }}"{% if checked %} checked{% endif %}>
+        <label for="o-{{ line.id }}-{{ s.order.id }}" title="{{ s.reasons|join('. ') }}">
+            {{ s.order.partner }}
+            {% if not exact %}<small>{{ s.order.total|number_format(2, ',', '.') }} €</small>{% endif %}
+            {% if s.named %}<small>· nombre parecido</small>{% endif %}
+        </label>
+    </li>
+{% endmacro %}
 
 {% macro order_label(order) %}
     <span class="acc-strong">{{ order.partner }}</span>
@@ -113,18 +129,16 @@
                                         · {{ g.round.title }}{% if g.round.deliveryDate %} (entrega {{ g.round.deliveryDate|date('d/m') }}){% endif %}
                                     </p>
                                     <ul class="cgt-chips">
-                                        {% for s in g.items %}
-                                            {% set cents = (s.order.total * 100)|round %}
-                                            <li class="cgt-chip{{ s.named ? ' cgt-chip--named' : '' }}">
-                                                <input type="checkbox" name="orders[]" id="o-{{ line.id }}-{{ s.order.id }}" value="{{ s.order.id }}" data-cents="{{ cents }}"{% if s.sure and sureOnes|length == 1 %} checked{% endif %}>
-                                                <label for="o-{{ line.id }}-{{ s.order.id }}" title="{{ s.reasons|join('. ') }}">
-                                                    {{ s.order.partner }}
-                                                    {% if not g.exact %}<small>{{ s.order.total|number_format(2, ',', '.') }} €</small>{% endif %}
-                                                    {% if s.named %}<small>· nombre parecido</small>{% endif %}
-                                                </label>
-                                            </li>
-                                        {% endfor %}
+                                        {% for s in g.items|slice(0, 6) %}{{ _self.chip(line, s, g.exact, s.sure and sureOnes|length == 1) }}{% endfor %}
                                     </ul>
+                                    {% if g.items|length > 6 %}
+                                        <details class="cgt-rest">
+                                            <summary>Ver {{ g.items|length - 6 }} más</summary>
+                                            <ul class="cgt-chips">
+                                                {% for s in g.items|slice(6) %}{{ _self.chip(line, s, g.exact, false) }}{% endfor %}
+                                            </ul>
+                                        </details>
+                                    {% endif %}
                                 </div>
                             {% endfor %}
                             {% if row.hidden > 0 %}<p class="cgt-more">Y {{ row.hidden }} más: búscalos con el buscador.</p>{% endif %}

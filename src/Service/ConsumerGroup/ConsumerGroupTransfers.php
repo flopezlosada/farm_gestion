@@ -45,8 +45,8 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 class ConsumerGroupTransfers
 {
-    /** Cuántas sugerencias se pintan por movimiento; el resto se busca en el buscador de pedidos. */
-    private const MAX_SHOWN = 12;
+    /** Cuántas sugerencias se llevan a la pantalla por movimiento; el resto se busca en el buscador de pedidos. */
+    private const MAX_SHOWN = 60;
 
     public function __construct(
         private readonly ConsumerGroupTransferRepository $transfers,
@@ -100,7 +100,9 @@ class ConsumerGroupTransfers
 
     /**
      * Lo que falta por elegir a mano, con los pedidos que pueden ser, los más probables
-     * primero, y todos los pedidos por pagar para elegir otro.
+     * primero, y todos los pedidos por pagar para elegir otro. Sólo los movimientos que
+     * podrían ser el pago de algo: con algún pedido parecido, o de un importe que cabe
+     * en lo que hay por pagar.
      *
      * @return array{lines: list<array{line: BankStatementLine, payer: string|null, suggestions: list<array{order: ConsumerGroupOrder, sure: bool, exact: bool, named: bool, reasons: list<string>}>, groups: list<array{exact: bool, round: ConsumerGroupRound, items: list<array{order: ConsumerGroupOrder, sure: bool, exact: bool, named: bool, reasons: list<string>}>}>, hidden: int}>, payable: list<ConsumerGroupOrder>}
      */
@@ -110,18 +112,26 @@ class ConsumerGroupTransfers
         $payable = $lines === [] ? [] : $this->orders->findPayableByTransfer();
         $aliases = $this->aliasesFor($lines);
 
-        return [
-            'lines' => array_map(static function (BankStatementLine $line) use ($payable, $aliases): array {
-                $suggestions = self::suggestions($line, $payable, self::aliasFamily($line, $aliases));
+        $rows = array_map(static function (BankStatementLine $line) use ($payable, $aliases): array {
+            $suggestions = self::suggestions($line, $payable, self::aliasFamily($line, $aliases));
 
-                return [
-                    'line' => $line,
-                    'payer' => $line->getTransferPayer(),
-                    'suggestions' => $suggestions,
-                    'groups' => self::groupSuggestions(\array_slice($suggestions, 0, self::MAX_SHOWN)),
-                    'hidden' => max(0, \count($suggestions) - self::MAX_SHOWN),
-                ];
-            }, $lines),
+            return [
+                'line' => $line,
+                'payer' => $line->getTransferPayer(),
+                'suggestions' => $suggestions,
+                'groups' => self::groupSuggestions(\array_slice($suggestions, 0, self::MAX_SHOWN)),
+                'hidden' => max(0, \count($suggestions) - self::MAX_SHOWN),
+            ];
+        }, $lines);
+        // Lo que ni casa con un pedido ni cabe en lo que se debe (un cobro a una empresa,
+        // una subvención) no es el pago de ninguno: no se pide elegir.
+        $owed = array_sum(array_map(static fn (ConsumerGroupOrder $o): int => (int) round($o->getTotal() * 100), $payable));
+
+        return [
+            'lines' => array_values(array_filter(
+                $rows,
+                static fn (array $row): bool => $row['suggestions'] !== [] || $row['line']->getAmountCents() <= $owed,
+            )),
             'payable' => $payable,
         ];
     }
@@ -132,14 +142,14 @@ class ConsumerGroupTransfers
     public function countPending(): int
     {
         $from = $this->enabled() ? $this->orders->firstCreatedOn() : null;
-        if ($from === null) {
-            return 0;
-        }
-
-        return \count(array_filter(
+        $withPayer = $from === null ? [] : array_filter(
             $this->transfers->findUndecidedDetails($from, $this->category(), true),
             static fn (?string $details): bool => TransferPayer::fromDetails((string) $details) !== null,
-        ));
+        );
+
+        // Sin candidatos no hace falta más. Con ellos se cuenta lo que la pantalla
+        // enseña, que además descarta los que no pueden ser el pago de un pedido.
+        return $withPayer === [] ? 0 : \count($this->pending()['lines']);
     }
 
     /**
