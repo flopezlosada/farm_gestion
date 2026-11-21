@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\Service\ConsumerGroup\Markup;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
@@ -233,6 +234,20 @@ class ConsumerGroupRound
     private ?\DateTime $deliveryDate = null;
 
     /**
+     * Incremento de gestión por defecto del pedido: lo heredan los productos que no
+     * tienen uno propio. Solo tiene sentido con un productor gestionado por la comisión.
+     * @ORM\Column(name="markup_type", type="string", length=10, nullable=true, enumType="App\Entity\MarkupType")
+     */
+    private ?MarkupType $markupType = null;
+
+    /**
+     * Valor del incremento por defecto, en la unidad de {@see $markupType} (% o €).
+     * @ORM\Column(name="markup_value", type="decimal", precision=8, scale=2, nullable=true)
+     */
+    #[Assert\PositiveOrZero]
+    private ?string $markupValue = null;
+
+    /**
      * Quién abrió la ronda (comisión). Nullable: si se borra el User, la ronda
      * sobrevive sin autor.
      * @ORM\ManyToOne(targetEntity="User")
@@ -451,6 +466,34 @@ class ConsumerGroupRound
             $this->minimumValue = null;
         }
         return $this;
+    }
+
+    public function getMarkupType(): ?MarkupType
+    {
+        return $this->markupType;
+    }
+
+    public function getMarkupValue(): ?string
+    {
+        return $this->markupValue;
+    }
+
+    /**
+     * Fija el incremento por defecto del pedido; ambos null lo quitan.
+     */
+    public function setMarkup(?MarkupType $type, ?string $value): self
+    {
+        $this->markupType = $type;
+        $this->markupValue = $value;
+        return $this;
+    }
+
+    /**
+     * Incremento por defecto del pedido, o null si no tiene.
+     */
+    public function getMarkup(): ?Markup
+    {
+        return Markup::fromStored($this->markupType, $this->markupValue);
     }
 
     public function getMinimumValue(): ?string
