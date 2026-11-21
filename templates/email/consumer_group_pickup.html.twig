@@ -42,13 +42,13 @@
     <p><strong>Importe: {{ order.total|number_format(2, ',', '.') }} €.</strong>
         {% if order.paid %}
             Ya está pagado. Gracias.
-        {% elseif order.willBeChargedByReceipt %}
+        {% elseif by_receipt %}
             No tienes que hacer nada: va en tu recibo del grupo de consumo, a mes vencido.
         {% else %}
             Está pendiente de pago: haz la transferencia con el concepto <strong>{{ order.paymentReference }}</strong>.
         {% endif %}
     </p>
-    {% if not order.paid and not order.willBeChargedByReceipt and payment_info %}
+    {% if not order.paid and not by_receipt and payment_info %}
         <p style="color: #555;">{{ payment_info|nl2br }}</p>
     {% endif %}
 

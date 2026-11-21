@@ -255,6 +255,16 @@ class AppSettings
     public const FEATURE_GRUPO_CONSUMO = 'feature.grupo_consumo';
 
     /**
+     * ¿Se cobran los pedidos del grupo de consumo por recibo de remesa? Apagado, un
+     * pedido sin pagar está «pendiente de pago» aunque su socia tenga mandato (paga por
+     * transferencia o en metálico y lo marca la comisión) y no se ofrece preparar la
+     * remesa del grupo de consumo.
+     * Lo resuelve {@see \App\Security\FeatureVoter} vía
+     * {@see is_granted('FEATURE_GRUPO_CONSUMO_REMESA')}. Arranca OFF (rodaje).
+     */
+    public const FEATURE_GRUPO_CONSUMO_REMESA = 'feature.grupo_consumo_remesa';
+
+    /**
      * ¿Está abierto el módulo de contabilidad y presupuestos (libro de caja,
      * partidas, presupuesto anual y su seguimiento)? Apagado, se oculta del menú y
      * sus rutas responden 403. Lo resuelve {@see \App\Security\FeatureVoter} vía
@@ -1074,6 +1084,12 @@ class AppSettings
             'group' => 'Funcionalidades en rodaje',
             'label' => 'Grupo de consumo',
             'help' => 'Abre el módulo del grupo de consumo: productores, rondas de pedido colectivo y los apuntes de lxs socixs. Apagado, se oculta del menú (gestión y panel) y no es accesible.',
+            'default' => false,
+        ],
+        self::FEATURE_GRUPO_CONSUMO_REMESA => [
+            'group' => 'Funcionalidades en rodaje',
+            'label' => 'Grupo de consumo: cobro por remesa',
+            'help' => 'Cobra los pedidos del grupo de consumo con un recibo en la remesa mensual. Apagado, se pagan por transferencia o en metálico, el pedido sin pagar no sale como «va en el recibo» y no se puede preparar la remesa del grupo de consumo.',
             'default' => false,
         ],
         self::FEATURE_CONTABILIDAD => [

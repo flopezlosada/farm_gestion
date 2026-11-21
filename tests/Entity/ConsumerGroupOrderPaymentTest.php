@@ -66,14 +66,23 @@ class ConsumerGroupOrderPaymentTest extends TestCase
 
     public function testVaEnElReciboQuienPagaPorReciboConMandatoCompleto(): void
     {
-        $this->assertTrue((new ConsumerGroupOrder(null, self::withMandate()))->willBeChargedByReceipt());
+        $this->assertTrue((new ConsumerGroupOrder(null, self::withMandate()))->willBeChargedByReceipt(true));
+    }
+
+    public function testSinElCobroPorRemesaNadaVaEnElRecibo(): void
+    {
+        $order = new ConsumerGroupOrder(null, self::withMandate());
+
+        $this->assertFalse($order->willBeChargedByReceipt(false), 'Con mandato completo, pero la remesa del grupo de consumo no está activa.');
+        $this->assertSame(ConsumerGroupPaymentState::Pending, $order->getPaymentState(false));
+        $this->assertSame(ConsumerGroupPaymentState::Paid, $order->markPaid(ConsumerGroupPaymentMethod::Transfer)->getPaymentState(false), 'Lo pagado a mano sigue pagado.');
     }
 
     public function testNoVaEnElReciboSiYaEstaPagado(): void
     {
         $order = (new ConsumerGroupOrder(null, self::withMandate()))->markPaid(ConsumerGroupPaymentMethod::Cash);
 
-        $this->assertFalse($order->willBeChargedByReceipt());
+        $this->assertFalse($order->willBeChargedByReceipt(true));
     }
 
     public function testNoVaEnElReciboSinMandatoCompleto(): void
@@ -81,15 +90,15 @@ class ConsumerGroupOrderPaymentTest extends TestCase
         // Cuenta y referencia, pero sin fecha de firma: el banco no lo acepta.
         $partner = (new Partner())->setIban('ES91 2100 0418 4502 0005 1332')->setMandateReference('CUOTA MENSUAL 200');
 
-        $this->assertFalse((new ConsumerGroupOrder(null, $partner))->willBeChargedByReceipt());
-        $this->assertFalse((new ConsumerGroupOrder(null, new Partner()))->willBeChargedByReceipt());
+        $this->assertFalse((new ConsumerGroupOrder(null, $partner))->willBeChargedByReceipt(true));
+        $this->assertFalse((new ConsumerGroupOrder(null, new Partner()))->willBeChargedByReceipt(true));
     }
 
     public function testNoVaEnElReciboQuienPagaPorTransferencia(): void
     {
         $partner = self::withMandate()->setPaymentMethod(PartnerPaymentMethod::Transfer);
 
-        $this->assertFalse((new ConsumerGroupOrder(null, $partner))->willBeChargedByReceipt());
+        $this->assertFalse((new ConsumerGroupOrder(null, $partner))->willBeChargedByReceipt(true));
     }
 
     public function testLaComisionSoloMarcaTransferenciaOMetalico(): void
@@ -137,12 +146,12 @@ class ConsumerGroupOrderPaymentTest extends TestCase
     {
         $order = static fn (): ConsumerGroupOrder => new ConsumerGroupOrder(null, self::withMandate());
 
-        $this->assertSame(ConsumerGroupPaymentState::InReceipt, $order()->getPaymentState());
-        $this->assertSame(ConsumerGroupPaymentState::InReceipt, $order()->setRemittanceLine(self::receipt(false))->getPaymentState(), 'En un borrador todavía va en el recibo.');
-        $this->assertSame(ConsumerGroupPaymentState::AwaitingBank, $order()->setRemittanceLine(self::receipt(true))->getPaymentState());
-        $this->assertSame(ConsumerGroupPaymentState::Paid, $order()->setRemittanceLine(self::receipt(true))->settleReceipt(ConsumerGroupPaymentMethod::Receipt, new \DateTimeImmutable('2026-11-05'), false)->getPaymentState());
-        $this->assertSame(ConsumerGroupPaymentState::Returned, $order()->setRemittanceLine(self::receipt(true))->settleReceipt(null, null, true)->getPaymentState());
-        $this->assertSame(ConsumerGroupPaymentState::Pending, (new ConsumerGroupOrder(null, new Partner()))->getPaymentState(), 'Sin mandato: lo paga ella.');
+        $this->assertSame(ConsumerGroupPaymentState::InReceipt, $order()->getPaymentState(true));
+        $this->assertSame(ConsumerGroupPaymentState::InReceipt, $order()->setRemittanceLine(self::receipt(false))->getPaymentState(true), 'En un borrador todavía va en el recibo.');
+        $this->assertSame(ConsumerGroupPaymentState::AwaitingBank, $order()->setRemittanceLine(self::receipt(true))->getPaymentState(true));
+        $this->assertSame(ConsumerGroupPaymentState::Paid, $order()->setRemittanceLine(self::receipt(true))->settleReceipt(ConsumerGroupPaymentMethod::Receipt, new \DateTimeImmutable('2026-11-05'), false)->getPaymentState(true));
+        $this->assertSame(ConsumerGroupPaymentState::Returned, $order()->setRemittanceLine(self::receipt(true))->settleReceipt(null, null, true)->getPaymentState(true));
+        $this->assertSame(ConsumerGroupPaymentState::Pending, (new ConsumerGroupOrder(null, new Partner()))->getPaymentState(true), 'Sin mandato: lo paga ella.');
     }
 
     public function testDevueltoNoVaEnElReciboAunqueTengaMandato(): void
@@ -150,7 +159,7 @@ class ConsumerGroupOrderPaymentTest extends TestCase
         // Ya fue y volvió: no vuelve sola a la remesa, lo decide la devolución.
         $order = (new ConsumerGroupOrder(null, self::withMandate()))->setRemittanceLine(self::receipt(true))->settleReceipt(null, null, true);
 
-        $this->assertFalse($order->willBeChargedByReceipt());
+        $this->assertFalse($order->willBeChargedByReceipt(true));
         $this->assertTrue($order->isReceiptReturned());
         $this->assertNotNull($order->getRemittanceLine(), 'Conserva el recibo: lo liga a su devolución.');
     }

@@ -48,7 +48,7 @@ class ConsumerGroupRemittanceControllerTest extends AbstractAuthenticatedTest
         if ($this->partnerIds !== []) {
             $em->createQuery('DELETE FROM App\Entity\Partner p WHERE p.id IN (:ids)')->execute(['ids' => $this->partnerIds]);
         }
-        foreach ($em->getRepository(Setting::class)->findBy(['name' => [AppSettings::FEATURE_CONTABILIDAD, AppSettings::FEATURE_GRUPO_CONSUMO]]) as $setting) {
+        foreach ($em->getRepository(Setting::class)->findBy(['name' => [AppSettings::FEATURE_CONTABILIDAD, AppSettings::FEATURE_GRUPO_CONSUMO, AppSettings::FEATURE_GRUPO_CONSUMO_REMESA]]) as $setting) {
             $em->remove($setting);
         }
         $em->flush();
@@ -64,11 +64,12 @@ class ConsumerGroupRemittanceControllerTest extends AbstractAuthenticatedTest
         return $em;
     }
 
-    private function enable(bool $consumerGroup): void
+    private function enable(bool $consumerGroup, ?bool $receiptCharging = null): void
     {
         $settings = static::getContainer()->get(AppSettings::class);
         $settings->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
         $settings->setBool(AppSettings::FEATURE_GRUPO_CONSUMO, $consumerGroup);
+        $settings->setBool(AppSettings::FEATURE_GRUPO_CONSUMO_REMESA, $receiptCharging ?? $consumerGroup);
     }
 
     /**
@@ -143,6 +144,21 @@ class ConsumerGroupRemittanceControllerTest extends AbstractAuthenticatedTest
         $this->assertResponseStatusCodeSame(403);
     }
 
+    /** El estado por defecto en producción: el módulo abierto y el cobro por remesa apagado. */
+    public function testConElGrupoDeConsumoSinCobroPorRemesaNoSeOfreceNiSePreparaNiSeEnvia(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enable(true, false);
+        $this->roundWithOrders();
+
+        $client->request('GET', '/gestion/accounting/remittances');
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorNotExists('form[action$="/from-consumer-group"]');
+
+        $client->request('POST', '/gestion/accounting/remittances/from-consumer-group', ['period' => '2096-03']);
+        $this->assertResponseStatusCodeSame(403);
+    }
+
     public function testEnviarDejaElPedidoEnElReciboEsperandoAlBanco(): void
     {
         $client = $this->createAuthenticatedClient();
@@ -159,7 +175,7 @@ class ConsumerGroupRemittanceControllerTest extends AbstractAuthenticatedTest
 
         $this->assertTrue($this->em()->find(Remittance::class, $remittance->getId())->isSent());
         $this->assertFalse($this->reload($ana)->isPaid(), 'Enviada no es cobrada: falta que el abono entre en el banco.');
-        $this->assertSame(ConsumerGroupPaymentState::AwaitingBank, $this->reload($ana)->getPaymentState());
+        $this->assertSame(ConsumerGroupPaymentState::AwaitingBank, $this->reload($ana)->getPaymentState(true));
         $this->assertFalse($this->reload($bea)->isPaid(), 'Lo de Bea sigue pendiente: lo marca la comisión.');
 
         // Su pago ya no se toca a mano: ni se ofrece en la ficha de la ronda.

@@ -88,7 +88,7 @@
                                 <div class="cg-round-card__meta">
                                     {{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}
                                     · {{ order.total|number_format(2, ',', '.') }} €
-                                    {%- set state = order.paymentState.value %}
+                                    {%- set state = order.getPaymentState(is_granted('FEATURE_GRUPO_CONSUMO_REMESA')).value %}
                                     {%- if state in ['in_receipt', 'awaiting_bank'] %} · va en tu recibo{% elseif state == 'returned' %} · recibo devuelto{% elseif state == 'pending' %} · pendiente de pago{% endif %}
                                 </div>
                             </div>

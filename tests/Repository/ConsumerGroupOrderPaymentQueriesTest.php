@@ -20,7 +20,7 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 /**
  * Las consultas del cobro del grupo de consumo contra la base: qué pedidos van en la
- * remesa de un mes y cuáles se entregan («pagado o va en el recibo»). Rondas en 2097
+ * remesa de un mes y cuáles se entregan (todo lo confirmado y no cancelado). Rondas en 2097
  * y un productor propio para no cruzarse con nada.
  */
 class ConsumerGroupOrderPaymentQueriesTest extends KernelTestCase
@@ -161,22 +161,21 @@ class ConsumerGroupOrderPaymentQueriesTest extends KernelTestCase
         $this->assertCount(1, $this->repo()->findToChargeByReceiptIn(new \DateTimeImmutable('2097-03-01')));
     }
 
-    public function testSeEntregaLoPagadoYLoQueVaEnElRecibo(): void
+    public function testSeEntregaTodoLoConfirmadoEsteOnoPagado(): void
     {
         $ana = $this->partner('Ana', true);
         $bea = $this->partner('Bea', false);
-        $march = $this->round('2097-03-10');
-        $this->order($march, $ana);
-        $beaOrder = $this->order($march, $bea);
+        $this->order($this->round('2097-03-10'), $ana);
+        $beaOrder = $this->order($this->round('2097-03-17'), $bea);
         $this->em()->flush();
         $from = new \DateTime('2097-01-01');
 
-        $this->assertCount(1, $this->repo()->findDeliverableUpcomingForPartner($ana, $from), 'Con recibo: se le entrega aunque no haya pagado aún.');
-        $this->assertCount(0, $this->repo()->findDeliverableUpcomingForPartner($bea, $from), 'Sin recibo y sin pagar: no.');
+        $this->assertCount(1, $this->repo()->findDeliverableUpcomingForPartner($ana, $from), 'Con mandato y sin pagar: sí.');
+        $this->assertCount(1, $this->repo()->findDeliverableUpcomingForPartner($bea, $from), 'Sin mandato y sin pagar: sí, lo pagará a su manera.');
 
-        $beaOrder->markPaid(ConsumerGroupPaymentMethod::Transfer);
+        $beaOrder->getRound()->setStatus(ConsumerGroupRound::STATUS_CANCELLED);
         $this->em()->flush();
 
-        $this->assertCount(1, $this->repo()->findDeliverableUpcomingForPartner($bea, $from), 'Pagado por transferencia: sí.');
+        $this->assertCount(0, $this->repo()->findDeliverableUpcomingForPartner($bea, $from), 'Una ronda cancelada no se entrega.');
     }
 }

@@ -57,7 +57,7 @@
                                     in_receipt: 'Va en el recibo',
                                     returned: 'Recibo devuelto',
                                     pending: 'No',
-                                }[order.paymentState.value] }}</td>
+                                }[order.getPaymentState(is_granted('FEATURE_GRUPO_CONSUMO_REMESA')).value] }}</td>
                                 <td class="tight">{{ order.pickedUp ? 'Sí' : 'No' }}</td>
                             </tr>
                         {% endfor %}

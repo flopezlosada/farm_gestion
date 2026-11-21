@@ -35,7 +35,7 @@
         <p class="cg-money__ok" style="margin: 0;">
             Pago recibido por {{ order.paidVia.label }}{% if order.paidAt %} el {{ order.paidAt|date('d/m/Y') }}{% endif %}. Gracias.
         </p>
-    {% elseif order.paymentState.value == 'returned' %}
+    {% elseif order.getPaymentState(is_granted('FEATURE_GRUPO_CONSUMO_REMESA')).value == 'returned' %}
         {# El banco devolvió el recibo. Qué se hace (volver a pasarlo, que
          # pague de otra forma) lo decide la comisión con ella: no se le
          # pide aquí una transferencia que puede cruzarse con un segundo
@@ -44,7 +44,7 @@
             <b>El banco ha devuelto el recibo de este pedido.</b> Nos pondremos en contacto
             contigo para ver cómo lo pagas.
         </p>
-    {% elseif order.paymentState.value in ['in_receipt', 'awaiting_bank'] %}
+    {% elseif order.getPaymentState(is_granted('FEATURE_GRUPO_CONSUMO_REMESA')).value in ['in_receipt', 'awaiting_bank'] %}
         {# Paga por recibo: no tiene que hacer nada, y la entrega ya sale en su
          # calendario. Pedirle una transferencia aquí sería cobrarle dos veces. #}
         <p style="margin: 0;">
@@ -59,11 +59,5 @@
         {% if payment_info %}
             <p class="csa-muted" style="margin: 0;">{{ payment_info|nl2br }}</p>
         {% endif %}
-        {# La regla existe desde el principio y hasta ahora no se contaba en
-         # ninguna parte: quien no había pagado veía su calendario sin la entrega
-         # y no tenía forma de saber por qué. #}
-        <p class="csa-muted" style="margin: 0;">
-            La entrega aparece en tu calendario cuando nos consta el pago.
-        </p>
     {% endif %}
 </div>
