@@ -4,6 +4,8 @@ namespace App\Tests\Controller;
 
 use App\Entity\BankPayerAlias;
 use App\Entity\BankStatementLine;
+use App\Entity\BudgetCategory;
+use App\Entity\BudgetCategoryGroup;
 use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupOrderLine;
 use App\Entity\ConsumerGroupPaymentMethod;
@@ -87,6 +89,7 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
     {
         $this->createAuthenticatedClient();
         $this->enable(true);
+        $this->ensureConsumerGroupCategory();
         [$lucia, $pedro] = $this->roundWithOrders();
         $sure = $this->transfer(1000, 'LUCIA ORTEGA PE');
         $unknown = $this->transfer(1500, 'TOMASA GIL ROMERO');
@@ -207,6 +210,7 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
     {
         $client = $this->createAuthenticatedClient();
         $this->enable(true);
+        $this->ensureConsumerGroupCategory();
         [$lucia] = $this->roundWithOrders();
         $line = $this->transfer(1000, 'LUCIA ORTEGA PE');
         $this->matchAll();
@@ -272,6 +276,24 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
         $em->clear();
 
         return $em;
+    }
+
+    /**
+     * La partida «Ingresos / Grupo de consumo» donde el cruce anota los movimientos sin
+     * apunte. La suite no carga datos de negocio: si no existe, se crea.
+     */
+    private function ensureConsumerGroupCategory(): void
+    {
+        $em = $this->em();
+        if ($em->getRepository(BudgetCategory::class)->findOneByGroupAndName('INGRESOS', 'Grupo de consumo') !== null) {
+            return;
+        }
+        $group = $em->getRepository(BudgetCategoryGroup::class)->findOneBy(['name' => 'INGRESOS'])
+            ?? (new BudgetCategoryGroup())->setName('INGRESOS')->setKind(BudgetCategoryGroup::KIND_INCOME);
+        $category = (new BudgetCategory())->setGroup($group)->setName('Grupo de consumo')->setSortOrder(99);
+        $em->persist($group);
+        $em->persist($category);
+        $em->flush();
     }
 
     private function enable(bool $consumerGroup): void
