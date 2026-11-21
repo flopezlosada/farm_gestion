@@ -10,7 +10,6 @@ use App\Entity\MarkupType;
 use App\Entity\Producer;
 use App\Service\ConsumerGroup\PriceLocked;
 use App\Service\ConsumerGroup\RoundPricing;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -160,7 +159,9 @@ class RoundPricingTest extends TestCase
         self::assertFalse($item->isMarkupPendingReview());
     }
 
-    #[DataProvider('desglosesInvalidos')]
+    /**
+     * @dataProvider desglosesInvalidos
+     */
     public function testNoSeDesglosaUnPrecioDeProductorFueraDeRango(string $producerPrice): void
     {
         $item = $this->item('Naranjas', '2.50', null);

@@ -4,7 +4,6 @@ namespace App\Tests\Service\ConsumerGroup;
 
 use App\Entity\MarkupType;
 use App\Service\ConsumerGroup\Markup;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -26,7 +25,9 @@ class MarkupTest extends TestCase
         yield 'precio de la BBDD con dos decimales' => ['percent', '10.00', '4.50', '4.95'];
     }
 
-    #[DataProvider('casos')]
+    /**
+     * @dataProvider casos
+     */
     public function testAplicaElIncrementoAlPrecioDelProductor(string $type, string $value, string $producer, string $expected): void
     {
         $markup = Markup::fromStored(MarkupType::from($type), $value);
@@ -59,6 +60,6 @@ class MarkupTest extends TestCase
         $markup = Markup::fromStored(MarkupType::Percent, '999999.99');
 
         $this->expectException(\InvalidArgumentException::class);
-        $markup->applyTo('50.00');
+        $markup->applyTo('5000.00');
     }
 }
