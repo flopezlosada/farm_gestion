@@ -10,7 +10,7 @@ Qué recoges:
 
 Importe: {{ order.total|number_format(2, ',', '.') }} €.
 {% if order.paid %}Ya está pagado. Gracias.
-{% elseif order.willBeChargedByReceipt %}No tienes que hacer nada: va en tu recibo del grupo de consumo, a mes vencido.
+{% elseif by_receipt %}No tienes que hacer nada: va en tu recibo del grupo de consumo, a mes vencido.
 {% else %}Está pendiente de pago: haz la transferencia con el concepto {{ order.paymentReference }}.
 {% if payment_info %}{{ payment_info }}
 {% endif %}{% endif %}

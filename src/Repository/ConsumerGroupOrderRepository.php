@@ -20,13 +20,12 @@ use Doctrine\Persistence\ManagerRegistry;
 class ConsumerGroupOrderRepository extends ServiceEntityRepository
 {
     /**
-     * Cuándo un pedido se puede entregar por su pago: consta pagado, o se le va a
-     * cobrar en el recibo del mes (paga por recibo y tiene el mandato completo). Es
-     * {@see ConsumerGroupOrder::willBeChargedByReceipt()} en DQL, y la misma condición
-     * para el calendario y la hoja del nodo. Necesita el alias `p` del socix.
+     * Socias a las que se les puede pasar recibo: pagan por recibo y tienen el mandato
+     * completo. Es la parte DQL de {@see ConsumerGroupOrder::willBeChargedByReceipt()}.
+     * Necesita el alias `p` del socix.
      */
-    private const DELIVERABLE_PAYMENT = "(o.paidVia IS NOT NULL OR (p.paymentMethod = '" . PartnerPaymentMethod::Receipt->value . "'"
-        . ' AND p.mandateReference IS NOT NULL AND p.mandateSignedOn IS NOT NULL AND p.iban IS NOT NULL))';
+    private const RECEIPT_CHARGEABLE = "(p.paymentMethod = '" . PartnerPaymentMethod::Receipt->value . "'"
+        . ' AND p.mandateReference IS NOT NULL AND p.mandateSignedOn IS NOT NULL AND p.iban IS NOT NULL)';
 
     public function __construct(ManagerRegistry $registry)
     {
@@ -46,10 +45,10 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
 
     /**
      * Apuntes de una socia listos para entregar y cuya entrega es futura (>= $from):
-     * pedido colectivo CONFIRMADO y apunte PAGADO o que va en el recibo del mes. Con ronda y líneas, ordenados por
-     * fecha de entrega. Para pintar en el calendario (socio y gestor) lo que la socia
-     * va a recibir. Regla de negocio: si no ha pagado ni se le va a cobrar por
-     * recibo, no aparece ({@see self::DELIVERABLE_PAYMENT}).
+     * pedido colectivo CONFIRMADO y no cancelado, esté o no pagado: se entiende que
+     * lo pagará de una manera o de otra, y el pago puede llegar después de la entrega.
+     * Con ronda y líneas, ordenados por fecha de entrega. Para pintar en el calendario
+     * (socio y gestor) lo que la socia va a recibir.
      *
      * @return ConsumerGroupOrder[]
      */
@@ -63,7 +62,6 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
             ->where('o.partner = :partner')
             ->andWhere('r.confirmed = true')
             ->andWhere('r.status != :cancelled')
-            ->andWhere(self::DELIVERABLE_PAYMENT)
             ->andWhere('r.deliveryDate >= :from')
             ->setParameter('partner', $partner->getFamilyHead())
             ->setParameter('cancelled', \App\Entity\ConsumerGroupRound::STATUS_CANCELLED)
@@ -78,7 +76,7 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
      * que quien reparte sepa qué bultos saca además de las cestas.
      *
      * Mismo filtro de entregabilidad que {@see findDeliverableUpcomingForPartner()}
-     * —confirmado, no cancelado y PAGADO o con recibo—, y por el mismo motivo: la hoja tiene
+     * —confirmado y no cancelado, pagado o no—, y por el mismo motivo: la hoja tiene
      * que llevar exactamente lo que se le ha prometido a la socia en su
      * calendario. Dos reglas distintas serían un pedido que aparece en un sitio y
      * no en el otro.
@@ -103,7 +101,6 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
             ->where('g.node = :node')
             ->andWhere('r.confirmed = true')
             ->andWhere('r.status != :cancelled')
-            ->andWhere(self::DELIVERABLE_PAYMENT)
             ->andWhere('r.deliveryDate BETWEEN :from AND :to')
             ->setParameter('node', $node)
             ->setParameter('cancelled', ConsumerGroupRound::STATUS_CANCELLED)
@@ -142,7 +139,7 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
             ->andWhere('r.status != :cancelled')
             ->andWhere('o.paidVia IS NULL')
             ->andWhere('o.remittanceLine IS NULL')
-            ->andWhere(self::DELIVERABLE_PAYMENT)
+            ->andWhere(self::RECEIPT_CHARGEABLE)
             ->andWhere('r.deliveryDate <= :to')
             ->setParameter('cancelled', ConsumerGroupRound::STATUS_CANCELLED)
             ->setParameter('to', $first->modify('last day of this month')->format('Y-m-d'))

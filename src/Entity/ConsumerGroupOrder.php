@@ -293,26 +293,33 @@ class ConsumerGroupOrder
 
     /**
      * Si, sin estar pagado, se le va a cobrar en el recibo del mes: la socia paga por
-     * recibo y tiene el mandato completo. Para la entrega cuenta como pagado, porque el
-     * cobro está asegurado; la consulta de entregables lo repite en DQL
-     * ({@see \App\Repository\ConsumerGroupOrderRepository}).
+     * recibo y tiene el mandato completo. La consulta de la remesa lo repite en DQL
+     * ({@see \App\Repository\ConsumerGroupOrderRepository}). La entrega no depende de
+     * esto: se entrega esté pagado o no.
+     *
+     * @param bool $receiptCharging si el cobro por remesa está activo
+     *                              ({@see \App\Service\AppSettings::FEATURE_GRUPO_CONSUMO_REMESA}); sin
+     *                              él no hay recibo que esperar. Obligatorio a propósito: un
+     *                              valor por omisión dejaría pintar «va en el recibo» sin mirarlo.
      */
-    public function willBeChargedByReceipt(): bool
+    public function willBeChargedByReceipt(bool $receiptCharging): bool
     {
-        return !$this->isPaid() && !$this->receiptReturned && $this->partner !== null && $this->partner->canBeChargedByReceipt();
+        return $receiptCharging && !$this->isPaid() && !$this->receiptReturned && $this->partner !== null && $this->partner->canBeChargedByReceipt();
     }
 
     /**
      * En qué punto está su pago, para pintarlo. Un pedido que va en un recibo
      * enviado y aún sin abono no «va en el recibo»: ya va, y se espera al banco.
+     *
+     * @param bool $receiptCharging si el cobro por remesa está activo, ver {@see willBeChargedByReceipt()}
      */
-    public function getPaymentState(): ConsumerGroupPaymentState
+    public function getPaymentState(bool $receiptCharging): ConsumerGroupPaymentState
     {
         return match (true) {
             $this->isPaid() => ConsumerGroupPaymentState::Paid,
             $this->receiptReturned => ConsumerGroupPaymentState::Returned,
             $this->isInSentReceipt() => ConsumerGroupPaymentState::AwaitingBank,
-            $this->willBeChargedByReceipt() => ConsumerGroupPaymentState::InReceipt,
+            $this->willBeChargedByReceipt($receiptCharging) => ConsumerGroupPaymentState::InReceipt,
             default => ConsumerGroupPaymentState::Pending,
         };
     }

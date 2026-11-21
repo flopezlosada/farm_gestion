@@ -242,7 +242,7 @@
                             <div class="cg-round-card__cta">
                                 {# El mismo orden que el bloque de pago de la ficha: lo
                                  # pagado manda, después el recibo, y si no, falta pagar. #}
-                                {% set state = order.paymentState.value %}
+                                {% set state = order.getPaymentState(is_granted('FEATURE_GRUPO_CONSUMO_REMESA')).value %}
                                 {% if state == 'paid' %}
                                     <span class="prl-chip prl-chip--ok"><span class="dot"></span>Pagado</span>
                                 {% elseif state == 'returned' %}

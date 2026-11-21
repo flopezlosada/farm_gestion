@@ -330,7 +330,7 @@ class RemittanceController extends AbstractController
      */
     #[Route('/from-consumer-group', name: 'accounting_remittance_from_consumer_group', methods: ['POST'])]
     #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
-    #[IsGranted('FEATURE_GRUPO_CONSUMO')]
+    #[IsGranted('FEATURE_GRUPO_CONSUMO_REMESA')]
     public function fromConsumerGroup(Request $request, RemittanceRepository $remittances, RemittanceFromConsumerGroup $builder, EntityManagerInterface $em): Response
     {
         $back = $this->redirectToRoute('accounting_remittances');
@@ -444,7 +444,7 @@ class RemittanceController extends AbstractController
     public function send(Request $request, Remittance $remittance, ValidatorInterface $validator, EntityManagerInterface $em): Response
     {
         if ($remittance->isConsumerGroup()) {
-            $this->denyAccessUnlessGranted('FEATURE_GRUPO_CONSUMO');
+            $this->denyAccessUnlessGranted('FEATURE_GRUPO_CONSUMO_REMESA');
         }
         $back = $this->redirectToRoute('accounting_remittance_show', ['id' => $remittance->getId()]);
         if (!$this->isCsrfTokenValid('send-remittance-' . $remittance->getId(), (string) $request->request->get('_token'))) {
@@ -777,14 +777,14 @@ class RemittanceController extends AbstractController
     }
 
     /**
-     * Los tipos de remesa que se pueden usar: el del grupo de consumo sólo con el grupo
-     * de consumo encendido.
+     * Los tipos de remesa que se pueden usar: el del grupo de consumo sólo con el cobro
+     * por remesa del grupo de consumo encendido.
      *
      * @return array<string, string>
      */
     private function kindLabels(): array
     {
-        return $this->isGranted('FEATURE_GRUPO_CONSUMO')
+        return $this->isGranted('FEATURE_GRUPO_CONSUMO_REMESA')
             ? Remittance::KIND_LABELS
             : array_diff_key(Remittance::KIND_LABELS, [Remittance::KIND_CONSUMER_GROUP => true]);
     }

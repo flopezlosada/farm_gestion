@@ -206,6 +206,7 @@ class ConsumerGroupPickupNotifier
             'node' => $pickup['node'],
             'pickup_date' => $pickup['date'],
             'payment_info' => $this->settings->getString(AppSettings::CONSUMER_GROUP_PAYMENT_INFO),
+            'by_receipt' => $order->willBeChargedByReceipt($this->receiptCharging()),
             'url' => $url,
             'preferences_url' => $preferencesUrl,
             'photos' => $this->photos->embed($email, ConsumerGroupNotifier::orderedProducts($order)),
@@ -291,6 +292,12 @@ class ConsumerGroupPickupNotifier
         return sprintf('Recoge tu pedido: %s', $pickup['order']->getRound()?->getTitle());
     }
 
+    /** Si los pedidos se cobran por recibo de remesa ({@see AppSettings::FEATURE_GRUPO_CONSUMO_REMESA}). */
+    private function receiptCharging(): bool
+    {
+        return $this->settings->getBool(AppSettings::FEATURE_GRUPO_CONSUMO_REMESA);
+    }
+
     /**
      * El cuerpo corto: cuándo, dónde, cuánto y si falta pagar. Es lo único que se lee
      * en el móvil, así que lleva todo lo que hace falta para ir a por él.
@@ -310,7 +317,7 @@ class ConsumerGroupPickupNotifier
             number_format($order->getTotal(), 2, ',', '.'),
             match (true) {
                 $order->isPaid() => ', pagado',
-                $order->willBeChargedByReceipt() => ', va en tu recibo',
+                $order->willBeChargedByReceipt($this->receiptCharging()) => ', va en tu recibo',
                 default => ', pendiente de pago',
             },
         );
