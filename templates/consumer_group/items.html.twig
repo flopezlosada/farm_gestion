@@ -148,32 +148,39 @@
                                                 {% set unbroken = item and item.producerPrice is null and (not round.draft or is_locked) %}
                                                 {% set pending = item and item.markupPendingReview and not is_locked %}
                                                 {% if unbroken %}
-                                                    <td class="tight cg-cell-price">
-                                                        <input type="number" min="0" step="0.01" inputmode="decimal"
-                                                               name="producer_price[{{ product.id }}]" value="" class="csa-input"
-                                                               placeholder="sin desglosar" title="Opcional: el precio del productor. El precio final no cambia; el incremento se calcula por diferencia.">
-                                                        <span class="csa-muted">€/{{ product.unit }}</span>
+                                                    <td>
+                                                        <div class="cg-cell-price">
+                                                            <input type="number" min="0" step="0.01" inputmode="decimal"
+                                                                   name="producer_price[{{ product.id }}]" value="" class="csa-input"
+                                                                   placeholder="sin desglosar" title="Opcional: el precio del productor. El precio final no cambia; el incremento se calcula por diferencia.">
+                                                            <span class="csa-muted">€/{{ product.unit }}</span>
+                                                        </div>
                                                     </td>
                                                     <td class="tight csa-muted">Sin desglosar</td>
                                                     <td class="tight"><strong>{{ current_price[product.id]|default('0')|number_format(2, ',', '.') }} €</strong></td>
                                                 {% else %}
-                                                    <td class="tight cg-cell-price">
-                                                        <input type="number" min="0" step="0.01" inputmode="decimal" class="csa-input cg-producer-price"
-                                                               name="producer_price[{{ product.id }}]"
-                                                               value="{{ pricing_form.producer_price[product.id]|default('') }}" placeholder="0,00"
-                                                               {{ is_locked ? 'disabled' : '' }}>
-                                                        <span class="csa-muted">€/{{ product.unit }}</span>
+                                                    <td>
+                                                        <div class="cg-cell-price">
+                                                            <input type="number" min="0" step="0.01" inputmode="decimal" class="csa-input cg-producer-price"
+                                                                   name="producer_price[{{ product.id }}]"
+                                                                   value="{{ pricing_form.producer_price[product.id]|default('') }}" placeholder="0,00"
+                                                                   {{ is_locked ? 'disabled' : '' }}>
+                                                            <span class="csa-muted">€/{{ product.unit }}</span>
+                                                        </div>
                                                     </td>
-                                                    <td class="tight cg-cell-price {{ pending ? 'cg-pending' : '' }}">
-                                                        <select name="markup_type[{{ product.id }}]" class="csa-input cg-markup-type" {{ is_locked ? 'disabled' : '' }}>
-                                                            <option value="">Del pedido</option>
-                                                            <option value="percent" {{ pricing_form.markup_type[product.id].value|default('') == 'percent' ? 'selected' : '' }}>Propio %</option>
-                                                            <option value="amount" {{ pricing_form.markup_type[product.id].value|default('') == 'amount' ? 'selected' : '' }}>Propio €</option>
-                                                        </select>
-                                                        <input type="number" min="0" step="0.01" inputmode="decimal" class="csa-input cg-markup-value"
-                                                               name="markup_value[{{ product.id }}]"
-                                                               value="{{ pricing_form.markup_value[product.id]|default('') }}" placeholder="0,00"
-                                                               {{ is_locked ? 'disabled' : '' }}>
+                                                    <td class="{{ pending ? 'cg-pending' : '' }}">
+                                                        {% set own_type = pricing_form.markup_type[product.id].value|default('') %}
+                                                        <div class="cg-cell-price">
+                                                            <select name="markup_type[{{ product.id }}]" class="csa-input cg-markup-type" {{ is_locked ? 'disabled' : '' }}>
+                                                                <option value="" {{ own_type == '' ? 'selected' : '' }}>Como el pedido</option>
+                                                                <option value="percent" {{ own_type == 'percent' ? 'selected' : '' }}>Otro, en %</option>
+                                                                <option value="amount" {{ own_type == 'amount' ? 'selected' : '' }}>Otro, en €</option>
+                                                            </select>
+                                                            <input type="number" min="0" step="0.01" inputmode="decimal" class="csa-input cg-markup-value"
+                                                                   name="markup_value[{{ product.id }}]"
+                                                                   value="{{ pricing_form.markup_value[product.id]|default('') }}" placeholder="0,00"
+                                                                   {{ own_type == '' ? 'hidden' : '' }} {{ is_locked ? 'disabled' : '' }}>
+                                                        </div>
                                                         {% if pending %}
                                                             <label class="cg-review">
                                                                 <input type="checkbox" name="reviewed[{{ product.id }}]" value="1" {{ pricing_form.reviewed[product.id] is defined ? 'checked' : '' }}>
@@ -270,6 +277,11 @@
                 return 0;
             };
             var refresh = function () {
+                document.querySelectorAll('.cg-markup-type').forEach(function (select) {
+                    var value = select.closest('td').querySelector('.cg-markup-value');
+                    value.hidden = select.value === '';
+                    if (select.value === '') { value.value = ''; }
+                });
                 document.querySelectorAll('tr').forEach(function (row) {
                     var price = row.querySelector('.cg-producer-price');
                     var out = row.querySelector('.cg-final-price');
