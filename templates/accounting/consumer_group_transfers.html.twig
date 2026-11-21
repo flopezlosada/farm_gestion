@@ -219,7 +219,7 @@
                 </thead>
                 <tbody>
                     {% for t in assigned %}
-                        <tr>
+                        <tr id="transferencia-{{ t.id }}">
                             <td class="tight" data-label="Fecha">{{ t.line.operationDate|date('d/m/Y') }}<br><span class="acc-muted acc-small">{{ t.line.account.name }}</span></td>
                             <td data-label="Quién paga">{{ t.line.transferPayer ?? t.line.suggestedConcept }}</td>
                             <td class="acc-num" data-label="Importe">{{ fmt.money(t.line.amount) }}</td>

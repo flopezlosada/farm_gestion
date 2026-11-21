@@ -185,6 +185,27 @@ class ConsumerGroupRemittanceControllerTest extends AbstractAuthenticatedTest
         $this->assertSelectorTextContains('body', 'En el recibo, falta el abono');
     }
 
+    /**
+     * El pago del pedido es de contabilidad: la comisión del grupo de consumo ve el
+     * estado, pero ni se le ofrece cambiarlo ni el servidor se lo deja hacer.
+     */
+    public function testLaComisionDelGrupoNoCambiaElPagoDeUnPedido(): void
+    {
+        $client = static::createClient();
+        $this->enable(true);
+        [$ana] = $this->roundWithOrders();
+        $client->loginUser($this->createUserWithRoles(['ROLE_GESTION_GRUPO_CONSUMO_EDIT']));
+
+        $client->request('GET', sprintf('/gestion/consumer-group/%d', $ana->getRound()->getId()));
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorNotExists(sprintf('form[action$="/orders/%d/payment"]', $ana->getId()));
+        $this->assertSelectorTextContains('body', 'Pendiente');
+
+        $client->request('POST', sprintf('/gestion/consumer-group/orders/%d/payment', $ana->getId()), ['_token' => 'x', 'via' => 'cash']);
+        $this->assertResponseStatusCodeSame(403);
+        $this->assertFalse($this->reload($ana)->isPaid());
+    }
+
     public function testUnPedidoPagadoAManoDespuesDelBorradorNoDejaEnviarla(): void
     {
         $client = $this->createAuthenticatedClient();

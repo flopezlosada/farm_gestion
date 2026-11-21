@@ -20,6 +20,9 @@
 {% set sb = status_badge[round.status]|default({ label: round.statusLabel, cls: 'mute' }) %}
 {% set can_edit = is_granted('ROLE_GESTION_GRUPO_CONSUMO_EDIT') %}
 {% set can_socixs = is_granted('ROLE_GESTION_SOCIXS') %}
+{# El pago lo lleva contabilidad: la comisión del grupo de consumo ve el estado pero no lo cambia. #}
+{% set can_pay = is_granted('ROLE_GESTION_CONTABILIDAD_EDIT') %}
+{% set can_see_bank = is_granted('FEATURE_CONTABILIDAD') and is_granted('ROLE_GESTION_CONTABILIDAD') %}
 {% set can_reparto = is_granted('ROLE_GESTION_REPARTO') %}
 
 {% block title %}{{ round.title }} · Grupo de consumo{% endblock %}
@@ -300,8 +303,16 @@
                                                     pending: 'Pendiente',
                                                 }[state] %}
                                                 {% set pay_chip = { paid: 'activo', awaiting_bank: 'mod-4', in_receipt: 'mod-4', returned: 'baja', pending: 'pausado' }[state] %}
-                                                {% set manual = can_edit and not order.inSentReceipt %}
-                                                {% if manual and order.paid %}
+                                                {% set manual = can_pay and not order.inSentReceipt %}
+                                                {% if order.paid and order.transfer %}
+                                                    {# Pagado con un movimiento del banco: el chip lleva a verlo (y a deshacerlo
+                                                     # si no es suyo), no vuelve el pedido a pendiente. #}
+                                                    {% if can_see_bank %}
+                                                        <a href="{{ path('accounting_cg_transfers') }}#transferencia-{{ order.transfer.id }}" class="prl-chip prl-chip--{{ pay_chip }}" title="Ver la transferencia en Contabilidad"><span class="dot"></span>{{ pay_label }}</a>
+                                                    {% else %}
+                                                        <span class="prl-chip prl-chip--{{ pay_chip }}"><span class="dot"></span>{{ pay_label }}</span>
+                                                    {% endif %}
+                                                {% elseif manual and order.paid %}
                                                     <form method="post" action="{{ path('consumer_group_order_payment', { id: order.id }) }}" class="cg-order__pay-form">
                                                         <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_order_payment_' ~ order.id) }}">
                                                         <input type="hidden" name="via" value="">

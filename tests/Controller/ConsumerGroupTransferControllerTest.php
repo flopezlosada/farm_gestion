@@ -203,6 +203,27 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * En la ficha de la ronda, un pedido pagado con una transferencia enseña el pago:
+     * el chip lleva a la transferencia en Contabilidad y no deja volver el pedido a
+     * pendiente de un clic.
+     */
+    public function testElPedidoPagadoPorTransferenciaLlevaAVerElPago(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enable(true);
+        $this->ensureConsumerGroupCategory();
+        [$lucia] = $this->roundWithOrders();
+        $this->transfer(1000, 'LUCIA ORTEGA PE');
+        $this->matchAll();
+        $transferId = $this->reload($lucia)->getTransfer()->getId();
+
+        $client->request('GET', sprintf('/gestion/consumer-group/%d', $lucia->getRound()->getId()));
+
+        $this->assertSelectorExists(sprintf('a[href$="/consumer-group-transfers#transferencia-%d"]', $transferId));
+        $this->assertSelectorNotExists(sprintf('form[action$="/orders/%d/payment"]', $lucia->getId()));
+    }
+
+    /**
      * Apartar un movimiento que el cruce anotó solo en la partida del grupo de consumo
      * no toca el libro: avisa de que ese apunte hay que corregirlo desde el extracto.
      */
