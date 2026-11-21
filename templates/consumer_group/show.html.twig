@@ -288,9 +288,9 @@
                                         <td class="tight" data-label="Pago">
                                             <div class="cg-cell-pago">
                                                 {# Pagado = de una forma concreta. «Va en el recibo» no es
-                                                 # pagado todavía: se le cobra en la remesa del mes, y por
-                                                 # eso ya se le entrega. Con el recibo ya enviado, el pago
-                                                 # lo lleva el banco: no se toca a mano. #}
+                                                 # pagado todavía: se le cobra en la remesa del mes. Con el
+                                                 # recibo ya enviado, el pago lo lleva el banco: no se toca
+                                                 # a mano. #}
                                                 {% set state = order.getPaymentState(is_granted('FEATURE_GRUPO_CONSUMO_REMESA')).value %}
                                                 {% set pay_label = {
                                                     paid: order.paid ? 'Pagado · ' ~ order.paidVia.label : '',

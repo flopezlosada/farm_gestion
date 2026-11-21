@@ -141,6 +141,36 @@ class ConsumerGroupPickupNotifierTest extends TestCase
         self::assertStringEndsWith('Importe: 7,50 €, pagado.', $this->bodyOf($order));
     }
 
+    public function testConMandatoPeroSinCobroPorRemesaElAvisoPideElPago(): void
+    {
+        $order = $this->order(withMandate: true);
+        $sent = [];
+        $mailer = $this->createMock(MailerInterface::class);
+        $mailer->method('send')->willReturnCallback(static function (TemplatedEmail $email) use (&$sent): void {
+            $sent[] = $email;
+        });
+
+        $this->notifier(mailer: $mailer, receiptCharging: false)->notify([$this->pickup($order)]);
+
+        self::assertFalse($sent[0]->getContext()['by_receipt'], 'Sin remesa activa no hay recibo que esperar.');
+        self::assertSame('El viernes 27 de noviembre en Torremocha. Importe: 7,50 €, pendiente de pago.', $this->bodyOf($order));
+    }
+
+    public function testConMandatoYCobroPorRemesaElAvisoDiceQueVaEnElRecibo(): void
+    {
+        $order = $this->order(withMandate: true);
+        $sent = [];
+        $mailer = $this->createMock(MailerInterface::class);
+        $mailer->method('send')->willReturnCallback(static function (TemplatedEmail $email) use (&$sent): void {
+            $sent[] = $email;
+        });
+
+        $this->notifier(mailer: $mailer, receiptCharging: true)->notify([$this->pickup($order)]);
+
+        self::assertTrue($sent[0]->getContext()['by_receipt']);
+        self::assertStringEndsWith('Importe: 7,50 €, va en tu recibo.', $this->bodyOf($order, receiptCharging: true));
+    }
+
     public function testElCorreoLlevaNodoDiaYPedido(): void
     {
         $sent = [];
@@ -195,7 +225,7 @@ class ConsumerGroupPickupNotifierTest extends TestCase
     /**
      * El texto que llega a la bandeja para ese pedido.
      */
-    private function bodyOf(ConsumerGroupOrder $order): string
+    private function bodyOf(ConsumerGroupOrder $order, bool $receiptCharging = false): string
     {
         $body = null;
         $inbox = $this->createMock(NotificationInbox::class);
@@ -206,7 +236,7 @@ class ConsumerGroupPickupNotifierTest extends TestCase
                 return 1;
             },
         );
-        $this->notifier(inbox: $inbox)->notify([$this->pickup($order)]);
+        $this->notifier(inbox: $inbox, receiptCharging: $receiptCharging)->notify([$this->pickup($order)]);
 
         return (string) $body;
     }
@@ -223,7 +253,7 @@ class ConsumerGroupPickupNotifierTest extends TestCase
      * El pedido de una familia de dos con correo propio cada una, sin mandato (pago
      * pendiente): 3 kg de naranjas a 2,50 €.
      */
-    private function order(): ConsumerGroupOrder
+    private function order(bool $withMandate = false): ConsumerGroupOrder
     {
         $producer = new Producer();
         $round = new ConsumerGroupRound();
@@ -234,6 +264,9 @@ class ConsumerGroupPickupNotifierTest extends TestCase
         $round->addItem($item);
 
         $head = (new Partner())->setName('Ana')->setEmail('ana@example.com');
+        if ($withMandate) {
+            $head->setIban('ES91 2100 0418 4502 0005 1332')->setMandateReference('CUOTA MENSUAL 200')->setMandateSignedOn(new \DateTimeImmutable('2022-11-01'));
+        }
         $head->addRelative((new Partner())->setName('Luis')->setEmail('luis@example.com'));
         $order = new ConsumerGroupOrder($round, $head);
         $order->addLine(new ConsumerGroupOrderLine($order, $item, '3'));
@@ -254,6 +287,7 @@ class ConsumerGroupPickupNotifierTest extends TestCase
         ?NotificationPreferences $preferences = null,
         ?EffectLedger $ledger = null,
         bool $emailEnabled = true,
+        bool $receiptCharging = false,
     ): ConsumerGroupPickupNotifier {
         $users = $this->createMock(UserRepository::class);
         $users->method('findByPartners')->willReturnCallback(
@@ -277,7 +311,12 @@ class ConsumerGroupPickupNotifierTest extends TestCase
         }
 
         $settings = $this->createMock(AppSettings::class);
-        $settings->method('getBool')->willReturn($emailEnabled);
+        $settings->method('getBool')->willReturnCallback(
+            static fn (string $name): bool => match ($name) {
+                AppSettings::FEATURE_GRUPO_CONSUMO_REMESA => $receiptCharging,
+                default => $emailEnabled,
+            },
+        );
         $settings->method('getString')->willReturn('');
 
         $urls = $this->createMock(UrlGeneratorInterface::class);

@@ -59,11 +59,5 @@
         {% if payment_info %}
             <p class="csa-muted" style="margin: 0;">{{ payment_info|nl2br }}</p>
         {% endif %}
-        {# La regla existe desde el principio y hasta ahora no se contaba en
-         # ninguna parte: quien no había pagado veía su calendario sin la entrega
-         # y no tenía forma de saber por qué. #}
-        <p class="csa-muted" style="margin: 0;">
-            La entrega aparece en tu calendario cuando nos consta el pago.
-        </p>
     {% endif %}
 </div>

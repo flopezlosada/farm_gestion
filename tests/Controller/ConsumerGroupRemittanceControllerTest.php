@@ -64,12 +64,12 @@ class ConsumerGroupRemittanceControllerTest extends AbstractAuthenticatedTest
         return $em;
     }
 
-    private function enable(bool $consumerGroup): void
+    private function enable(bool $consumerGroup, ?bool $receiptCharging = null): void
     {
         $settings = static::getContainer()->get(AppSettings::class);
         $settings->setBool(AppSettings::FEATURE_CONTABILIDAD, true);
         $settings->setBool(AppSettings::FEATURE_GRUPO_CONSUMO, $consumerGroup);
-        $settings->setBool(AppSettings::FEATURE_GRUPO_CONSUMO_REMESA, $consumerGroup);
+        $settings->setBool(AppSettings::FEATURE_GRUPO_CONSUMO_REMESA, $receiptCharging ?? $consumerGroup);
     }
 
     /**
@@ -135,6 +135,21 @@ class ConsumerGroupRemittanceControllerTest extends AbstractAuthenticatedTest
     {
         $client = $this->createAuthenticatedClient();
         $this->enable(false);
+
+        $client->request('GET', '/gestion/accounting/remittances');
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorNotExists('form[action$="/from-consumer-group"]');
+
+        $client->request('POST', '/gestion/accounting/remittances/from-consumer-group', ['period' => '2096-03']);
+        $this->assertResponseStatusCodeSame(403);
+    }
+
+    /** El estado por defecto en producción: el módulo abierto y el cobro por remesa apagado. */
+    public function testConElGrupoDeConsumoSinCobroPorRemesaNoSeOfreceNiSePreparaNiSeEnvia(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enable(true, false);
+        $this->roundWithOrders();
 
         $client->request('GET', '/gestion/accounting/remittances');
         $this->assertResponseIsSuccessful();
