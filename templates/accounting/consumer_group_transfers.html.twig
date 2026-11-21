@@ -187,10 +187,12 @@
                             var extra = known[find.value];
                             other.value = extra ? extra.id : '';
                             if (extra) { total += extra.cents; n++; }
-                            button.disabled = n === 0;
+                            button.disabled = n === 0 || total > paid;
                             count.textContent = n > 1 ? ' (' + n + ')' : '';
                             sum.className = 'cgt-sum' + (n === 0 ? '' : (total === paid ? ' cgt-sum--ok' : ' cgt-sum--warn'));
-                            sum.textContent = n === 0 ? '' : (total === paid ? 'Cuadra: ' + euros(total) : 'Suman ' + euros(total) + ' y la transferencia trae ' + euros(paid));
+                            sum.textContent = n === 0 ? '' : (total === paid ? 'Cuadra: ' + euros(total)
+                                : (total > paid ? 'Suman ' + euros(total) + ' y la transferencia sólo trae ' + euros(paid) + ': quita alguno'
+                                    : 'Suman ' + euros(total) + ' y la transferencia trae ' + euros(paid)));
                         }
 
                         form.addEventListener('change', refresh);

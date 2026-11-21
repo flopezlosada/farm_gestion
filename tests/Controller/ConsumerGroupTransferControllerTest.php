@@ -144,6 +144,27 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * Una transferencia no puede pagar más de lo que trae: dos pedidos de 10 € para un
+     * ingreso de 10 € se rechazan y ninguno queda pagado.
+     */
+    public function testNoSePuedenAsignarPedidosQueSumanMasQueLaTransferencia(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enable(true);
+        [$lucia, $pedro] = $this->roundWithOrders();
+        $line = $this->transfer(1000, $this->payerOf($lucia));
+
+        $crawler = $client->request('GET', '/gestion/accounting/consumer-group-transfers');
+        $token = $crawler->filter(sprintf('#asignar-%d input[name="_token"]', $line->getId()))->attr('value');
+        $client->request('POST', sprintf('/gestion/accounting/consumer-group-transfers/lines/%d/assign', $line->getId()), ['_token' => $token, 'orders' => [$lucia->getId(), $pedro->getId()]]);
+        $client->followRedirect();
+
+        $this->assertSelectorTextContains('body', 'Los pedidos suman 20,00 € y la transferencia sólo trae 10,00 €');
+        $this->assertFalse($this->reload($lucia)->isPaid());
+        $this->assertFalse($this->reload($pedro)->isPaid());
+    }
+
+    /**
      * Asignar a mano paga el pedido y aprende al ordenante: la próxima transferencia
      * suya casa sola. Deshacer lo devuelve todo y el cruce no lo vuelve a asignar.
      */
