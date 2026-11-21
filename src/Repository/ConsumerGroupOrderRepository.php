@@ -8,7 +8,6 @@ use App\Entity\Node;
 use App\Entity\Partner;
 use App\Entity\PartnerPaymentMethod;
 use App\Entity\Remittance;
-use App\Entity\Producer;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -55,8 +54,9 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
     public function findDeliverableUpcomingForPartner(Partner $partner, \DateTimeInterface $from): array
     {
         return $this->createQueryBuilder('o')
-            ->addSelect('r', 'l')
+            ->addSelect('r', 'l', 'pr')
             ->innerJoin('o.round', 'r')
+            ->leftJoin('r.producers', 'pr')
             ->leftJoin('o.lines', 'l')
             ->innerJoin('o.partner', 'p')
             ->where('o.partner = :partner')
@@ -197,52 +197,15 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
     public function findByPartner(Partner $partner): array
     {
         return $this->createQueryBuilder('o')
-            ->addSelect('r', 'l')
+            ->addSelect('r', 'l', 'pr')
             ->innerJoin('o.round', 'r')
+            ->leftJoin('r.producers', 'pr')
             ->leftJoin('o.lines', 'l')
             ->where('o.partner = :partner')
             ->setParameter('partner', $partner->getFamilyHead())
             ->orderBy('r.deliveryDate', 'DESC')
             ->getQuery()
             ->getResult();
-    }
-
-    /**
-     * El último pedido que hizo esta socia a este mismo productor, para poder
-     * ofrecerle «lo mismo que la vez pasada».
-     *
-     * SE BUSCA POR PRODUCTOR Y NO POR PRODUCTO SUELTO: lo que se repite es un
-     * pedido entero —las dos garrafas de aceite y el bote de aceitunas—, y es la
-     * forma en que la gente piensa lo que pide. Se excluye el pedido en curso
-     * porque lo que se ofrece es lo ANTERIOR; si no, se propondría copiar lo que
-     * ya está escrito en pantalla.
-     *
-     * @param Partner  $partner  la socia
-     * @param Producer $producer el productor del pedido actual
-     * @param int|null $exceptRoundId pedido en curso, que no cuenta como anterior
-     *
-     * @return ConsumerGroupOrder|null el más reciente por fecha de entrega, o null
-     */
-    public function findLastForPartnerAndProducer(Partner $partner, Producer $producer, ?int $exceptRoundId = null): ?ConsumerGroupOrder
-    {
-        // SIN fetch join de las líneas: con setMaxResults(1), el límite lo aplica
-        // la base a FILAS, así que un join de colección devolvería el pedido con
-        // una sola línea y el resto perdidas en silencio. Las líneas se cargan
-        // después, que es una consulta más sobre un único pedido.
-        $qb = $this->createQueryBuilder('o')
-            ->innerJoin('o.round', 'r')
-            ->where('o.partner = :partner')
-            ->andWhere('r.producer = :producer')
-            ->setParameter('partner', $partner->getFamilyHead())
-            ->setParameter('producer', $producer)
-            ->orderBy('r.deliveryDate', 'DESC')
-            ->setMaxResults(1);
-
-        if (null !== $exceptRoundId) {
-            $qb->andWhere('r.id <> :except')->setParameter('except', $exceptRoundId);
-        }
-
-        return $qb->getQuery()->getOneOrNullResult();
     }
 
     /**
@@ -301,9 +264,8 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
     public function findPayableByTransfer(): array
     {
         return $this->createQueryBuilder('o')
-            ->addSelect('r', 'pr', 'p', 'rel', 'l', 'ri')
+            ->addSelect('r', 'p', 'rel', 'l', 'ri')
             ->innerJoin('o.round', 'r')
-            ->leftJoin('r.producer', 'pr')
             ->innerJoin('o.partner', 'p')
             ->leftJoin('p.relatives', 'rel')
             ->leftJoin('o.lines', 'l')

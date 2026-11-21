@@ -27,7 +27,7 @@ class OrderEditorTest extends TestCase
     {
         $producer = new Producer();
         $round = new ConsumerGroupRound();
-        $round->setProducer($producer);
+        $round->addProducer($producer);
 
         // La fruta se vende al peso y admite medios kilos; el aceite viene en
         // garrafa y no se parte. El salto lo dice el producto.

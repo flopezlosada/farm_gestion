@@ -6,10 +6,24 @@
 </head>
 <body style="font-family: Arial, sans-serif; color: #333; max-width: 580px; margin: 0 auto; padding: 24px;">
 
-    <h2 style="color: #5a8f3d; margin-top: 0;">Hola {{ round.producer }},</h2>
+    <h2 style="color: #5a8f3d; margin-top: 0;">Hola {{ producer }},</h2>
 
     <p>El pedido <strong>«{{ round.title }}»</strong> ha alcanzado el mínimo y queda
        <strong>confirmado</strong>: puedes darlo por bueno.</p>
+
+    <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
+        {% for line in lines %}
+            <tr>
+                <td style="padding: 4px 8px; border-bottom: 1px solid #eee;">{{ line.item.name }}</td>
+                <td style="padding: 4px 8px; border-bottom: 1px solid #eee; text-align: right;">{{ line.totalQuantity|number_format(2, ',', '.') }} {{ line.item.unit }}</td>
+                <td style="padding: 4px 8px; border-bottom: 1px solid #eee; text-align: right;">{{ line.producerSubtotal|number_format(2, ',', '.') }} €</td>
+            </tr>
+        {% endfor %}
+        <tr>
+            <td colspan="2" style="padding: 4px 8px; text-align: right;"><strong>Total</strong></td>
+            <td style="padding: 4px 8px; text-align: right;"><strong>{{ total|number_format(2, ',', '.') }} €</strong></td>
+        </tr>
+    </table>
 
     {% if round.deliveryDate %}
         <p>Fecha de entrega prevista: <strong>{{ round.deliveryDate|format_date('full', locale='es') }}</strong>.</p>

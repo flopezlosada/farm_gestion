@@ -38,7 +38,7 @@ class PartnerConsumerGroupDeliveriesTest extends TestCase
     private function orderOn(string $deliveryDate, bool $empty = false): ConsumerGroupOrder
     {
         $round = (new ConsumerGroupRound())
-            ->setProducer($this->producer)
+            ->addProducer($this->producer)
             ->setDeliveryDate(new \DateTime($deliveryDate));
         $order = new ConsumerGroupOrder($round);
         $round->addOrder($order);

@@ -128,7 +128,7 @@ class NodeConsumerGroupDeliveriesTest extends TestCase
     {
         $producer = new Producer();
         $round = new ConsumerGroupRound();
-        $round->setProducer($producer);
+        $round->addProducer($producer);
 
         $order = new ConsumerGroupOrder($round, (new Partner())->setName('Socia'));
 

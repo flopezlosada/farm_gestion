@@ -63,7 +63,7 @@
                         <span class="rcal-comp__ic cg"><i class="fa {{ icons[cat]|default(icon_default) }}"></i></span>
                         <span class="rcal-comp__t">
                             <span class="rcal-comp__name">{{ line.roundItem.name }}</span>
-                            <span class="rcal-comp__sub">{{ line.quantity|number_format(2, ',', '.') }} {{ line.roundItem.unit }}{% if d.order.round.producer %} · {{ d.order.round.producer.name }}{% endif %}</span>
+                            <span class="rcal-comp__sub">{{ line.quantity|number_format(2, ',', '.') }} {{ line.roundItem.unit }}{% if d.order.round.producers is not empty %} · {{ d.order.round.producerNames }}{% endif %}</span>
                         </span>
                     </div>
                 {% endif %}
@@ -84,7 +84,7 @@
             {% for d in cg_here %}
                 {% set fl = d.order.lines|filter(l => l.quantity > 0)|first %}
                 {% set cat = fl and fl.product and fl.product.category ? fl.product.category.name|lower : '' %}
-                <span class="rcal-mk__i cg" title="Pedido del grupo de consumo{% if d.order.round.producer %} · {{ d.order.round.producer.name }}{% endif %}"><i class="fa {{ icons[cat]|default(icon_default) }}"></i></span>
+                <span class="rcal-mk__i cg" title="Pedido del grupo de consumo{% if d.order.round.producers is not empty %} · {{ d.order.round.producerNames }}{% endif %}"><i class="fa {{ icons[cat]|default(icon_default) }}"></i></span>
             {% endfor %}
         </span>
     {% endif %}

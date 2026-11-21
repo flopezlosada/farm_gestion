@@ -36,7 +36,7 @@ class ConsumerGroupRoundItemRepository extends ServiceEntityRepository
     {
         return $this->createQueryBuilder('ri')
             ->join('ri.round', 'r')->addSelect('r')
-            ->join('r.producer', 'p')->addSelect('p')
+            ->leftJoin('r.producers', 'p')->addSelect('p')
             ->where('ri.product = :product')
             ->setParameter('product', $product)
             ->orderBy('r.created', 'DESC')

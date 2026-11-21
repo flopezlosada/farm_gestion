@@ -4,6 +4,7 @@ namespace App\Service\ConsumerGroup;
 
 use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupRoundItem;
+use App\Entity\Producer;
 
 /**
  * Máquina de estados de una {@see ConsumerGroupRound}. Lógica pura (sin BBDD): decide
@@ -97,7 +98,9 @@ class RoundStateMachine
     /**
      * ¿Se puede abrir ya este borrador a las socias? Hace falta que tenga
      * productos (un aviso de un pedido vacío manda a la gente a una lista sin
-     * nada que pedir) y que no haya vencido la fecha de cierre (abriría un
+     * nada que pedir), que CADA productor del pedido tenga alguno (uno sin
+     * productos recibiría luego un pedido vacío y figuraría en el aviso sin
+     * ofrecer nada) y que no haya vencido la fecha de cierre (abriría un
      * pedido en el que ya no se puede apuntar nadie). Tampoco puede quedar ningún
      * producto con incremento propio pendiente de revisar tras cambiar el del pedido
      * ({@see ConsumerGroupRoundItem::isMarkupPendingReview()}).
@@ -106,8 +109,21 @@ class RoundStateMachine
     {
         return $round->isDraft()
             && \count($round->getItems()) > 0
+            && $this->everyProducerHasItems($round)
             && !$round->isOrdersDeadlinePassed()
             && !$round->getItems()->exists(static fn (int $i, ConsumerGroupRoundItem $item): bool => $item->isMarkupPendingReview());
+    }
+
+    /**
+     * ¿Aporta cada productor del pedido al menos un producto?
+     */
+    private function everyProducerHasItems(ConsumerGroupRound $round): bool
+    {
+        $withItems = $round->getItems()
+            ->map(static fn (ConsumerGroupRoundItem $item): ?Producer => $item->getProduct()?->getProducer())
+            ->toArray();
+
+        return $round->getProducers()->forAll(static fn (int $i, Producer $producer): bool => \in_array($producer, $withItems, true));
     }
 
     /**
@@ -120,7 +136,7 @@ class RoundStateMachine
     public function open(ConsumerGroupRound $round): void
     {
         if (!$this->canOpen($round)) {
-            throw new InvalidRoundTransition('Este pedido no se puede abrir: tiene que estar en borrador, con productos, con la fecha de cierre sin vencer y sin incrementos pendientes de revisar.');
+            throw new InvalidRoundTransition('Este pedido no se puede abrir: tiene que estar en borrador, con productos de cada productor, con la fecha de cierre sin vencer y sin incrementos pendientes de revisar.');
         }
 
         $round->setStatus(ConsumerGroupRound::STATUS_OPEN);

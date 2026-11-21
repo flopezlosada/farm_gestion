@@ -140,8 +140,7 @@ class RoundPricing
         if ($producerPrice === null) {
             return $item->getPrice();
         }
-        $selfManaged = $item->getRound()?->getProducer()?->isSelfManaged() ?? false;
-        $markup = $selfManaged ? null : $item->getEffectiveMarkup();
+        $markup = $item->isSelfManaged() ? null : $item->getEffectiveMarkup();
 
         return $markup?->applyTo($producerPrice) ?? Markup::fromCents(Markup::toCents($producerPrice));
     }

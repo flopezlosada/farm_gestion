@@ -25,12 +25,14 @@ class RoundPricingTest extends TestCase
     protected function setUp(): void
     {
         $this->pricing = new RoundPricing();
-        $this->round = (new ConsumerGroupRound())->setProducer(new Producer());
+        $this->round = (new ConsumerGroupRound())->addProducer(new Producer());
     }
 
     private function item(string $name, string $price = '0', ?string $producerPrice = null): ConsumerGroupRoundItem
     {
-        $item = new ConsumerGroupRoundItem($this->round, (new ConsumerGroupProduct())->setName($name), $price);
+        $product = (new ConsumerGroupProduct())->setName($name);
+        $this->round->getProducers()->first()->addProduct($product);
+        $item = new ConsumerGroupRoundItem($this->round, $product, $price);
         $item->setProducerPrice($producerPrice);
         $this->round->addItem($item);
 
@@ -68,7 +70,7 @@ class RoundPricingTest extends TestCase
 
     public function testUnProductorAutogestionadoNoLlevaIncremento(): void
     {
-        $this->round->getProducer()->setSelfManaged(true);
+        $this->round->getProducers()->first()->setSelfManaged(true);
         $this->round->setMarkup(MarkupType::Percent, '10.00');
         $item = $this->item('Naranjas', '0', '2.00');
 

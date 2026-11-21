@@ -1,6 +1,6 @@
 Hola {{ partner.name }},
 
-Te toca recoger tu pedido del grupo de consumo «{{ round.title }}» ({{ round.producer }}):
+Te toca recoger tu pedido del grupo de consumo «{{ round.title }}» ({{ round.producerNames }}):
 
   {{ pickup_date|format_date(pattern="EEEE d 'de' MMMM", locale='es')|capitalize }}, en {{ node.name }}
 

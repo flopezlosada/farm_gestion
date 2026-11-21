@@ -1,6 +1,6 @@
 Hola {{ partner.name }},
 
-Tu pedido del grupo de consumo «{{ round.title }}» ({{ round.producer }}) está CONFIRMADO.
+Tu pedido del grupo de consumo «{{ round.title }}» ({{ round.producerNames }}) está CONFIRMADO.
 {% if round.deliveryDate %}
 Se te entregará el {{ round.deliveryDate|format_date('full', locale='es') }} junto con tu cesta.
 {% endif %}

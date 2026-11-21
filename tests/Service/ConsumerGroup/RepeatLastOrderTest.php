@@ -10,7 +10,7 @@ use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupRoundItem;
 use App\Entity\Partner;
 use App\Entity\Producer;
-use App\Repository\ConsumerGroupOrderRepository;
+use App\Repository\ConsumerGroupOrderLineRepository;
 use App\Service\ConsumerGroup\RepeatLastOrder;
 use PHPUnit\Framework\TestCase;
 
@@ -62,18 +62,6 @@ class RepeatLastOrderTest extends TestCase
         self::assertSame([$this->itemIdFor($actual, $this->aceite) => '2'], $quantities);
     }
 
-    public function testLasLineasACeroNoSeProponen(): void
-    {
-        $anterior = $this->round(10, ['aceite' => '38.00', 'aceitunas' => '7.00']);
-        $actual = $this->round(11, ['aceite' => '42.00', 'aceitunas' => '7.50']);
-
-        $order = $this->orderWith($anterior, ['aceite' => '2', 'aceitunas' => '0']);
-
-        $quantities = $this->service($order)->quantitiesFor($actual, new Partner());
-
-        self::assertSame([$this->itemIdFor($actual, $this->aceite) => '2'], $quantities);
-    }
-
     public function testSinPedidoAnteriorNoHayNadaQueRepetir(): void
     {
         $actual = $this->round(11, ['aceite' => '42.00']);
@@ -81,22 +69,49 @@ class RepeatLastOrderTest extends TestCase
         self::assertSame([], $this->service(null)->quantitiesFor($actual, new Partner()));
     }
 
-    public function testUnPedidoSinProductorNoRompe(): void
+    public function testUnPedidoSinProductosNoProponeNada(): void
     {
-        $huerfano = new ConsumerGroupRound();
+        self::assertSame([], $this->service(null)->quantitiesFor(new ConsumerGroupRound(), new Partner()));
+    }
 
-        self::assertSame([], $this->service(null)->quantitiesFor($huerfano, new Partner()));
+    public function testCadaProductoTraeLoUltimoQuePidioAunqueVengaDePedidosDistintos(): void
+    {
+        $actual = $this->round(12, ['aceite' => '42.00', 'aceitunas' => '7.50']);
+
+        $lines = $this->createMock(ConsumerGroupOrderLineRepository::class);
+        // El repositorio resuelve «lo más reciente de cada producto»: el aceite de un
+        // pedido de marzo y las aceitunas de otro de junio.
+        $lines->expects(self::once())->method('findLastQuantitiesByProduct')
+            ->with(self::isInstanceOf(Partner::class), [1, 2], 12)
+            ->willReturn([1 => '3', 2 => '1']);
+
+        $quantities = (new RepeatLastOrder($lines))->quantitiesFor($actual, new Partner());
+
+        self::assertSame(
+            [$this->itemIdFor($actual, $this->aceite) => '3', $this->itemIdFor($actual, $this->aceitunas) => '1'],
+            $quantities
+        );
     }
 
     /**
-     * El servicio con un repositorio que devuelve el pedido anterior dado.
+     * El servicio con un repositorio que devuelve lo que la socia pidió en el pedido
+     * anterior dado: producto => cantidad, solo las mayores que cero (lo que promete
+     * {@see ConsumerGroupOrderLineRepository::findLastQuantitiesByProduct()}).
      */
     private function service(?ConsumerGroupOrder $previous): RepeatLastOrder
     {
-        $orders = $this->createMock(ConsumerGroupOrderRepository::class);
-        $orders->method('findLastForPartnerAndProducer')->willReturn($previous);
+        $byProduct = [];
+        foreach ($previous?->getLines() ?? [] as $line) {
+            $productId = $line->getRoundItem()?->getProduct()?->getId();
+            if (null !== $productId && (float) $line->getQuantity() > 0) {
+                $byProduct[$productId] = $line->getQuantity();
+            }
+        }
 
-        return new RepeatLastOrder($orders);
+        $lines = $this->createMock(ConsumerGroupOrderLineRepository::class);
+        $lines->method('findLastQuantitiesByProduct')->willReturn($byProduct);
+
+        return new RepeatLastOrder($lines);
     }
 
     /**
@@ -121,7 +136,7 @@ class RepeatLastOrderTest extends TestCase
     private function round(int $id, array $prices): ConsumerGroupRound
     {
         $round = new ConsumerGroupRound();
-        $round->setProducer($this->producer);
+        $round->addProducer($this->producer);
         $this->setId($round, $id);
 
         $itemId = $id * 100;

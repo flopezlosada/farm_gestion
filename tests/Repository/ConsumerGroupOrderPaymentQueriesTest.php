@@ -36,8 +36,8 @@ class ConsumerGroupOrderPaymentQueriesTest extends KernelTestCase
     {
         $em = $this->em();
         $em->clear();
-        $em->createQuery('DELETE FROM App\Entity\ConsumerGroupOrder o WHERE o.round IN (SELECT r.id FROM App\Entity\ConsumerGroupRound r WHERE r.producer = :p)')->execute(['p' => $this->producer->getId()]);
-        $em->createQuery('DELETE FROM App\Entity\ConsumerGroupRound r WHERE r.producer = :p')->execute(['p' => $this->producer->getId()]);
+        $em->createQuery('DELETE FROM App\Entity\ConsumerGroupOrder o WHERE o.round IN (SELECT r.id FROM App\Entity\ConsumerGroupRound r JOIN r.producers rp WHERE rp.id = :p)')->execute(['p' => $this->producer->getId()]);
+        $em->createQuery('DELETE FROM App\Entity\ConsumerGroupRound r WHERE :p MEMBER OF r.producers')->execute(['p' => $this->producer->getId()]);
         $em->createQuery('DELETE FROM App\Entity\Remittance r WHERE r.kind = :k AND r.period >= :y')->execute(['k' => Remittance::KIND_CONSUMER_GROUP, 'y' => '2097-01-01']);
         $em->createQuery('DELETE FROM App\Entity\ConsumerGroupProduct p WHERE p.producer = :p')->execute(['p' => $this->producer->getId()]);
         $em->createQuery('DELETE FROM App\Entity\Producer p WHERE p.id = :p')->execute(['p' => $this->producer->getId()]);
@@ -84,7 +84,7 @@ class ConsumerGroupOrderPaymentQueriesTest extends KernelTestCase
     private function round(string $delivery, bool $confirmed = true, int $status = ConsumerGroupRound::STATUS_CONFIRMED): ConsumerGroupRound
     {
         $round = (new ConsumerGroupRound())->setStatus($status);
-        $round->setTitle('Ronda cobro ' . $delivery)->setProducer($this->producer)
+        $round->setTitle('Ronda cobro ' . $delivery)->addProducer($this->producer)
             ->setOrdersCloseAt(new \DateTime($delivery . ' -3 days'))
             ->setDeliveryDate(new \DateTime($delivery));
         $round->setConfirmed($confirmed);

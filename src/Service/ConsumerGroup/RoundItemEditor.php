@@ -28,11 +28,11 @@ class RoundItemEditor
     }
 
     /**
-     * Puebla una ronda recién creada con los productos activos del catálogo de su
-     * productor. No hay precio de referencia en el catálogo (se quitó: nadie lo
-     * mantenía al día): el arranque es lo último que se cobró por cada producto
-     * ({@see ConsumerGroupRoundItemRepository::findLastPriceForProduct()}), o 0 si es la
-     * primera vez.
+     * Puebla una ronda recién creada con los productos activos del catálogo de cada
+     * uno de sus productores. No hay precio de referencia en el catálogo (se quitó:
+     * nadie lo mantenía al día): el arranque es lo último que se cobró por cada
+     * producto ({@see ConsumerGroupRoundItemRepository::findLastPriceForProduct()}), o 0
+     * si es la primera vez.
      *
      * Con un productor gestionado por la comisión se parte además de su último precio
      * de productor, si lo hay. El pedido nace SIN incremento (se fija en la pantalla de
@@ -42,24 +42,21 @@ class RoundItemEditor
      */
     public function seedFromCatalog(ConsumerGroupRound $round): void
     {
-        $producer = $round->getProducer();
-        if ($producer === null) {
-            return;
-        }
-
         $position = 0;
-        foreach ($producer->getActiveProducts() as $product) {
-            $price = $this->roundItems->findLastPriceForProduct($product) ?? '0';
-            $item = new ConsumerGroupRoundItem($round, $product, $price);
-            $item->setSortOrder($position++);
-            $round->addItem($item);
+        foreach ($round->getProducers() as $producer) {
+            foreach ($producer->getActiveProducts() as $product) {
+                $price = $this->roundItems->findLastPriceForProduct($product) ?? '0';
+                $item = new ConsumerGroupRoundItem($round, $product, $price);
+                $item->setSortOrder($position++);
+                $round->addItem($item);
 
-            $producerPrice = $producer->isSelfManaged()
-                ? ($price === '0' ? null : $price)
-                : $this->roundItems->findLastProducerPriceForProduct($product);
-            if ($producerPrice !== null) {
-                $item->setProducerPrice($producerPrice);
-                $this->pricing->reprice($item);
+                $producerPrice = $producer->isSelfManaged()
+                    ? ($price === '0' ? null : $price)
+                    : $this->roundItems->findLastProducerPriceForProduct($product);
+                if ($producerPrice !== null) {
+                    $item->setProducerPrice($producerPrice);
+                    $this->pricing->reprice($item);
+                }
             }
         }
     }
@@ -88,7 +85,8 @@ class RoundItemEditor
      * }> $desired
      *
      * @throws PriceLocked si un precio con socias apuntadas cambiaría
-     * @throws \InvalidArgumentException si un desglose no es válido
+     * @throws \InvalidArgumentException si un desglose no es válido o si un producto
+     *         incluido es de un productor que no participa en el pedido
      */
     public function apply(ConsumerGroupRound $round, array $desired): void
     {
@@ -108,6 +106,7 @@ class RoundItemEditor
             $item = $existing[$key] ?? null;
 
             if ($entry['included']) {
+                $this->assertProducerParticipates($round, $product);
                 if ($item === null) {
                     $item = new ConsumerGroupRoundItem($round, $product, '0');
                     $round->addItem($item);
@@ -117,6 +116,21 @@ class RoundItemEditor
             } elseif ($item !== null) {
                 $round->removeItem($item);
             }
+        }
+    }
+
+    /**
+     * Garantiza la invariante del pedido: todo producto es de un productor que
+     * participa en él. El selector de la pantalla ya solo ofrece esos productos;
+     * esto cubre cualquier otra puerta de entrada.
+     *
+     * @throws \InvalidArgumentException
+     */
+    private function assertProducerParticipates(ConsumerGroupRound $round, ConsumerGroupProduct $product): void
+    {
+        $producer = $product->getProducer();
+        if ($producer === null || !$round->hasProducer($producer)) {
+            throw new \InvalidArgumentException(sprintf('«%s» no es de ningún productor de este pedido.', $product->getName()));
         }
     }
 
@@ -144,7 +158,7 @@ class RoundItemEditor
                 break;
             default:
                 $item->setPrice($entry['price']);
-                if ($item->getRound()?->getProducer()?->isSelfManaged()) {
+                if ($item->isSelfManaged()) {
                     $item->setProducerPrice($entry['price']);
                 }
         }

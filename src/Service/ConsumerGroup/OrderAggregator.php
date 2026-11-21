@@ -3,6 +3,8 @@
 namespace App\Service\ConsumerGroup;
 
 use App\Entity\ConsumerGroupRound;
+use App\Entity\ConsumerGroupRoundItem;
+use App\Entity\Producer;
 
 /**
  * Agrega los pedidos de una ronda del grupo de consumo. Lógica pura (sin BBDD):
@@ -14,6 +16,11 @@ use App\Entity\ConsumerGroupRound;
  *   - byItem: por cada producto de la ronda ({@see \App\Entity\ConsumerGroupRoundItem}),
  *     lo que piden las socias, lo que pide la asociación para el local, la suma
  *     de las dos y su subtotal. Incluye items sin pedir.
+ *   - producerTotal: lo que se le debe al productor, a SU precio (sin el incremento de
+ *     gestión), que es lo que va en lo que se le pasa.
+ *
+ * Con un productor, todo se limita a sus productos: en un pedido con varios cada uno
+ * recibe solo lo suyo.
  *
  * LO QUE SE LE PIDE AL PRODUCTOR NO ES SÓLO LO DE LAS SOCIAS: la comisión encarga
  * además para el local, y eso viaja en la propia línea de la ronda
@@ -31,39 +38,48 @@ class OrderAggregator
      * @return array{
      *     participantCount: int,
      *     total: float,
+     *     producerTotal: float,
      *     byItem: list<array{
      *         item: \App\Entity\ConsumerGroupRoundItem,
      *         quantity: float,
      *         associationQuantity: float,
      *         totalQuantity: float,
-     *         subtotal: float
+     *         subtotal: float,
+     *         producerSubtotal: float
      *     }>
      * }
      */
-    public function aggregate(ConsumerGroupRound $round): array
+    public function aggregate(ConsumerGroupRound $round, ?Producer $producer = null): array
     {
         $qtyByItem = [];
         $participantCount = 0;
 
         foreach ($round->getOrders() as $order) {
-            if ($order->isEmpty()) {
-                continue;
-            }
-            ++$participantCount;
+            $participates = false;
 
             foreach ($order->getLines() as $line) {
                 $item = $line->getRoundItem();
-                if ($item === null) {
+                if ($item === null || !$this->belongsTo($item, $producer)) {
                     continue;
                 }
+                $quantity = (float) $line->getQuantity();
+                $participates = $participates || $quantity > 0;
                 $key = spl_object_id($item);
-                $qtyByItem[$key] = ($qtyByItem[$key] ?? 0.0) + (float) $line->getQuantity();
+                $qtyByItem[$key] = ($qtyByItem[$key] ?? 0.0) + $quantity;
+            }
+
+            if ($participates) {
+                ++$participantCount;
             }
         }
 
         $byItem = [];
         $total = 0.0;
+        $producerTotal = 0.0;
         foreach ($round->getItems() as $item) {
+            if (!$this->belongsTo($item, $producer)) {
+                continue;
+            }
             $partners = round($qtyByItem[spl_object_id($item)] ?? 0.0, 2);
             $association = round((float) $item->getAssociationQuantity(), 2);
             $totalQuantity = round($partners + $association, 2);
@@ -72,6 +88,7 @@ class OrderAggregator
             // cada socia: el precio es el mismo para todas y así la línea cuadra
             // siempre con lo que se le encarga al productor.
             $subtotal = round($totalQuantity * (float) $item->getPrice(), 2);
+            $producerSubtotal = round($totalQuantity * (float) $item->getPriceForProducer(), 2);
 
             $byItem[] = [
                 'item' => $item,
@@ -79,14 +96,26 @@ class OrderAggregator
                 'associationQuantity' => $association,
                 'totalQuantity' => $totalQuantity,
                 'subtotal' => $subtotal,
+                'producerSubtotal' => $producerSubtotal,
             ];
             $total += $subtotal;
+            $producerTotal += $producerSubtotal;
         }
 
         return [
             'participantCount' => $participantCount,
             'total' => round($total, 2),
+            'producerTotal' => round($producerTotal, 2),
             'byItem' => $byItem,
         ];
+    }
+
+    /**
+     * ¿Cuenta este producto? Todos si no se filtra por productor; si se filtra, solo
+     * los de ese productor.
+     */
+    private function belongsTo(ConsumerGroupRoundItem $item, ?Producer $producer): bool
+    {
+        return $producer === null || $item->getProduct()?->getProducer() === $producer;
     }
 }

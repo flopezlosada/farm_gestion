@@ -21,13 +21,13 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
- * Form de la CABECERA de una ronda: productor (del catálogo) y datos de la ronda.
+ * Form de la CABECERA de una ronda: productores (del catálogo) y datos de la ronda.
  * Los productos de la ronda ({@see \App\Entity\ConsumerGroupRoundItem}) NO se editan
- * aquí, sino en la pantalla de "productos de la ronda" (se siembran del catálogo del
- * productor al crearla).
+ * aquí, sino en la pantalla de "productos de la ronda" (se siembran del catálogo de
+ * sus productores al crearla).
  *
- * Opción `lock_producer` (true en edición): el productor no se cambia una vez creada
- * la ronda, porque sus productos cuelgan de ese catálogo.
+ * Opción `lock_producers` (true en el panel del productor): los productores no se
+ * eligen, el pedido es de quien lo abre.
  */
 class ConsumerGroupRoundType extends AbstractType
 {
@@ -38,20 +38,29 @@ class ConsumerGroupRoundType extends AbstractType
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
         $round = $options['data'] ?? null;
+        $assignedIds = $round instanceof ConsumerGroupRound
+            ? $round->getProducers()->map(static fn (Producer $p): ?int => $p->getId())->getValues()
+            : [];
 
         $builder
             ->add('title', TextType::class, [
                 'label' => 'Título',
                 'attr'  => ['placeholder' => 'Fruta de temporada — julio'],
             ])
-            ->add('producer', EntityType::class, [
-                'label'         => 'Productor',
+            ->add('producers', EntityType::class, [
+                'label'         => 'Productores',
                 'class'         => Producer::class,
                 'choice_label'  => 'name',
-                'placeholder'   => 'Elige un productor…',
-                'disabled'      => $options['lock_producer'],
+                'multiple'      => true,
+                'expanded'      => true,
+                'by_reference'  => false,
+                'disabled'      => $options['lock_producers'],
+                'help'          => 'Un pedido puede reunir varios productores. Solo se ofrecerán los productos de los que elijas.',
+                // Activos, más los que el pedido ya tiene aunque se hayan desactivado:
+                // si no, al reenviar el formulario se perderían en silencio.
                 'query_builder' => static fn (ProducerRepository $r) => $r->createQueryBuilder('p')
-                    ->where('p.active = true')
+                    ->where('p.active = true OR p.id IN (:assigned)')
+                    ->setParameter('assigned', $assignedIds ?: [0])
                     ->orderBy('p.name', 'ASC'),
             ])
             ->add('ordersCloseAt', DateType::class, [
@@ -223,8 +232,8 @@ class ConsumerGroupRoundType extends AbstractType
     {
         $resolver->setDefaults([
             'data_class'     => ConsumerGroupRound::class,
-            'lock_producer'  => false,
+            'lock_producers' => false,
         ]);
-        $resolver->setAllowedTypes('lock_producer', 'bool');
+        $resolver->setAllowedTypes('lock_producers', 'bool');
     }
 }
