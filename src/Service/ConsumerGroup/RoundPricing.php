@@ -160,7 +160,7 @@ class RoundPricing
         }
 
         throw new PriceLocked(sprintf(
-            'No se puede cambiar el precio de «%s»: ya hay socias apuntadas. Avisa a Paco.',
+            'No se puede cambiar el precio de «%s»: ya hay socias apuntadas. Si hace falta cambiarlo de verdad, díselo a quien administra la aplicación.',
             $item->getName(),
         ));
     }
