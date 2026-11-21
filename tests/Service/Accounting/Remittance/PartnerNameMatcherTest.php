@@ -122,4 +122,63 @@ class PartnerNameMatcherTest extends TestCase
     {
         $this->assertSame([], PartnerNameMatcher::candidates('Eva Sola Gil', [self::partner('Eva', null)]));
     }
+
+    /**
+     * El ordenante de una transferencia llega cortado por el banco (23 caracteres en
+     * La Caixa): el último apellido se queda en dos letras. Con dos palabras de la
+     * ficha iguales basta.
+     */
+    public function testOrdenanteCortadoPorElBancoEsLaMismaPersona(): void
+    {
+        $this->assertTrue(PartnerNameMatcher::matchesBankPayer('MARIA LORENA GARMENDIA BE', self::partner('MARIA', 'LORENA GARMENDIA BERASATEGI')));
+    }
+
+    /** La ficha lleva un segundo nombre que el banco no trae. */
+    public function testALaTransferenciaLeFaltaElSegundoNombreDeLaFicha(): void
+    {
+        $this->assertTrue(PartnerNameMatcher::matchesBankPayer('ANSELMO RIOS VERA', self::partner('ANSELMO', 'JULIAN RIOS VERA')));
+    }
+
+    /** La «Ñ» llega como espacio y el resto de la palabra sigue casando. */
+    public function testLaEnieComoEspacioNoImpideCasar(): void
+    {
+        $this->assertTrue(PartnerNameMatcher::matchesBankPayer('BEGO A IBARRA SOLA', self::partner('Begoña', 'Ibarra Sola')));
+    }
+
+    /**
+     * Sólo con los apellidos y una partícula, coincide una palabra: no basta. Es el
+     * caso que resuelve el ordenante aprendido, no el parecido.
+     */
+    public function testUnaSolaPalabraEnComunNoBasta(): void
+    {
+        $this->assertFalse(PartnerNameMatcher::matchesBankPayer('DE LA  ESPINOSA SALCEDO', self::partner('MARIA', 'JOSEFA DE LA ESPINOSA')));
+        $this->assertFalse(PartnerNameMatcher::matchesBankPayer('MARIA BE', self::partner('MARIA', 'BENAVENTE')), 'Dos letras no son un apellido.');
+    }
+
+    /**
+     * Dos palabras iguales que son nombres de pila no identifican a nadie: «José Luis»
+     * lo son muchos. Hace falta que case algo del apellido.
+     */
+    public function testDosNombresDePilaIgualesSinApellidoNoCasan(): void
+    {
+        $this->assertFalse(PartnerNameMatcher::matchesBankPayer('JOSE LUIS MARTIN', self::partner('José Luis', 'Pérez Gómez')));
+        $this->assertTrue(PartnerNameMatcher::matchesBankPayer('JOSE LUIS MARTIN', self::partner('José Luis', 'Martín Gómez')));
+    }
+
+    /** Un ordenante que sólo trae los apellidos sigue casando con la ficha. */
+    public function testUnOrdenanteConSoloApellidosCasaPorEllos(): void
+    {
+        $this->assertTrue(PartnerNameMatcher::matchesBankPayer('RIOS VERA', self::partner('Anselmo', 'Ríos Vera')));
+    }
+
+    public function testOtraPersonaNoCasaYUnaFichaSinApellidosTampoco(): void
+    {
+        $this->assertFalse(PartnerNameMatcher::matchesBankPayer('PEDRO MARTIN GIL', self::partner('Lucía', 'Ortega Peña')));
+        $this->assertFalse(PartnerNameMatcher::matchesBankPayer('PEDRO MARTIN GIL', self::partner('Pedro', null)));
+    }
+
+    public function testNormalizaComoComparaElCruce(): void
+    {
+        $this->assertSame('maria jose nunez', PartnerNameMatcher::normalize('  María  José NÚÑEZ '));
+    }
 }

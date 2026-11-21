@@ -3,6 +3,7 @@
 namespace App\Entity;
 
 use App\Service\Accounting\Norma43\Norma43Movement;
+use App\Service\Accounting\Norma43\TransferPayer;
 use Doctrine\ORM\Mapping as ORM;
 
 /**
@@ -184,6 +185,15 @@ class BankStatementLine
         $first = $this->details !== null ? explode("\n", $this->details)[0] : '';
 
         return mb_substr($first !== '' ? $first : sprintf('Movimiento del banco (concepto %s-%s)', $this->commonConcept, $this->ownConcept), 0, 255);
+    }
+
+    /**
+     * Quién ordenó la transferencia, si es una transferencia recibida en un formato de
+     * banco conocido ({@see TransferPayer}); null si es otra cosa.
+     */
+    public function getTransferPayer(): ?string
+    {
+        return TransferPayer::of($this);
     }
 
     public function getId(): ?int

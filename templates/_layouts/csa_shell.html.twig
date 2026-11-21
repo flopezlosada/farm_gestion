@@ -267,6 +267,10 @@
                                    route starts with 'accounting_invoice' or route starts with 'accounting_issued_invoice') }}
                                 {{ _self.nav_link('Remesas', path('accounting_remittances'), 'fa-exchange',
                                    route starts with 'accounting_remittance') }}
+                                {% if is_granted('FEATURE_GRUPO_CONSUMO') %}
+                                    {{ _self.nav_link('Pagos grupo de consumo', path('accounting_cg_transfers'), 'fa-shopping-basket',
+                                       route starts with 'accounting_cg_transfer') }}
+                                {% endif %}
                                 {{ _self.nav_link('Cómo vamos', path('accounting_report'), 'fa-line-chart',
                                    route == 'accounting_report') }}
                                 {{ _self.nav_link('Presupuestos', path('accounting_budgets'), 'fa-calculator',

@@ -293,7 +293,7 @@
                                                  # a mano. #}
                                                 {% set state = order.getPaymentState(is_granted('FEATURE_GRUPO_CONSUMO_REMESA')).value %}
                                                 {% set pay_label = {
-                                                    paid: order.paid ? 'Pagado · ' ~ order.paidVia.label : '',
+                                                    paid: order.paid ? 'Pagado · ' ~ order.paidVia.label ~ (order.transfer ? ' del ' ~ order.paidAt|date('d/m') : '') : '',
                                                     awaiting_bank: 'En el recibo, falta el abono',
                                                     in_receipt: 'Va en el recibo',
                                                     returned: 'Recibo devuelto',

@@ -288,4 +288,49 @@ class ConsumerGroupOrderRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * Los pedidos que se pueden pagar por transferencia: sin pagar, de una ronda
+     * confirmada y no cancelada, y que no van en un recibo ya enviado al banco (ése lo
+     * cobra el banco o lo cierra su devolución). Con lo necesario para el total, el
+     * nombre de toda la familia y la ronda, en una consulta: el cruce compara cada
+     * movimiento contra todos.
+     *
+     * @return list<ConsumerGroupOrder>
+     */
+    public function findPayableByTransfer(): array
+    {
+        return $this->createQueryBuilder('o')
+            ->addSelect('r', 'pr', 'p', 'rel', 'l', 'ri')
+            ->innerJoin('o.round', 'r')
+            ->leftJoin('r.producer', 'pr')
+            ->innerJoin('o.partner', 'p')
+            ->leftJoin('p.relatives', 'rel')
+            ->leftJoin('o.lines', 'l')
+            ->leftJoin('l.roundItem', 'ri')
+            ->leftJoin('o.remittanceLine', 'rl')
+            ->leftJoin('rl.remittance', 'rm')
+            ->where('o.paidVia IS NULL')
+            ->andWhere('o.receiptReturned = false')
+            ->andWhere('r.confirmed = true')
+            ->andWhere('r.status != :cancelled')
+            ->andWhere('rm.id IS NULL OR rm.status != :sent')
+            ->setParameter('cancelled', ConsumerGroupRound::STATUS_CANCELLED)
+            ->setParameter('sent', Remittance::STATUS_SENT)
+            ->orderBy('r.deliveryDate', 'ASC')
+            ->addOrderBy('o.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * El día del primer pedido que se hizo en la app: antes, ningún ingreso del banco
+     * puede ser el pago de uno. Null si aún no hay ninguno.
+     */
+    public function firstCreatedOn(): ?\DateTimeImmutable
+    {
+        $first = $this->createQueryBuilder('o')->select('MIN(o.created)')->getQuery()->getSingleScalarResult();
+
+        return $first === null ? null : (new \DateTimeImmutable((string) $first))->setTime(0, 0);
+    }
 }

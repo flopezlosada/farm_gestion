@@ -2,6 +2,7 @@
 
 namespace App\Service\Accounting\Remittance;
 
+use App\Entity\BankPayerAlias;
 use App\Entity\Partner;
 
 /**
@@ -56,6 +57,56 @@ final class PartnerNameMatcher
         usort($found, static fn (array $a, array $b): int => $b['score'] <=> $a['score']);
 
         return $found;
+    }
+
+    /**
+     * Si el ordenante de una transferencia puede ser esa persona. Más laxo que
+     * {@see candidates()}, porque el banco corta el nombre del ordenante (a 23
+     * caracteres en La Caixa) y puede quedarse sin el segundo apellido o sin el
+     * segundo nombre de la ficha: basta con que DOS palabras de la ficha estén en el
+     * ordenante (iguales, cortadas o con una errata), una de ellas igual y una de ellas
+     * del apellido: dos nombres de pila iguales no identifican a nadie.
+     *
+     * Sólo sirve para elegir entre pedidos que ya deben justo ese importe: el nombre
+     * desempata, no decide solo.
+     *
+     * @param string  $payer   el ordenante, tal cual lo da el banco
+     * @param Partner $partner una persona de la familia
+     */
+    public static function matchesBankPayer(string $payer, Partner $partner): bool
+    {
+        $theirs = self::significant(self::words($payer));
+        $used = [];
+        $matched = 0;
+        $exact = 0;
+        $surnames = 0;
+        $mine = [
+            ...array_map(static fn (array $w): array => $w + ['surname' => false], self::significant(self::words((string) $partner->getName()))),
+            ...array_map(static fn (array $w): array => $w + ['surname' => true], self::significant(self::words((string) $partner->getSurname()))),
+        ];
+        foreach ($mine as $word) {
+            foreach ($theirs as $i => $their) {
+                $kind = isset($used[$i]) ? null : self::compare($word['key'], $their['key']);
+                if ($kind !== null) {
+                    $used[$i] = true;
+                    ++$matched;
+                    $exact += $kind === 'same' ? 1 : 0;
+                    $surnames += $word['surname'] ? 1 : 0;
+                    break;
+                }
+            }
+        }
+
+        return $matched >= 2 && $exact >= 1 && $surnames >= 1;
+    }
+
+    /**
+     * Un nombre como se compara: minúsculas, sin tildes ni signos, espacios simples.
+     * Es la clave del ordenante aprendido ({@see BankPayerAlias}).
+     */
+    public static function normalize(string $name): string
+    {
+        return implode(' ', array_map(static fn (array $w): string => $w['key'], self::words($name)));
     }
 
     /**
