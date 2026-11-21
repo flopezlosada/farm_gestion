@@ -24,6 +24,19 @@ class TransferPayerTest extends TestCase
         $this->assertSame('LUCIA ORTEGA PEREZ', TransferPayer::fromDetails("TRANSF. A SU FAVOR\n14650100-LUCIA ORTEGA PEREZ"));
     }
 
+    /** La entidad también llega en dos grupos de cuatro cifras separados por un espacio. */
+    public function testLaEntidadDeLaCaixaConEspacioNoSeQuedaPegadaAlNombre(): void
+    {
+        $this->assertSame('JOAQUIN MANUEL GRIJOTA', TransferPayer::fromDetails("TRANSF. A SU FAVOR\n1491 0001-JOAQUIN MANUEL GRIJOTA"));
+        $this->assertSame('BAUTISTA CARRASCOSA IN', TransferPayer::fromDetails("TRANSF. A SU FAVOR\r\n0049 0054-BAUTISTA CARRASCOSA IN"));
+    }
+
+    /** Fiare escribe a veces el concepto en minúsculas, con el código de operación en la 2ª línea. */
+    public function testFiareEnMinusculasTambienTieneOrdenante(): void
+    {
+        $this->assertSame('baonza del moral diego', TransferPayer::fromDetails("trf. baonza del moral diego\n8522"));
+    }
+
     /** Los dobles espacios del banco se quedan en uno: es como se compara. */
     public function testLaTransferenciaInmediataDeLaCaixaNoLlevaEntidad(): void
     {
@@ -72,7 +85,7 @@ class TransferPayerTest extends TestCase
         ];
         foreach ($details as $text) {
             $this->assertNotNull(TransferPayer::fromDetails($text), $text);
-            $this->assertNotEmpty(array_filter(TransferPayer::detailPrefixes(), static fn (string $p): bool => str_contains($text, $p)), $text);
+            $this->assertNotEmpty(array_filter(TransferPayer::detailPrefixes(), static fn (string $p): bool => stripos($text, $p) !== false), $text);
         }
     }
 }

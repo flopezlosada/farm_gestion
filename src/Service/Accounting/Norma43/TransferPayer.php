@@ -9,9 +9,10 @@ use App\Entity\BankStatementLine;
  * movimiento. Cada banco lo escribe a su manera; los formatos vistos en los
  * extractos reales:
  *
- *  - Fiare: «TRF. NOMBRE APELLIDOS» en la primera línea;
- *  - La Caixa: «TRANSF. A SU FAVOR» y en la segunda línea «<entidad>-NOMBRE»
- *    (cortado a 23 caracteres, la «Ñ» como espacio), o «TRANSFER INMEDIATA» y el
+ *  - Fiare: «TRF. NOMBRE APELLIDOS» en la primera línea, en mayúsculas o minúsculas;
+ *  - La Caixa: «TRANSF. A SU FAVOR» y en la segunda línea «<entidad>-NOMBRE», con la
+ *    entidad de 8 cifras (en grupos de 4 separados por un espacio, o sin él), el nombre
+ *    cortado a 23 caracteres y la «Ñ» como espacio; o «TRANSFER INMEDIATA» y el
  *    nombre en la segunda.
  *
  * Un banco nuevo es un patrón más aquí. Lo que no sea una transferencia recibida
@@ -24,9 +25,9 @@ final class TransferPayer
      * grupo `name` es el ordenante.
      */
     private const FORMATS = [
-        'TRF.' => '/^TRF\.\s+(?<name>[^\r\n]+)/u',
-        'TRANSF. A SU FAVOR' => '/^TRANSF\. A SU FAVOR\s*\R(?:\d+-)?(?<name>[^\r\n]+)/u',
-        'TRANSFER INMEDIATA' => '/^TRANSFER INMEDIATA\s*\R(?<name>[^\r\n]+)/u',
+        'TRF.' => '/^TRF\.\s+(?<name>[^\r\n]+)/iu',
+        'TRANSF. A SU FAVOR' => '/^TRANSF\. A SU FAVOR\s*\R(?:\d+(?:\s\d+)?-)?(?<name>[^\r\n]+)/iu',
+        'TRANSFER INMEDIATA' => '/^TRANSFER INMEDIATA\s*\R(?<name>[^\r\n]+)/iu',
     ];
 
     /**

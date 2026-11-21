@@ -53,6 +53,28 @@ class ConsumerGroupTransfersTest extends TestCase
         $this->assertFalse($found[1]['sure']);
     }
 
+    /**
+     * Los pedidos de una ronda que deben justo el importe se agrupan: se leen una vez, no
+     * uno por pedido. Los de nombre parecido pero otro importe forman su propio grupo.
+     */
+    public function testLasSugerenciasSeAgrupanPorImporteYRonda(): void
+    {
+        $lucia = $this->order(self::partner('LUCIA', 'ORTEGA PEREZ'), '10');
+        $pedro = $this->order(self::partner('PEDRO', 'MARTIN GIL'), '10');
+        $otroImporte = $this->order(self::partner('LUCIA', 'ORTEGA PEREZ'), '4');
+
+        $found = ConsumerGroupTransfers::suggestions($this->transfer(2500, 'LUCIA ORTEGA PE'), [$otroImporte, $pedro, $lucia], null);
+        $groups = ConsumerGroupTransfers::groupSuggestions($found);
+
+        $this->assertCount(2, $groups);
+        $this->assertTrue($groups[0]['exact']);
+        $this->assertSame([$lucia, $pedro], array_map(static fn (array $s): ConsumerGroupOrder => $s['order'], $groups[0]['items']));
+        $this->assertSame([true, false], array_map(static fn (array $s): bool => $s['named'], $groups[0]['items']));
+        $this->assertFalse($groups[1]['exact']);
+        $this->assertSame([$otroImporte], array_map(static fn (array $s): ConsumerGroupOrder => $s['order'], $groups[1]['items']));
+        $this->assertSame([], ConsumerGroupTransfers::groupSuggestions([]));
+    }
+
     /** El pedido está a nombre de quien encabeza la familia, y paga otra persona de ella. */
     public function testPagaOtraPersonaDeLaFamilia(): void
     {

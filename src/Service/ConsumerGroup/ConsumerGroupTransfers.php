@@ -7,6 +7,7 @@ use App\Entity\BankPayerAlias;
 use App\Entity\BankStatementLine;
 use App\Entity\BudgetCategory;
 use App\Entity\ConsumerGroupOrder;
+use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupTransfer;
 use App\Entity\Partner;
 use App\Entity\Remittance;
@@ -44,6 +45,9 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 class ConsumerGroupTransfers
 {
+    /** Cuántas sugerencias se pintan por movimiento; el resto se busca en el buscador de pedidos. */
+    private const MAX_SHOWN = 12;
+
     public function __construct(
         private readonly ConsumerGroupTransferRepository $transfers,
         private readonly ConsumerGroupOrderRepository $orders,
@@ -98,7 +102,7 @@ class ConsumerGroupTransfers
      * Lo que falta por elegir a mano, con los pedidos que pueden ser, los más probables
      * primero, y todos los pedidos por pagar para elegir otro.
      *
-     * @return array{lines: list<array{line: BankStatementLine, payer: string|null, suggestions: list<array{order: ConsumerGroupOrder, sure: bool, reasons: list<string>}>}>, payable: list<ConsumerGroupOrder>}
+     * @return array{lines: list<array{line: BankStatementLine, payer: string|null, suggestions: list<array{order: ConsumerGroupOrder, sure: bool, exact: bool, named: bool, reasons: list<string>}>, groups: list<array{exact: bool, round: ConsumerGroupRound, items: list<array{order: ConsumerGroupOrder, sure: bool, exact: bool, named: bool, reasons: list<string>}>}>, hidden: int}>, payable: list<ConsumerGroupOrder>}
      */
     public function pending(): array
     {
@@ -107,11 +111,17 @@ class ConsumerGroupTransfers
         $aliases = $this->aliasesFor($lines);
 
         return [
-            'lines' => array_map(static fn (BankStatementLine $line): array => [
-                'line' => $line,
-                'payer' => $line->getTransferPayer(),
-                'suggestions' => self::suggestions($line, $payable, self::aliasFamily($line, $aliases)),
-            ], $lines),
+            'lines' => array_map(static function (BankStatementLine $line) use ($payable, $aliases): array {
+                $suggestions = self::suggestions($line, $payable, self::aliasFamily($line, $aliases));
+
+                return [
+                    'line' => $line,
+                    'payer' => $line->getTransferPayer(),
+                    'suggestions' => $suggestions,
+                    'groups' => self::groupSuggestions(\array_slice($suggestions, 0, self::MAX_SHOWN)),
+                    'hidden' => max(0, \count($suggestions) - self::MAX_SHOWN),
+                ];
+            }, $lines),
             'payable' => $payable,
         ];
     }
@@ -216,7 +226,7 @@ class ConsumerGroupTransfers
      * @param list<ConsumerGroupOrder> $payable     los pedidos por pagar
      * @param Partner|null             $aliasFamily la familia que ya pagó antes desde ese ordenante
      *
-     * @return list<array{order: ConsumerGroupOrder, sure: bool, reasons: list<string>}>
+     * @return list<array{order: ConsumerGroupOrder, sure: bool, exact: bool, named: bool, reasons: list<string>}>
      */
     public static function suggestions(BankStatementLine $line, array $payable, ?Partner $aliasFamily): array
     {
@@ -241,6 +251,8 @@ class ConsumerGroupTransfers
             $found[] = [
                 'order' => $order,
                 'sure' => $amount && ($byAlias || $byName),
+                'exact' => $amount,
+                'named' => $byAlias || $byName,
                 'reasons' => $reasons,
                 'rank' => ($amount ? 1 : 0) + ($byAlias || $byName ? 2 : 0),
             ];
@@ -248,7 +260,29 @@ class ConsumerGroupTransfers
         // usort es estable: a igual rango, en el orden de entrega.
         usort($found, static fn (array $a, array $b): int => $b['rank'] <=> $a['rank']);
 
-        return array_map(static fn (array $s): array => ['order' => $s['order'], 'sure' => $s['sure'], 'reasons' => $s['reasons']], $found);
+        return array_map(static fn (array $s): array => ['order' => $s['order'], 'sure' => $s['sure'], 'exact' => $s['exact'], 'named' => $s['named'], 'reasons' => $s['reasons']], $found);
+    }
+
+    /**
+     * Agrupa las sugerencias para pintarlas: por si deben justo el importe y por ronda,
+     * en el orden en que aparece cada grupo. Una ronda con 30 pedidos del mismo importe
+     * se lee una vez, no 30. Puro.
+     *
+     * @param list<array{order: ConsumerGroupOrder, sure: bool, exact: bool, named: bool, reasons: list<string>}> $suggestions
+     *
+     * @return list<array{exact: bool, round: ConsumerGroupRound, items: list<array{order: ConsumerGroupOrder, sure: bool, exact: bool, named: bool, reasons: list<string>}>}>
+     */
+    public static function groupSuggestions(array $suggestions): array
+    {
+        $groups = [];
+        foreach ($suggestions as $suggestion) {
+            $round = $suggestion['order']->getRound();
+            $key = ($suggestion['exact'] ? 'e' : 'n') . spl_object_id($round);
+            $groups[$key] ??= ['exact' => $suggestion['exact'], 'round' => $round, 'items' => []];
+            $groups[$key]['items'][] = $suggestion;
+        }
+
+        return array_values($groups);
     }
 
     /**

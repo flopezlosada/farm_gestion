@@ -102,8 +102,8 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
-     * Asigna el movimiento al pedido elegido en el desplegable «otro pedido». El
-     * desplegable se rellena con JavaScript, que el cliente de pruebas no ejecuta: se
+     * Asigna el movimiento al pedido elegido en el buscador «otro pedido». El buscador
+     * rellena su campo oculto con JavaScript, que el cliente de pruebas no ejecuta: se
      * envía el mismo formulario, con su token.
      */
     private function assignByOther(KernelBrowser $client, BankStatementLine $line, ConsumerGroupOrder $order): void
@@ -146,8 +146,7 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
         $crawler = $client->request('GET', '/gestion/accounting/consumer-group-transfers');
         $this->assertResponseIsSuccessful();
         $this->assertSelectorTextContains(sprintf('#movimiento-%d', $line->getId()), 'TOMASA GIL ROMERO');
-        $this->assertCount(1, $crawler->filter('#cgt-payable option[value="' . $pedro->getId() . '"]'), 'Los pedidos por pagar se pintan una sola vez.');
-        $this->assertCount(0, $crawler->filter(sprintf('#asignar-%d option[value="%d"]', $line->getId(), $pedro->getId())));
+        $this->assertCount(1, $crawler->filter('#cgt-payable option[data-id="' . $pedro->getId() . '"]'), 'Los pedidos por pagar se pintan una sola vez, en la lista que comparten los buscadores.');
         $this->assignByOther($client, $line, $pedro);
         $this->assertResponseRedirects('/gestion/accounting/consumer-group-transfers');
         $client->followRedirect();
