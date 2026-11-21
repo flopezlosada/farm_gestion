@@ -19,12 +19,27 @@ use App\Entity\BankStatementLine;
  */
 final class TransferPayer
 {
-    /** Un patrón por formato de banco; el grupo `name` es el ordenante. */
+    /**
+     * Un patrón por formato de banco, con el texto fijo con que empieza el detalle; el
+     * grupo `name` es el ordenante.
+     */
     private const FORMATS = [
-        '/^TRF\.\s+(?<name>[^\r\n]+)/u',
-        '/^TRANSF\. A SU FAVOR\s*\R(?:\d+-)?(?<name>[^\r\n]+)/u',
-        '/^TRANSFER INMEDIATA\s*\R(?<name>[^\r\n]+)/u',
+        'TRF.' => '/^TRF\.\s+(?<name>[^\r\n]+)/u',
+        'TRANSF. A SU FAVOR' => '/^TRANSF\. A SU FAVOR\s*\R(?:\d+-)?(?<name>[^\r\n]+)/u',
+        'TRANSFER INMEDIATA' => '/^TRANSFER INMEDIATA\s*\R(?<name>[^\r\n]+)/u',
     ];
+
+    /**
+     * El texto fijo con que empieza el detalle de cada formato conocido. Sirve para
+     * descartar en la consulta los movimientos que no pueden tener ordenante, sin
+     * leerlos todos; la decisión exacta la sigue dando {@see fromDetails()}.
+     *
+     * @return list<string>
+     */
+    public static function detailPrefixes(): array
+    {
+        return array_keys(self::FORMATS);
+    }
 
     /**
      * El ordenante del movimiento, o null si no es una transferencia recibida.

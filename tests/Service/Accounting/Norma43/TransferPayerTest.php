@@ -57,4 +57,22 @@ class TransferPayerTest extends TestCase
 
         return new BankStatementLine($account, new Norma43Movement($day, $day, '02', '000', $cents, '', '', '', $texts), 1);
     }
+
+    /**
+     * El prefijo de cada formato es lo que la consulta usa para descartar movimientos:
+     * todo detalle con ordenante tiene que contener alguno, o la consulta lo perdería.
+     */
+    public function testTodoDetalleConOrdenanteContieneAlgunPrefijoDeLaConsulta(): void
+    {
+        $details = [
+            "TRF. LUCIA ORTEGA PEREZ",
+            "TRANSF. A SU FAVOR\n2100-LUCIA ORTEGA PE",
+            "TRANSFER INMEDIATA\nLUCIA ORTEGA PEREZ",
+            "  TRF. CON ESPACIOS DELANTE",
+        ];
+        foreach ($details as $text) {
+            $this->assertNotNull(TransferPayer::fromDetails($text), $text);
+            $this->assertNotEmpty(array_filter(TransferPayer::detailPrefixes(), static fn (string $p): bool => str_contains($text, $p)), $text);
+        }
+    }
 }

@@ -19,6 +19,7 @@ use App\Service\Accounting\Norma43\Norma43Movement;
 use App\Service\AppSettings;
 use App\Service\ConsumerGroup\ConsumerGroupTransfers;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
 /**
  * Las transferencias del grupo de consumo, de punta a punta sobre la base de tests: el
@@ -101,6 +102,18 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
+     * Asigna el movimiento al pedido elegido en el desplegable «otro pedido». El
+     * desplegable se rellena con JavaScript, que el cliente de pruebas no ejecuta: se
+     * envía el mismo formulario, con su token.
+     */
+    private function assignByOther(KernelBrowser $client, BankStatementLine $line, ConsumerGroupOrder $order): void
+    {
+        $crawler = $client->request('GET', '/gestion/accounting/consumer-group-transfers');
+        $token = $crawler->filter(sprintf('#asignar-%d input[name="_token"]', $line->getId()))->attr('value');
+        $client->request('POST', sprintf('/gestion/accounting/consumer-group-transfers/lines/%d/assign', $line->getId()), ['_token' => $token, 'other' => (string) $order->getId()]);
+    }
+
+    /**
      * Asignar a mano un importe que no cuadra avisa y NO aprende el ordenante: puede ser
      * un pago parcial o un error, y aprenderlo casaría mal la próxima vez.
      */
@@ -111,8 +124,7 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
         [, $pedro] = $this->roundWithOrders();
         $line = $this->transfer(1500, 'TOMASA GIL ROMERO');
 
-        $crawler = $client->request('GET', '/gestion/accounting/consumer-group-transfers');
-        $client->submit($crawler->filter(sprintf('#asignar-%d', $line->getId()))->form(), ['other' => (string) $pedro->getId()]);
+        $this->assignByOther($client, $line, $pedro);
         $client->followRedirect();
 
         $this->assertSelectorTextContains('body', 'no cuadra: la transferencia trae 15,00 € y los pedidos suman 10,00 €');
@@ -134,8 +146,9 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
         $crawler = $client->request('GET', '/gestion/accounting/consumer-group-transfers');
         $this->assertResponseIsSuccessful();
         $this->assertSelectorTextContains(sprintf('#movimiento-%d', $line->getId()), 'TOMASA GIL ROMERO');
-        $form = $crawler->filter(sprintf('#asignar-%d', $line->getId()))->form();
-        $client->submit($form, ['other' => (string) $pedro->getId()]);
+        $this->assertCount(1, $crawler->filter('#cgt-payable option[value="' . $pedro->getId() . '"]'), 'Los pedidos por pagar se pintan una sola vez.');
+        $this->assertCount(0, $crawler->filter(sprintf('#asignar-%d option[value="%d"]', $line->getId(), $pedro->getId())));
+        $this->assignByOther($client, $line, $pedro);
         $this->assertResponseRedirects('/gestion/accounting/consumer-group-transfers');
         $client->followRedirect();
         $this->assertSelectorTextNotContains('body', 'no cuadra');
@@ -177,6 +190,29 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
         $client->submit($crawler->filter(sprintf('form[action$="/%d/reopen"]', $transfer->getId()))->form());
         $client->followRedirect();
         $this->assertSelectorExists(sprintf('#movimiento-%d', $line->getId()));
+    }
+
+    /**
+     * Apartar un movimiento que el cruce anotó solo en la partida del grupo de consumo
+     * no toca el libro: avisa de que ese apunte hay que corregirlo desde el extracto.
+     */
+    public function testApartarUnMovimientoAnotadoSoloAvisaDelApunte(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $this->enable(true);
+        [$lucia] = $this->roundWithOrders();
+        $line = $this->transfer(1000, 'LUCIA ORTEGA PE');
+        $this->matchAll();
+        $transferId = $this->reload($lucia)->getTransfer()->getId();
+
+        $crawler = $client->request('GET', '/gestion/accounting/consumer-group-transfers');
+        $client->submit($crawler->filter(sprintf('form[action$="/%d/release"]', $transferId))->form());
+        $crawler = $client->request('GET', '/gestion/accounting/consumer-group-transfers');
+        $client->submit($crawler->filter(sprintf('form[action$="/lines/%d/dismiss"]', $line->getId()))->form());
+        $client->followRedirect();
+
+        $this->assertSelectorTextContains('body', 'Su apunte sigue en la partida «Grupo de consumo»');
+        $this->assertNotNull($this->em()->find(BankStatementLine::class, $line->getId())->getEntry(), 'Apartar no borra el apunte.');
     }
 
     /** Un pedido ya pagado no se puede volver a pagar con otra transferencia. */

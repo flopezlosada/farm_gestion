@@ -17,6 +17,7 @@ use App\Repository\ConsumerGroupTransferRepository;
 use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Norma43\BankLineEntryDraft;
 use App\Service\Accounting\Norma43\RemittanceCreditBooker;
+use App\Service\Accounting\Norma43\TransferPayer;
 use App\Service\Accounting\Remittance\PartnerNameMatcher;
 use App\Service\AppSettings;
 use Doctrine\ORM\EntityManagerInterface;
@@ -120,7 +121,15 @@ class ConsumerGroupTransfers
      */
     public function countPending(): int
     {
-        return !$this->enabled() ? 0 : \count($this->undecided(true));
+        $from = $this->enabled() ? $this->orders->firstCreatedOn() : null;
+        if ($from === null) {
+            return 0;
+        }
+
+        return \count(array_filter(
+            $this->transfers->findUndecidedDetails($from, $this->category(), true),
+            static fn (?string $details): bool => TransferPayer::fromDetails((string) $details) !== null,
+        ));
     }
 
     /**
@@ -184,6 +193,19 @@ class ConsumerGroupTransfers
         $this->em->persist($transfer->dismiss());
 
         return $transfer;
+    }
+
+    /**
+     * Si el movimiento apartado sigue anotado, sin que nadie lo corrigiera, en la partida
+     * del grupo de consumo. Apartarlo no toca el libro: ese apunte (anotado solo al
+     * asignarlo, o por una regla) queda en una partida que ya no le corresponde, y hay
+     * que avisar de que se corrija desde el extracto.
+     */
+    public function staysBookedAsConsumerGroup(BankStatementLine $line): bool
+    {
+        $entry = $line->getEntry();
+
+        return $entry !== null && $entry->isAutoBooked() && $entry->getCategory() !== null && $entry->getCategory() === $this->category();
     }
 
     /**

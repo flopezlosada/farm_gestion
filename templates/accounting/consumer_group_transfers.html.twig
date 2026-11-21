@@ -104,12 +104,7 @@
                                         {% if pending.payable is not empty %}
                                             <div class="cgt-other">
                                                 <label for="otro-{{ line.id }}" class="acc-small">{{ suggested is empty ? 'Pedido:' : 'U otro pedido:' }}</label>
-                                                <select name="other" id="otro-{{ line.id }}">
-                                                    <option value="">—</option>
-                                                    {% for order in pending.payable %}
-                                                        <option value="{{ order.id }}">{{ order.partner }} · {{ order.round.title }} · {{ order.total|number_format(2, ',', '.') }} €</option>
-                                                    {% endfor %}
-                                                </select>
+                                                <select name="other" id="otro-{{ line.id }}" data-payable><option value="">—</option></select>
                                             </div>
                                         {% endif %}
                                     </form>
@@ -128,6 +123,21 @@
                     {% endfor %}
                 </tbody>
             </table>
+            {# Los pedidos por pagar se pintan UNA vez y un script los copia a cada desplegable: pintarlos en cada fila crece con filas × pedidos. #}
+            <template id="cgt-payable">
+                {% for order in pending.payable %}
+                    <option value="{{ order.id }}">{{ order.partner }} · {{ order.round.title }} · {{ order.total|number_format(2, ',', '.') }} €</option>
+                {% endfor %}
+            </template>
+            <script>
+                (function () {
+                    var options = document.getElementById('cgt-payable');
+                    if (!options) { return; }
+                    document.querySelectorAll('select[data-payable]').forEach(function (select) {
+                        select.appendChild(options.content.cloneNode(true));
+                    });
+                })();
+            </script>
         {% endif %}
     </div>
 

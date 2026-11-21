@@ -6,6 +6,7 @@ use App\Entity\BankStatementLine;
 use App\Entity\BudgetCategory;
 use App\Entity\ConsumerGroupOrder;
 use App\Entity\ConsumerGroupTransfer;
+use App\Service\Accounting\Norma43\TransferPayer;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
@@ -36,8 +37,35 @@ class ConsumerGroupTransferRepository extends ServiceEntityRepository
      */
     public function findUndecidedLines(\DateTimeImmutable $from, ?BudgetCategory $category, bool $withReleased): array
     {
-        $qb = $this->getEntityManager()->createQueryBuilder()
+        return $this->undecidedQuery($from, $category, $withReleased)
             ->select('l', 'a', 'e')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Sólo el texto del banco de esos mismos movimientos, sin leer los movimientos
+     * enteros: para contarlos sin cargarlos. Mismos criterios que
+     * {@see findUndecidedLines()}.
+     *
+     * @return list<string|null>
+     */
+    public function findUndecidedDetails(\DateTimeImmutable $from, ?BudgetCategory $category, bool $withReleased): array
+    {
+        return $this->undecidedQuery($from, $category, $withReleased)
+            ->select('l.details')
+            ->getQuery()
+            ->getSingleColumnResult();
+    }
+
+    /**
+     * La consulta común de los movimientos por decidir, sin elegir qué se lee. Descarta
+     * ya en la base los que no tienen el texto de ninguna transferencia recibida: el
+     * ordenante exacto lo decide {@see \App\Service\Accounting\Norma43\TransferPayer}.
+     */
+    private function undecidedQuery(\DateTimeImmutable $from, ?BudgetCategory $category, bool $withReleased): QueryBuilder
+    {
+        $qb = $this->getEntityManager()->createQueryBuilder()
             ->from(BankStatementLine::class, 'l')
             ->innerJoin('l.account', 'a')
             ->leftJoin('l.entry', 'e')
@@ -46,6 +74,12 @@ class ConsumerGroupTransferRepository extends ServiceEntityRepository
             ->andWhere('l.operationDate >= :from')->setParameter('from', $from)
             ->orderBy('l.operationDate', 'ASC')
             ->addOrderBy('l.id', 'ASC');
+        $like = [];
+        foreach (TransferPayer::detailPrefixes() as $i => $prefix) {
+            $like[] = sprintf('l.details LIKE :prefix%d', $i);
+            $qb->setParameter('prefix' . $i, '%' . addcslashes($prefix, '%_\\') . '%');
+        }
+        $qb->andWhere(implode(' OR ', $like));
         $category !== null
             ? $qb->andWhere('e.id IS NULL OR e.category = :category')->setParameter('category', $category)
             : $qb->andWhere('e.id IS NULL');
@@ -53,7 +87,7 @@ class ConsumerGroupTransferRepository extends ServiceEntityRepository
             ? $qb->andWhere(sprintf('t.id IS NULL OR (t.dismissed = false AND NOT EXISTS (SELECT o.id FROM %s o WHERE o.transfer = t))', ConsumerGroupOrder::class))
             : $qb->andWhere('t.id IS NULL');
 
-        return $qb->getQuery()->getResult();
+        return $qb;
     }
 
     /**

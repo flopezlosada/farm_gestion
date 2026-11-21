@@ -116,6 +116,9 @@ class ConsumerGroupTransferController extends AbstractController
         $transfers->dismiss($line);
         $em->flush();
         $this->addFlash('success', 'Apartada: no es el pago de un pedido.');
+        if ($transfers->staysBookedAsConsumerGroup($line)) {
+            $this->addFlash('warning', 'Su apunte sigue en la partida «Grupo de consumo», anotado solo. Corrígelo desde el extracto para que los informes no lo cuenten como ingreso del grupo.');
+        }
 
         return $this->redirectToRoute('accounting_cg_transfers');
     }
