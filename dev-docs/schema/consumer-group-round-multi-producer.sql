@@ -10,6 +10,10 @@
 -- El INSERT IGNORE es idempotente y hay que RELANZARLO justo al subir el código: entre
 -- este SQL y la subida, el código viejo sigue creando pedidos solo con `producer_id`.
 --
+-- VOLVER ATRÁS (solo antes del DROP): los pedidos creados con el código nuevo tienen
+-- producer_id NULL y el código viejo lo exige. Antes de bajar el código viejo:
+--   UPDATE consumer_group_round r SET r.producer_id = (SELECT MIN(rp.producer_id) FROM consumer_group_round_producer rp WHERE rp.round_id = r.id) WHERE r.producer_id IS NULL;
+--
 -- Aplicar a las TRES bases de trabajo: db, db_prod_snapshot (golden) y db_test.
 
 CREATE TABLE consumer_group_round_producer (round_id INT NOT NULL, producer_id INT NOT NULL, INDEX IDX_371B97BAA6005CA0 (round_id), INDEX IDX_371B97BA89B658FE (producer_id), PRIMARY KEY(round_id, producer_id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB;

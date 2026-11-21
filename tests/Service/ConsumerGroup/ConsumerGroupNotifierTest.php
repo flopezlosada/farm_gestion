@@ -188,6 +188,26 @@ class ConsumerGroupNotifierTest extends TestCase
         self::assertSame($naranjero, $bodies['naranjero@example.com']['producer']);
     }
 
+    public function testSiFallaElEnvioAUnProductorSeDevuelveYElOtroRecibeElSuyo(): void
+    {
+        $this->round->getProducers()->first()->setName('Naranjero')->setEmail('naranjero@example.com');
+        $this->addProducerWithItem('Almazara', 'almazara@example.com', 'Aceite');
+        $order = $this->orderFor($this->partner('socia@example.com'));
+        $order->addLine(new ConsumerGroupOrderLine($order, $this->round->getItems()->last(), '1'));
+
+        $mailer = $this->createMock(MailerInterface::class);
+        $mailer->method('send')->willReturnCallback(static function (TemplatedEmail $mail): void {
+            if ($mail->getTo()[0]->getAddress() === 'almazara@example.com') {
+                throw new TransportException('SMTP caído');
+            }
+        });
+
+        $result = $this->notifier($mailer, true)->notifyProducersConfirmed($this->round);
+
+        self::assertSame(1, $result['sent']);
+        self::assertSame(['Almazara'], $result['failed']);
+    }
+
     public function testUnProductorSinNadaPedidoNoRecibeCorreo(): void
     {
         $this->round->getProducers()->first()->setEmail('naranjero@example.com');

@@ -152,18 +152,20 @@ class ConsumerGroupNotifier
      *
      * Un productor sin email no es un fallo: no hay a quién escribir, y se devuelve su
      * nombre para que la comisión sepa que tiene que pasarle el pedido por otro lado.
-     * Un productor sin nada pedido tampoco recibe correo.
+     * Un productor sin nada pedido tampoco recibe correo. Si el envío a uno falla, no aborta
+     * el de los demás: se devuelve su nombre para avisar a la comisión.
      *
-     * @return array{enabled: bool, sent: int, withoutEmail: list<string>}
+     * @return array{enabled: bool, sent: int, withoutEmail: list<string>, failed: list<string>}
      */
     public function notifyProducersConfirmed(ConsumerGroupRound $round): array
     {
         if (!$this->settings->getBool(AppSettings::EMAIL_ENABLED)) {
-            return ['enabled' => false, 'sent' => 0, 'withoutEmail' => []];
+            return ['enabled' => false, 'sent' => 0, 'withoutEmail' => [], 'failed' => []];
         }
 
         $sent = 0;
         $withoutEmail = [];
+        $failed = [];
         foreach ($round->getProducers() as $producer) {
             $aggregate = $this->aggregator->aggregate($round, $producer);
             $lines = array_values(array_filter($aggregate['byItem'], static fn (array $line): bool => $line['totalQuantity'] > 0));
@@ -193,10 +195,11 @@ class ConsumerGroupNotifier
                     'producer' => $producer->getId(),
                     'error' => $e->getMessage(),
                 ]);
+                $failed[] = $producer->getName();
             }
         }
 
-        return ['enabled' => true, 'sent' => $sent, 'withoutEmail' => $withoutEmail];
+        return ['enabled' => true, 'sent' => $sent, 'withoutEmail' => $withoutEmail, 'failed' => $failed];
     }
 
     /**

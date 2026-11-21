@@ -685,6 +685,9 @@ class ConsumerGroupController extends AbstractController
                     }
                     $this->addFlash('success', $msg);
                 }
+                if ($producersResult['failed'] !== []) {
+                    $this->addFlash('warning', sprintf('El correo NO llegó a: %s. Pásales el pedido a mano.', implode(', ', $producersResult['failed'])));
+                }
                 if ($producersResult['withoutEmail'] !== []) {
                     $this->addFlash('warning', sprintf('Sin email, pásale el pedido a mano a: %s.', implode(', ', $producersResult['withoutEmail'])));
                 }
