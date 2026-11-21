@@ -5,9 +5,11 @@ namespace App\Tests\Service\ConsumerGroup;
 use App\Entity\ConsumerGroupProduct;
 use App\Entity\ConsumerGroupUnit;
 use App\Entity\ConsumerGroupRound;
+use App\Entity\MarkupType;
 use App\Entity\Producer;
 use App\Repository\ConsumerGroupRoundItemRepository;
 use App\Service\ConsumerGroup\RoundItemEditor;
+use App\Service\ConsumerGroup\RoundPricing;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -36,7 +38,7 @@ class RoundItemEditorTest extends TestCase
         $this->producer->addProduct($this->retirado);
 
         $this->roundItems = $this->createMock(ConsumerGroupRoundItemRepository::class);
-        $this->editor = new RoundItemEditor($this->roundItems);
+        $this->editor = new RoundItemEditor($this->roundItems, new RoundPricing());
     }
 
     private function round(): ConsumerGroupRound
@@ -89,6 +91,88 @@ class RoundItemEditorTest extends TestCase
         self::assertArrayNotHasKey('Aceite', $productos, 'El aceite se quitó');
         self::assertArrayHasKey('Descatalogado', $productos);
         self::assertSame('5.00', $productos['Descatalogado']);
+    }
+
+    public function testProductoGestionadoSeFijaPorPrecioDeProductorMasIncrementoDelPedido(): void
+    {
+        $round = $this->round()->setMarkup(MarkupType::Percent, '10.00');
+
+        $this->editor->apply($round, [[
+            'product'       => $this->fruta,
+            'included'      => true,
+            'price'         => '0',
+            'mode'          => 'managed',
+            'producerPrice' => '2.00',
+            'markupType'    => null,
+            'markupValue'   => null,
+        ]]);
+
+        $item = $round->getItems()->first();
+        self::assertSame('2.00', $item->getProducerPrice());
+        self::assertSame('2.20', $item->getPrice());
+    }
+
+    public function testProductoAutogestionadoGuardaSuPrecioComoPrecioDeProductor(): void
+    {
+        $this->producer->setSelfManaged(true);
+        $round = $this->round();
+
+        $this->editor->apply($round, [
+            ['product' => $this->fruta, 'included' => true, 'price' => '3.00'],
+        ]);
+
+        $item = $round->getItems()->first();
+        self::assertSame('3.00', $item->getPrice());
+        self::assertSame('3.00', $item->getProducerPrice(), 'Sin incremento: el precio final es el del productor');
+    }
+
+    public function testElModoSinDesglosarNoCambiaElPrecioFinal(): void
+    {
+        $round = $this->round();
+        $this->editor->apply($round, [['product' => $this->fruta, 'included' => true, 'price' => '2.50']]);
+        $item = $round->getItems()->first();
+
+        $this->editor->apply($round, [[
+            'product'       => $this->fruta,
+            'included'      => true,
+            'price'         => '2.50',
+            'mode'          => 'breakdown',
+            'producerPrice' => '2.00',
+        ]]);
+
+        self::assertSame('2.50', $item->getPrice());
+        self::assertSame('2.00', $item->getProducerPrice());
+    }
+
+    public function testElModoSinDesglosarSinPrecioDeProductorNoTocaNada(): void
+    {
+        $round = $this->round();
+        $this->editor->apply($round, [['product' => $this->fruta, 'included' => true, 'price' => '2.50']]);
+        $item = $round->getItems()->first();
+
+        $this->editor->apply($round, [[
+            'product'       => $this->fruta,
+            'included'      => true,
+            'price'         => '2.50',
+            'mode'          => 'breakdown',
+            'producerPrice' => null,
+        ]]);
+
+        self::assertSame('2.50', $item->getPrice());
+        self::assertNull($item->getProducerPrice());
+    }
+
+    public function testSiembraConElUltimoPrecioDeProductorYSinIncrementoElFinalEsElMismo(): void
+    {
+        $this->roundItems->method('findLastPriceForProduct')->willReturn('2.50');
+        $this->roundItems->method('findLastProducerPriceForProduct')->willReturn('2.00');
+        $round = $this->round();
+
+        $this->editor->seedFromCatalog($round);
+
+        $item = $round->getItems()->first();
+        self::assertSame('2.00', $item->getProducerPrice());
+        self::assertSame('2.00', $item->getPrice(), 'Con el pedido sin incremento, el final es el del productor');
     }
 
     public function testLoDelLocalSeAjustaAlSaltoDelProducto(): void

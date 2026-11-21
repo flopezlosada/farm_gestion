@@ -174,6 +174,17 @@ class RoundStateMachineTest extends TestCase
         $this->machine->open($round);
     }
 
+    public function testNoSeAbreConUnIncrementoPendienteDeRevisar(): void
+    {
+        $round = $this->draftWithItem();
+        $round->setOrdersCloseAt(new \DateTime('+5 days'));
+        $round->getItems()->first()->setMarkupPendingReview(true);
+
+        self::assertFalse($this->machine->canOpen($round));
+        $this->expectException(InvalidRoundTransition::class);
+        $this->machine->open($round);
+    }
+
     public function testNoSeAbreLoQueYaNoEsBorrador(): void
     {
         $round = $this->draftWithItem();
