@@ -225,4 +225,40 @@ class RoundPricingTest extends TestCase
         self::assertSame('2.20', $item->getPrice());
         self::assertSame('2.00', $item->getProducerPrice());
     }
+
+    public function testUnPrecioDeProductorQueRedondeaACeroSeRechaza(): void
+    {
+        $item = $this->item('Naranjas', '2.50', '2.00');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->pricing->setBreakdown($item, '0.004', null, null, false);
+    }
+
+    public function testUnIncrementoQueDesbordaElPrecioFinalSeRechazaYElPedidoNoCambia(): void
+    {
+        $item = $this->item('Naranjas', '2.20', '2.00');
+        $this->round->setMarkup(MarkupType::Percent, '10.00');
+
+        try {
+            $this->pricing->changeRoundMarkup($this->round, MarkupType::Amount, '999999.99');
+            self::fail('Debía rechazarse: 2,00 + 999.999,99 no cabe en el precio');
+        } catch (\InvalidArgumentException) {
+        }
+
+        self::assertSame('10.00', $this->round->getMarkupValue(), 'El incremento anterior se conserva');
+        self::assertSame('2.20', $item->getPrice());
+    }
+
+    public function testQuitarElIncrementoPropioDejaDeEstarPendiente(): void
+    {
+        $propio = $this->item('Aceite', '8.50', '8.00');
+        $propio->setOwnMarkup(MarkupType::Amount, '0.50');
+        $propio->setMarkupPendingReview(true);
+        $this->round->setMarkup(MarkupType::Percent, '10.00');
+
+        $this->pricing->setBreakdown($propio, '8.00', null, null, false);
+
+        self::assertFalse($propio->isMarkupPendingReview(), 'Hereda el del pedido: no queda nada propio que revisar');
+        self::assertSame('8.80', $propio->getPrice());
+    }
 }

@@ -403,7 +403,9 @@ class ConsumerGroupController extends AbstractController
             }
 
             try {
-                if ($managed) {
+                // Un formulario sin el campo del incremento del pedido (petición recortada,
+                // página vieja) significa «sin cambios», no «quita el incremento».
+                if ($managed && $request->request->has('round_markup_type')) {
                     $pricing->changeRoundMarkup($round, $form['round_type'], $form['round_value']);
                 }
                 $itemEditor->apply($round, $desired);
@@ -1040,8 +1042,13 @@ class ConsumerGroupController extends AbstractController
      */
     private function normalizeDecimal(mixed $value): string
     {
+        // Un array anidado (`price[5][]=x`) o algo que no cabe en decimal(8,2) cuenta como
+        // inválido: sin tope, un `1e9` llegaría a la BBDD y rompería el guardado.
+        if (!is_scalar($value)) {
+            return '0';
+        }
         $normalized = str_replace(',', '.', (string) $value);
-        if (!is_numeric($normalized) || (float) $normalized < 0) {
+        if (!is_numeric($normalized) || (float) $normalized < 0 || (float) $normalized > 999999.99) {
             return '0';
         }
 

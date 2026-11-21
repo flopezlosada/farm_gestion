@@ -64,6 +64,36 @@ class ConsumerGroupItemsMarkupTest extends AbstractAuthenticatedTest
         self::assertSame([], $pendientes);
     }
 
+    public function testUnFormularioSinElCampoDelIncrementoDelPedidoNoLoQuita(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_GRUPO_CONSUMO, true);
+        [$round, $naranjas, $aceite] = $this->prepararBorrador();
+        $payload = $this->payload($client, $round, $naranjas, $aceite);
+        unset($payload['round_markup_type'], $payload['round_markup_value']);
+
+        $client->request('POST', '/gestion/consumer-group/' . $round->getId() . '/items', $payload);
+
+        self::assertSame(MarkupType::Percent, $this->recargar($round)->getMarkupType(), 'Campo ausente = sin cambios');
+        self::assertSame('5.00', $this->recargar($round)->getMarkupValue());
+    }
+
+    public function testUnPrecioDeProductorAbsurdoNoRompeElGuardado(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_GRUPO_CONSUMO, true);
+        [$round, $naranjas, $aceite] = $this->prepararBorrador();
+        $payload = $this->payload($client, $round, $naranjas, $aceite);
+        $payload['producer_price'][$naranjas->getId()] = '1e9';
+        $payload['markup_value'][$aceite->getId()] = [['x']];
+
+        $client->request('POST', '/gestion/consumer-group/' . $round->getId() . '/items', $payload);
+
+        self::assertResponseRedirects('/gestion/consumer-group/' . $round->getId() . '/items');
+        [$precios] = $this->estado($round);
+        self::assertSame('2.10', $precios['Naranjas'], 'No se guarda nada');
+    }
+
     /**
      * @param array<string, mixed> $extra
      * @return array<string, mixed>

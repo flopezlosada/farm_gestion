@@ -45,6 +45,7 @@ class RoundPricing
      * Todo o nada: si algún precio está bloqueado, no se cambia nada.
      *
      * @throws PriceLocked
+     * @throws \InvalidArgumentException si el precio resultante no es válido
      */
     public function changeRoundMarkup(ConsumerGroupRound $round, ?MarkupType $type, ?string $value): void
     {
@@ -61,9 +62,10 @@ class RoundPricing
                 }
                 $this->assertPriceChangeAllowed($item, $this->priceFor($item));
             }
-        } catch (PriceLocked $locked) {
+        } catch (\Throwable $failed) {
+            // Todo o nada: el pedido no puede quedarse con un incremento a medio aplicar.
             $round->setMarkup(...$previous);
-            throw $locked;
+            throw $failed;
         }
 
         foreach ($round->getItems() as $item) {
@@ -84,10 +86,15 @@ class RoundPricing
      */
     public function setBreakdown(ConsumerGroupRoundItem $item, string $producerPrice, ?MarkupType $type, ?string $value, bool $reviewed): void
     {
-        $item->setProducerPrice(Markup::fromCents(Markup::toCents($producerPrice)));
+        $producerCents = Markup::toCents($producerPrice);
+        if ($producerCents <= 0) {
+            throw new \InvalidArgumentException(sprintf('Pon el precio del productor de «%s»: no puede quedarse a 0.', $item->getName()));
+        }
+        $item->setProducerPrice(Markup::fromCents($producerCents));
         $item->setOwnMarkup($type, $value);
         $this->reprice($item);
-        if ($reviewed) {
+        // Sin incremento propio ya no hay nada que revisar: hereda el del pedido.
+        if ($reviewed || $type === null) {
             $item->setMarkupPendingReview(false);
         }
     }

@@ -14,6 +14,9 @@ use App\Entity\MarkupType;
  */
 final class Markup
 {
+    /** Mayor importe que cabe en las columnas decimal(8,2), en céntimos. */
+    public const MAX_CENTS = 99999999;
+
     private function __construct(
         public readonly MarkupType $type,
         public readonly string $value,
@@ -31,8 +34,8 @@ final class Markup
         if ($type === null || $value === null) {
             return null;
         }
-        if ((float) $value < 0) {
-            throw new \InvalidArgumentException('El incremento no puede ser negativo.');
+        if ((float) $value < 0 || (float) $value > self::MAX_CENTS / 100) {
+            throw new \InvalidArgumentException('El incremento tiene que estar entre 0 y 999.999,99.');
         }
 
         return new self($type, number_format((float) $value, 2, '.', ''));
@@ -54,7 +57,12 @@ final class Markup
             MarkupType::Percent => intdiv($producerCents * self::toCents($this->value) * 2 + 10000, 20000),
         };
 
-        return self::fromCents($producerCents + $markupCents);
+        $finalCents = $producerCents + $markupCents;
+        if ($finalCents > self::MAX_CENTS) {
+            throw new \InvalidArgumentException('El precio final no puede pasar de 999.999,99 €.');
+        }
+
+        return self::fromCents($finalCents);
     }
 
     /**

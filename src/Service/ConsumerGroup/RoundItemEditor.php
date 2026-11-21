@@ -35,9 +35,10 @@ class RoundItemEditor
      * primera vez.
      *
      * Con un productor gestionado por la comisión se parte además de su último precio
-     * de productor, si lo hay, y el precio final se recalcula con el incremento del
-     * pedido. Sin él, el precio final de la última vez queda como arranque y la
-     * comisión tiene que poner el precio del productor al revisar.
+     * de productor, si lo hay. El pedido nace SIN incremento (se fija en la pantalla de
+     * productos), así que el precio final arranca igual al del productor; sin precio de
+     * productor previo, queda el precio final de la última vez y la comisión tiene que
+     * poner el del productor al revisar.
      */
     public function seedFromCatalog(ConsumerGroupRound $round): void
     {

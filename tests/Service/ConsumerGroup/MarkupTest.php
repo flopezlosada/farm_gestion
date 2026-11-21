@@ -47,4 +47,18 @@ class MarkupTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         Markup::fromStored(MarkupType::Amount, '-0.10');
     }
+
+    public function testUnValorQueNoCabeEnLaColumnaSeRechaza(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Markup::fromStored(MarkupType::Percent, '1000000');
+    }
+
+    public function testUnPrecioFinalQueNoCabeSeRechaza(): void
+    {
+        $markup = Markup::fromStored(MarkupType::Percent, '999999.99');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $markup->applyTo('50.00');
+    }
 }
