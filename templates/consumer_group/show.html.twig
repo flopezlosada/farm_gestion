@@ -105,6 +105,9 @@
                 {% if round.canManageOrders %}
                     <a href="{{ path('consumer_group_edit', { id: round.id }) }}" class="prt-btn prt-btn--primary"><i class="fa fa-pencil"></i> Editar</a>
                     <a href="{{ path('consumer_group_items', { id: round.id }) }}" class="prt-btn"><i class="fa fa-list"></i> Productos del pedido</a>
+                {% elseif round.producer and not round.producer.selfManaged and round.items is not empty %}
+                    {# Ya no se tocan productos ni precio final, pero el desglose de un pedido anterior se puede rellenar. #}
+                    <a href="{{ path('consumer_group_items', { id: round.id }) }}" class="prt-btn"><i class="fa fa-list"></i> Desglosar precios</a>
                 {% endif %}
                 {% if can_open %}
                     <a href="{{ path('consumer_group_announce', { id: round.id }) }}" class="prt-btn prt-btn--primary"><i class="fa fa-bullhorn"></i> Abrir y avisar a las socias</a>

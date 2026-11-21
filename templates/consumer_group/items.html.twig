@@ -82,7 +82,7 @@
             <form method="post" action="{{ path('consumer_group_items', { id: round.id }) }}">
                 <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_items_' ~ round.id) }}">
 
-                {% if managed %}
+                {% if managed and not breakdown_only %}
                     <div class="prt-card">
                         <div class="prt-card__head">
                             <h2 class="prt-card__title"><span class="accent"></span>Incremento de gestión del pedido</h2>
@@ -114,6 +114,11 @@
                         <span class="prt-card__head-meta">{{ catalog|length }} en el catálogo</span>
                     </div>
                     <div class="prt-card__body">
+                        {% if breakdown_only|default(false) %}
+                            <div class="csa-alert csa-alert--warning">
+                                Este pedido ya no admite cambios de productos ni de precio final. Solo puedes poner el precio del productor: el incremento se calcula por diferencia y el precio final no cambia.
+                            </div>
+                        {% endif %}
                         <p class="csa-muted" style="margin-top: 0;">
                             Marca los productos que entran en este pedido y ajusta su precio. El precio es de este pedido: se ha rellenado con el de la última vez que lo llevó este productor.
                         </p>
@@ -137,7 +142,7 @@
                                         {% set is_locked = locked_product_ids[product.id]|default(false) %}
                                         <tr class="{{ is_locked ? 'cg-row-locked' : '' }}">
                                             <td class="tight">
-                                                <input type="checkbox" name="include[{{ product.id }}]" value="1" {{ included[product.id]|default(false) ? 'checked' : '' }}>
+                                                <input type="checkbox" name="include[{{ product.id }}]" value="1" {{ included[product.id]|default(false) ? 'checked' : '' }} {{ breakdown_only|default(false) ? 'disabled' : '' }}>
                                             </td>
                                             <td>
                                                 {{ product.name }} <span class="csa-muted">/ {{ product.unit }}</span>
@@ -145,19 +150,26 @@
                                             </td>
                                             {% if managed %}
                                                 {% set item = item_by_product[product.id]|default(null) %}
-                                                {% set unbroken = item and item.producerPrice is null and (not round.draft or is_locked) %}
+                                                {# Precio final fijo: con socias apuntadas, o sin desglosar en un pedido ya abierto. #}
+                                                {% set unbroken = item and (is_locked or (item.producerPrice is null and not round.draft)) %}
                                                 {% set pending = item and item.markupPendingReview and not is_locked %}
                                                 {% if unbroken %}
+                                                    {% set bd_producer = pricing_form.producer_price[product.id]|default(item.producerPrice) %}
                                                     <td>
                                                         <div class="cg-cell-price">
-                                                            <input type="number" min="0" step="0.01" inputmode="decimal"
-                                                                   name="producer_price[{{ product.id }}]" value="" class="csa-input"
-                                                                   placeholder="sin desglosar" title="Opcional: el precio del productor. El precio final no cambia; el incremento se calcula por diferencia.">
+                                                            <input type="number" min="0" step="0.01" inputmode="decimal" class="csa-input cg-bd-producer"
+                                                                   name="producer_price[{{ product.id }}]" value="{{ bd_producer }}"
+                                                                   data-final="{{ current_price[product.id]|default('0') }}"
+                                                                   placeholder="sin desglosar" title="El precio final no cambia: el incremento se calcula por diferencia.">
                                                             <span class="csa-muted">€/{{ product.unit }}</span>
                                                         </div>
                                                     </td>
-                                                    <td class="tight csa-muted">Sin desglosar</td>
-                                                    <td class="tight"><strong>{{ current_price[product.id]|default('0')|number_format(2, ',', '.') }} €</strong></td>
+                                                    <td class="csa-muted cg-bd-markup">
+                                                        {{ bd_producer is not null and bd_producer != '' ? ((current_price[product.id] - bd_producer)|number_format(2, ',', '.') ~ ' €') : 'Sin desglosar' }}
+                                                    </td>
+                                                    <td class="tight"><strong>{{ current_price[product.id]|default('0')|number_format(2, ',', '.') }} €</strong>
+                                                        <i class="fa fa-lock csa-muted" title="El precio final de este producto no se puede cambiar: solo se desglosa."></i>
+                                                    </td>
                                                 {% else %}
                                                     <td>
                                                         <div class="cg-cell-price">
@@ -276,7 +288,19 @@
                 if (type === 'percent') { return Math.floor((producer * cents(value) * 2 + 10000) / 20000); }
                 return 0;
             };
+            var money = function (c) { return (c / 100).toFixed(2).replace('.', ','); };
+            var refreshBreakdown = function () {
+                document.querySelectorAll('.cg-bd-producer').forEach(function (input) {
+                    var out = input.closest('tr').querySelector('.cg-bd-markup');
+                    var producer = cents(input.value);
+                    var final = cents(input.dataset.final);
+                    if (input.value === '' || producer <= 0) { out.textContent = 'Sin desglosar'; }
+                    else if (producer > final) { out.textContent = 'No puede superar el precio final'; }
+                    else { out.textContent = money(final - producer) + ' €'; }
+                });
+            };
             var refresh = function () {
+                refreshBreakdown();
                 document.querySelectorAll('.cg-markup-type').forEach(function (select) {
                     var value = select.closest('td').querySelector('.cg-markup-value');
                     value.hidden = select.value === '';

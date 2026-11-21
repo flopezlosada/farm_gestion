@@ -64,6 +64,30 @@ class ConsumerGroupItemsMarkupTest extends AbstractAuthenticatedTest
         self::assertSame([], $pendientes);
     }
 
+    public function testUnPedidoEntregadoSinDesglosarSePuedeDesglosarSinCambiarElPrecioFinal(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_GRUPO_CONSUMO, true);
+        [$round, $naranjas] = $this->prepararEntregadoSinDesglosar();
+
+        $crawler = $client->request('GET', '/gestion/consumer-group/' . $round->getId() . '/items');
+        self::assertResponseIsSuccessful();
+        $client->request('POST', '/gestion/consumer-group/' . $round->getId() . '/items', [
+            '_token'         => $crawler->filter('input[name="_token"]')->attr('value'),
+            // Un intento de quitar el producto y de cambiar su precio: no cuenta, el pedido está entregado.
+            'include'        => [],
+            'price'          => [$naranjas->getId() => '99.00'],
+            'producer_price' => [$naranjas->getId() => '20.00'],
+        ]);
+
+        self::assertResponseRedirects('/gestion/consumer-group/' . $round->getId());
+        $items = $this->recargar($round)->getItems();
+        self::assertCount(1, $items, 'No se quita nada');
+        self::assertSame('26.00', $items->first()->getPrice(), 'El precio final no cambia');
+        self::assertSame('20.00', $items->first()->getProducerPrice());
+        self::assertSame('6.00', $items->first()->getMarkupValue(), 'El incremento es la diferencia');
+    }
+
     public function testUnFormularioSinElCampoDelIncrementoDelPedidoNoLoQuita(): void
     {
         $client = $this->createAuthenticatedClient();
@@ -143,6 +167,31 @@ class ConsumerGroupItemsMarkupTest extends AbstractAuthenticatedTest
         $em->flush();
 
         return [$round, $naranjas, $aceite];
+    }
+
+    /**
+     * Pedido entregado de un productor gestionado, anterior al desglose: precio final
+     * 26,00 sin precio de productor.
+     *
+     * @return array{0: ConsumerGroupRound, 1: ConsumerGroupProduct}
+     */
+    private function prepararEntregadoSinDesglosar(): array
+    {
+        $em = self::getContainer()->get('doctrine')->getManager();
+        $producer = (new Producer())->setName('Huerta Test ' . uniqid());
+        $naranjas = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit($this->unidadGlobal('kg'));
+        $producer->addProduct($naranjas);
+        $round = new ConsumerGroupRound();
+        $round->setTitle('Pedido entregado')->setProducer($producer)->setOrdersCloseAt(new \DateTime('-10 days'))->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_NONE);
+        $round->setStatus(ConsumerGroupRound::STATUS_DELIVERED);
+        $item = new ConsumerGroupRoundItem($round, $naranjas, '26.00');
+        $round->addItem($item);
+        foreach ([$producer, $naranjas, $round, $item] as $entity) {
+            $em->persist($entity);
+        }
+        $em->flush();
+
+        return [$round, $naranjas];
     }
 
     private function recargar(ConsumerGroupRound $round): ConsumerGroupRound

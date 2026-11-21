@@ -243,16 +243,21 @@ class ConsumerGroupController extends AbstractController
         ValidatorInterface $validator,
         RoundPricing $pricing,
     ): Response {
-        if (!$round->canManageOrders()) {
+        // Confirmado, entregado o cancelado: los productos y precios ya no se tocan, pero
+        // un pedido anterior al desglose se puede desglosar (el precio final no cambia).
+        $breakdownOnly = !$round->canManageOrders();
+        $managed = !($round->getProducer()?->isSelfManaged() ?? false);
+        if ($breakdownOnly && (!$managed || $round->getItems()->isEmpty())) {
             $this->addFlash('warning', 'Este pedido ya no admite cambios en sus productos.');
 
             return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
         }
 
         // Catálogo a mostrar: productos activos del productor + los que ya están en la
-        // pedido (aunque se hayan desactivado, para no perderlos sin querer).
+        // pedido (aunque se hayan desactivado, para no perderlos sin querer). Solo los
+        // del pedido si ya no se pueden añadir ni quitar.
         $catalog = [];
-        foreach ($round->getProducer()?->getActiveProducts() ?? [] as $product) {
+        foreach ($breakdownOnly ? [] : ($round->getProducer()?->getActiveProducts() ?? []) as $product) {
             $catalog[$product->getId()] = $product;
         }
         $existingItemByProductId = [];
@@ -268,14 +273,10 @@ class ConsumerGroupController extends AbstractController
         // apuntarse (y, tras confirmar, lo que ya ha pagado).
         $lockedProductIds = [];
         foreach ($existingItemByProductId as $productId => $item) {
-            if ($orderLines->findWithQuantityForItem($item) !== []) {
+            if ($breakdownOnly || $orderLines->findWithQuantityForItem($item) !== []) {
                 $lockedProductIds[$productId] = true;
             }
         }
-
-        // Productor gestionado por la comisión: su precio final es precio del productor
-        // + incremento de gestión. El autogestionado pone su precio final sin incremento.
-        $managed = !($round->getProducer()?->isSelfManaged() ?? false);
 
         if ($request->isMethod('POST')) {
             if (!$this->isCsrfTokenValid('consumer_group_items_'.$round->getId(), (string) $request->request->get('_token'))) {
@@ -285,6 +286,10 @@ class ConsumerGroupController extends AbstractController
             }
 
             $included = $request->request->all('include');
+            if ($breakdownOnly) {
+                // Ni se añade ni se quita nada: lo enviado no manda, valen los productos del pedido.
+                $included = array_fill_keys(array_keys($existingItemByProductId), '1');
+            }
             $prices = $request->request->all('price');
             $form = $this->readPricingForm($request);
 
@@ -375,6 +380,7 @@ class ConsumerGroupController extends AbstractController
                     'removals_with_orders' => $removalsWithOrders,
                     'locked_product_ids'   => $lockedProductIds,
                     'managed'              => $managed,
+                    'breakdown_only'       => $breakdownOnly,
                     'pricing_form'         => $form,
                     'item_by_product'      => $existingItemByProductId,
                 ]);
@@ -405,7 +411,7 @@ class ConsumerGroupController extends AbstractController
             try {
                 // Un formulario sin el campo del incremento del pedido (petición recortada,
                 // página vieja) significa «sin cambios», no «quita el incremento».
-                if ($managed && $request->request->has('round_markup_type')) {
+                if ($managed && !$breakdownOnly && $request->request->has('round_markup_type')) {
                     $pricing->changeRoundMarkup($round, $form['round_type'], $form['round_value']);
                 }
                 $itemEditor->apply($round, $desired);
@@ -477,6 +483,7 @@ class ConsumerGroupController extends AbstractController
             'included'           => $included,
             'locked_product_ids' => $lockedProductIds,
             'managed'            => $managed,
+            'breakdown_only'     => $breakdownOnly,
             'pricing_form'       => $this->pricingFormFromItems($round),
             'item_by_product'    => $existingItemByProductId,
         ]);
@@ -535,9 +542,9 @@ class ConsumerGroupController extends AbstractController
     /**
      * Completa la entrada de un producto de un productor gestionado con el desglose
      * enviado, según {@see RoundItemEditor::apply()}:
-     *   - producto sin desglosar con el pedido ya abierto (o con socias apuntadas): el
-     *     precio final no cambia y solo se desglosa si llega el precio del productor;
-     *   - producto con socias apuntadas ya desglosado: no se toca;
+     *   - producto con socias apuntadas, o sin desglosar con el pedido ya abierto: el
+     *     precio final NO cambia; solo se puede poner o corregir el precio del productor
+     *     y el incremento sale por diferencia;
      *   - resto: el dato es el precio del productor y el incremento propio.
      *
      * @param array<string, mixed> $entry
@@ -546,13 +553,10 @@ class ConsumerGroupController extends AbstractController
      */
     private function managedEntry(array $entry, ?ConsumerGroupRoundItem $item, array $form, int $id, bool $draft, bool $locked): array
     {
-        if ($item !== null && $item->getProducerPrice() === null && (!$draft || $locked)) {
+        if ($item !== null && ($locked || ($item->getProducerPrice() === null && !$draft))) {
             $producerPrice = $form['producer_price'][$id] ?? '0';
 
             return $entry + ['mode' => 'breakdown', 'producerPrice' => (float) $producerPrice > 0 ? $producerPrice : null];
-        }
-        if ($locked) {
-            return $entry;
         }
 
         $type = $form['markup_type'][$id] ?? null;

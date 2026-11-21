@@ -261,4 +261,17 @@ class RoundPricingTest extends TestCase
         self::assertFalse($propio->isMarkupPendingReview(), 'Hereda el del pedido: no queda nada propio que revisar');
         self::assertSame('8.80', $propio->getPrice());
     }
+
+    public function testSePuedeCorregirUnDesgloseYaHechoSinCambiarElPrecioFinal(): void
+    {
+        $item = $this->item('Naranjas', '26.00', null);
+        $item->getLines()->add(new ConsumerGroupOrderLine(null, $item, '2'));
+        $this->pricing->breakDown($item, '25.00');
+
+        $this->pricing->breakDown($item, '20.00');
+
+        self::assertSame('26.00', $item->getPrice(), 'Con socias apuntadas el final no se toca');
+        self::assertSame('20.00', $item->getProducerPrice());
+        self::assertSame('6.00', $item->getMarkupValue(), 'El incremento es la diferencia');
+    }
 }
