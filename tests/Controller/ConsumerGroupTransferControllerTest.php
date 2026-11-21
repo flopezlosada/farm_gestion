@@ -16,6 +16,7 @@ use App\Entity\Partner;
 use App\Entity\Producer;
 use App\Entity\Setting;
 use App\Service\Accounting\Norma43\Norma43Movement;
+use App\Service\Accounting\Remittance\PartnerNameMatcher;
 use App\Service\AppSettings;
 use App\Service\ConsumerGroup\ConsumerGroupTransfers;
 use Doctrine\ORM\EntityManagerInterface;
@@ -101,6 +102,12 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
         $this->assertSame('Grupo de consumo', $this->em()->find(BankStatementLine::class, $sure->getId())->getEntry()->getCategory()?->getName());
     }
 
+    /** El ordenante que escribiría el banco si pagara la socia de ese pedido. */
+    private function payerOf(ConsumerGroupOrder $order): string
+    {
+        return strtoupper($order->getPartner()->getName() . ' ' . $order->getPartner()->getSurname());
+    }
+
     /**
      * Asigna el movimiento al pedido elegido en el buscador «otro pedido». El buscador
      * rellena su campo oculto con JavaScript, que el cliente de pruebas no ejecuta: se
@@ -121,8 +128,9 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
     {
         $client = $this->createAuthenticatedClient();
         $this->enable(true);
-        [, $pedro] = $this->roundWithOrders();
-        $line = $this->transfer(1500, 'TOMASA GIL ROMERO');
+        [$lucia, $pedro] = $this->roundWithOrders();
+        $payer = $this->payerOf($lucia);
+        $line = $this->transfer(1500, $payer);
 
         $this->assignByOther($client, $line, $pedro);
         $client->followRedirect();
@@ -176,7 +184,7 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
         $client = $this->createAuthenticatedClient();
         $this->enable(true);
         $this->roundWithOrders();
-        $line = $this->transfer(3000, 'DONANTE GENEROSA SOLIDARIA');
+        $line = $this->transfer(1000, 'DONANTE GENEROSA SOLIDARIA');
 
         $crawler = $client->request('GET', '/gestion/accounting/consumer-group-transfers');
         $client->submit($crawler->filter(sprintf('form[action$="/lines/%d/dismiss"]', $line->getId()))->form());
@@ -215,21 +223,26 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
     }
 
     /**
-     * Un cobro que no casa con ningún pedido y es mayor que todo lo que hay por pagar (a
-     * una empresa, una subvención) no es el pago de ninguno: no se pide elegir.
+     * Sólo se pide elegir lo que puede ser el pago de un pedido: debe justo uno o lo ordena
+     * una socia. Un ingreso de una empresa, sea cual sea su importe, no tiene que ver con
+     * el grupo de consumo.
      */
-    public function testUnImporteQueNoCabeEnLoQueSeDebeNoSePideElegir(): void
+    public function testSoloSePideElegirLoQuePuedeSerUnPagoDelGrupo(): void
     {
         $client = $this->createAuthenticatedClient();
         $this->enable(true);
-        $this->roundWithOrders();
-        $empresa = $this->transfer(320000, 'ECOLISE');
-        $pequeno = $this->transfer(3000, 'DONANTE GENEROSA SOLIDARIA');
+        [$lucia] = $this->roundWithOrders();
+        $grande = $this->transfer(320000, 'ECOLISE');
+        $pequeno = $this->transfer(2000, 'ECOLISE');
+        $exacto = $this->transfer(1000, 'DONANTE GENEROSA SOLIDARIA');
+        $socia = $this->transfer(3000, $this->payerOf($lucia));
 
         $client->request('GET', '/gestion/accounting/consumer-group-transfers');
 
-        $this->assertSelectorNotExists(sprintf('#movimiento-%d', $empresa->getId()));
-        $this->assertSelectorExists(sprintf('#movimiento-%d', $pequeno->getId()));
+        $this->assertSelectorNotExists(sprintf('#movimiento-%d', $grande->getId()));
+        $this->assertSelectorNotExists(sprintf('#movimiento-%d', $pequeno->getId()), 'Una empresa con un importe pequeño tampoco.');
+        $this->assertSelectorExists(sprintf('#movimiento-%d', $exacto->getId()), 'Debe justo un pedido.');
+        $this->assertSelectorExists(sprintf('#movimiento-%d', $socia->getId()), 'La ordena una socia, aunque el importe no cuadre.');
     }
 
     /** Un pedido ya pagado no se puede volver a pagar con otra transferencia. */
@@ -238,7 +251,7 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
         $client = $this->createAuthenticatedClient();
         $this->enable(true);
         [$lucia] = $this->roundWithOrders();
-        $line = $this->transfer(1500, 'TOMASA GIL ROMERO');
+        $line = $this->transfer(1500, $this->payerOf($lucia));
         $crawler = $client->request('GET', '/gestion/accounting/consumer-group-transfers');
         $token = $crawler->filter(sprintf('#asignar-%d input[name="_token"]', $line->getId()))->attr('value');
 
@@ -296,8 +309,8 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
         $round->setConfirmed(true);
         $item = new ConsumerGroupRoundItem($round, $naranjas, '2.50');
         $round->addItem($item);
-        $lucia = (new Partner())->setname('LUCIA')->setSurname('ORTEGA PEREZ ' . strtoupper(substr(uniqid(), -4)));
-        $pedro = (new Partner())->setname('PEDRO')->setSurname('MARTIN GIL ' . strtoupper(substr(uniqid(), -4)));
+        $lucia = (new Partner())->setname('LUCIA')->setSurname('ORTEGA PEREZ ' . strtoupper(substr(uniqid(), -4)))->setStatus(Partner::STATUS_ACTIVO)->setMember(true);
+        $pedro = (new Partner())->setname('PEDRO')->setSurname('MARTIN GIL ' . strtoupper(substr(uniqid(), -4)))->setStatus(Partner::STATUS_ACTIVO)->setMember(true);
         $orders = [];
         foreach ([$lucia, $pedro] as $partner) {
             $order = new ConsumerGroupOrder($round, $partner);

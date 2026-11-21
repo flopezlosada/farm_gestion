@@ -15,6 +15,7 @@ use App\Entity\User;
 use App\Repository\BankPayerAliasRepository;
 use App\Repository\ConsumerGroupOrderRepository;
 use App\Repository\ConsumerGroupTransferRepository;
+use App\Repository\PartnerRepository;
 use App\Service\Accounting\Closing\ClosedPeriods;
 use App\Service\Accounting\Norma43\BankLineEntryDraft;
 use App\Service\Accounting\Norma43\RemittanceCreditBooker;
@@ -52,6 +53,7 @@ class ConsumerGroupTransfers
         private readonly ConsumerGroupTransferRepository $transfers,
         private readonly ConsumerGroupOrderRepository $orders,
         private readonly BankPayerAliasRepository $aliases,
+        private readonly PartnerRepository $partners,
         private readonly RemittanceCreditBooker $creditBooker,
         private readonly ClosedPeriods $closed,
         private readonly AppSettings $settings,
@@ -101,10 +103,10 @@ class ConsumerGroupTransfers
     /**
      * Lo que falta por elegir a mano, con los pedidos que pueden ser, los más probables
      * primero, y todos los pedidos por pagar para elegir otro. Sólo los movimientos que
-     * podrían ser el pago de algo: con algún pedido parecido, o de un importe que cabe
-     * en lo que hay por pagar.
+     * pueden ser el pago de un pedido: deben justo uno, o los ordena una socia
+     * ({@see isFromMember()}).
      *
-     * @return array{lines: list<array{line: BankStatementLine, payer: string|null, suggestions: list<array{order: ConsumerGroupOrder, sure: bool, exact: bool, named: bool, reasons: list<string>}>, groups: list<array{exact: bool, round: ConsumerGroupRound, items: list<array{order: ConsumerGroupOrder, sure: bool, exact: bool, named: bool, reasons: list<string>}>}>, hidden: int}>, payable: list<ConsumerGroupOrder>}
+     * @return array{lines: list<array{line: BankStatementLine, payer: string|null, relevant: bool, suggestions: list<array{order: ConsumerGroupOrder, sure: bool, exact: bool, named: bool, reasons: list<string>}>, groups: list<array{exact: bool, round: ConsumerGroupRound, items: list<array{order: ConsumerGroupOrder, sure: bool, exact: bool, named: bool, reasons: list<string>}>}>, hidden: int}>, payable: list<ConsumerGroupOrder>}
      */
     public function pending(): array
     {
@@ -112,8 +114,11 @@ class ConsumerGroupTransfers
         $payable = $lines === [] ? [] : $this->orders->findPayableByTransfer();
         $aliases = $this->aliasesFor($lines);
 
-        $rows = array_map(static function (BankStatementLine $line) use ($payable, $aliases): array {
-            $suggestions = self::suggestions($line, $payable, self::aliasFamily($line, $aliases));
+        $members = $lines === [] ? [] : $this->partners->findMembers();
+
+        $rows = array_map(static function (BankStatementLine $line) use ($payable, $aliases, $members): array {
+            $aliasFamily = self::aliasFamily($line, $aliases);
+            $suggestions = self::suggestions($line, $payable, $aliasFamily);
 
             return [
                 'line' => $line,
@@ -121,17 +126,12 @@ class ConsumerGroupTransfers
                 'suggestions' => $suggestions,
                 'groups' => self::groupSuggestions(\array_slice($suggestions, 0, self::MAX_SHOWN)),
                 'hidden' => max(0, \count($suggestions) - self::MAX_SHOWN),
+                'relevant' => $suggestions !== [] || self::isFromMember($line, $members, $aliasFamily),
             ];
         }, $lines);
-        // Lo que ni casa con un pedido ni cabe en lo que se debe (un cobro a una empresa,
-        // una subvención) no es el pago de ninguno: no se pide elegir.
-        $owed = array_sum(array_map(static fn (ConsumerGroupOrder $o): int => (int) round($o->getTotal() * 100), $payable));
 
         return [
-            'lines' => array_values(array_filter(
-                $rows,
-                static fn (array $row): bool => $row['suggestions'] !== [] || $row['line']->getAmountCents() <= $owed,
-            )),
+            'lines' => array_values(array_filter($rows, static fn (array $row): bool => $row['relevant'])),
             'payable' => $payable,
         ];
     }
@@ -271,6 +271,25 @@ class ConsumerGroupTransfers
         usort($found, static fn (array $a, array $b): int => $b['rank'] <=> $a['rank']);
 
         return array_map(static fn (array $s): array => ['order' => $s['order'], 'sure' => $s['sure'], 'exact' => $s['exact'], 'named' => $s['named'], 'reasons' => $s['reasons']], $found);
+    }
+
+    /**
+     * Si quien ordena la transferencia es una socia: la familia ya pagó antes desde ese
+     * ordenante, o su nombre es el de alguna ficha de socia. Es lo que separa un pago al
+     * grupo de consumo de un ingreso que no tiene que ver (una empresa, una subvención):
+     * un movimiento sólo se pide elegir si debe justo un pedido o lo paga una socia. Puro.
+     *
+     * @param list<Partner> $members     las socias
+     * @param Partner|null  $aliasFamily la familia que ya pagó antes desde ese ordenante
+     */
+    public static function isFromMember(BankStatementLine $line, array $members, ?Partner $aliasFamily): bool
+    {
+        $payer = $line->getTransferPayer();
+
+        return $payer !== null && ($aliasFamily !== null || array_filter(
+            $members,
+            static fn (Partner $p): bool => PartnerNameMatcher::matchesBankPayer($payer, $p),
+        ) !== []);
     }
 
     /**
