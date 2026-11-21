@@ -161,7 +161,8 @@ class ConsumerGroupTransfers
      * @param non-empty-list<ConsumerGroupOrder> $orders los pedidos que paga, de una o varias familias
      * @param User|null                          $by     quien lo decide
      *
-     * @throws \InvalidArgumentException si ya está asignado o algún pedido no se puede pagar
+     * @throws \InvalidArgumentException si ya está asignado, algún pedido no se puede pagar o
+     *                                   los pedidos suman más de lo que trae la transferencia
      */
     public function assign(BankStatementLine $line, array $orders, ?User $by): ConsumerGroupTransfer
     {
@@ -171,6 +172,14 @@ class ConsumerGroupTransfers
         $entry = $line->getEntry();
         if ($entry !== null && $entry->getCategory() !== $this->category()) {
             throw new \InvalidArgumentException('Este movimiento ya está anotado en otra partida: no es el pago de un pedido.');
+        }
+        $due = array_sum(array_map(static fn (ConsumerGroupOrder $o): int => (int) round($o->getTotal() * 100), $orders));
+        if ($due > $line->getAmountCents()) {
+            throw new \InvalidArgumentException(sprintf(
+                'Los pedidos suman %s € y la transferencia sólo trae %s €: quita alguno.',
+                number_format($due / 100, 2, ',', '.'),
+                number_format($line->getAmountCents() / 100, 2, ',', '.'),
+            ));
         }
         $transfer = $this->transfers->findOneBy(['line' => $line]) ?? new ConsumerGroupTransfer($line);
         if ($transfer->getOrders() !== []) {
