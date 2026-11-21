@@ -802,9 +802,10 @@ class ConsumerGroupController extends AbstractController
      * remesa del grupo de consumo ({@see ConsumerGroupPaymentMethod::manual()}). Y un
      * pedido que va en un recibo ya enviado no se toca a mano: su pago lo lleva el banco
      * ({@see \App\Service\ConsumerGroup\ConsumerGroupReceiptSync}), y si se devuelve
-     * se cierra desde la devolución.
+     * se cierra desde la devolución. Es de contabilidad, no de la comisión del grupo.
      */
     #[Route('/orders/{id}/payment', name: 'consumer_group_order_payment', methods: ['POST'], requirements: ['id' => '\d+'])]
+    #[IsGranted('ROLE_GESTION_CONTABILIDAD_EDIT')]
     public function payment(Request $request, ConsumerGroupOrder $order, ConsumerGroupEventRecorder $recorder, EntityManagerInterface $em): Response
     {
         $roundId = $order->getRound()->getId();
