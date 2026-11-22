@@ -171,11 +171,11 @@
                     {% set first_item = aggregate.byItem|first %}
                     {% set mixed_units = aggregate.byItem|filter(l => (l.item.unit ~ '') != (first_item.item.unit ~ ''))|length > 0 %}
                     {% if aggregate.byItem|length == 1 %}
-                        {% set qty_title = 'Cantidad de ' ~ first_item.item.name ~ ', en ' ~ first_item.item.unit %}
+                        {% set qty_title = 'Nº de «' ~ first_item.item.unit ~ '» de ' ~ first_item.item.name %}
                     {% elseif not mixed_units %}
-                        {% set qty_title = 'Cantidad, en ' ~ first_item.item.unit %}
+                        {% set qty_title = 'Nº de «' ~ first_item.item.unit ~ '»' %}
                     {% else %}
-                        {% set qty_title = 'Cantidad, en la unidad de cada producto' %}
+                        {% set qty_title = 'Nº de unidades de cada producto' %}
                     {% endif %}
                     <div class="prl prl-table-wrap">
                         <table class="prl-table">
