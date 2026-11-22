@@ -14,7 +14,18 @@
                 {% import '_macros/csa.html.twig' as csa %}
                 <div class="csa-form-grid">
                     {{ csa.field(form.title, 'Título', { full: true }) }}
-                    {{ csa.field(form.producers, 'Productores', { full: true }) }}
+                    {# Con decenas de productores, una casilla por cada uno es inmanejable:
+                     # csa-check-filter deja a la vista solo los elegidos y un buscador. #}
+                    <div class="csa-field--full"
+                         data-csa-check-filter
+                         data-csa-check-filter-threshold="6"
+                         data-csa-check-filter-placeholder="Escribe el nombre de un productor…"
+                         data-csa-check-filter-label="Buscar un productor por su nombre"
+                         data-csa-check-filter-none-match="Ningún productor coincide con"
+                         data-csa-check-filter-hint="Busca un productor para añadirlo, o pulsa en uno para quitarlo."
+                         data-csa-check-filter-empty="Todavía no has elegido ningún productor.">
+                        {{ csa.field(form.producers, 'Productores', { full: true }) }}
+                    </div>
                     {{ csa.field(form.ordersCloseAt, 'Cierre de apuntes') }}
                     {{ csa.field(form.deliveryDate, 'Fecha de entrega') }}
                     {% include 'consumer_group/_minimum_fields.html.twig' with { form: form } only %}

@@ -15,6 +15,9 @@
  * cambiar de control: lo marcado sigue viéndose sin abrir nada.
  *
  * Activación opt-in: sólo dentro de un contenedor con [data-csa-check-filter].
+ * Los textos son los de «quién coordina un área»; otra lista los cambia con
+ * data-csa-check-filter-{placeholder,label,none-match,hint,empty} en el contenedor
+ * (ver TEXTOS). El umbral también: data-csa-check-filter-threshold.
  *
  * LO MARCADO NO SE ESCONDE NUNCA, ni en reposo ni cuando no coincide con lo que
  * se busca. Si desapareciera al teclear, la lista diría "no coordina nadie"
@@ -34,6 +37,15 @@ var UMBRAL_BUSCADOR = 12;
    devuelve casi la lista completa y volvemos al muro que esto viene a quitar.
    Con dos quedan un puñado, que es lo que se lee de un vistazo. */
 var MIN_CARACTERES = 2;
+
+/* Textos por defecto: los de la lista de coordinadoras de un área. */
+var TEXTOS = {
+    placeholder: 'Escribe un nombre para buscar…',
+    label: 'Buscar una persona por su nombre',
+    noneMatch: 'Nadie coincide con',
+    hint: 'Busca a alguien para añadirlo, o pulsa en un nombre para quitarlo.',
+    empty: 'Todavía no coordina nadie esta área.'
+};
 
 /* Clase de ocultación propia en lugar del atributo `hidden`: la pill es el
    <label>, y su `display: inline-flex` gana por especificidad al
@@ -65,7 +77,9 @@ function enhance(container) {
         container.querySelectorAll('input[type="checkbox"][name$="[]"]')
     );
 
-    if (checkboxes.length <= UMBRAL_BUSCADOR) {
+    var threshold = parseInt(container.dataset.csaCheckFilterThreshold, 10);
+
+    if (checkboxes.length <= (isNaN(threshold) ? UMBRAL_BUSCADOR : threshold)) {
         return;
     }
 
@@ -86,11 +100,19 @@ function enhance(container) {
     // opciones sin tener que suponer cuántos divs lo envuelven.
     var list = rows[0].el.parentElement;
 
+    var texts = {
+        placeholder: container.dataset.csaCheckFilterPlaceholder || TEXTOS.placeholder,
+        label: container.dataset.csaCheckFilterLabel || TEXTOS.label,
+        noneMatch: container.dataset.csaCheckFilterNoneMatch || TEXTOS.noneMatch,
+        hint: container.dataset.csaCheckFilterHint || TEXTOS.hint,
+        empty: container.dataset.csaCheckFilterEmpty || TEXTOS.empty
+    };
+
     var search = document.createElement('input');
     search.type = 'search';
     search.className = 'csa-input csa-check-filter';
-    search.placeholder = 'Escribe un nombre para buscar…';
-    search.setAttribute('aria-label', 'Buscar una persona por su nombre');
+    search.placeholder = texts.placeholder;
+    search.setAttribute('aria-label', texts.label);
     // Sin esto, Enter en el buscador envía el formulario: se guardaría el alta
     // a medias creyendo que sólo se estaba buscando.
     search.addEventListener('keydown', function (event) {
@@ -133,7 +155,7 @@ function enhance(container) {
         if (buscando) {
             status.textContent = encontradas
                 ? encontradas + (1 === encontradas ? ' coincidencia' : ' coincidencias')
-                : 'Nadie coincide con «' + search.value.trim() + '».';
+                : texts.noneMatch + ' «' + search.value.trim() + '».';
 
             return;
         }
@@ -141,8 +163,8 @@ function enhance(container) {
         // En reposo el hueco no se deja vacío: sin esta línea, un área que no
         // tiene a nadie asignado se ve igual que una lista que no ha cargado.
         status.textContent = marcadas
-            ? 'Busca a alguien para añadirlo, o pulsa en un nombre para quitarlo.'
-            : 'Todavía no coordina nadie esta área.';
+            ? texts.hint
+            : texts.empty;
     }
 
     search.addEventListener('input', apply);
