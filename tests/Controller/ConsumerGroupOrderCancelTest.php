@@ -145,6 +145,9 @@ class ConsumerGroupOrderCancelTest extends AbstractAuthenticatedTest
             $em->persist($entity);
         }
         $em->flush();
+        // La primera petición del cliente reutiliza este mismo gestor: sin limpiarlo, la
+        // ronda conserva la colección de pedidos vacía con la que se construyó.
+        $em->clear();
 
         return $order;
     }
