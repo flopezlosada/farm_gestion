@@ -248,12 +248,14 @@
 {# ---------- QTY ----------
  # Cantidad numérica: entero si es redonda, con 1 decimal si lleva media
  # (p.ej. cestas compartidas que pesan ½). Evita pintar "3,0" pero respeta
- # "2,5".
+ # "2,5". `decimals` (por defecto 1) es la precisión cuando no es redonda: con
+ # cantidades que pueden llevar cuartos, `csa.qty(v, 2)`.
  #
- #   {{ csa.qty(2.5) }}  →  2,5
- #   {{ csa.qty(3) }}    →  3
+ #   {{ csa.qty(2.5) }}     →  2,5
+ #   {{ csa.qty(3) }}       →  3
+ #   {{ csa.qty(0.25, 2) }} →  0,25
  #}
-{% macro qty(v) %}{{ v == v|round ? v|number_format(0, ',', '.') : v|number_format(1, ',', '.') }}{% endmacro %}
+{% macro qty(v, decimals = 1) %}{{ v == v|round ? v|number_format(0, ',', '.') : v|number_format(decimals, ',', '.') }}{% endmacro %}
 
 
 {# `opts` es opcional y las decenas de llamadas de tres argumentos siguen
