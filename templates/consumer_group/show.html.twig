@@ -97,6 +97,19 @@
             </div>
         {% endif %}
 
+        {% if can_edit and open_blockers %}
+            {# Fuera de la barra de acciones: dentro, el flex de los botones la dejaba en una línea diminuta. #}
+            <div class="csa-alert csa-alert--warning" role="status" style="margin-bottom: var(--csa-sp-4);">
+                <i class="fa fa-exclamation-triangle csa-alert__icon" aria-hidden="true"></i>
+                <div class="csa-alert__body">
+                    <strong>Este pedido sigue en borrador y todavía no se puede abrir.</strong>
+                    <ul style="margin: .35em 0 0 1.25em; padding: 0;">
+                        {% for blocker in open_blockers %}<li>{{ blocker }}</li>{% endfor %}
+                    </ul>
+                </div>
+            </div>
+        {% endif %}
+
         {% if can_edit %}
             <div class="prt-actionbar">
                 {# canManageOrders y no canReceiveOrders: pasado el plazo de apuntes, la
@@ -111,15 +124,6 @@
                 {% endif %}
                 {% if can_open %}
                     <a href="{{ path('consumer_group_announce', { id: round.id }) }}" class="prt-btn prt-btn--primary"><i class="fa fa-bullhorn"></i> Abrir y avisar a las socias</a>
-                {% elseif round.draft %}
-                    <span class="csa-muted">En borrador: para abrirlo hace falta que cada productor tenga productos, que la fecha de cierre no haya pasado y que no queden incrementos pendientes de revisar.</span>
-                    {% set pending_items = round.items|filter(i => i.markupPendingReview) %}
-                    {% if pending_items|length > 0 %}
-                        <div class="csa-alert csa-alert--warning" style="flex-basis: 100%;">
-                            Incremento pendiente de revisar en: <strong>{{ pending_items|map(i => i.name)|join(', ') }}</strong>.
-                            <a href="{{ path('consumer_group_items', { id: round.id }) }}">Revisarlos en «Productos del pedido»</a>.
-                        </div>
-                    {% endif %}
                 {% endif %}
                 {% if can_confirm %}
                     <a href="{{ path('consumer_group_confirm', { id: round.id }) }}" class="prt-btn prt-btn--primary"><i class="fa fa-check"></i> Confirmar pedido</a>
