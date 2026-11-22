@@ -28,6 +28,7 @@ class ConsumerGroupRoundFormProducersTest extends AbstractAuthenticatedTest
         $filter = $crawler->filter('[data-csa-check-filter]');
         self::assertCount(1, $filter, 'La lista de productores se marca como filtrable.');
         self::assertGreaterThanOrEqual(15, $filter->filter('input[type="checkbox"][name$="[]"]')->count(), 'Los productores siguen siendo casillas del formulario, el buscador solo las filtra.');
+        self::assertSame('6', $filter->attr('data-csa-check-filter-threshold'));
         self::assertSame('Escribe el nombre de un productor…', $filter->attr('data-csa-check-filter-placeholder'));
     }
 }

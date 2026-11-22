@@ -17,7 +17,7 @@
  * Activación opt-in: sólo dentro de un contenedor con [data-csa-check-filter].
  * Los textos son los de «quién coordina un área»; otra lista los cambia con
  * data-csa-check-filter-{placeholder,label,none-match,hint,empty} en el contenedor
- * (ver TEXTOS).
+ * (ver TEXTOS). El umbral también: data-csa-check-filter-threshold.
  *
  * LO MARCADO NO SE ESCONDE NUNCA, ni en reposo ni cuando no coincide con lo que
  * se busca. Si desapareciera al teclear, la lista diría "no coordina nadie"
@@ -77,7 +77,9 @@ function enhance(container) {
         container.querySelectorAll('input[type="checkbox"][name$="[]"]')
     );
 
-    if (checkboxes.length <= UMBRAL_BUSCADOR) {
+    var threshold = parseInt(container.dataset.csaCheckFilterThreshold, 10);
+
+    if (checkboxes.length <= (isNaN(threshold) ? UMBRAL_BUSCADOR : threshold)) {
         return;
     }
 
