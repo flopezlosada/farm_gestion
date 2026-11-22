@@ -216,7 +216,7 @@
                                         </td>
                                         <td class="tight" data-label="Precio">
                                             {{ line.item.price|number_format(2, ',', '.') }} € <span class="csa-muted">/ {{ line.item.unit }}</span>
-                                            {% if line.item.producerPrice is not null %}
+                                            {% if line.item.producerPrice is not null and (is_granted('ROLE_GESTION_GRUPO_CONSUMO') or is_granted('ROLE_GESTION_CONTABILIDAD')) %}
                                                 <div class="csa-muted" style="font-size: .8em;">productor {{ line.item.producerPrice|number_format(2, ',', '.') }} + gestión {{ (line.item.price - line.item.producerPrice)|number_format(2, ',', '.') }}</div>
                                             {% endif %}
                                         </td>
