@@ -17,60 +17,103 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 /**
  * Cancelar el pedido de una socia desde el menú de su fila: lo vacía igual que
  * cuando ella deja las cantidades a cero, y sólo si el pago está pendiente.
+ *
+ * Los tests de las guardas de negocio piden el token con el pedido aún pendiente
+ * y cambian su estado DESPUÉS: así el POST llega con un token válido y lo que lo
+ * rechaza es la guarda, no el CSRF.
  */
 class ConsumerGroupOrderCancelTest extends AbstractAuthenticatedTest
 {
     public function testCancelarUnPedidoPendienteLoVaciaYLoDejaEnLaBitacora(): void
     {
         $client = $this->createAuthenticatedClient();
-        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_GRUPO_CONSUMO, true);
         $order = $this->prepararPedido();
 
         $client->request('POST', $this->cancelUrl($order), ['_token' => $this->cancelToken($client, $order)]);
 
         self::assertResponseRedirects('/gestion/consumer-group/' . $order->getRound()->getId());
-        $reloaded = $this->reload($order);
-        self::assertTrue($reloaded->isEmpty(), 'Cancelar deja el pedido sin líneas con cantidad.');
-        $kinds = array_map(
-            static fn (ConsumerGroupEventLog $e): string => $e->getKind(),
-            self::getContainer()->get('doctrine')->getManager()->getRepository(ConsumerGroupEventLog::class)->findBy(['round' => $reloaded->getRound()]),
-        );
-        self::assertContains(ConsumerGroupEventLog::KIND_ORDER_EMPTIED, $kinds);
+        self::assertTrue($this->reload($order)->isEmpty(), 'Cancelar deja el pedido sin líneas con cantidad.');
+        self::assertSame(1, $this->countEmptiedEvents($order));
     }
 
     public function testUnPedidoPagadoNoSeCancela(): void
     {
         $client = $this->createAuthenticatedClient();
-        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_GRUPO_CONSUMO, true);
-        $order = $this->prepararPedido(pagado: true);
+        $order = $this->prepararPedido();
+        $token = $this->cancelToken($client, $order);
+        $this->modificar($order, static fn (ConsumerGroupOrder $o) => $o->markPaid(ConsumerGroupPaymentMethod::Cash));
 
-        $client->request('POST', $this->cancelUrl($order), ['_token' => $this->cancelToken($client, $order)]);
+        $client->request('POST', $this->cancelUrl($order), ['_token' => $token]);
 
+        self::assertResponseRedirects();
         self::assertFalse($this->reload($order)->isEmpty(), 'Un pedido cobrado tiene dinero detrás: no se vacía.');
+        self::assertSame(0, $this->countEmptiedEvents($order));
+    }
+
+    public function testEnUnaRondaQueYaNoAdmiteCambiosNoSeCancela(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $order = $this->prepararPedido();
+        $token = $this->cancelToken($client, $order);
+        $this->modificar($order, static fn (ConsumerGroupOrder $o) => $o->getRound()->setStatus(ConsumerGroupRound::STATUS_CANCELLED));
+
+        $client->request('POST', $this->cancelUrl($order), ['_token' => $token]);
+
+        self::assertResponseRedirects();
+        self::assertFalse($this->reload($order)->isEmpty());
+        self::assertSame(0, $this->countEmptiedEvents($order));
+    }
+
+    public function testCancelarDosVecesNoRepiteElEventoDeLaBitacora(): void
+    {
+        $client = $this->createAuthenticatedClient();
+        $order = $this->prepararPedido();
+        $token = $this->cancelToken($client, $order);
+
+        $client->request('POST', $this->cancelUrl($order), ['_token' => $token]);
+        $client->request('POST', $this->cancelUrl($order), ['_token' => $token]);
+
+        self::assertSame(1, $this->countEmptiedEvents($order));
     }
 
     public function testSinTokenValidoNoSeCancela(): void
     {
         $client = $this->createAuthenticatedClient();
-        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_GRUPO_CONSUMO, true);
         $order = $this->prepararPedido();
 
         $client->request('POST', $this->cancelUrl($order), ['_token' => 'falso']);
 
+        self::assertFalse($this->reload($order)->isEmpty());
+        self::assertSame(0, $this->countEmptiedEvents($order));
+    }
+
+    public function testQuienSoloPuedeLeerNoVeLaOpcionNiPuedeCancelar(): void
+    {
+        $client = static::createClient();
+        $order = $this->prepararPedido();
+        $client->loginUser($this->createUserWithRoles(['ROLE_GESTION_GRUPO_CONSUMO']));
+
+        $crawler = $client->request('GET', '/gestion/consumer-group/' . $order->getRound()->getId());
+        self::assertResponseIsSuccessful();
+        self::assertCount(0, $crawler->filter('form[action$="/orders/' . $order->getId() . '/cancel"]'), 'Sin permiso de edición no se ofrece cancelar.');
+
+        $client->request('POST', $this->cancelUrl($order), ['_token' => 'da-igual']);
+        self::assertResponseStatusCodeSame(403);
         self::assertFalse($this->reload($order)->isEmpty());
     }
 
     public function testElMenuOfreceCancelarSoloConElPagoPendiente(): void
     {
         $client = $this->createAuthenticatedClient();
-        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_GRUPO_CONSUMO, true);
         $pendiente = $this->prepararPedido();
         $pagado = $this->prepararPedido(pagado: true);
 
         $crawler = $client->request('GET', '/gestion/consumer-group/' . $pendiente->getRound()->getId());
+        self::assertResponseIsSuccessful();
         self::assertCount(1, $crawler->filter('form[action$="/orders/' . $pendiente->getId() . '/cancel"]'));
 
         $crawler = $client->request('GET', '/gestion/consumer-group/' . $pagado->getRound()->getId());
+        self::assertResponseIsSuccessful();
         self::assertCount(0, $crawler->filter('form[action$="/orders/' . $pagado->getId() . '/cancel"]'));
     }
 
@@ -79,6 +122,7 @@ class ConsumerGroupOrderCancelTest extends AbstractAuthenticatedTest
      */
     private function prepararPedido(bool $pagado = false): ConsumerGroupOrder
     {
+        static::getContainer()->get(AppSettings::class)->setBool(AppSettings::FEATURE_GRUPO_CONSUMO, true);
         $em = self::getContainer()->get('doctrine')->getManager();
 
         $producer = (new Producer())->setName('Huerta Test ' . uniqid());
@@ -112,14 +156,37 @@ class ConsumerGroupOrderCancelTest extends AbstractAuthenticatedTest
 
     /**
      * El token sale del formulario ya pintado: el gestor de CSRF exige una sesión
-     * abierta, que sólo existe tras la primera petición.
+     * abierta, que sólo existe tras la primera petición. Si el formulario no está,
+     * el test no tiene nada que comprobar y falla en vez de seguir con un token falso.
      */
     private function cancelToken(KernelBrowser $client, ConsumerGroupOrder $order): string
     {
         $crawler = $client->request('GET', '/gestion/consumer-group/' . $order->getRound()->getId());
-        $form = $crawler->filter('form[action$="/orders/' . $order->getId() . '/cancel"] input[name="_token"]');
+        self::assertResponseIsSuccessful();
+        $field = $crawler->filter('form[action$="/orders/' . $order->getId() . '/cancel"] input[name="_token"]');
+        self::assertCount(1, $field, 'El menú del pedido pendiente debería ofrecer cancelar.');
 
-        return $form->count() > 0 ? $form->attr('value') : 'sin-formulario';
+        return $field->attr('value');
+    }
+
+    /**
+     * Cambia el estado del pedido en la base, tras haber pedido el token.
+     *
+     * @param callable(ConsumerGroupOrder): mixed $change
+     */
+    private function modificar(ConsumerGroupOrder $order, callable $change): void
+    {
+        $em = self::getContainer()->get('doctrine')->getManager();
+        $change($em->getRepository(ConsumerGroupOrder::class)->find($order->getId()));
+        $em->flush();
+    }
+
+    private function countEmptiedEvents(ConsumerGroupOrder $order): int
+    {
+        $em = self::getContainer()->get('doctrine')->getManager();
+        $events = $em->getRepository(ConsumerGroupEventLog::class)->findBy(['round' => $order->getRound()->getId()]);
+
+        return count(array_filter($events, static fn (ConsumerGroupEventLog $e): bool => $e->getKind() === ConsumerGroupEventLog::KIND_ORDER_EMPTIED));
     }
 
     /**

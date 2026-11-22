@@ -940,6 +940,12 @@ class ConsumerGroupController extends AbstractController
             return $back;
         }
 
+        if ($order->isEmpty()) {
+            $this->addFlash('info', 'Este pedido ya estaba cancelado.');
+
+            return $back;
+        }
+
         $editor->apply($order, array_map(
             static fn (ConsumerGroupRoundItem $item): array => ['item' => $item, 'quantity' => '0'],
             $round->getItems()->toArray(),
