@@ -32,7 +32,7 @@ class ConsumerGroupSummaryTableTest extends AbstractAuthenticatedTest
         self::assertCount(1, $card);
         $text = preg_replace('/\s+/', ' ', $card->text());
         self::assertStringContainsString('1 socia ha pedido', $text);
-        foreach (['Nº de «kg» de Naranjas', 'De las socias', 'Para el local', 'Total a pedir', 'Importe'] as $label) {
+        foreach (['Nº de «kg» de Naranjas', 'De las socias', 'Para el local', 'Total a pedir', 'Importe', 'Para el productor', 'Gestión'] as $label) {
             self::assertStringContainsString($label, $text);
         }
         self::assertStringContainsString('se pide por kg', $text);
@@ -51,6 +51,7 @@ class ConsumerGroupSummaryTableTest extends AbstractAuthenticatedTest
         $cells = $row->filter('td')->each(static fn ($td): string => trim(preg_replace('/\s+/', ' ', $td->text())));
         self::assertSame('4', $cells[2], 'De las socias: 4 kg, no «4,00».');
         self::assertSame('4', $cells[4], 'Total a pedir: 4 kg, no «4,00».');
+        self::assertSame(['10,00 €', '0,00 €', '10,00 €'], array_slice($cells, 5, 3), 'Sin precio de productor, todo el importe es del productor y la gestión es cero.');
     }
 
     /**
