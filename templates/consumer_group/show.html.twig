@@ -146,7 +146,8 @@
         {% set can_order_local = can_edit and round.canManageOrders %}
         <section class="prt-card">
             <header class="prt-card__head">
-                <h2 class="prt-card__title"><span class="accent"></span>Pedido al productor · {{ aggregate.participantCount }} socia{{ aggregate.participantCount == 1 ? '' : 's' }}</h2>
+                <h2 class="prt-card__title"><span class="accent"></span>Pedido al productor</h2>
+                <span class="csa-muted">{{ aggregate.participantCount == 1 ? '1 socia ha pedido' : aggregate.participantCount ~ ' socias han pedido' }}</span>
                 {# En un pedido con varios productores, cada uno recibe solo lo suyo. #}
                 {% if round.mixed %}
                     {% for producer in round.producers %}
@@ -168,12 +169,15 @@
                         <table class="prl-table">
                             <thead>
                                 <tr>
-                                    <th>Producto</th>
-                                    <th class="tight">Precio</th>
-                                    <th class="tight">Socias</th>
-                                    <th class="tight">Para el local</th>
-                                    <th class="tight">Total</th>
-                                    <th class="tight">Subtotal</th>
+                                    <th rowspan="2">Producto</th>
+                                    <th rowspan="2" class="tight" style="width: 170px;">Precio</th>
+                                    <th colspan="3" class="tight cg-agg__group">Cantidad, en la unidad del producto</th>
+                                    <th rowspan="2" class="tight" style="width: 120px;">Importe</th>
+                                </tr>
+                                <tr>
+                                    <th class="tight" style="width: 110px;">De las socias</th>
+                                    <th class="tight" style="width: 110px;">Para el local</th>
+                                    <th class="tight" style="width: 110px;">Total a pedir</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -181,17 +185,18 @@
                                     {% set medios = line.item.product and line.item.product.halfUnits %}
                                     <tr>
                                         <td>
-                                            {{ line.item.name }} <span class="csa-muted">/ {{ line.item.unit }}</span>
+                                            {{ line.item.name }}
+                                            <div class="csa-muted" style="font-size: .8em;">se pide por {{ line.item.unit }}</div>
                                             {% if round.mixed %}<div class="csa-muted" style="font-size: .8em;">{{ line.item.product.producer }}</div>{% endif %}
                                         </td>
                                         <td class="tight">
-                                            {{ line.item.price|number_format(2, ',', '.') }} €
+                                            {{ line.item.price|number_format(2, ',', '.') }} € <span class="csa-muted">/ {{ line.item.unit }}</span>
                                             {# Desglose: solo lo ve la comisión (esta pantalla es de gestión). #}
                                             {% if line.item.producerPrice is not null and (is_granted('ROLE_GESTION_GRUPO_CONSUMO') or is_granted('ROLE_GESTION_CONTABILIDAD')) %}
                                                 <div class="csa-muted" style="font-size: .8em;">productor {{ line.item.producerPrice|number_format(2, ',', '.') }} + gestión {{ (line.item.price - line.item.producerPrice)|number_format(2, ',', '.') }}</div>
                                             {% endif %}
                                         </td>
-                                        <td class="tight">{{ line.quantity|number_format(2, ',', '.') }}</td>
+                                        <td class="tight">{{ csa.qty(line.quantity) }}</td>
                                         <td class="tight">
                                             {% if can_order_local %}
                                                 {# El salto lo dice el producto, igual que en el panel de la
@@ -205,15 +210,15 @@
                                                        placeholder="0"
                                                        aria-label="Para el local · {{ line.item.name }}">
                                             {% else %}
-                                                {{ line.associationQuantity|number_format(2, ',', '.') }}
+                                                {{ csa.qty(line.associationQuantity) }}
                                             {% endif %}
                                         </td>
-                                        <td class="tight"><b>{{ line.totalQuantity|number_format(2, ',', '.') }}</b></td>
+                                        <td class="tight"><b>{{ csa.qty(line.totalQuantity) }}</b></td>
                                         <td class="tight">{{ line.subtotal|number_format(2, ',', '.') }} €</td>
                                     </tr>
                                 {% endfor %}
                                 <tr>
-                                    <td colspan="5" style="text-align: right;"><b>Total</b></td>
+                                    <td colspan="5" style="text-align: right;"><b>Importe total del pedido</b></td>
                                     <td class="tight"><b>{{ aggregate.total|number_format(2, ',', '.') }} €</b></td>
                                 </tr>
                             </tbody>
@@ -533,6 +538,7 @@
         .cg-pay-summary { display: flex; align-items: center; gap: var(--csa-sp-3); flex-wrap: wrap; }
         /* Cabe una cantidad de tres cifras y media: no tiene que estirarse a lo
            ancho de la columna, que en una tabla de seis descuadra el resto. */
+        .cg-agg__group { text-align: center; border-bottom: 1px solid var(--prt-line, #ebe7dd); }
         .cg-local-qty { width: 5.5rem; text-align: right; }
         .cg-pago-filter { display: inline-flex; gap: var(--csa-sp-2); }
         .cg-pago-filter .prl-btn.is-active { background: var(--prt-ink, #1d1c17); color: #fff; border-color: var(--prt-ink, #1d1c17); }
