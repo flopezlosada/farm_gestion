@@ -279,7 +279,7 @@
                                     <th style="width: 26%;">Socia</th>
                                     <th>Pedido</th>
                                     <th class="tight" style="width: 90px;">Total</th>
-                                    <th class="tight" style="width: 390px;">Pago</th>
+                                    <th class="tight" style="width: 410px;">Pago</th>
                                     {% if round.delivered %}
                                         <th class="tight" style="width: 130px;">Recogida</th>
                                     {% endif %}
@@ -521,12 +521,21 @@
            piezas bajan de línea en vez de desbordar la columna. #}
         .cg-cell-pago { display: flex; flex-wrap: wrap; align-items: center; gap: var(--csa-sp-1) var(--csa-sp-2); max-width: 100%; }
         .cg-cell-pago .cg-order__ref { flex: 1 0 100%; min-width: 0; }
-        {# Sin wrap, "Concepto: GC15 FRANCISCO LOPEZ LOSADA" no cabía en la
-           columna y se salía por la derecha, empujando la página entera a
-           scroll horizontal — el mismo problema que ya se arregló en
-           "Productos del pedido", aquí con el nombre del concepto en vez de
-           la unidad. #}
+        {# El concepto va en una sola línea, recortado con «…» (el texto entero
+           está en el title). Un nombre largo no puede ensanchar la columna ni
+           empujar la página a scroll horizontal. En la vista de tarjetas del
+           móvil no hay title que valga en táctil: ahí se parte en varias líneas. #}
         .cg-order__ref { font-size: .8rem; color: var(--csa-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        @media (max-width: 768px) {
+            .cg-cell-pago { min-width: 0; }
+            .cg-order__ref { white-space: normal; overflow-wrap: anywhere; }
+        }
+        {# Con los anchos fijos de Pago y compañía, por debajo de este ancho «Pedido»
+           se quedaría sin sitio: la tabla mantiene un mínimo y el contenedor
+           (ya con scroll horizontal) la desliza. En móvil pasa a tarjetas. #}
+        @media (min-width: 769px) {
+            #cg-socias { min-width: 960px; }
+        }
         .cg-order__ref-label { font-weight: 600; }
         .cg-order__pay-via { display: flex; flex-wrap: wrap; align-items: center; gap: var(--csa-sp-1); font-size: .8rem; color: var(--csa-muted); }
         .cg-order__pay-form { margin: 0; max-width: 100%; }
