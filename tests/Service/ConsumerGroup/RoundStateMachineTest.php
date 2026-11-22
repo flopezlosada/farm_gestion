@@ -205,6 +205,42 @@ class RoundStateMachineTest extends TestCase
         $this->machine->open($round);
     }
 
+    public function testLosMotivosNombranAlProductorSinProductos(): void
+    {
+        $round = $this->draftWithItem();
+        $round->addProducer((new Producer())->setName('Huerta del Sur'));
+
+        self::assertSame(['Falta algún producto de: Huerta del Sur.'], $this->machine->openBlockers($round));
+    }
+
+    public function testLosMotivosSeAcumulan(): void
+    {
+        $round = new ConsumerGroupRound();
+        $round->setOrdersCloseAt(new \DateTime('-1 day'));
+        $round->addProducer((new Producer())->setName('Huerta del Sur'));
+        $round->addProducer((new Producer())->setName('Queseria Norte'));
+
+        self::assertSame([
+            'El pedido todavía no tiene productos.',
+            'Falta algún producto de: Huerta del Sur, Queseria Norte.',
+            'La fecha de cierre de apuntes ya ha pasado.',
+        ], $this->machine->openBlockers($round));
+    }
+
+    public function testLosMotivosNombranLosProductosConIncrementoPendiente(): void
+    {
+        $round = $this->draftWithItem();
+        $item = $round->getItems()->first();
+        $item->setMarkupPendingReview(true);
+
+        self::assertSame(['Incremento pendiente de revisar en: ' . $item->getName() . '.'], $this->machine->openBlockers($round));
+    }
+
+    public function testUnBorradorListoNoTieneMotivos(): void
+    {
+        self::assertSame([], $this->machine->openBlockers($this->draftWithItem()));
+    }
+
     public function testNoSeAbreLoQueYaNoEsBorrador(): void
     {
         $round = $this->draftWithItem();

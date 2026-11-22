@@ -96,34 +96,46 @@ class RoundStateMachine
     }
 
     /**
-     * ¿Se puede abrir ya este borrador a las socias? Hace falta que tenga
-     * productos (un aviso de un pedido vacío manda a la gente a una lista sin
-     * nada que pedir), que CADA productor del pedido tenga alguno (uno sin
-     * productos recibiría luego un pedido vacío y figuraría en el aviso sin
-     * ofrecer nada) y que no haya vencido la fecha de cierre (abriría un
-     * pedido en el que ya no se puede apuntar nadie). Tampoco puede quedar ningún
-     * producto con incremento propio pendiente de revisar tras cambiar el del pedido
-     * ({@see ConsumerGroupRoundItem::isMarkupPendingReview()}).
+     * ¿Se puede abrir ya este borrador a las socias? Sí si está en borrador y
+     * {@see openBlockers()} no encuentra nada que lo impida.
      */
     public function canOpen(ConsumerGroupRound $round): bool
     {
-        return $round->isDraft()
-            && \count($round->getItems()) > 0
-            && $this->everyProducerHasItems($round)
-            && !$round->isOrdersDeadlinePassed()
-            && !$round->getItems()->exists(static fn (int $i, ConsumerGroupRoundItem $item): bool => $item->isMarkupPendingReview());
+        return $round->isDraft() && [] === $this->openBlockers($round);
     }
 
     /**
-     * ¿Aporta cada productor del pedido al menos un producto?
+     * Motivos, redactados para la comisión, por los que el borrador aún no se
+     * puede abrir; vacío si ya se puede. Hace falta que tenga productos (un aviso
+     * de un pedido vacío manda a la gente a una lista sin nada que pedir), que CADA
+     * productor del pedido tenga alguno (uno sin productos recibiría luego un
+     * pedido vacío y figuraría en el aviso sin ofrecer nada), que no haya vencido la
+     * fecha de cierre (abriría un pedido en el que ya no se puede apuntar nadie) y
+     * que ningún producto quede con incremento propio pendiente de revisar tras
+     * cambiar el del pedido ({@see ConsumerGroupRoundItem::isMarkupPendingReview()}).
+     *
+     * @return list<string>
      */
-    private function everyProducerHasItems(ConsumerGroupRound $round): bool
+    public function openBlockers(ConsumerGroupRound $round): array
     {
-        $withItems = $round->getItems()
-            ->map(static fn (ConsumerGroupRoundItem $item): ?Producer => $item->getProduct()?->getProducer())
-            ->toArray();
+        $names = static fn (iterable $things): string => implode(', ', array_map('strval', [...$things]));
+        $withoutItems = $round->getProducers()->filter(fn (Producer $producer): bool => !$this->hasItems($round, $producer));
+        $pendingReview = $round->getItems()->filter(static fn (ConsumerGroupRoundItem $item): bool => $item->isMarkupPendingReview());
 
-        return $round->getProducers()->forAll(static fn (int $i, Producer $producer): bool => \in_array($producer, $withItems, true));
+        return array_values(array_filter([
+            $round->getItems()->isEmpty() ? 'El pedido todavía no tiene productos.' : null,
+            !$withoutItems->isEmpty() ? 'Falta algún producto de: ' . $names($withoutItems) . '.' : null,
+            $round->isOrdersDeadlinePassed() ? 'La fecha de cierre de apuntes ya ha pasado.' : null,
+            !$pendingReview->isEmpty() ? 'Incremento pendiente de revisar en: ' . $names($pendingReview->map(static fn (ConsumerGroupRoundItem $item): string => $item->getName())) . '.' : null,
+        ]));
+    }
+
+    /**
+     * ¿Aporta el productor al menos un producto al pedido?
+     */
+    private function hasItems(ConsumerGroupRound $round, Producer $producer): bool
+    {
+        return $round->getItems()->exists(static fn (int $i, ConsumerGroupRoundItem $item): bool => $item->getProduct()?->getProducer() === $producer);
     }
 
     /**
@@ -136,7 +148,7 @@ class RoundStateMachine
     public function open(ConsumerGroupRound $round): void
     {
         if (!$this->canOpen($round)) {
-            throw new InvalidRoundTransition('Este pedido no se puede abrir: tiene que estar en borrador, con productos de cada productor, con la fecha de cierre sin vencer y sin incrementos pendientes de revisar.');
+            throw new InvalidRoundTransition('Este pedido no se puede abrir: ' . ($round->isDraft() ? implode(' ', $this->openBlockers($round)) : 'ya no está en borrador.'));
         }
 
         $round->setStatus(ConsumerGroupRound::STATUS_OPEN);

@@ -112,14 +112,12 @@
                 {% if can_open %}
                     <a href="{{ path('consumer_group_announce', { id: round.id }) }}" class="prt-btn prt-btn--primary"><i class="fa fa-bullhorn"></i> Abrir y avisar a las socias</a>
                 {% elseif round.draft %}
-                    <span class="csa-muted">En borrador: para abrirlo hace falta que cada productor tenga productos, que la fecha de cierre no haya pasado y que no queden incrementos pendientes de revisar.</span>
-                    {% set pending_items = round.items|filter(i => i.markupPendingReview) %}
-                    {% if pending_items|length > 0 %}
-                        <div class="csa-alert csa-alert--warning" style="flex-basis: 100%;">
-                            Incremento pendiente de revisar en: <strong>{{ pending_items|map(i => i.name)|join(', ') }}</strong>.
-                            <a href="{{ path('consumer_group_items', { id: round.id }) }}">Revisarlos en «Productos del pedido»</a>.
-                        </div>
-                    {% endif %}
+                    <div class="csa-alert csa-alert--warning" style="flex-basis: 100%;">
+                        En borrador. Para abrirlo falta:
+                        <ul style="margin: .25em 0 0 1.25em;">
+                            {% for blocker in open_blockers %}<li>{{ blocker }}</li>{% endfor %}
+                        </ul>
+                    </div>
                 {% endif %}
                 {% if can_confirm %}
                     <a href="{{ path('consumer_group_confirm', { id: round.id }) }}" class="prt-btn prt-btn--primary"><i class="fa fa-check"></i> Confirmar pedido</a>

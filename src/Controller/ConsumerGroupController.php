@@ -172,6 +172,7 @@ class ConsumerGroupController extends AbstractController
             'transitions' => $machine->allowedTransitions($round),
             'can_confirm' => $machine->canConfirm($round),
             'can_open'    => $machine->canOpen($round),
+            'open_blockers' => $round->isDraft() ? $machine->openBlockers($round) : [],
             // La regla de cuándo tiene sentido avisar vive en el announcer, no
             // repetida en la plantilla: si cambia, cambia en un sitio.
             'can_announce' => $announcer->canAnnounce($round),
@@ -723,7 +724,7 @@ class ConsumerGroupController extends AbstractController
         $opening = $round->isDraft();
         if ($opening ? !$machine->canOpen($round) : !$announcer->canAnnounce($round)) {
             $this->addFlash('warning', $opening
-                ? 'Para abrir el pedido hace falta que tenga productos y que la fecha de cierre no haya pasado.'
+                ? 'Todavía no se puede abrir el pedido. ' . implode(' ', $machine->openBlockers($round))
                 : 'Sólo se avisa de un pedido abierto y con productos.');
 
             return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
