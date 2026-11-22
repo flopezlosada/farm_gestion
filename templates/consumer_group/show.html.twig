@@ -393,12 +393,25 @@
                                                     {% if can_socixs %}<a href="{{ path('partner_show', { id: partner.id }) }}"><i class="fa fa-user"></i> Ver ficha del socio</a>{% endif %}
                                                     {% if can_socixs or can_reparto %}<a href="{{ path('partner_delivery_calendar', { id: partner.id }) }}"><i class="fa fa-calendar"></i> Calendario de reparto</a>{% endif %}
                                                     {% if can_cancel %}
-                                                        <form method="post" action="{{ path('consumer_group_order_cancel', { id: order.id }) }}" onsubmit="return confirm('¿Cancelar el pedido de {{ partner.name|e('js') }} {{ partner.surname|e('js') }}? Se vacía su pedido.')">
-                                                            <input type="hidden" name="_token" value="{{ csrf_token('consumer_group_order_cancel_' ~ order.id) }}">
-                                                            <button type="submit" class="cg-kebab-menu__danger"><i class="fa fa-times"></i> Cancelar pedido</button>
-                                                        </form>
+                                                        <div class="cg-kebab-menu__sep">
+                                                            <button type="button" class="cg-kebab-menu__danger" onclick="document.getElementById('cg-cancel-order-{{ order.id }}').showModal()"><i class="fa fa-times"></i> Cancelar pedido</button>
+                                                        </div>
                                                     {% endif %}
                                                 </div>
+                                                {# Fuera del menú: un <dialog> dentro de un ancestro oculto no se pinta. #}
+                                                {% if can_cancel %}
+                                                    {{ csa.confirm_dialog('cg-cancel-order-' ~ order.id, {
+                                                        variant: 'danger',
+                                                        eyebrow: 'Pedido de socia',
+                                                        title: 'Cancelar el pedido de ' ~ partner.name ~ ' ' ~ partner.surname,
+                                                        body: 'Se vacía su pedido y deja de contar en los totales.',
+                                                        confirm_label: 'Cancelar pedido',
+                                                        cancel_label: 'Volver',
+                                                        action: path('consumer_group_order_cancel', { id: order.id }),
+                                                        csrf_token: csrf_token('consumer_group_order_cancel_' ~ order.id),
+                                                        csrf_name: '_token',
+                                                    }) }}
+                                                {% endif %}
                                             {% endif %}
                                         </td>
                                     </tr>
@@ -548,7 +561,7 @@
         .cg-kebab-menu { position: fixed; z-index: 100; min-width: 210px; background: #fff; border: 1px solid var(--prt-line-2, #d8d2c2); border-radius: 8px; box-shadow: 0 8px 26px rgba(0,0,0,0.16); padding: 6px; }
         .cg-kebab-menu a { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px; color: var(--prt-ink, #1d1c17); text-decoration: none; font-size: 13px; }
         .cg-kebab-menu a:hover { background: var(--prt-sage-l, #eaf0e2); }
-        .cg-kebab-menu form { margin: 0; border-top: 1px solid var(--prt-line, #ebe7dd); margin-top: 4px; padding-top: 4px; }
+        .cg-kebab-menu__sep { border-top: 1px solid var(--prt-line, #ebe7dd); margin-top: 4px; padding-top: 4px; }
         .cg-kebab-menu__danger { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: 0; border-radius: 6px; background: none; cursor: pointer; font: inherit; font-size: 13px; text-align: left; color: var(--prt-terra-d, #7d3a1f); }
         .cg-kebab-menu__danger:hover { background: var(--prt-terra-l, #fae6dc); }
     </style>
