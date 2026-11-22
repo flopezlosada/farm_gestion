@@ -910,6 +910,54 @@ class ConsumerGroupController extends AbstractController
     }
 
     /**
+     * Cancela el pedido de una socia desde gestión: lo vacía, igual que cuando ella
+     * deja todas las cantidades a cero desde su panel. El pedido queda vacío (no sale
+     * en el listado) y el hecho queda en la bitácora. Sólo con el pago pendiente: uno
+     * ya cobrado, o dentro de un recibo enviado al banco, tiene dinero detrás y no se
+     * deshace por aquí.
+     */
+    #[Route('/orders/{id}/cancel', name: 'consumer_group_order_cancel', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function orderCancel(Request $request, ConsumerGroupOrder $order, OrderEditor $editor, ConsumerGroupEventRecorder $recorder, MinimumAutoConfirmer $autoConfirmer, EntityManagerInterface $em): Response
+    {
+        $round = $order->getRound();
+        $back = $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
+
+        if (!$this->isCsrfTokenValid('consumer_group_order_cancel_'.$order->getId(), (string) $request->request->get('_token'))) {
+            $this->addFlash('warning', 'Token de seguridad inválido.');
+
+            return $back;
+        }
+
+        if (!$round->canManageOrders()) {
+            $this->addFlash('warning', 'No se puede cancelar el pedido en el estado actual del pedido.');
+
+            return $back;
+        }
+
+        if ($order->isPaid() || $order->isInSentReceipt()) {
+            $this->addFlash('warning', 'Este pedido ya está pagado o va en un recibo enviado al banco: no se puede cancelar desde aquí.');
+
+            return $back;
+        }
+
+        $editor->apply($order, array_map(
+            static fn (ConsumerGroupRoundItem $item): array => ['item' => $item, 'quantity' => '0'],
+            $round->getItems()->toArray(),
+        ));
+        $recorder->record(
+            ConsumerGroupEventLog::KIND_ORDER_EMPTIED,
+            $round,
+            $this->getUser(),
+            sprintf('Pedido de %s cancelado desde gestión.', $order->getPartner()),
+        );
+        $em->flush();
+        $autoConfirmer->checkAndConfirm($round);
+        $this->addFlash('success', 'Pedido cancelado.');
+
+        return $back;
+    }
+
+    /**
      * Construye las cantidades deseadas (item de pedido => cantidad en crudo) a
      * partir de un POST `<campo>[<roundItemId>]`. Compartido por apuntar y editar
      * el pedido de una socia (`quantity`) y por lo que se pide para el local
