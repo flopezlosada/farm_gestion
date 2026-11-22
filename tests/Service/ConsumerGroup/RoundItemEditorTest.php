@@ -5,6 +5,7 @@ namespace App\Tests\Service\ConsumerGroup;
 use App\Entity\ConsumerGroupProduct;
 use App\Entity\ConsumerGroupUnit;
 use App\Entity\ConsumerGroupRound;
+use App\Entity\ConsumerGroupRoundItem;
 use App\Entity\MarkupType;
 use App\Entity\Producer;
 use App\Repository\ConsumerGroupRoundItemRepository;
