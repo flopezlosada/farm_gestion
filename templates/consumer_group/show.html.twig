@@ -186,10 +186,11 @@
                                     <th rowspan="2">Producto</th>
                                     <th rowspan="2" class="tight" style="width: 170px;">Precio</th>
                                     <th colspan="3" class="tight cg-agg__group">{{ qty_title }}</th>
+                                    <th rowspan="2" class="cg-agg__gap"></th>
                                     {% if show_split %}
-                                        <th colspan="3" class="tight cg-agg__group cg-agg__money">Importe</th>
+                                        <th colspan="3" class="tight cg-agg__group">Importe</th>
                                     {% else %}
-                                        <th rowspan="2" class="tight cg-agg__money" style="width: 120px;">Importe</th>
+                                        <th rowspan="2" class="tight" style="width: 120px;">Importe</th>
                                     {% endif %}
                                 </tr>
                                 <tr>
@@ -197,9 +198,9 @@
                                     <th class="tight cg-agg__num" style="width: 110px;">Para el local</th>
                                     <th class="tight cg-agg__num" style="width: 110px;">Total a pedir</th>
                                     {% if show_split %}
-                                        <th class="tight cg-agg__num cg-agg__money" style="width: 120px;">Para el productor</th>
-                                        <th class="tight cg-agg__num cg-agg__money" style="width: 100px;">Gestión</th>
-                                        <th class="tight cg-agg__num cg-agg__money" style="width: 110px;">Total</th>
+                                        <th class="tight cg-agg__num" style="width: 120px;">Para el productor</th>
+                                        <th class="tight cg-agg__num" style="width: 100px;">Gestión</th>
+                                        <th class="tight cg-agg__num" style="width: 110px;">Total</th>
                                     {% endif %}
                                 </tr>
                             </thead>
@@ -237,23 +238,25 @@
                                             {% endif %}
                                         </td>
                                         <td class="tight cg-agg__num"><b>{{ csa.qty(line.totalQuantity) }}</b></td>
+                                        <td class="cg-agg__gap"></td>
                                         {% if show_split %}
-                                            <td class="tight cg-agg__num cg-agg__money">{{ line.producerSubtotal|number_format(2, ',', '.') }} €</td>
-                                            <td class="tight cg-agg__num cg-agg__money">{{ (line.subtotal - line.producerSubtotal)|number_format(2, ',', '.') }} €</td>
-                                            <td class="tight cg-agg__num cg-agg__money"><b>{{ line.subtotal|number_format(2, ',', '.') }} €</b></td>
+                                            <td class="tight cg-agg__num">{{ line.producerSubtotal|number_format(2, ',', '.') }} €</td>
+                                            <td class="tight cg-agg__num">{{ (line.subtotal - line.producerSubtotal)|number_format(2, ',', '.') }} €</td>
+                                            <td class="tight cg-agg__num"><b>{{ line.subtotal|number_format(2, ',', '.') }} €</b></td>
                                         {% else %}
-                                            <td class="tight cg-agg__money">{{ line.subtotal|number_format(2, ',', '.') }} €</td>
+                                            <td class="tight">{{ line.subtotal|number_format(2, ',', '.') }} €</td>
                                         {% endif %}
                                     </tr>
                                 {% endfor %}
                                 <tr>
                                     <td colspan="5" style="text-align: right;"><b>Total del pedido</b></td>
+                                    <td class="cg-agg__gap"></td>
                                     {% if show_split %}
-                                        <td class="tight cg-agg__num cg-agg__money"><b>{{ aggregate.producerTotal|number_format(2, ',', '.') }} €</b></td>
-                                        <td class="tight cg-agg__num cg-agg__money"><b>{{ (aggregate.total - aggregate.producerTotal)|number_format(2, ',', '.') }} €</b></td>
-                                        <td class="tight cg-agg__num cg-agg__money"><b>{{ aggregate.total|number_format(2, ',', '.') }} €</b></td>
+                                        <td class="tight cg-agg__num"><b>{{ aggregate.producerTotal|number_format(2, ',', '.') }} €</b></td>
+                                        <td class="tight cg-agg__num"><b>{{ (aggregate.total - aggregate.producerTotal)|number_format(2, ',', '.') }} €</b></td>
+                                        <td class="tight cg-agg__num"><b>{{ aggregate.total|number_format(2, ',', '.') }} €</b></td>
                                     {% else %}
-                                        <td class="tight cg-agg__money"><b>{{ aggregate.total|number_format(2, ',', '.') }} €</b></td>
+                                        <td class="tight"><b>{{ aggregate.total|number_format(2, ',', '.') }} €</b></td>
                                     {% endif %}
                                 </tr>
                             </tbody>
@@ -575,9 +578,11 @@
            ancho de la columna, que en una tabla de seis descuadra el resto. */
         .prl-table thead th.cg-agg__group { text-align: center; border-bottom: 1px solid var(--prt-line, #ebe7dd); }
         .prl-table .cg-agg__num { text-align: center; }
-        {# Las cantidades y los euros son dos bloques: los euros llevan un fondo suave,
-           sin rayas. #}
-        .prl-table thead th.cg-agg__money, .prl-table tbody td.cg-agg__money { background: rgba(91, 122, 76, 0.07); }
+        {# Hueco entre el bloque de cantidades y el de euros: la columna no pinta las
+           líneas, así que se cortan ahí. #}
+        .prl-table .cg-agg__gap { width: 28px; padding: 0; }
+        .prl-table thead th.cg-agg__gap, .prl-table tbody td.cg-agg__gap { border-bottom-color: transparent; }
+        .prl-table tbody tr:hover td.cg-agg__gap { background: transparent; }
         {# Sin las flechas del navegador, el número queda en el centro real de la celda y
            se alinea con las cifras de arriba y de abajo. #}
         .cg-local-qty { -moz-appearance: textfield; appearance: textfield; }

@@ -51,7 +51,7 @@ class ConsumerGroupSummaryTableTest extends AbstractAuthenticatedTest
         $cells = $row->filter('td')->each(static fn ($td): string => trim(preg_replace('/\s+/', ' ', $td->text())));
         self::assertSame('4', $cells[2], 'De las socias: 4 kg, no «4,00».');
         self::assertSame('4', $cells[4], 'Total a pedir: 4 kg, no «4,00».');
-        self::assertSame(['10,00 €', '0,00 €', '10,00 €'], array_slice($cells, 5, 3), 'Sin precio de productor, todo el importe es del productor y la gestión es cero.');
+        self::assertSame(['10,00 €', '0,00 €', '10,00 €'], array_slice($cells, 6, 3), 'Sin precio de productor, todo el importe es del productor y la gestión es cero.');
     }
 
     /**
