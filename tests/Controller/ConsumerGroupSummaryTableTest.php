@@ -32,7 +32,7 @@ class ConsumerGroupSummaryTableTest extends AbstractAuthenticatedTest
         self::assertCount(1, $card);
         $text = preg_replace('/\s+/', ' ', $card->text());
         self::assertStringContainsString('1 socia ha pedido', $text);
-        foreach (['Cantidad, en la unidad del producto', 'De las socias', 'Para el local', 'Total a pedir', 'Importe'] as $label) {
+        foreach (['Cantidad de Naranjas, en kg', 'De las socias', 'Para el local', 'Total a pedir', 'Importe'] as $label) {
             self::assertStringContainsString($label, $text);
         }
         self::assertStringContainsString('se pide por kg', $text);
