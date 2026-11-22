@@ -9,12 +9,12 @@
 
     <div class="csa-stack-lg">
 
-        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Pedido', subtitle: 'Productor, plazo de apuntes y día de entrega.' } %}
+        {% embed '_components/csa_form_section.html.twig' with { num: '1', title: 'Pedido', subtitle: 'Productores, plazo de apuntes y día de entrega.' } %}
             {% block body %}
                 {% import '_macros/csa.html.twig' as csa %}
                 <div class="csa-form-grid">
                     {{ csa.field(form.title, 'Título', { full: true }) }}
-                    {{ csa.field(form.producer, 'Productor') }}
+                    {{ csa.field(form.producers, 'Productores', { full: true }) }}
                     {{ csa.field(form.ordersCloseAt, 'Cierre de apuntes') }}
                     {{ csa.field(form.deliveryDate, 'Fecha de entrega') }}
                     {% include 'consumer_group/_minimum_fields.html.twig' with { form: form } only %}
@@ -23,7 +23,7 @@
                 </div>
                 {% if create_hint|default(false) %}
                     <p class="csa-muted" style="margin-top: var(--csa-sp-3);">
-                        Al crear el pedido se añadirán los productos activos del catálogo del productor, a su precio de referencia. Luego podrás ajustar cuáles entran y a qué precio.
+                        Al crear el pedido se añadirán los productos activos del catálogo de cada productor. Luego podrás ajustar cuáles entran y a qué precio.
                     </p>
                 {% endif %}
             {% endblock %}

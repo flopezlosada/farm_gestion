@@ -257,7 +257,7 @@ class ConsumerGroupPickupNotifierTest extends TestCase
     {
         $producer = new Producer();
         $round = new ConsumerGroupRound();
-        $round->setProducer($producer)->setTitle('Naranjas de noviembre');
+        $round->addProducer($producer)->setTitle('Naranjas de noviembre');
         $product = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit((new ConsumerGroupUnit())->setName('kg'));
         $producer->addProduct($product);
         $item = new ConsumerGroupRoundItem($round, $product, '2.50');

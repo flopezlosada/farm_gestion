@@ -29,7 +29,7 @@
 
 {% block csa_main %}
 
-    {{ csa.page_header('Grupo de consumo', round.title, round.producer) }}
+    {{ csa.page_header('Grupo de consumo', round.title, round.producerNames) }}
 
     <div class="csa-stack-lg">
 
@@ -91,6 +91,7 @@
                                     <label class="cg-order-line__label" for="cg-qty-{{ item.id }}">
                                         {{ item.name }}
                                         <span class="csa-muted">· {{ item.price|number_format(2, ',', '.') }} € / {{ item.unit }}</span>
+                                        {% if round.mixed and item.product %}<span class="cg-order-line__desc">{{ item.product.producer }}</span>{% endif %}
                                         {% if item.product and item.product.description %}
                                             <span class="cg-order-line__desc">{{ item.product.description|striptags|u.truncate(80, '…', false) }}</span>
                                         {% endif %}

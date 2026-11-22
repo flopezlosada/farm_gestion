@@ -12,10 +12,12 @@ use App\Entity\Partner;
 use App\Entity\Producer;
 use App\Service\AppSettings;
 use App\Service\ConsumerGroup\ConsumerGroupEmailPhotos;
+use App\Service\ConsumerGroup\OrderAggregator;
 use App\Service\ConsumerGroup\ConsumerGroupNotifier;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Mailer\Exception\TransportException;
+use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
@@ -33,7 +35,7 @@ class ConsumerGroupNotifierTest extends TestCase
     {
         $producer = new Producer();
         $round = new ConsumerGroupRound();
-        $round->setProducer($producer);
+        $round->addProducer($producer);
         $product = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit((new ConsumerGroupUnit())->setName('kg'));
         $producer->addProduct($product);
         $this->item = new ConsumerGroupRoundItem($round, $product, '2.50');
@@ -68,7 +70,7 @@ class ConsumerGroupNotifierTest extends TestCase
         $urls = $this->createMock(UrlGeneratorInterface::class);
         $urls->method('generate')->willReturn('https://csa-vega.example/panel/consumer-group');
 
-        return new ConsumerGroupNotifier($mailer, $settings, $urls, $this->createMock(LoggerInterface::class), $this->createMock(ConsumerGroupEmailPhotos::class));
+        return new ConsumerGroupNotifier($mailer, $settings, $urls, $this->createMock(LoggerInterface::class), $this->createMock(ConsumerGroupEmailPhotos::class), new OrderAggregator());
     }
 
     public function testNoEnviaSiElInterruptorEstaApagado(): void
@@ -122,39 +124,113 @@ class ConsumerGroupNotifierTest extends TestCase
 
     public function testNotificaAlProductorSiTieneEmail(): void
     {
-        $this->round->getProducer()->setEmail('productor@example.com');
+        $this->round->getProducers()->first()->setEmail('productor@example.com');
+        $this->orderFor($this->partner('socia@example.com'));
 
         $mailer = $this->createMock(MailerInterface::class);
         $mailer->expects(self::once())->method('send');
 
-        $result = $this->notifier($mailer, true)->notifyProducerConfirmed($this->round);
+        $result = $this->notifier($mailer, true)->notifyProducersConfirmed($this->round);
 
         self::assertTrue($result['enabled']);
-        self::assertTrue($result['sent']);
+        self::assertSame(1, $result['sent']);
+        self::assertSame([], $result['withoutEmail']);
     }
 
-    public function testNoNotificaAlProductorSinEmail(): void
+    public function testNoNotificaAlProductorSinEmailPeroLoDevuelve(): void
     {
+        $this->round->getProducers()->first()->setName('Huerta Sin Correo');
+        $this->orderFor($this->partner('socia@example.com'));
+
         $mailer = $this->createMock(MailerInterface::class);
         $mailer->expects(self::never())->method('send');
 
-        $result = $this->notifier($mailer, true)->notifyProducerConfirmed($this->round);
+        $result = $this->notifier($mailer, true)->notifyProducersConfirmed($this->round);
 
         self::assertTrue($result['enabled']);
-        self::assertFalse($result['sent']);
+        self::assertSame(0, $result['sent']);
+        self::assertSame(['Huerta Sin Correo'], $result['withoutEmail']);
     }
 
     public function testNoNotificaAlProductorConElInterruptorApagado(): void
     {
-        $this->round->getProducer()->setEmail('productor@example.com');
+        $this->round->getProducers()->first()->setEmail('productor@example.com');
+        $this->orderFor($this->partner('socia@example.com'));
 
         $mailer = $this->createMock(MailerInterface::class);
         $mailer->expects(self::never())->method('send');
 
-        $result = $this->notifier($mailer, false)->notifyProducerConfirmed($this->round);
+        $result = $this->notifier($mailer, false)->notifyProducersConfirmed($this->round);
 
         self::assertFalse($result['enabled']);
-        self::assertFalse($result['sent']);
+        self::assertSame(0, $result['sent']);
+    }
+
+    public function testEnUnPedidoConVariosProductoresCadaUnoRecibeSoloLoSuyo(): void
+    {
+        $naranjero = $this->round->getProducers()->first()->setName('Naranjero')->setEmail('naranjero@example.com');
+        $this->addProducerWithItem('Almazara', 'almazara@example.com', 'Aceite');
+        // La socia pide 2 de naranjas y 2 de aceite.
+        $order = $this->orderFor($this->partner('socia@example.com'));
+        $order->addLine(new ConsumerGroupOrderLine($order, $this->round->getItems()->last(), '2'));
+
+        $bodies = [];
+        $mailer = $this->createMock(MailerInterface::class);
+        $mailer->expects(self::exactly(2))->method('send')->willReturnCallback(static function (TemplatedEmail $mail) use (&$bodies): void {
+            $bodies[$mail->getTo()[0]->getAddress()] = $mail->getContext();
+        });
+
+        $result = $this->notifier($mailer, true)->notifyProducersConfirmed($this->round);
+
+        self::assertSame(2, $result['sent']);
+        self::assertSame(['Naranjas'], array_map(static fn (array $l): string => $l['item']->getName(), $bodies['naranjero@example.com']['lines']));
+        self::assertSame(['Aceite'], array_map(static fn (array $l): string => $l['item']->getName(), $bodies['almazara@example.com']['lines']));
+        self::assertSame($naranjero, $bodies['naranjero@example.com']['producer']);
+    }
+
+    public function testSiFallaElEnvioAUnProductorSeDevuelveYElOtroRecibeElSuyo(): void
+    {
+        $this->round->getProducers()->first()->setName('Naranjero')->setEmail('naranjero@example.com');
+        $this->addProducerWithItem('Almazara', 'almazara@example.com', 'Aceite');
+        $order = $this->orderFor($this->partner('socia@example.com'));
+        $order->addLine(new ConsumerGroupOrderLine($order, $this->round->getItems()->last(), '1'));
+
+        $mailer = $this->createMock(MailerInterface::class);
+        $mailer->method('send')->willReturnCallback(static function (TemplatedEmail $mail): void {
+            if ($mail->getTo()[0]->getAddress() === 'almazara@example.com') {
+                throw new TransportException('SMTP caído');
+            }
+        });
+
+        $result = $this->notifier($mailer, true)->notifyProducersConfirmed($this->round);
+
+        self::assertSame(1, $result['sent']);
+        self::assertSame(['Almazara'], $result['failed']);
+    }
+
+    public function testUnProductorSinNadaPedidoNoRecibeCorreo(): void
+    {
+        $this->round->getProducers()->first()->setEmail('naranjero@example.com');
+        $this->addProducerWithItem('Almazara', 'almazara@example.com', 'Aceite');
+        // Solo se pide de lo del primero: el segundo no tiene nada que preparar.
+        $this->orderFor($this->partner('socia@example.com'));
+
+        $mailer = $this->createMock(MailerInterface::class);
+        $mailer->expects(self::once())->method('send');
+
+        $result = $this->notifier($mailer, true)->notifyProducersConfirmed($this->round);
+
+        self::assertSame(1, $result['sent']);
+        self::assertSame([], $result['withoutEmail']);
+    }
+
+    private function addProducerWithItem(string $name, string $email, string $productName): void
+    {
+        $producer = (new Producer())->setName($name)->setEmail($email);
+        $product = (new ConsumerGroupProduct())->setName($productName)->setUnit((new ConsumerGroupUnit())->setName('L'));
+        $producer->addProduct($product);
+        $this->round->addProducer($producer);
+        $this->round->addItem(new ConsumerGroupRoundItem($this->round, $product, '10.00'));
     }
 
     public function testRecipientStats(): void

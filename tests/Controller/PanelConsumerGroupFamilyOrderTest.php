@@ -100,7 +100,7 @@ class PanelConsumerGroupFamilyOrderTest extends AbstractPartnerAuthenticatedTest
         $product = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit($unit);
         $producer->addProduct($product);
         $round = (new ConsumerGroupRound())->setStatus(ConsumerGroupRound::STATUS_OPEN);
-        $round->setTitle('Ronda familia')->setProducer($producer)
+        $round->setTitle('Ronda familia')->addProducer($producer)
             ->setOrdersCloseAt(new \DateTime('+3 days'))->setDeliveryDate(new \DateTime('+7 days'));
         $item = new ConsumerGroupRoundItem($round, $product, '2.50');
         $round->addItem($item);

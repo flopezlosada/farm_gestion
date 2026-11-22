@@ -280,7 +280,7 @@ class SeedConsumerGroupFakesCommand extends Command
     private function round(Producer $producer, string $title, int $status, string $close, string $delivery): ConsumerGroupRound
     {
         $r = (new ConsumerGroupRound())
-            ->setProducer($producer)->setTitle($title)->setStatus($status)
+            ->addProducer($producer)->setTitle($title)->setStatus($status)
             ->setOrdersCloseAt(new \DateTime($close))
             ->setDeliveryDate(new \DateTime($delivery));
         $this->em->persist($r);

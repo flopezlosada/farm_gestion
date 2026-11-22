@@ -9,6 +9,7 @@ use App\Entity\ConsumerGroupRound;
 use App\Entity\ConsumerGroupRoundItem;
 use App\Entity\MarkupType;
 use App\Entity\Partner;
+use App\Entity\Producer;
 use App\Form\ConsumerGroupRoundType;
 use App\Repository\ConsumerGroupEventLogRepository;
 use App\Repository\ConsumerGroupOrderLineRepository;
@@ -26,6 +27,7 @@ use App\Service\ConsumerGroup\MinimumAutoConfirmer;
 use App\Service\ConsumerGroup\OrderAggregator;
 use App\Service\ConsumerGroup\OrderEditor;
 use App\Service\ConsumerGroup\PriceLocked;
+use App\Service\ConsumerGroup\ProducerOrderCsv;
 use App\Service\ConsumerGroup\RoundItemEditor;
 use App\Service\ConsumerGroup\RoundPricing;
 use App\Service\ConsumerGroup\RoundStateMachine;
@@ -112,7 +114,7 @@ class ConsumerGroupController extends AbstractController
     /**
      * Crear un pedido. Nace en BORRADOR (las socias no lo ven ni se avisa a
      * nadie) y se siembra con los productos activos del
-     * catálogo del productor (al precio de referencia); luego se ajustan en la
+     * catálogo de cada productor; luego se ajustan en la
      * pantalla de productos del pedido.
      */
     #[Route('/new', name: 'consumer_group_new', methods: ['GET', 'POST'])]
@@ -185,8 +187,8 @@ class ConsumerGroupController extends AbstractController
     }
 
     /**
-     * Editar la cabecera del pedido (no el productor: sus productos cuelgan de ese
-     * catálogo).
+     * Editar la cabecera del pedido. Los productores se pueden ampliar; quitar uno
+     * solo si ya no tiene productos en el pedido ({@see ConsumerGroupRound::validateProducers()}).
      *
      * Mientras la comisión pueda gestionarlo, y no sólo mientras admita apuntes:
      * pasado el plazo, ajustar la fecha de entrega o la nota al productor sigue
@@ -201,7 +203,7 @@ class ConsumerGroupController extends AbstractController
             return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
         }
 
-        $form = $this->createForm(ConsumerGroupRoundType::class, $round, ['lock_producer' => true]);
+        $form = $this->createForm(ConsumerGroupRoundType::class, $round);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
@@ -246,19 +248,21 @@ class ConsumerGroupController extends AbstractController
         // Confirmado, entregado o cancelado: los productos y precios ya no se tocan, pero
         // un pedido anterior al desglose se puede desglosar (el precio final no cambia).
         $breakdownOnly = !$round->canManageOrders();
-        $managed = !($round->getProducer()?->isSelfManaged() ?? false);
+        $managed = !$round->hasSelfManagedProducer();
         if ($breakdownOnly && (!$managed || $round->getItems()->isEmpty())) {
             $this->addFlash('warning', 'Este pedido ya no admite cambios en sus productos.');
 
             return $this->redirectToRoute('consumer_group_show', ['id' => $round->getId()]);
         }
 
-        // Catálogo a mostrar: productos activos del productor + los que ya están en la
+        // Catálogo a mostrar: productos activos de los productores + los que ya están en la
         // pedido (aunque se hayan desactivado, para no perderlos sin querer). Solo los
         // del pedido si ya no se pueden añadir ni quitar.
         $catalog = [];
-        foreach ($breakdownOnly ? [] : ($round->getProducer()?->getActiveProducts() ?? []) as $product) {
-            $catalog[$product->getId()] = $product;
+        foreach ($breakdownOnly ? [] : $round->getProducers() as $producer) {
+            foreach ($producer->getActiveProducts() as $product) {
+                $catalog[$product->getId()] = $product;
+            }
         }
         $existingItemByProductId = [];
         foreach ($round->getItems() as $item) {
@@ -667,7 +671,7 @@ class ConsumerGroupController extends AbstractController
             $em->flush();
 
             if ($request->request->getBoolean('send_email')) {
-                $notifier->notifyProducerConfirmed($round);
+                $producersResult = $notifier->notifyProducersConfirmed($round);
                 $result = $notifier->notifyConfirmed($round);
                 if (!$result['enabled']) {
                     $this->addFlash('warning', 'Pedido confirmado. El email NO se envió: el interruptor general de correo está apagado.');
@@ -680,6 +684,12 @@ class ConsumerGroupController extends AbstractController
                         $msg .= sprintf(' %d fallo(s) de envío (ver logs).', $result['failed']);
                     }
                     $this->addFlash('success', $msg);
+                }
+                if ($producersResult['failed'] !== []) {
+                    $this->addFlash('warning', sprintf('El correo NO llegó a: %s. Pásales el pedido a mano.', implode(', ', $producersResult['failed'])));
+                }
+                if ($producersResult['withoutEmail'] !== []) {
+                    $this->addFlash('warning', sprintf('Sin email, pásale el pedido a mano a: %s.', implode(', ', $producersResult['withoutEmail'])));
                 }
             } else {
                 $this->addFlash('success', 'Pedido confirmado (sin aviso por email).');
@@ -1000,41 +1010,23 @@ class ConsumerGroupController extends AbstractController
     }
 
     /**
-     * Export CSV del pedido AGREGADO al productor: una fila por producto con la
-     * cantidad total pedida y el subtotal.
-     *
-     * La cantidad es la TOTAL —lo de las socias más lo que la asociación encarga
-     * para el local—, sin desglosar: al productor le da igual de quién es cada
-     * caja, y el reparto interno no es asunto suyo.
+     * Export CSV del pedido AGREGADO al productor ({@see ProducerOrderCsv}). Con
+     * `?producer=<id>` solo lo de ese productor, que es lo que se le pasa en un pedido
+     * con varios; sin él, el pedido entero.
      */
     #[Route('/{id}/export', name: 'consumer_group_export', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function export(ConsumerGroupRound $round, OrderAggregator $aggregator): StreamedResponse
+    public function export(Request $request, ConsumerGroupRound $round, ProducerOrderCsv $csv): StreamedResponse
     {
-        $aggregate = $aggregator->aggregate($round);
-
-        $response = new StreamedResponse(function () use ($aggregate): void {
-            $out = fopen('php://output', 'wb');
-            fwrite($out, "\xEF\xBB\xBF"); // BOM para Excel.
-            fputcsv($out, ['Producto', 'Unidad', 'Cantidad total', 'Precio', 'Subtotal']);
-            foreach ($aggregate['byItem'] as $line) {
-                $item = $line['item'];
-                fputcsv($out, [
-                    $item->getName(),
-                    $item->getUnit(),
-                    number_format($line['totalQuantity'], 2, ',', ''),
-                    number_format((float) $item->getPrice(), 2, ',', ''),
-                    number_format($line['subtotal'], 2, ',', ''),
-                ]);
+        $producerId = $request->query->getInt('producer');
+        $producer = null;
+        if ($producerId > 0) {
+            $producer = $round->getProducers()->findFirst(static fn (int $i, Producer $p): bool => $p->getId() === $producerId);
+            if ($producer === null) {
+                throw $this->createNotFoundException();
             }
-            fputcsv($out, ['', '', '', 'Total', number_format($aggregate['total'], 2, ',', '')]);
-            fclose($out);
-        });
+        }
 
-        $filename = sprintf('pedido-%s-%s.csv', $round->getId(), (new \DateTime())->format('Ymd'));
-        $response->headers->set('Content-Type', 'text/csv; charset=UTF-8');
-        $response->headers->set('Content-Disposition', 'attachment; filename="'.$filename.'"');
-
-        return $response;
+        return $csv->response($round, $producer);
     }
 
     /**

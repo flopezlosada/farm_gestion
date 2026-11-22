@@ -164,6 +164,26 @@ class RoundStateMachineTest extends TestCase
         $this->machine->open($round);
     }
 
+    public function testNoSeAbreSiUnProductorDelPedidoNoTieneProductos(): void
+    {
+        $round = $this->draftWithItem();
+        $round->addProducer((new Producer())->setName('Sin productos en el pedido'));
+
+        self::assertFalse((new RoundStateMachine())->canOpen($round));
+    }
+
+    public function testSeAbreSiCadaProductorDelPedidoTieneProductos(): void
+    {
+        $round = $this->draftWithItem();
+        $otro = new Producer();
+        $producto = (new ConsumerGroupProduct())->setName('Naranjas');
+        $otro->addProduct($producto);
+        $round->addProducer($otro);
+        $round->addItem(new ConsumerGroupRoundItem($round, $producto, '2.00'));
+
+        self::assertTrue((new RoundStateMachine())->canOpen($round));
+    }
+
     public function testNoSeAbreUnBorradorConElCierreVencido(): void
     {
         $round = $this->draftWithItem();
@@ -202,7 +222,7 @@ class RoundStateMachineTest extends TestCase
         $producer = new Producer();
         $product = (new ConsumerGroupProduct())->setName('Aceite');
         $producer->addProduct($product);
-        $round = (new ConsumerGroupRound())->setProducer($producer);
+        $round = (new ConsumerGroupRound())->addProducer($producer);
         $round->addItem(new ConsumerGroupRoundItem($round, $product, '25.00'));
 
         return $round;

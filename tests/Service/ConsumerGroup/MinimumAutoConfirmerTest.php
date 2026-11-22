@@ -58,7 +58,7 @@ class MinimumAutoConfirmerTest extends TestCase
 
         $notifier = $this->createMock(ConsumerGroupNotifier::class);
         $notifier->expects(self::once())->method('notifyConfirmed')->with($round);
-        $notifier->expects(self::never())->method('notifyProducerConfirmed');
+        $notifier->expects(self::never())->method('notifyProducersConfirmed');
 
         $em = $this->createMock(EntityManagerInterface::class);
         $em->expects(self::once())->method('flush');
@@ -144,7 +144,7 @@ class MinimumAutoConfirmerTest extends TestCase
 
         $notifier = $this->createMock(ConsumerGroupNotifier::class);
         $notifier->expects(self::once())->method('notifyConfirmed')->with($round);
-        $notifier->expects(self::once())->method('notifyProducerConfirmed')->with($round);
+        $notifier->expects(self::once())->method('notifyProducersConfirmed')->with($round);
 
         $em = $this->createMock(EntityManagerInterface::class);
         $em->expects(self::once())->method('flush');

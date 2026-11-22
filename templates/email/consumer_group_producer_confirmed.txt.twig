@@ -1,6 +1,12 @@
-Hola {{ round.producer }},
+Hola {{ producer }},
 
-El pedido «{{ round.title }}» ha alcanzado el mínimo y queda CONFIRMADO: puedes darlo por bueno.
+El pedido «{{ round.title }}» ha quedado CONFIRMADO: puedes darlo por bueno.
+
+Lo que se te pide:
+{% for line in lines %}
+- {{ line.item.name }}: {{ line.totalQuantity|number_format(2, ',', '.') }} {{ line.item.unit }} × {{ line.item.priceForProducer|number_format(2, ',', '.') }} € = {{ line.producerSubtotal|number_format(2, ',', '.') }} €
+{% endfor %}
+Total: {{ total|number_format(2, ',', '.') }} €
 {% if round.deliveryDate %}
 Fecha de entrega prevista: {{ round.deliveryDate|format_date('full', locale='es') }}.
 {% endif %}

@@ -155,7 +155,7 @@
                                         <a class="prl-person__name" href="{{ path('consumer_group_show', { id: round.id }) }}">
                                             {{ round.title }}
                                         </a>
-                                        <span class="prl-person__meta">{{ round.producer ? round.producer.name : '—' }}</span>
+                                        <span class="prl-person__meta">{{ round.producerNames ?: '—' }}</span>
                                     </div>
                                 </div>
                             </td>

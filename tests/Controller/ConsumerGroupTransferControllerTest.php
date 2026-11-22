@@ -53,9 +53,9 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
             $em->createQuery('DELETE FROM App\Entity\FinancialAccount a WHERE a.id = :a')->execute(['a' => $this->accountId]);
         }
         if ($this->producerId !== null) {
-            $em->createQuery('DELETE FROM App\Entity\ConsumerGroupOrder o WHERE o.round IN (SELECT r.id FROM App\Entity\ConsumerGroupRound r WHERE r.producer = :p)')->execute(['p' => $this->producerId]);
-            $em->createQuery('DELETE FROM App\Entity\ConsumerGroupRoundItem i WHERE i.round IN (SELECT r.id FROM App\Entity\ConsumerGroupRound r WHERE r.producer = :p)')->execute(['p' => $this->producerId]);
-            $em->createQuery('DELETE FROM App\Entity\ConsumerGroupRound r WHERE r.producer = :p')->execute(['p' => $this->producerId]);
+            $em->createQuery('DELETE FROM App\Entity\ConsumerGroupOrder o WHERE o.round IN (SELECT r.id FROM App\Entity\ConsumerGroupRound r JOIN r.producers rp WHERE rp.id = :p)')->execute(['p' => $this->producerId]);
+            $em->createQuery('DELETE FROM App\Entity\ConsumerGroupRoundItem i WHERE i.round IN (SELECT r.id FROM App\Entity\ConsumerGroupRound r JOIN r.producers rp WHERE rp.id = :p)')->execute(['p' => $this->producerId]);
+            $em->createQuery('DELETE FROM App\Entity\ConsumerGroupRound r WHERE :p MEMBER OF r.producers')->execute(['p' => $this->producerId]);
             $em->createQuery('DELETE FROM App\Entity\ConsumerGroupProduct x WHERE x.producer = :p')->execute(['p' => $this->producerId]);
             $em->createQuery('DELETE FROM App\Entity\Producer p WHERE p.id = :p')->execute(['p' => $this->producerId]);
         }
@@ -367,7 +367,7 @@ class ConsumerGroupTransferControllerTest extends AbstractAuthenticatedTest
         $naranjas = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit($this->unidadGlobal('kg'));
         $producer->addProduct($naranjas);
         $round = (new ConsumerGroupRound())->setStatus(ConsumerGroupRound::STATUS_CONFIRMED);
-        $round->setTitle('Ronda transferencias')->setProducer($producer)
+        $round->setTitle('Ronda transferencias')->addProducer($producer)
             ->setOrdersCloseAt(new \DateTime('2096-03-05'))
             ->setDeliveryDate(new \DateTime('2096-03-10'));
         $round->setConfirmed(true);

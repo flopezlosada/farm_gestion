@@ -28,6 +28,7 @@ class ConsumerGroupRoundRepository extends ServiceEntityRepository
     public function findAllForManagement(): array
     {
         return $this->createQueryBuilder('r')
+            ->leftJoin('r.producers', 'pr')->addSelect('pr')
             ->orderBy('r.deliveryDate', 'DESC')
             ->addOrderBy('r.id', 'DESC')
             ->getQuery()
@@ -45,11 +46,14 @@ class ConsumerGroupRoundRepository extends ServiceEntityRepository
     public function findFilteredForManagement(array $filters): array
     {
         $qb = $this->createQueryBuilder('r')
+            ->leftJoin('r.producers', 'pr')->addSelect('pr')
             ->orderBy('r.deliveryDate', 'DESC')
             ->addOrderBy('r.id', 'DESC');
 
         if (!empty($filters['producer'])) {
-            $qb->andWhere('r.producer = :producer')->setParameter('producer', $filters['producer']);
+            // MEMBER OF y no un WHERE sobre el join de arriba: ese join es el que
+            // carga TODOS los productores del pedido, y filtrarlo dejaría solo uno.
+            $qb->andWhere(':producer MEMBER OF r.producers')->setParameter('producer', $filters['producer']);
         }
 
         if (null !== ($filters['status'] ?? null)) {
@@ -76,16 +80,11 @@ class ConsumerGroupRoundRepository extends ServiceEntityRepository
      */
     public function findProducersWithRounds(): array
     {
-        // FROM Producer, no ConsumerGroupRound: Doctrine no deja seleccionar sólo
-        // el alias de un join sin incluir también el alias raíz del FROM.
-        return $this->getEntityManager()->createQueryBuilder()
-            ->select('p')
-            ->distinct()
-            ->from(Producer::class, 'p')
-            ->join(ConsumerGroupRound::class, 'r', 'WITH', 'r.producer = p')
-            ->orderBy('p.name', 'ASC')
-            ->getQuery()
-            ->getResult();
+        return $this->getEntityManager()->createQuery(
+            'SELECT p FROM App\Entity\Producer p
+             WHERE EXISTS (SELECT 1 FROM App\Entity\ConsumerGroupRound r JOIN r.producers rp WHERE rp = p)
+             ORDER BY p.name ASC'
+        )->getResult();
     }
 
     /**
@@ -97,6 +96,7 @@ class ConsumerGroupRoundRepository extends ServiceEntityRepository
     public function findOpen(): array
     {
         return $this->createQueryBuilder('r')
+            ->leftJoin('r.producers', 'pr')->addSelect('pr')
             ->where('r.status = :open')
             ->setParameter('open', ConsumerGroupRound::STATUS_OPEN)
             ->orderBy('r.ordersCloseAt', 'ASC')
@@ -105,15 +105,17 @@ class ConsumerGroupRoundRepository extends ServiceEntityRepository
     }
 
     /**
-     * Las rondas de ESTE productor, más recientes por fecha de entrega arriba.
-     * Para su panel de autogestión: sólo ve lo suyo.
+     * Las rondas en las que participa ESTE productor (solo o con otros), más
+     * recientes por fecha de entrega arriba. Cada una trae TODOS sus productores
+     * cargados, no solo este.
      *
      * @return ConsumerGroupRound[]
      */
     public function findAllForProducer(Producer $producer): array
     {
         return $this->createQueryBuilder('r')
-            ->where('r.producer = :producer')
+            ->leftJoin('r.producers', 'pr')->addSelect('pr')
+            ->where(':producer MEMBER OF r.producers')
             ->setParameter('producer', $producer)
             ->orderBy('r.deliveryDate', 'DESC')
             ->addOrderBy('r.id', 'DESC')

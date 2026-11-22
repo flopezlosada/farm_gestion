@@ -148,7 +148,7 @@ class EmailPreviewFactory
 
         $round = (new ConsumerGroupRound())
             ->setTitle('Aceite de la nueva cosecha')
-            ->setProducer($producer)
+            ->addProducer($producer)
             ->setDescription('Cosecha temprana, sin filtrar. Se recoge con la cesta.')
             ->setOrdersCloseAt(new \DateTime('+10 days'))
             ->setDeliveryDate(new \DateTime('+17 days'));

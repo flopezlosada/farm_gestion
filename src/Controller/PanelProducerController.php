@@ -12,6 +12,7 @@ use App\Repository\ConsumerGroupRoundRepository;
 use App\Service\ConsumerGroup\ConsumerGroupEventRecorder;
 use App\Service\ConsumerGroup\InvalidRoundTransition;
 use App\Service\ConsumerGroup\OrderAggregator;
+use App\Service\ConsumerGroup\ProducerOrderCsv;
 use App\Service\ConsumerGroup\RoundItemEditor;
 use App\Service\ConsumerGroup\RoundStateMachine;
 use Doctrine\ORM\EntityManagerInterface;
@@ -49,7 +50,12 @@ class PanelProducerController extends AbstractController
         $producer = $this->getUser()->getProducer();
 
         return $this->render('Panel/producer/index.html.twig', [
-            'rounds' => $rounds->findAllForProducer($producer),
+            // Solo los pedidos propios: en uno con varios productores este panel
+            // enseñaría el agregado y los productos de los demás.
+            'rounds' => array_values(array_filter(
+                $rounds->findAllForProducer($producer),
+                static fn (ConsumerGroupRound $round): bool => !$round->isMixed(),
+            )),
         ]);
     }
 
@@ -63,8 +69,8 @@ class PanelProducerController extends AbstractController
         $producer = $this->getUser()->getProducer();
 
         $round = new ConsumerGroupRound();
-        $round->setProducer($producer);
-        $form = $this->createForm(ConsumerGroupRoundType::class, $round, ['lock_producer' => true]);
+        $round->addProducer($producer);
+        $form = $this->createForm(ConsumerGroupRoundType::class, $round, ['lock_producers' => true]);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
@@ -115,8 +121,10 @@ class PanelProducerController extends AbstractController
         }
 
         $catalog = [];
-        foreach ($round->getProducer()?->getActiveProducts() ?? [] as $product) {
-            $catalog[$product->getId()] = $product;
+        foreach ($round->getProducers() as $roundProducer) {
+            foreach ($roundProducer->getActiveProducts() as $product) {
+                $catalog[$product->getId()] = $product;
+            }
         }
         $existingItemByProductId = [];
         foreach ($round->getItems() as $item) {
@@ -242,35 +250,11 @@ class PanelProducerController extends AbstractController
      * Export CSV del agregado: mismo formato que la comisión ve en gestión.
      */
     #[Route('/rounds/{id}/export', name: 'panel_producer_round_export', methods: ['GET'], requirements: ['id' => '\d+'])]
-    public function export(ConsumerGroupRound $round, OrderAggregator $aggregator): StreamedResponse
+    public function export(ConsumerGroupRound $round, ProducerOrderCsv $csv): StreamedResponse
     {
         $this->assertOwnRound($round);
 
-        $aggregate = $aggregator->aggregate($round);
-
-        $response = new StreamedResponse(function () use ($aggregate): void {
-            $out = fopen('php://output', 'wb');
-            fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, ['Producto', 'Unidad', 'Cantidad total', 'Precio', 'Subtotal']);
-            foreach ($aggregate['byItem'] as $line) {
-                $item = $line['item'];
-                fputcsv($out, [
-                    $item->getName(),
-                    $item->getUnit(),
-                    number_format($line['totalQuantity'], 2, ',', ''),
-                    number_format((float) $item->getPrice(), 2, ',', ''),
-                    number_format($line['subtotal'], 2, ',', ''),
-                ]);
-            }
-            fputcsv($out, ['', '', '', 'Total', number_format($aggregate['total'], 2, ',', '')]);
-            fclose($out);
-        });
-
-        $filename = sprintf('pedido-%s-%s.csv', $round->getId(), (new \DateTime())->format('Ymd'));
-        $response->headers->set('Content-Type', 'text/csv; charset=UTF-8');
-        $response->headers->set('Content-Disposition', 'attachment; filename="'.$filename.'"');
-
-        return $response;
+        return $csv->response($round);
     }
 
     /**
@@ -280,7 +264,9 @@ class PanelProducerController extends AbstractController
     private function assertOwnRound(ConsumerGroupRound $round): void
     {
         $producer = $this->getUser()->getProducer();
-        if ($round->getProducer()?->getId() !== $producer?->getId()) {
+        // Pedido propio = este productor es el ÚNICO. Un pedido con varios es de la
+        // comisión: aquí daría a ver y tocar los productos y pedidos de los demás.
+        if ($round->getSoleProducer()?->getId() !== $producer?->getId()) {
             throw $this->createNotFoundException();
         }
     }

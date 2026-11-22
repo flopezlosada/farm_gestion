@@ -11,8 +11,8 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
 use Gedmo\Mapping\Annotation as Gedmo;
 
 /**
- * Ronda de pedido del GRUPO DE CONSUMO: un pedido colectivo de productos de un
- * tercero (fruta de temporada, aceite…) que la asociación NO produce y que se
+ * Ronda de pedido del GRUPO DE CONSUMO: un pedido colectivo de productos de uno o
+ * varios terceros (fruta de temporada, aceite…) que la asociación NO produce y que se
  * reparte junto con la cesta semanal. Lo abre la comisión del grupo de consumo,
  * las socias se apuntan mientras está abierto, y en la fecha de entrega el
  * producto llega con la cesta del socio en su nodo.
@@ -110,13 +110,19 @@ class ConsumerGroupRound
     private string $title = '';
 
     /**
-     * Productor de esta ronda (del catálogo persistente). RESTRICT: no se borra un
-     * productor con rondas.
-     * @ORM\ManyToOne(targetEntity="Producer")
-     * @ORM\JoinColumn(name="producer_id", nullable=false, onDelete="RESTRICT")
+     * Productores del pedido (del catálogo persistente): decisión de la comisión
+     * previa a los productos, y límite de qué catálogos puede ofrecer el pedido.
+     * RESTRICT por el lado del productor: no se borra un productor con pedidos.
+     * @ORM\ManyToMany(targetEntity="Producer")
+     * @ORM\JoinTable(
+     *     name="consumer_group_round_producer",
+     *     joinColumns={@ORM\JoinColumn(name="round_id", referencedColumnName="id", onDelete="CASCADE")},
+     *     inverseJoinColumns={@ORM\JoinColumn(name="producer_id", referencedColumnName="id", onDelete="RESTRICT")}
+     * )
+     * @ORM\OrderBy({"name": "ASC"})
+     * @var Collection<int, Producer>
      */
-    #[Assert\NotNull]
-    private ?Producer $producer = null;
+    private Collection $producers;
 
     /**
      * @ORM\Column(type="smallint")
@@ -284,6 +290,7 @@ class ConsumerGroupRound
 
     public function __construct()
     {
+        $this->producers = new ArrayCollection();
         $this->items = new ArrayCollection();
         $this->orders = new ArrayCollection();
     }
@@ -304,15 +311,109 @@ class ConsumerGroupRound
         return $this;
     }
 
-    public function getProducer(): ?Producer
+    /**
+     * @return Collection<int, Producer>
+     */
+    public function getProducers(): Collection
     {
-        return $this->producer;
+        return $this->producers;
     }
 
-    public function setProducer(?Producer $producer): self
+    public function hasProducer(Producer $producer): bool
     {
-        $this->producer = $producer;
+        return $this->producers->contains($producer);
+    }
+
+    public function addProducer(Producer $producer): self
+    {
+        if (!$this->producers->contains($producer)) {
+            $this->producers->add($producer);
+        }
         return $this;
+    }
+
+    public function removeProducer(Producer $producer): self
+    {
+        $this->producers->removeElement($producer);
+        return $this;
+    }
+
+    /**
+     * ¿Participa más de un productor? Un pedido mixto no admite productores
+     * autogestionados ni mínimo automático ({@see validateProducers()}).
+     */
+    public function isMixed(): bool
+    {
+        return \count($this->producers) > 1;
+    }
+
+    /**
+     * ¿Algún productor del pedido lo gestiona él mismo? Entonces fija sus precios y no
+     * hay incremento de gestión. Nunca ocurre en un pedido mixto.
+     */
+    public function hasSelfManagedProducer(): bool
+    {
+        return $this->producers->exists(static fn (int $i, Producer $p): bool => $p->isSelfManaged());
+    }
+
+    /**
+     * El productor del pedido cuando es uno solo; null si hay varios o ninguno.
+     * Es la forma de preguntar «¿es este tu pedido?» sin asumir un único productor.
+     */
+    public function getSoleProducer(): ?Producer
+    {
+        return \count($this->producers) === 1 ? $this->producers->first() : null;
+    }
+
+    /**
+     * Nombres de los productores, separados por coma y en orden alfabético, para
+     * títulos, correos y tarjetas. Vacío si aún no tiene.
+     */
+    public function getProducerNames(): string
+    {
+        $names = array_map(static fn (Producer $p): string => $p->getName(), $this->producers->toArray());
+        sort($names, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return implode(', ', $names);
+    }
+
+    /**
+     * Reglas que unen a los productores con el resto del pedido: al menos uno,
+     * ninguno autogestionado si es mixto (su panel asume un pedido propio), sin
+     * mínimo automático si es mixto (un productor alcanzaría el suyo con compras
+     * de otro) y ningún producto de un productor que ya no participa.
+     */
+    #[Assert\Callback]
+    public function validateProducers(ExecutionContextInterface $context): void
+    {
+        if ($this->producers->isEmpty()) {
+            $context->buildViolation('Elige al menos un productor.')->atPath('producers')->addViolation();
+
+            return;
+        }
+
+        if ($this->isMixed()) {
+            foreach ($this->producers as $producer) {
+                if ($producer->isSelfManaged()) {
+                    $context->buildViolation('{{ name }} lleva sus propios pedidos y no puede estar en un pedido con varios productores.')
+                        ->setParameter('{{ name }}', $producer->getName())
+                        ->atPath('producers')->addViolation();
+                }
+            }
+            if ($this->hasAutomaticMinimum()) {
+                $context->buildViolation('El mínimo automático no está disponible en pedidos con varios productores.')
+                    ->atPath('producers')->addViolation();
+            }
+        }
+
+        foreach ($this->items as $item) {
+            $producer = $item->getProduct()?->getProducer();
+            if ($producer !== null && !$this->producers->contains($producer)) {
+                $context->buildViolation('{{ name }} ya tiene productos en este pedido: quítalos antes de quitarlo.')
+                    ->setParameter('{{ name }}', $producer->getName())
+                    ->atPath('producers')->addViolation();
+            }
+        }
     }
 
     public function getStatus(): int

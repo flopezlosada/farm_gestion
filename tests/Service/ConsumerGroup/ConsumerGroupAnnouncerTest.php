@@ -49,7 +49,7 @@ class ConsumerGroupAnnouncerTest extends TestCase
     {
         $producer = new Producer();
         $round = new ConsumerGroupRound();
-        $round->setProducer($producer);
+        $round->addProducer($producer);
         $round->setStatus(ConsumerGroupRound::STATUS_OPEN);
         $round->setTitle('Aceite de la cooperativa');
         // Relativa y no absoluta: con una fecha escrita a mano, el día que pasara
@@ -68,7 +68,7 @@ class ConsumerGroupAnnouncerTest extends TestCase
     public function testNoSeAvisaDeUnPedidoSinProductos(): void
     {
         $round = new ConsumerGroupRound();
-        $round->setProducer(new Producer());
+        $round->addProducer(new Producer());
 
         self::assertFalse($this->announcer()->canAnnounce($round));
     }

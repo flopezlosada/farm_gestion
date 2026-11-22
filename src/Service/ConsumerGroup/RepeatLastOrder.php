@@ -4,11 +4,11 @@ namespace App\Service\ConsumerGroup;
 
 use App\Entity\ConsumerGroupRound;
 use App\Entity\Partner;
-use App\Repository\ConsumerGroupOrderRepository;
+use App\Repository\ConsumerGroupOrderLineRepository;
 
 /**
- * «Lo mismo que la vez pasada»: traslada el último pedido de una socia a este
- * mismo productor a los productos del pedido que tiene delante.
+ * «Lo mismo que la vez pasada»: traslada lo que la socia pidió la última vez de cada
+ * producto a los productos del pedido que tiene delante.
  *
  * EXISTE PORQUE LO QUE SE PIDE AQUÍ SE REPITE. El aceite, la legumbre o las
  * conservas se piden un par de veces al año y casi siempre lo mismo; teclear de
@@ -21,12 +21,14 @@ use App\Repository\ConsumerGroupOrderRepository;
  * línea no valen de una vez a otra. Lo que la socia quiere repetir es «dos
  * garrafas de aceite», y el aceite sí es el mismo producto del catálogo.
  *
- * Lo que ya no esté a la venta esta vez simplemente no se propone: no se inventa
- * una línea para un producto que este pedido no ofrece.
+ * Y cada producto trae lo SUYO más reciente, aunque venga de pedidos distintos: en un
+ * pedido con varios productores, el aceite puede venir de uno anterior y las naranjas
+ * de otro. Lo que ya no esté a la venta esta vez simplemente no se propone: no se
+ * inventa una línea para un producto que este pedido no ofrece.
  */
 class RepeatLastOrder
 {
-    public function __construct(private readonly ConsumerGroupOrderRepository $orders)
+    public function __construct(private readonly ConsumerGroupOrderLineRepository $lines)
     {
     }
 
@@ -40,23 +42,15 @@ class RepeatLastOrder
      */
     public function quantitiesFor(ConsumerGroupRound $round, Partner $partner): array
     {
-        $producer = $round->getProducer();
-        if (null === $producer) {
-            return [];
-        }
-
-        $previous = $this->orders->findLastForPartnerAndProducer($partner, $producer, $round->getId());
-        if (null === $previous) {
-            return [];
-        }
-
-        $byProduct = [];
-        foreach ($previous->getLines() as $line) {
-            $productId = $line->getRoundItem()?->getProduct()?->getId();
-            if (null !== $productId && (float) $line->getQuantity() > 0) {
-                $byProduct[$productId] = $line->getQuantity();
+        $productIds = [];
+        foreach ($round->getItems() as $item) {
+            $productId = $item->getProduct()?->getId();
+            if (null !== $productId) {
+                $productIds[] = $productId;
             }
         }
+
+        $byProduct = $this->lines->findLastQuantitiesByProduct($partner, $productIds, $round->getId());
 
         $quantities = [];
         foreach ($round->getItems() as $item) {

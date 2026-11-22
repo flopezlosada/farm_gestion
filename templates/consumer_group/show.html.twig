@@ -46,7 +46,7 @@
                     {% if round.confirmed %}<span class="prt-chip prt-chip--mod-1"><span class="dot"></span>Confirmado</span>{% endif %}
                     {% if round.fullyPickedUp %}<span class="prt-chip prt-chip--activo"><span class="dot"></span>Recogido por todas</span>{% endif %}
                     <span class="sep">·</span>
-                    <span>{{ round.producer ? round.producer.name : '' }}</span>
+                    <span>{{ round.producerNames }}</span>
                     {% if round.deliveryDate %}<span class="sep">·</span><span>Entrega {{ round.deliveryDate|date('d/m/Y') }}</span>{% endif %}
                 </div>
             </div>
@@ -105,14 +105,14 @@
                 {% if round.canManageOrders %}
                     <a href="{{ path('consumer_group_edit', { id: round.id }) }}" class="prt-btn prt-btn--primary"><i class="fa fa-pencil"></i> Editar</a>
                     <a href="{{ path('consumer_group_items', { id: round.id }) }}" class="prt-btn"><i class="fa fa-list"></i> Productos del pedido</a>
-                {% elseif round.producer and not round.producer.selfManaged and round.items is not empty %}
+                {% elseif round.producers is not empty and not round.hasSelfManagedProducer and round.items is not empty %}
                     {# Ya no se tocan productos ni precio final, pero el desglose de un pedido anterior se puede rellenar. #}
                     <a href="{{ path('consumer_group_items', { id: round.id }) }}" class="prt-btn"><i class="fa fa-list"></i> Desglosar precios</a>
                 {% endif %}
                 {% if can_open %}
                     <a href="{{ path('consumer_group_announce', { id: round.id }) }}" class="prt-btn prt-btn--primary"><i class="fa fa-bullhorn"></i> Abrir y avisar a las socias</a>
                 {% elseif round.draft %}
-                    <span class="csa-muted">En borrador: para abrirlo hace falta que tenga productos, que la fecha de cierre no haya pasado y que no queden incrementos pendientes de revisar.</span>
+                    <span class="csa-muted">En borrador: para abrirlo hace falta que cada productor tenga productos, que la fecha de cierre no haya pasado y que no queden incrementos pendientes de revisar.</span>
                     {% set pending_items = round.items|filter(i => i.markupPendingReview) %}
                     {% if pending_items|length > 0 %}
                         <div class="csa-alert csa-alert--warning" style="flex-basis: 100%;">
@@ -147,7 +147,14 @@
         <section class="prt-card">
             <header class="prt-card__head">
                 <h2 class="prt-card__title"><span class="accent"></span>Pedido al productor · {{ aggregate.participantCount }} socia{{ aggregate.participantCount == 1 ? '' : 's' }}</h2>
-                <a href="{{ path('consumer_group_export', { id: round.id }) }}" class="prt-btn"><i class="fa fa-download"></i> Exportar pedido (CSV)</a>
+                {# En un pedido con varios productores, cada uno recibe solo lo suyo. #}
+                {% if round.mixed %}
+                    {% for producer in round.producers %}
+                        <a href="{{ path('consumer_group_export', { id: round.id, producer: producer.id }) }}" class="prt-btn"><i class="fa fa-download"></i> CSV de {{ producer.name }}</a>
+                    {% endfor %}
+                {% else %}
+                    <a href="{{ path('consumer_group_export', { id: round.id }) }}" class="prt-btn"><i class="fa fa-download"></i> Exportar pedido (CSV)</a>
+                {% endif %}
             </header>
             <div class="prt-card__body">
             {% if round.items is empty %}
@@ -173,7 +180,10 @@
                                 {% for line in aggregate.byItem %}
                                     {% set medios = line.item.product and line.item.product.halfUnits %}
                                     <tr>
-                                        <td>{{ line.item.name }} <span class="csa-muted">/ {{ line.item.unit }}</span></td>
+                                        <td>
+                                            {{ line.item.name }} <span class="csa-muted">/ {{ line.item.unit }}</span>
+                                            {% if round.mixed %}<div class="csa-muted" style="font-size: .8em;">{{ line.item.product.producer }}</div>{% endif %}
+                                        </td>
                                         <td class="tight">
                                             {{ line.item.price|number_format(2, ',', '.') }} €
                                             {# Desglose: solo lo ve la comisión (esta pantalla es de gestión). #}

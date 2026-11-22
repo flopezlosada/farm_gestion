@@ -50,7 +50,7 @@ class OrderAggregatorTest extends TestCase
     public function testAgregaCantidadesTotalesYParticipantes(): void
     {
         $round = new ConsumerGroupRound();
-        $round->setProducer($this->producer);
+        $round->addProducer($this->producer);
         $fruta = $this->item($round, $this->product('Naranjas', 'kg'), '2.50');
         $aceite = $this->item($round, $this->product('Aceite', 'L'), '8.00');
 
@@ -88,7 +88,7 @@ class OrderAggregatorTest extends TestCase
     public function testLoQueSePideParaElLocalSumaAlPedidoDelProductor(): void
     {
         $round = new ConsumerGroupRound();
-        $round->setProducer($this->producer);
+        $round->addProducer($this->producer);
         $aceite = $this->item($round, $this->product('Aceite', 'garrafa de 5 L'), '40.00');
 
         // Una socia pide 2 garrafas = 80,00
@@ -116,7 +116,7 @@ class OrderAggregatorTest extends TestCase
         // El caso de completar el mínimo del productor cuando no se ha apuntado
         // nadie: hay pedido que hacer, pero no hay ninguna socia detrás.
         $round = new ConsumerGroupRound();
-        $round->setProducer($this->producer);
+        $round->addProducer($this->producer);
         $this->item($round, $this->product('Naranjas', 'caja de 10 kg'), '12.00')
             ->setAssociationQuantity('2');
 
@@ -131,7 +131,7 @@ class OrderAggregatorTest extends TestCase
     public function testItemSinPedidosApareceConCero(): void
     {
         $round = new ConsumerGroupRound();
-        $round->setProducer($this->producer);
+        $round->addProducer($this->producer);
         $this->item($round, $this->product('Producto sin demanda', 'ud'), '5.00');
 
         $result = (new OrderAggregator())->aggregate($round);
@@ -149,5 +149,70 @@ class OrderAggregatorTest extends TestCase
         self::assertSame(0, $result['participantCount']);
         self::assertSame(0.0, $result['total']);
         self::assertSame([], $result['byItem']);
+    }
+
+    public function testConUnProductorSoloCuentaSusProductosYSusSocias(): void
+    {
+        $otro = new Producer();
+        $round = new ConsumerGroupRound();
+        $round->addProducer($this->producer)->addProducer($otro);
+        $naranjas = $this->item($round, $this->product('Naranjas', 'kg'), '2.50');
+        $aceiteProducto = (new ConsumerGroupProduct())->setName('Aceite')->setUnit((new ConsumerGroupUnit())->setName('L'));
+        $otro->addProduct($aceiteProducto);
+        $aceite = $this->item($round, $aceiteProducto, '8.00');
+
+        // A pide naranjas y aceite; B solo aceite; C solo naranjas.
+        $a = $this->order($round);
+        $a->addLine(new ConsumerGroupOrderLine($a, $naranjas, '2'));
+        $a->addLine(new ConsumerGroupOrderLine($a, $aceite, '1'));
+        $b = $this->order($round);
+        $b->addLine(new ConsumerGroupOrderLine($b, $aceite, '3'));
+        $c = $this->order($round);
+        $c->addLine(new ConsumerGroupOrderLine($c, $naranjas, '1'));
+
+        $aggregator = new OrderAggregator();
+        $todo = $aggregator->aggregate($round);
+        $delNaranjero = $aggregator->aggregate($round, $this->producer);
+        $delOtro = $aggregator->aggregate($round, $otro);
+
+        self::assertSame(3, $todo['participantCount']);
+        self::assertCount(2, $todo['byItem']);
+        self::assertCount(1, $delNaranjero['byItem']);
+        self::assertSame($naranjas, $delNaranjero['byItem'][0]['item']);
+        self::assertSame(2, $delNaranjero['participantCount'], 'A y C piden naranjas; B no cuenta para este productor');
+        self::assertEqualsWithDelta(7.5, $delNaranjero['total'], 0.001);
+        self::assertSame($aceite, $delOtro['byItem'][0]['item']);
+        self::assertSame(2, $delOtro['participantCount']);
+        self::assertEqualsWithDelta(32.0, $delOtro['total'], 0.001);
+        self::assertEqualsWithDelta($todo['total'], $delNaranjero['total'] + $delOtro['total'], 0.001, 'Entre todos suman el pedido entero');
+    }
+
+    public function testAlProductorSeLeCuentaASuPrecioSinElIncrementoDeGestion(): void
+    {
+        $round = new ConsumerGroupRound();
+        $round->addProducer($this->producer);
+        $aceite = $this->item($round, $this->product('Aceite', 'L'), '10.00');
+        $aceite->setProducerPrice('8.00');
+        $order = $this->order($round);
+        $order->addLine(new ConsumerGroupOrderLine($order, $aceite, '3'));
+
+        $result = (new OrderAggregator())->aggregate($round);
+
+        self::assertEqualsWithDelta(30.0, $result['total'], 0.001, 'Las socias pagan el precio final');
+        self::assertEqualsWithDelta(24.0, $result['producerTotal'], 0.001, 'Al productor se le debe el suyo');
+        self::assertEqualsWithDelta(24.0, $result['byItem'][0]['producerSubtotal'], 0.001);
+    }
+
+    public function testSinDesglosarElPrecioDelProductorEsElFinal(): void
+    {
+        $round = new ConsumerGroupRound();
+        $round->addProducer($this->producer);
+        $aceite = $this->item($round, $this->product('Aceite', 'L'), '10.00');
+        $order = $this->order($round);
+        $order->addLine(new ConsumerGroupOrderLine($order, $aceite, '2'));
+
+        $result = (new OrderAggregator())->aggregate($round);
+
+        self::assertEqualsWithDelta(20.0, $result['producerTotal'], 0.001);
     }
 }

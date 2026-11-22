@@ -148,6 +148,16 @@ class ConsumerGroupRoundItem
         return $this;
     }
 
+    /**
+     * ¿Es de un productor autogestionado? Él fija su precio y no lleva incremento
+     * de gestión. Se pregunta al producto, no a la ronda: el productor de cada
+     * línea es el de su producto.
+     */
+    public function isSelfManaged(): bool
+    {
+        return $this->product?->getProducer()?->isSelfManaged() ?? false;
+    }
+
     public function getProduct(): ?ConsumerGroupProduct
     {
         return $this->product;
@@ -188,6 +198,16 @@ class ConsumerGroupRoundItem
     public function hasOrderedQuantity(): bool
     {
         return $this->lines->exists(static fn (int $i, ConsumerGroupOrderLine $line): bool => (float) $line->getQuantity() > 0);
+    }
+
+    /**
+     * Precio unitario que cobra el productor: el suyo si está desglosado y, si no, el
+     * final (los pedidos sin desglosar o de un productor autogestionado no llevan
+     * incremento, así que es el mismo). Es el que va en lo que se le pasa al productor.
+     */
+    public function getPriceForProducer(): string
+    {
+        return $this->producerPrice ?? $this->price;
     }
 
     public function getProducerPrice(): ?string

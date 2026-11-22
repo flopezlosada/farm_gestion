@@ -92,7 +92,7 @@ class ConsumerGroupItemsRemovalConfirmationTest extends AbstractAuthenticatedTes
         $producer->addProduct($aceite);
 
         $round = (new ConsumerGroupRound())->setStatus(ConsumerGroupRound::STATUS_OPEN);
-        $round->setTitle('Ronda de test')->setProducer($producer)->setOrdersCloseAt(new \DateTime('tomorrow'));
+        $round->setTitle('Ronda de test')->addProducer($producer)->setOrdersCloseAt(new \DateTime('tomorrow'));
         $item = new ConsumerGroupRoundItem($round, $naranjas, '2.50');
         $round->addItem($item);
 

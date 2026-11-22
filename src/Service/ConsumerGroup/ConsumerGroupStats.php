@@ -93,8 +93,9 @@ class ConsumerGroupStats
              FROM App\Entity\ConsumerGroupOrderLine l
              JOIN l.order o
              JOIN o.round r
-             JOIN r.producer p
              JOIN l.roundItem ri
+             JOIN ri.product prod
+             JOIN prod.producer p
              WHERE r.confirmed = true AND r.status != :cancelled AND l.quantity > 0
              GROUP BY p.id
              ORDER BY money DESC'
@@ -203,19 +204,19 @@ class ConsumerGroupStats
      * Cifras de UN productor (para su ficha): rondas totales, confirmadas, pedidos
      * y dinero movido. El dinero y los pedidos se miden solo sobre confirmadas
      * (mismo criterio que {@see global()}); las rondas totales cuentan cualquier
-     * estado, para que la ficha diga "ha tenido 5 rondas" aunque 2 se cancelaran.
+     * estado, para que la ficha diga "ha tenido 5 rondas" (en las que participa, solo o con otros) aunque 2 se cancelaran.
      *
      * @return array{rounds: int, confirmedRounds: int, orders: int, money: float}
      */
     public function forProducer(Producer $producer): array
     {
         $rounds = (int) $this->em->createQuery(
-            'SELECT COUNT(r.id) FROM App\Entity\ConsumerGroupRound r WHERE r.producer = :producer'
+            'SELECT COUNT(r.id) FROM App\Entity\ConsumerGroupRound r WHERE :producer MEMBER OF r.producers'
         )->setParameter('producer', $producer)->getSingleScalarResult();
 
         $confirmedRounds = (int) $this->em->createQuery(
             'SELECT COUNT(r.id) FROM App\Entity\ConsumerGroupRound r
-             WHERE r.producer = :producer AND r.confirmed = true AND r.status != :cancelled'
+             WHERE :producer MEMBER OF r.producers AND r.confirmed = true AND r.status != :cancelled'
         )->setParameter('producer', $producer)
             ->setParameter('cancelled', ConsumerGroupRound::STATUS_CANCELLED)
             ->getSingleScalarResult();
@@ -226,7 +227,8 @@ class ConsumerGroupStats
              JOIN l.order o
              JOIN o.round r
              JOIN l.roundItem ri
-             WHERE r.producer = :producer AND r.confirmed = true AND r.status != :cancelled AND l.quantity > 0'
+             JOIN ri.product pprod
+             WHERE pprod.producer = :producer AND r.confirmed = true AND r.status != :cancelled AND l.quantity > 0'
         )->setParameter('producer', $producer)
             ->setParameter('cancelled', ConsumerGroupRound::STATUS_CANCELLED)
             ->getSingleResult();
@@ -289,7 +291,8 @@ class ConsumerGroupStats
              JOIN l.order o
              JOIN l.roundItem ri
              JOIN ri.round r
-             WHERE r.producer = :producer AND r.confirmed = true AND r.status != :cancelled AND l.quantity > 0
+             JOIN ri.product pprod
+             WHERE pprod.producer = :producer AND r.confirmed = true AND r.status != :cancelled AND l.quantity > 0
              GROUP BY r.id
              ORDER BY r.deliveryDate DESC, r.id DESC'
         )->setParameter('producer', $producer)
@@ -322,7 +325,7 @@ class ConsumerGroupStats
              JOIN ri.product prod
              JOIN prod.unit u
              JOIN ri.round r
-             WHERE r.producer = :producer AND r.confirmed = true AND r.status != :cancelled AND l.quantity > 0
+             WHERE prod.producer = :producer AND r.confirmed = true AND r.status != :cancelled AND l.quantity > 0
              GROUP BY prod.id
              ORDER BY money DESC'
         )->setParameter('producer', $producer)
@@ -360,7 +363,8 @@ class ConsumerGroupStats
              JOIN o.partner pa
              JOIN l.roundItem ri
              JOIN ri.round r
-             WHERE r.producer = :producer AND r.confirmed = true AND r.status != :cancelled AND l.quantity > 0
+             JOIN ri.product pprod
+             WHERE pprod.producer = :producer AND r.confirmed = true AND r.status != :cancelled AND l.quantity > 0
              GROUP BY pa.id
              ORDER BY money DESC"
         )->setParameter('producer', $producer)

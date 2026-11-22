@@ -154,7 +154,7 @@ class ConsumerGroupItemsMarkupTest extends AbstractAuthenticatedTest
         $producer->addProduct($aceite);
 
         $round = new ConsumerGroupRound();
-        $round->setTitle('Ronda con incremento')->setProducer($producer)->setOrdersCloseAt(new \DateTime('+5 days'))->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_NONE);
+        $round->setTitle('Ronda con incremento')->addProducer($producer)->setOrdersCloseAt(new \DateTime('+5 days'))->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_NONE);
         $round->setMarkup(MarkupType::Percent, '5.00');
         $itemNaranjas = (new ConsumerGroupRoundItem($round, $naranjas, '2.10'))->setProducerPrice('2.00');
         $itemAceite = (new ConsumerGroupRoundItem($round, $aceite, '8.50'))->setProducerPrice('8.00')->setOwnMarkup(MarkupType::Amount, '0.50');
@@ -182,7 +182,7 @@ class ConsumerGroupItemsMarkupTest extends AbstractAuthenticatedTest
         $naranjas = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit($this->unidadGlobal('kg'));
         $producer->addProduct($naranjas);
         $round = new ConsumerGroupRound();
-        $round->setTitle('Pedido entregado')->setProducer($producer)->setOrdersCloseAt(new \DateTime('-10 days'))->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_NONE);
+        $round->setTitle('Pedido entregado')->addProducer($producer)->setOrdersCloseAt(new \DateTime('-10 days'))->setMinimumType(ConsumerGroupRound::MINIMUM_TYPE_NONE);
         $round->setStatus(ConsumerGroupRound::STATUS_DELIVERED);
         $item = new ConsumerGroupRoundItem($round, $naranjas, '26.00');
         $round->addItem($item);

@@ -56,7 +56,7 @@ class MinimumAutoConfirmer
         }
 
         $this->confirm($round, sprintf('Pedido confirmado automáticamente: se alcanzó el mínimo (%s).', $round->getMinimumTypeLabel()));
-        $this->notifier->notifyProducerConfirmed($round);
+        $this->notifier->notifyProducersConfirmed($round);
     }
 
     /**

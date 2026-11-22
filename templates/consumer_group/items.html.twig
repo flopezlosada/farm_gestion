@@ -43,7 +43,7 @@
                 <h1 class="prt-hero__title">{{ round.title }}</h1>
                 <div class="prt-hero__meta">
                     <span class="prt-chip prt-chip--mod-1"><span class="dot"></span>Editando productos</span>
-                    {% if round.producer %}<span class="sep">·</span><span>{{ round.producer.name }}</span>{% endif %}
+                    {% if round.producers is not empty %}<span class="sep">·</span><span>{{ round.producerNames }}</span>{% endif %}
                 </div>
             </div>
             <div class="prt-hero__actions">
@@ -55,8 +55,8 @@
             <div class="prt-card">
                 <div class="prt-card__body">
                     <p class="csa-muted" style="margin: 0;">
-                        El productor no tiene productos activos en su catálogo.
-                        <a href="{{ path('consumer_group_producer_show', { id: round.producer.id }) }}">Añádelos primero</a>.
+                        {{ round.mixed ? 'Los productores no tienen' : 'El productor no tiene' }} productos activos en su catálogo. Añádelos primero:
+                        {% for producer in round.producers %}<a href="{{ path('consumer_group_producer_show', { id: producer.id }) }}">{{ producer.name }}</a>{{ loop.last ? '.' : ', ' }}{% endfor %}
                     </p>
                 </div>
             </div>
@@ -146,6 +146,7 @@
                                             </td>
                                             <td>
                                                 {{ product.name }} <span class="csa-muted">/ {{ product.unit }}</span>
+                                                {% if round.mixed %}<div class="csa-muted" style="font-size: .8em;">{{ product.producer }}</div>{% endif %}
                                                 {% if product.description %}<div class="csa-muted" style="font-size: .85em;">{{ product.description|striptags|u.truncate(80, '…', false) }}</div>{% endif %}
                                             </td>
                                             {% if managed %}

@@ -11,7 +11,7 @@
 <a class="cg-round-card" href="{{ path('panel_consumer_group_show', { id: round.id }) }}">
     <div class="cg-round-card__body">
         <div class="cg-round-card__title">{{ round.title }}</div>
-        <div class="cg-round-card__meta">{{ round.producer ? round.producer.name : '' }}</div>
+        <div class="cg-round-card__meta">{{ round.producerNames }}</div>
         <div class="cg-round-card__meta">
             Cierre: {{ round.ordersCloseAt ? round.ordersCloseAt|date('d/m/Y') : '—' }}
             · Entrega: {{ round.deliveryDate ? round.deliveryDate|date('d/m/Y') : '—' }}

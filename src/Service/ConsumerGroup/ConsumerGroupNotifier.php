@@ -32,6 +32,7 @@ class ConsumerGroupNotifier
         private readonly UrlGeneratorInterface $urls,
         private readonly LoggerInterface $logger,
         private readonly ConsumerGroupEmailPhotos $photos,
+        private readonly OrderAggregator $aggregator,
     ) {
     }
 
@@ -142,46 +143,63 @@ class ConsumerGroupNotifier
     }
 
     /**
-     * Avisa al productor de que su ronda está confirmada: ya puede darla por
-     * buena y prepararla. Se llama tanto si se confirmó sola al alcanzar el
-     * mínimo automático ({@see MinimumAutoConfirmer}) como si la confirmó la
-     * comisión a mano ({@see \App\Controller\ConsumerGroupController::confirm()}
-     * con el email activado) — al productor le da igual cómo se llegó a la
-     * confirmación. Solo si el productor tiene email; si no lo tiene, no hay
-     * nada que enviar (no es un fallo).
+     * Avisa a cada productor del pedido de que está confirmado: ya puede darlo por
+     * bueno y prepararlo. Cada uno recibe SOLO lo suyo —sus productos, cantidades y su
+     * precio, sin el incremento de gestión—, nunca lo de los demás productores. Se
+     * llama tanto si se confirmó solo al alcanzar el mínimo automático
+     * ({@see MinimumAutoConfirmer}) como si la confirmó la comisión a mano
+     * ({@see \App\Controller\ConsumerGroupController::confirm()} con el email activado).
      *
-     * @return array{enabled: bool, sent: bool}
+     * Un productor sin email no es un fallo: no hay a quién escribir, y se devuelve su
+     * nombre para que la comisión sepa que tiene que pasarle el pedido por otro lado.
+     * Un productor sin nada pedido tampoco recibe correo. Si el envío a uno falla, no aborta
+     * el de los demás: se devuelve su nombre para avisar a la comisión.
+     *
+     * @return array{enabled: bool, sent: int, withoutEmail: list<string>, failed: list<string>}
      */
-    public function notifyProducerConfirmed(ConsumerGroupRound $round): array
+    public function notifyProducersConfirmed(ConsumerGroupRound $round): array
     {
         if (!$this->settings->getBool(AppSettings::EMAIL_ENABLED)) {
-            return ['enabled' => false, 'sent' => false];
+            return ['enabled' => false, 'sent' => 0, 'withoutEmail' => [], 'failed' => []];
         }
 
-        $email = (string) ($round->getProducer()?->getEmail() ?? '');
-        if ($email === '') {
-            return ['enabled' => true, 'sent' => false];
+        $sent = 0;
+        $withoutEmail = [];
+        $failed = [];
+        foreach ($round->getProducers() as $producer) {
+            $aggregate = $this->aggregator->aggregate($round, $producer);
+            $lines = array_values(array_filter($aggregate['byItem'], static fn (array $line): bool => $line['totalQuantity'] > 0));
+            if ($lines === []) {
+                continue;
+            }
+
+            $email = (string) ($producer->getEmail() ?? '');
+            if ($email === '') {
+                $withoutEmail[] = $producer->getName();
+                continue;
+            }
+
+            $message = (new TemplatedEmail())
+                ->to($email)
+                ->subject(sprintf('Pedido «%s» confirmado', $round->getTitle()))
+                ->htmlTemplate('email/consumer_group_producer_confirmed.html.twig')
+                ->textTemplate('email/consumer_group_producer_confirmed.txt.twig')
+                ->context(['round' => $round, 'producer' => $producer, 'lines' => $lines, 'total' => $aggregate['producerTotal']]);
+
+            try {
+                $this->mailer->send($message);
+                ++$sent;
+            } catch (\Throwable $e) {
+                $this->logger->error('Fallo al avisar al productor de la confirmación del pedido.', [
+                    'round' => $round->getId(),
+                    'producer' => $producer->getId(),
+                    'error' => $e->getMessage(),
+                ]);
+                $failed[] = $producer->getName();
+            }
         }
 
-        $message = (new TemplatedEmail())
-            ->to($email)
-            ->subject(sprintf('Pedido «%s» confirmado', $round->getTitle()))
-            ->htmlTemplate('email/consumer_group_producer_confirmed.html.twig')
-            ->textTemplate('email/consumer_group_producer_confirmed.txt.twig')
-            ->context(['round' => $round]);
-
-        try {
-            $this->mailer->send($message);
-            return ['enabled' => true, 'sent' => true];
-        } catch (\Throwable $e) {
-            $this->logger->error('Fallo al avisar al productor de la confirmación del pedido.', [
-                'round' => $round->getId(),
-                'producer' => $round->getProducer()?->getId(),
-                'error' => $e->getMessage(),
-            ]);
-
-            return ['enabled' => true, 'sent' => false];
-        }
+        return ['enabled' => true, 'sent' => $sent, 'withoutEmail' => $withoutEmail, 'failed' => $failed];
     }
 
     /**

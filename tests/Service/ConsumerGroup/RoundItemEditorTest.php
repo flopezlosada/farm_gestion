@@ -5,6 +5,7 @@ namespace App\Tests\Service\ConsumerGroup;
 use App\Entity\ConsumerGroupProduct;
 use App\Entity\ConsumerGroupUnit;
 use App\Entity\ConsumerGroupRound;
+use App\Entity\ConsumerGroupRoundItem;
 use App\Entity\MarkupType;
 use App\Entity\Producer;
 use App\Repository\ConsumerGroupRoundItemRepository;
@@ -44,7 +45,7 @@ class RoundItemEditorTest extends TestCase
     private function round(): ConsumerGroupRound
     {
         $round = new ConsumerGroupRound();
-        $round->setProducer($this->producer);
+        $round->addProducer($this->producer);
         return $round;
     }
 
@@ -206,5 +207,43 @@ class RoundItemEditorTest extends TestCase
         ]);
 
         self::assertSame('0', $naranjas->getAssociationQuantity());
+    }
+
+    public function testSiembraLosProductosDeTodosLosProductoresDelPedido(): void
+    {
+        $otro = new Producer();
+        $miel = (new ConsumerGroupProduct())->setName('Miel')->setUnit((new ConsumerGroupUnit())->setName('bote'));
+        $otro->addProduct($miel);
+        $round = $this->round();
+        $round->addProducer($otro);
+
+        $this->editor->seedFromCatalog($round);
+
+        $names = array_map(static fn (ConsumerGroupRoundItem $i): string => $i->getName(), $round->getItems()->toArray());
+        sort($names);
+        self::assertSame(['Aceite', 'Miel', 'Naranjas'], $names);
+    }
+
+    public function testNoAdmiteUnProductoDeUnProductorQueNoParticipa(): void
+    {
+        $ajeno = (new Producer());
+        $miel = (new ConsumerGroupProduct())->setName('Miel')->setUnit((new ConsumerGroupUnit())->setName('bote'));
+        $ajeno->addProduct($miel);
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        $this->editor->apply($this->round(), [['product' => $miel, 'included' => true, 'price' => '5.00']]);
+    }
+
+    public function testUnProductoAjenoQueNoSeIncluyeNoMolesta(): void
+    {
+        $ajeno = new Producer();
+        $miel = (new ConsumerGroupProduct())->setName('Miel')->setUnit((new ConsumerGroupUnit())->setName('bote'));
+        $ajeno->addProduct($miel);
+        $round = $this->round();
+
+        $this->editor->apply($round, [['product' => $miel, 'included' => false, 'price' => '5.00']]);
+
+        self::assertCount(0, $round->getItems());
     }
 }

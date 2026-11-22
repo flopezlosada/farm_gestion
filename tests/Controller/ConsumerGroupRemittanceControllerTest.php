@@ -36,9 +36,9 @@ class ConsumerGroupRemittanceControllerTest extends AbstractAuthenticatedTest
     {
         $em = $this->em();
         if ($this->producerId !== null) {
-            $em->createQuery('DELETE FROM App\Entity\ConsumerGroupOrder o WHERE o.round IN (SELECT r.id FROM App\Entity\ConsumerGroupRound r WHERE r.producer = :p)')->execute(['p' => $this->producerId]);
-            $em->createQuery('DELETE FROM App\Entity\ConsumerGroupRoundItem i WHERE i.round IN (SELECT r.id FROM App\Entity\ConsumerGroupRound r WHERE r.producer = :p)')->execute(['p' => $this->producerId]);
-            $em->createQuery('DELETE FROM App\Entity\ConsumerGroupRound r WHERE r.producer = :p')->execute(['p' => $this->producerId]);
+            $em->createQuery('DELETE FROM App\Entity\ConsumerGroupOrder o WHERE o.round IN (SELECT r.id FROM App\Entity\ConsumerGroupRound r JOIN r.producers rp WHERE rp.id = :p)')->execute(['p' => $this->producerId]);
+            $em->createQuery('DELETE FROM App\Entity\ConsumerGroupRoundItem i WHERE i.round IN (SELECT r.id FROM App\Entity\ConsumerGroupRound r JOIN r.producers rp WHERE rp.id = :p)')->execute(['p' => $this->producerId]);
+            $em->createQuery('DELETE FROM App\Entity\ConsumerGroupRound r WHERE :p MEMBER OF r.producers')->execute(['p' => $this->producerId]);
             $em->createQuery('DELETE FROM App\Entity\ConsumerGroupProduct x WHERE x.producer = :p')->execute(['p' => $this->producerId]);
         }
         $em->createQuery('DELETE FROM App\Entity\Remittance r WHERE r.kind = :k AND r.period = :m')->execute(['k' => Remittance::KIND_CONSUMER_GROUP, 'm' => '2096-03-01']);
@@ -85,7 +85,7 @@ class ConsumerGroupRemittanceControllerTest extends AbstractAuthenticatedTest
         $naranjas = (new ConsumerGroupProduct())->setName('Naranjas')->setUnit($this->unidadGlobal('kg'));
         $producer->addProduct($naranjas);
         $round = (new ConsumerGroupRound())->setStatus(ConsumerGroupRound::STATUS_CONFIRMED);
-        $round->setTitle('Ronda remesa')->setProducer($producer)
+        $round->setTitle('Ronda remesa')->addProducer($producer)
             ->setOrdersCloseAt(new \DateTime('2096-03-05'))
             ->setDeliveryDate(new \DateTime('2096-03-10'));
         $round->setConfirmed(true);

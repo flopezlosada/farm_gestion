@@ -17,7 +17,7 @@
                     <span class="cgcal-order__mon">{{ r.deliveryDate|date('M')|upper }}</span>
                 </div>
                 <div class="cgcal-order__body">
-                    <div class="cgcal-order__head">{{ r.title }} <span class="csa-muted">· {{ r.producer ? r.producer.name : '' }}</span></div>
+                    <div class="cgcal-order__head">{{ r.title }} <span class="csa-muted">· {{ r.producerNames }}</span></div>
                     <ul class="cgcal-order__lines">
                         {% for line in d.order.lines %}{% if line.quantity > 0 %}<li>{{ line.quantity|number_format(2, ',', '.') }} {{ line.roundItem.unit }} · {{ line.roundItem.name }}</li>{% endif %}{% endfor %}
                     </ul>
