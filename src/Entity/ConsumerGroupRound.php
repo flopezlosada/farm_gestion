@@ -688,6 +688,23 @@ class ConsumerGroupRound
         }
     }
 
+    /**
+     * El pedido no puede llegar antes de que se cierren los apuntes: el productor
+     * recibe el pedido con las cantidades definitivas cuando el plazo acaba. El
+     * mismo día de cierre sí vale. Con una de las dos fechas sin poner no hay
+     * nada que comparar (la de entrega puede quedar pendiente).
+     */
+    #[Assert\Callback]
+    public function validateDeliveryNotBeforeClose(ExecutionContextInterface $context): void
+    {
+        if ($this->deliveryDate !== null && $this->ordersCloseAt !== null && $this->deliveryDate < $this->ordersCloseAt) {
+            $context->buildViolation('La fecha de entrega no puede ser anterior al cierre de apuntes ({{ close }}).')
+                ->setParameter('{{ close }}', $this->ordersCloseAt->format('d/m/Y'))
+                ->atPath('deliveryDate')
+                ->addViolation();
+        }
+    }
+
     public function getDescription(): ?string
     {
         return $this->description;
